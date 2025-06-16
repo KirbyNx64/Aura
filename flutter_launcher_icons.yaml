@@ -1,0 +1,25 @@
+flutter_launcher_icons:
+  android: true
+  ios: false
+
+  # Ícono para Android (foreground, sin fondo)
+  image_path: "assets/icon/icon.png" 
+  adaptive_icon_foreground: "assets/icon/icon_foreground.png"
+
+  # Color de fondo para el ícono adaptativo Android
+  adaptive_icon_background: "#5865f2"
+
+  min_sdk_android: 24
+
+  # Configuración iOS que dejás aunque no generes íconos
+  remove_alpha_ios: true
+
+  # No generar íconos para otras plataformas
+  web:
+    generate: false
+
+  windows:
+    generate: false
+
+  macos:
+    generate: false
