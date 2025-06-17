@@ -126,13 +126,14 @@ class _DownloadScreenState extends State<DownloadScreen>
     final yt = YoutubeExplode();
     try {
       final video = await yt.videos.get(url);
-      final manifest = await yt.videos.streamsClient.getManifest(video.id);
+      final manifest = await yt.videos.streamsClient
+          .getManifest(video.id)
+          .timeout(const Duration(seconds: 10));
+
       final audioStreams = manifest.audioOnly;
-      if (audioStreams.isEmpty) {
-        throw Exception('No hay streams de solo audio.');
-      }
 
       final audioInfo = audioStreams.withHighestBitrate();
+
       final safeTitle = video.title
           .replaceAll(RegExp(r'[\\/:*?"<>|]'), '')
           .trim();
@@ -196,11 +197,13 @@ class _DownloadScreenState extends State<DownloadScreen>
 
       // Insertar metadata
       setState(() => _progress = 0.85);
-      final artist = video.author;
+      final artist = video.author.replaceFirst(
+        RegExp(r' - Topic$', caseSensitive: false),
+        '',
+      );
       final metaSession = await FFmpegKit.execute(
         '-i "$mp3Path" -i "$coverPath" '
         '-map 0:a -map 1 '
-        '-metadata title="${safeTitle}" '
         '-metadata artist="$artist" '
         '-metadata:s:v title="Album cover" '
         '-metadata:s:v comment="Cover (front)" '
@@ -233,7 +236,7 @@ class _DownloadScreenState extends State<DownloadScreen>
           context: context,
           builder: (context) => AlertDialog(
             title: const Text('Descarga fallida'),
-            content: Text('Ocurrió un error:\n\n$e'),
+            content: Text('Ocurrió un error, intentalo de nuevo.'),
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(context).pop(),
@@ -246,29 +249,6 @@ class _DownloadScreenState extends State<DownloadScreen>
     } finally {
       yt.close();
       if (mounted) setState(() => _isDownloading = false);
-    }
-  }
-
-  Future<void> _writeStreamToFile(
-    Stream<List<int>> stream,
-    String inputPath,
-  ) async {
-    final file = File(inputPath);
-    late IOSink sink;
-
-    try {
-      sink = file.openWrite(); // Abres el sink
-      await for (final chunk in stream) {
-        sink.add(chunk); // Escribes cada chunk
-        // aquí podrías actualizar el progreso
-      }
-    } catch (e) {
-      // Si falla algo, puedes hacer log o propagar el error:
-      rethrow;
-    } finally {
-      // Este código siempre se ejecuta, haya excepción o no:
-      await sink.flush(); // Vacía buffers pendientes
-      await sink.close(); // Cierra el sink
     }
   }
 

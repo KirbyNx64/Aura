@@ -153,22 +153,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.0.2"
-  device_info_plus:
-    dependency: "direct main"
-    description:
-      name: device_info_plus
-      sha256: "0c6396126421b590089447154c5f98a5de423b70cfb15b1578fd018843ee6f53"
-      url: "https://pub.dev"
-    source: hosted
-    version: "11.4.0"
-  device_info_plus_platform_interface:
-    dependency: transitive
-    description:
-      name: device_info_plus_platform_interface
-      sha256: "0b04e02b30791224b31969eb1b50d723498f402971bff3630bca2ba839bd1ed2"
-      url: "https://pub.dev"
-    source: hosted
-    version: "7.0.2"
   fading_edge_scrollview:
     dependency: transitive
     description:
@@ -197,18 +181,18 @@ packages:
     dependency: transitive
     description:
       name: ffmpeg_kit_flutter_android
-      sha256: "1bcd2e18169862d9782f019e3e83f92a41a12692deb25e0e767ecd44518c0f7e"
+      sha256: "6fe3ece6a8c16b04f695dab9f58b39fc35e617fce8221d4183dd027e59f71c01"
       url: "https://pub.dev"
     source: hosted
-    version: "1.4.0"
+    version: "1.7.0"
   ffmpeg_kit_flutter_new:
     dependency: "direct main"
     description:
       name: ffmpeg_kit_flutter_new
-      sha256: dbaf0f4963b08a034a4f787276c1e12efc36a56670693f1721e46f95554f0979
+      sha256: "385c52a2e3308ea3927db4c88f8bf90fb42997f87ceb9081ddc9c6a8cc5f8bf7"
       url: "https://pub.dev"
     source: hosted
-    version: "1.6.1"
+    version: "2.0.0"
   ffmpeg_kit_flutter_platform_interface:
     dependency: transitive
     description:
@@ -322,10 +306,10 @@ packages:
     dependency: "direct dev"
     description:
       name: flutter_lints
-      sha256: "5398f14efa795ffb7a33e9b6a08798b26a180edac4ad7db3f231e40f82ce11e1"
+      sha256: "3105dc8492f6183fb076ccf1f351ac3d60564bff92e20bfc4af9cc1651f4e7e1"
       url: "https://pub.dev"
     source: hosted
-    version: "5.0.0"
+    version: "6.0.0"
   flutter_rust_bridge:
     dependency: transitive
     description:
@@ -460,10 +444,10 @@ packages:
     dependency: transitive
     description:
       name: lints
-      sha256: c35bb79562d980e9a453fc715854e1ed39e24e7d0297a880ef54e17f9874a9d7
+      sha256: a5e2b223cb7c9c8efdc663ef484fdd95bb243bff242ef5b13e26883547fce9a0
       url: "https://pub.dev"
     source: hosted
-    version: "5.1.1"
+    version: "6.0.0"
   logging:
     dependency: transitive
     description:
@@ -523,18 +507,16 @@ packages:
   on_audio_query:
     dependency: "direct main"
     description:
-      name: on_audio_query
-      sha256: "28d7a247f8a0580b5d1befba15c8d8fd7e1cf3cd8e0449d54a66fc2ef27adf10"
-      url: "https://pub.dev"
-    source: hosted
+      path: on_audio_query
+      relative: true
+    source: path
     version: "2.9.0"
   on_audio_query_android:
     dependency: transitive
     description:
-      name: on_audio_query_android
-      sha256: c0b946011ee7aa8ec76b21837f0cb0007120ac291202ed6c6fb4c498ba2ff6fe
-      url: "https://pub.dev"
-    source: hosted
+      path: on_audio_query_android
+      relative: true
+    source: path
     version: "1.1.0"
   on_audio_query_ios:
     dependency: transitive
@@ -1021,14 +1003,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "5.13.0"
-  win32_registry:
-    dependency: transitive
-    description:
-      name: win32_registry
-      sha256: "6f1b564492d0147b330dd794fee8f512cec4977957f310f9951b5f9d83618dae"
-      url: "https://pub.dev"
-    source: hosted
-    version: "2.1.0"
   xdg_directories:
     dependency: transitive
     description:
