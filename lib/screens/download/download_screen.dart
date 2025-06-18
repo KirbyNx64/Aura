@@ -24,6 +24,7 @@ class _DownloadScreenState extends State<DownloadScreen>
   final _urlController = TextEditingController();
   final _focusNode = FocusNode();
   bool _isDownloading = false;
+  bool _isProcessing = false;
   double _progress = 0.0;
   String? _directoryPath;
 
@@ -92,7 +93,183 @@ class _DownloadScreenState extends State<DownloadScreen>
     }
   }
 
-  Future<void> _downloadAudio() async {
+  // Future<void> _downloadAudio() async {
+  //   final url = _urlController.text.trim();
+  //   if (url.isEmpty) return;
+  //   if (!await _ensurePermissions()) return;
+
+  //   if (Platform.isAndroid && _directoryPath == null) {
+  //     if (mounted) {
+  //       showDialog(
+  //         context: context,
+  //         builder: (context) => AlertDialog(
+  //           title: const Text('Carpeta no seleccionada'),
+  //           content: const Text(
+  //             'Debes seleccionar una carpeta antes de descargar el audio.',
+  //           ),
+  //           actions: [
+  //             TextButton(
+  //               onPressed: () => Navigator.of(context).pop(),
+  //               child: const Text('Aceptar'),
+  //             ),
+  //           ],
+  //         ),
+  //       );
+  //     }
+  //     return;
+  //   }
+
+  //   setState(() {
+  //     _isDownloading = true;
+  //     _progress = 0.0;
+  //   });
+
+  //   final yt = YoutubeExplode();
+  //   try {
+  //     final video = await yt.videos.get(url);
+  //     final manifest = await yt.videos.streamsClient
+  //         .getManifest(video.id)
+  //         .timeout(const Duration(seconds: 10));
+
+  //     final audioStreams = manifest.audioOnly;
+
+  //     final audioInfo = audioStreams.withHighestBitrate();
+
+  //     final safeTitle = video.title
+  //         .replaceAll(RegExp(r'[\\/:*?"<>|]'), '')
+  //         .trim();
+  //     final saveDir = Platform.isAndroid
+  //         ? _directoryPath!
+  //         : (await getApplicationDocumentsDirectory()).path;
+
+  //     final inputPath = '$saveDir/$safeTitle.m4a';
+  //     final mp3Path = '$saveDir/$safeTitle.mp3';
+  //     final metaPath = '$saveDir/${safeTitle}_final.mp3';
+  //     final coverPath = '$saveDir/${safeTitle}_cover.jpg';
+
+  //     // Limpieza previa
+  //     for (final path in [inputPath, mp3Path, metaPath, coverPath]) {
+  //       final file = File(path);
+  //       if (file.existsSync()) await file.delete();
+  //     }
+
+  //     // Verificar acceso al stream antes de abrir archivo
+  //     late Stream<List<int>> stream;
+  //     try {
+  //       stream = yt.videos.streamsClient.get(audioInfo);
+  //     } on YoutubeExplodeException catch (e) {
+  //       throw Exception('Error al obtener el stream: ${e.message}');
+  //     }
+
+  //     final file = File(inputPath);
+  //     final sink = file.openWrite();
+  //     final totalBytes = audioInfo.size.totalBytes;
+  //     var received = 0;
+
+  //     try {
+  //       await for (final chunk in stream) {
+  //         received += chunk.length;
+  //         sink.add(chunk);
+  //         setState(() => _progress = received / totalBytes * 0.6); // 0-60%
+  //       }
+  //     } finally {
+  //       await sink.flush();
+  //       await sink.close();
+  //     }
+
+  //     if (!await file.exists()) throw Exception('La descarga falló.');
+
+  //     // Conversión a MP3
+  //     setState(() => _progress = 0.65);
+  //     final session = await FFmpegKit.execute(
+  //       '-i "$inputPath" -vn -acodec libmp3lame "$mp3Path"',
+  //     );
+  //     final returnCode = await session.getReturnCode();
+  //     if (returnCode?.isValueSuccess() != true) {
+  //       throw Exception('Conversión fallida.');
+  //     }
+
+  //     await file.delete();
+
+  //     // Descargar portada
+  //     setState(() => _progress = 0.75);
+  //     final response = await http.get(Uri.parse(video.thumbnails.highResUrl));
+  //     await File(coverPath).writeAsBytes(response.bodyBytes);
+
+  //     // Insertar metadata
+  //     setState(() => _progress = 0.85);
+  //     final artist = video.author.replaceFirst(
+  //       RegExp(r' - Topic$', caseSensitive: false),
+  //       '',
+  //     );
+  //     final metaSession = await FFmpegKit.execute(
+  //       '-i "$mp3Path" -i "$coverPath" '
+  //       '-map 0:a -map 1 '
+  //       '-metadata artist="$artist" '
+  //       '-metadata:s:v title="Album cover" '
+  //       '-metadata:s:v comment="Cover (front)" '
+  //       '-id3v2_version 3 -write_id3v1 1 '
+  //       '-codec copy "$metaPath"',
+  //     );
+
+  //     if ((await metaSession.getReturnCode())?.isValueSuccess() != true) {
+  //       throw Exception('Error al escribir metadata.');
+  //     }
+
+  //     await File(mp3Path).delete();
+  //     await File(metaPath).rename(mp3Path);
+  //     await File(coverPath).delete();
+
+  //     // Indexar en Android
+  //     MediaScanner.loadMedia(path: mp3Path);
+  //     setState(() => _progress = 1.0);
+
+  //     await Future.delayed(const Duration(seconds: 2));
+  //     foldersShouldReload.value = !foldersShouldReload.value;
+
+  //     if (mounted) {
+  //       _urlController.clear();
+  //       _focusNode.unfocus();
+  //     }
+  //   } catch (e) {
+  //     if (mounted) {
+  //       showDialog(
+  //         context: context,
+  //         builder: (context) => AlertDialog(
+  //           title: const Text('Descarga fallida'),
+  //           content: Text(
+  //             'Ocurrió un error, intentalo de nuevo.\n\n'
+  //             'Detalles: ${e.toString()}',
+  //           ),
+  //           actions: [
+  //             TextButton(
+  //               onPressed: () => Navigator.of(context).pop(),
+  //               child: const Text('OK'),
+  //             ),
+  //           ],
+  //         ),
+  //       );
+  //     }
+  //   } finally {
+  //     yt.close();
+  //     if (mounted) setState(() => _isDownloading = false);
+  //   }
+  // }
+
+  Future<Video> _intentarObtenerVideo(YoutubeExplode yt, String url) async {
+    for (int intento = 0; intento < 10; intento++) {
+      try {
+        return await yt.videos.get(url);
+      } on VideoUnavailableException {
+        await Future.delayed(const Duration(seconds: 3));
+      }
+    }
+    throw VideoUnavailableException(
+      'El video no está disponible después de varios intentos.',
+    );
+  }
+
+  Future<void> _downloadAudioOnly() async {
     final url = _urlController.text.trim();
     if (url.isEmpty) return;
     if (!await _ensurePermissions()) return;
@@ -120,104 +297,171 @@ class _DownloadScreenState extends State<DownloadScreen>
 
     setState(() {
       _isDownloading = true;
+      _isProcessing = false;
       _progress = 0.0;
     });
 
     final yt = YoutubeExplode();
     try {
-      final video = await yt.videos.get(url);
-      final manifest = await yt.videos.streamsClient
-          .getManifest(video.id)
-          .timeout(const Duration(seconds: 10));
+      final video = await _intentarObtenerVideo(yt, url);
+      final manifest = await yt.videos.streamsClient.getManifest(video.id);
 
-      final audioStreams = manifest.audioOnly;
-
-      final audioInfo = audioStreams.withHighestBitrate();
-
+      final audioStreamInfo = manifest.audioOnly.withHighestBitrate();
       final safeTitle = video.title
           .replaceAll(RegExp(r'[\\/:*?"<>|]'), '')
           .trim();
+
       final saveDir = Platform.isAndroid
           ? _directoryPath!
           : (await getApplicationDocumentsDirectory()).path;
+      final filePath = '$saveDir/$safeTitle.m4a';
 
-      final inputPath = '$saveDir/$safeTitle.m4a';
-      final mp3Path = '$saveDir/$safeTitle.mp3';
-      final metaPath = '$saveDir/${safeTitle}_final.mp3';
-      final coverPath = '$saveDir/${safeTitle}_cover.jpg';
+      final file = File(filePath);
+      if (file.existsSync()) await file.delete();
 
-      // Limpieza previa
-      for (final path in [inputPath, mp3Path, metaPath, coverPath]) {
-        final file = File(path);
-        if (file.existsSync()) await file.delete();
-      }
-
-      // Verificar acceso al stream antes de abrir archivo
-      late Stream<List<int>> stream;
-      try {
-        stream = yt.videos.streamsClient.get(audioInfo);
-      } on YoutubeExplodeException catch (e) {
-        throw Exception('Error al obtener el stream: ${e.message}');
-      }
-
-      final file = File(inputPath);
+      final stream = yt.videos.streamsClient.get(audioStreamInfo);
       final sink = file.openWrite();
-      final totalBytes = audioInfo.size.totalBytes;
+      final totalBytes = audioStreamInfo.size.totalBytes;
       var received = 0;
 
-      try {
-        await for (final chunk in stream) {
-          received += chunk.length;
-          sink.add(chunk);
-          setState(() => _progress = received / totalBytes * 0.6); // 0-60%
-        }
-      } finally {
-        await sink.flush();
-        await sink.close();
+      await for (final chunk in stream) {
+        received += chunk.length;
+        sink.add(chunk);
+        setState(() => _progress = received / totalBytes * 0.6); // 0-60%
       }
+
+      await sink.flush();
+      await sink.close();
 
       if (!await file.exists()) throw Exception('La descarga falló.');
 
-      // Conversión a MP3
-      setState(() => _progress = 0.65);
-      final session = await FFmpegKit.execute(
-        '-i "$inputPath" -vn -acodec libmp3lame "$mp3Path"',
+      await _procesarAudio(
+        filePath,
+        video.title,
+        video.author,
+        video.thumbnails.highResUrl,
       );
-      final returnCode = await session.getReturnCode();
-      if (returnCode?.isValueSuccess() != true) {
-        throw Exception('Conversión fallida.');
+    } on VideoUnavailableException {
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Video no disponible'),
+            content: const Text(
+              'El video no está disponible. Puede haber sido eliminado, '
+              'es privado o está restringido por YouTube.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  _urlController.clear();
+                  _focusNode.unfocus();
+                },
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
       }
 
-      await file.delete();
+      // Ya no es necesario el resto del código aquí, pues _procesarAudio se encarga del resto
+    } catch (e) {
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Descarga fallida'),
+            content: Text(
+              'Ocurrió un error, intentalo de nuevo.\n\n'
+              'Detalles: ${e.toString()}',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+      }
+    } finally {
+      yt.close();
+      if (mounted) {
+        setState(() {
+          _isDownloading = false;
+          _isProcessing = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _procesarAudio(
+    String inputPath,
+    String title,
+    String author,
+    String thumbnailUrl,
+  ) async {
+    setState(() {
+      _isProcessing = true;
+    });
+    final saveDir = File(inputPath).parent.path;
+    final tempDir = await getTemporaryDirectory();
+    final baseName = title.replaceAll(RegExp(r'[\\/:*?"<>|]'), '').trim();
+    final mp3Path = '$saveDir/$baseName.mp3';
+    final metaPath = '$saveDir/${baseName}_meta.mp3';
+    final coverPath = '${tempDir.path}/${baseName}_cover.jpg';
+
+    for (final path in [mp3Path, metaPath, coverPath]) {
+      final file = File(path);
+      if (file.existsSync()) await file.delete();
+    }
+
+    try {
+      setState(() => _progress = 0.65);
+
+      // Conversión a MP3 (sin video)
+      final convertSession = await FFmpegKit.execute(
+        '-i "$inputPath" -vn -acodec libmp3lame "$mp3Path"',
+      );
+
+      if (!(await convertSession.getReturnCode())!.isValueSuccess()) {
+        throw Exception('Error al convertir a MP3');
+      }
 
       // Descargar portada
       setState(() => _progress = 0.75);
-      final response = await http.get(Uri.parse(video.thumbnails.highResUrl));
+      final response = await http.get(Uri.parse(thumbnailUrl));
       await File(coverPath).writeAsBytes(response.bodyBytes);
 
-      // Insertar metadata
+      // Insertar metadata ID3
       setState(() => _progress = 0.85);
-      final artist = video.author.replaceFirst(
+
+      final cleanedAuthor = author.replaceFirst(
         RegExp(r' - Topic$', caseSensitive: false),
         '',
       );
+
       final metaSession = await FFmpegKit.execute(
         '-i "$mp3Path" -i "$coverPath" '
         '-map 0:a -map 1 '
-        '-metadata artist="$artist" '
+        '-metadata title="$baseName" '
+        '-metadata artist="$cleanedAuthor" '
         '-metadata:s:v title="Album cover" '
         '-metadata:s:v comment="Cover (front)" '
         '-id3v2_version 3 -write_id3v1 1 '
         '-codec copy "$metaPath"',
       );
 
-      if ((await metaSession.getReturnCode())?.isValueSuccess() != true) {
-        throw Exception('Error al escribir metadata.');
+      if (!(await metaSession.getReturnCode())!.isValueSuccess()) {
+        throw Exception('Error al escribir metadatos');
       }
 
+      // Limpiar archivos temporales
+      await File(inputPath).delete();
       await File(mp3Path).delete();
-      await File(metaPath).rename(mp3Path);
       await File(coverPath).delete();
+      await File(metaPath).rename(mp3Path);
 
       // Indexar en Android
       MediaScanner.loadMedia(path: mp3Path);
@@ -235,8 +479,8 @@ class _DownloadScreenState extends State<DownloadScreen>
         showDialog(
           context: context,
           builder: (context) => AlertDialog(
-            title: const Text('Descarga fallida'),
-            content: Text('Ocurrió un error, intentalo de nuevo.'),
+            title: const Text('Error al procesar audio'),
+            content: Text('Detalles: ${e.toString()}'),
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(context).pop(),
@@ -245,9 +489,13 @@ class _DownloadScreenState extends State<DownloadScreen>
             ],
           ),
         );
+        if (mounted) {
+          setState(() {
+            _isProcessing = false;
+          });
+        }
       }
     } finally {
-      yt.close();
       if (mounted) setState(() => _isDownloading = false);
     }
   }
@@ -325,8 +573,7 @@ class _DownloadScreenState extends State<DownloadScreen>
                   content: const Text(
                     'Esta función descarga únicamente el audio de videos individuales de YouTube o YouTube Music.\n\n'
                     'No funciona con playlists, videos privados, ni contenido protegido por derechos de autor.\n\n'
-                    'El audio se guarda en formato .m4a en la carpeta seleccionada.\n\n'
-                    'Nota: Solo se descargará el audio, sin portada (carátula), artista ni metadatos adicionales.',
+                    'La descargar puede fallar por bloqueos de YouTube.',
                   ),
                   actions: [
                     TextButton(
@@ -421,10 +668,14 @@ class _DownloadScreenState extends State<DownloadScreen>
                 color: Theme.of(context).colorScheme.primaryContainer,
                 child: InkWell(
                   borderRadius: BorderRadius.circular(8),
-                  onTap: _isDownloading ? null : _downloadAudio,
+                  onTap: _isDownloading ? null : _downloadAudioOnly,
                   child: Center(
                     child: Text(
-                      _isDownloading ? 'Descargando...' : 'Descargar Audio',
+                      _isDownloading
+                          ? (_isProcessing
+                                ? 'Procesando audio...'
+                                : 'Descargando... ${((_progress / 0.6).clamp(0, 1) * 100).toStringAsFixed(0)}%')
+                          : 'Descargar Audio',
                       style: TextStyle(
                         color: Theme.of(context).colorScheme.onPrimaryContainer,
                         fontWeight: FontWeight.bold,

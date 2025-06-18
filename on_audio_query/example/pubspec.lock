@@ -177,10 +177,9 @@ packages:
   on_audio_query_android:
     dependency: transitive
     description:
-      name: on_audio_query_android
-      sha256: c0b946011ee7aa8ec76b21837f0cb0007120ac291202ed6c6fb4c498ba2ff6fe
-      url: "https://pub.dev"
-    source: hosted
+      path: "../../on_audio_query_android"
+      relative: true
+    source: path
     version: "1.1.0"
   on_audio_query_ios:
     dependency: transitive

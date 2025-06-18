@@ -124,7 +124,9 @@ class _SongsState extends State<Songs> {
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(10),
-        color: Colors.redAccent.withOpacity(0.5),
+        color: Colors.redAccent.withValues(
+          alpha: 50,
+        ),
       ),
       padding: const EdgeInsets.all(20),
       child: Column(

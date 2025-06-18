@@ -24,7 +24,6 @@ dependencies:
   share_plus: ^11.0.0
   cross_file: ^0.3.4+2
   http: ^1.4.0
-  palette_generator: ^0.3.3+7
   youtube_explode_dart: ^2.4.2
   file_selector: ^1.0.3
   audiotags: ^1.4.5

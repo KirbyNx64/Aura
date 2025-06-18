@@ -2,6 +2,9 @@ import 'package:audio_service/audio_service.dart';
 import 'package:audio_session/audio_session.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:on_audio_query/on_audio_query.dart';
+import 'dart:io';
+import 'dart:async';
+import 'package:path_provider/path_provider.dart';
 
 Future<AudioHandler> initAudioService() {
   return AudioService.init(
@@ -18,6 +21,8 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   final AudioPlayer _player = AudioPlayer();
   final List<MediaItem> _mediaQueue = [];
   bool _initializing = true;
+  Timer? _sleepTimer;
+  DateTime? _sleepEndTime;
 
   MyAudioHandler() {
     _init();
@@ -36,7 +41,6 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
           controls: [
             MediaControl.skipToPrevious,
             if (playing) MediaControl.pause else MediaControl.play,
-            MediaControl.stop,
             MediaControl.skipToNext,
           ],
           systemActions: const {
@@ -131,6 +135,23 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
           // Si algo falla, lo ignoramos y seguimos sin duración real
         }
       }
+
+      Uri? artUri;
+      try {
+        final albumArt = await OnAudioQuery().queryArtwork(
+          song.id,
+          ArtworkType.AUDIO,
+        );
+        if (albumArt != null) {
+          final tempDir = await getTemporaryDirectory();
+          final file = await File(
+            '${tempDir.path}/artwork_${song.id}.jpg',
+          ).writeAsBytes(albumArt);
+          artUri = Uri.file(file.path);
+        }
+      } catch (e) {
+        artUri = null;
+      }
       items.add(
         MediaItem(
           id: song.data,
@@ -138,9 +159,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
           title: song.title,
           artist: song.artist ?? '',
           duration: dur,
-          artUri: Uri.parse(
-            'content://media/external/audio/albumart/${song.albumId}',
-          ),
+          artUri: artUri,
           extras: {
             'songId': song.id,
             'albumId': song.albumId,
@@ -292,4 +311,29 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   }
 
   Stream<Duration> get positionStream => _player.positionStream;
+
+  /// Inicia el temporizador de apagado automático.
+  void startSleepTimer(Duration duration) {
+    _sleepTimer?.cancel();
+    _sleepEndTime = DateTime.now().add(duration);
+    _sleepTimer = Timer(duration, () async {
+      await pause();
+      _sleepEndTime = null;
+    });
+  }
+
+  void cancelSleepTimer() {
+    _sleepTimer?.cancel();
+    _sleepTimer = null;
+    _sleepEndTime = null;
+  }
+
+  /// Devuelve el tiempo restante o null si no hay temporizador activo.
+  Duration? get sleepTimeRemaining {
+    if (_sleepEndTime == null) return null;
+    final remaining = _sleepEndTime!.difference(DateTime.now());
+    return remaining.isNegative ? null : remaining;
+  }
+
+  bool get isSleepTimerActive => sleepTimeRemaining != null;
 }
