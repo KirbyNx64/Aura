@@ -11,6 +11,7 @@ import 'package:flutter/services.dart';
 import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit.dart';
 import 'package:media_scanner/media_scanner.dart';
 import 'package:http/http.dart' as http;
+import 'package:device_info_plus/device_info_plus.dart';
 
 class DownloadScreen extends StatefulWidget {
   const DownloadScreen({super.key});
@@ -82,15 +83,40 @@ class _DownloadScreenState extends State<DownloadScreen>
   }
 
   Future<void> _pickDirectory() async {
+    final androidInfo = await DeviceInfoPlugin().androidInfo;
+    final sdkInt = androidInfo.version.sdkInt;
+
+    if (sdkInt < 29) {
+      final path = await _getDefaultMusicDir();
+      setState(() => _directoryPath = path);
+      await _saveDirectory(path);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'En Android 9 o inferior se usará la carpeta Música por defecto.',
+          ),
+        ),
+      );
+      return;
+    }
+
     final String? path = await getDirectoryPath();
-    if (path == null) {
-      // El usuario canceló la selección
-    } else {
-      setState(() {
-        _directoryPath = path;
-      });
+    if (path != null) {
+      setState(() => _directoryPath = path);
       await _saveDirectory(path);
     }
+  }
+
+  Future<String> _getDefaultMusicDir() async {
+    if (Platform.isAndroid) {
+      final dir = Directory('/storage/emulated/0/Music');
+      if (await dir.exists()) return dir.path;
+      final downloads = await getExternalStorageDirectory();
+      return downloads?.path ?? '/storage/emulated/0/Download';
+    }
+    final docs = await getApplicationDocumentsDirectory();
+    return docs.path;
   }
 
   // Future<void> _downloadAudio() async {
@@ -256,16 +282,35 @@ class _DownloadScreenState extends State<DownloadScreen>
   //   }
   // }
 
-  Future<Video> _intentarObtenerVideo(YoutubeExplode yt, String url) async {
-    for (int intento = 0; intento < 10; intento++) {
+  Future<Video> _intentarObtenerVideo(
+    String url, {
+    int maxIntentos = 10,
+  }) async {
+    for (int intento = 1; intento <= maxIntentos; intento++) {
+      print('👻 Intento $intento...');
+
+      final yt = YoutubeExplode(
+        YoutubeHttpClient(),
+      ); // Nuevo cliente en cada intento
+
       try {
-        return await yt.videos.get(url);
+        final video = await yt.videos.get(url);
+        yt.close(); // Cerrar cliente después del éxito
+        print('📹 Video obtenido: ${video.title}');
+        return video;
       } on VideoUnavailableException {
+        yt.close();
+        print('❌ Video no disponible, reintentando...');
+        await Future.delayed(const Duration(seconds: 3));
+      } catch (e) {
+        yt.close();
+        print('⚠️ Error inesperado: $e');
         await Future.delayed(const Duration(seconds: 3));
       }
     }
+
     throw VideoUnavailableException(
-      'El video no está disponible después de varios intentos.',
+      '✖️ ERROR: El video no está disponible después de varios intentos.',
     );
   }
 
@@ -303,7 +348,7 @@ class _DownloadScreenState extends State<DownloadScreen>
 
     final yt = YoutubeExplode();
     try {
-      final video = await _intentarObtenerVideo(yt, url);
+      final video = await _intentarObtenerVideo(url);
       final manifest = await yt.videos.streamsClient.getManifest(video.id);
 
       final audioStreamInfo = manifest.audioOnly.withHighestBitrate();

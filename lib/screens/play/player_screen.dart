@@ -248,9 +248,16 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     final height = size.height;
 
     // Tamaños relativos
-    final artworkSize = width * 0.8; // Portada ocupa 70% del ancho
-    final progressBarWidth = artworkSize + width * 0.12;
-    final buttonFontSize = width * 0.04 + 10; // Ajusta según prefieras
+    final artworkSize = width * 0.8;
+    double progressBarWidth;
+    if (width <= 400) {
+      progressBarWidth = artworkSize * 1.2;
+    } else if (width <= 800) {
+      progressBarWidth = artworkSize * 1.3;
+    } else {
+      progressBarWidth = (artworkSize * 1.5).clamp(0, width * 0.9);
+    }
+    final buttonFontSize = width * 0.04 + 10;
 
     return GestureDetector(
       onVerticalDragUpdate: (details) {
@@ -299,7 +306,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
               child: Center(
                 child: Padding(
                   padding: EdgeInsets.symmetric(
-                    horizontal: width * 0.05,
+                    horizontal: width * 0.04,
                     vertical: height * 0.03,
                   ),
                   child: Column(
@@ -406,7 +413,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                           ],
                         ),
                       ),
-                      SizedBox(height: height * 0.02),
+                      SizedBox(height: height * 0.01),
                       SizedBox(
                         width: artworkSize,
                         child: Text(
@@ -563,105 +570,97 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                   (maxControlsWidth / 400 * 52).clamp(40, 80);
 
                               return Center(
-                                child: ConstrainedBox(
-                                  constraints: const BoxConstraints(
-                                    maxWidth: 400,
-                                  ),
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    mainAxisSize: MainAxisSize.max,
-                                    children: [
-                                      IconButton(
-                                        icon: const Icon(Icons.shuffle),
-                                        color: isShuffle
-                                            ? Theme.of(
-                                                context,
-                                              ).colorScheme.primary
-                                            : Colors.white,
-                                        iconSize: iconSize,
-                                        onPressed: () {
-                                          audioHandler.setShuffleMode(
-                                            isShuffle
-                                                ? AudioServiceShuffleMode.none
-                                                : AudioServiceShuffleMode.all,
-                                          );
-                                        },
-                                        tooltip: 'Aleatorio',
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  mainAxisSize: MainAxisSize.max,
+                                  children: [
+                                    IconButton(
+                                      icon: const Icon(Icons.shuffle),
+                                      color: isShuffle
+                                          ? Theme.of(
+                                              context,
+                                            ).colorScheme.primary
+                                          : Colors.white,
+                                      iconSize: iconSize,
+                                      onPressed: () {
+                                        audioHandler.setShuffleMode(
+                                          isShuffle
+                                              ? AudioServiceShuffleMode.none
+                                              : AudioServiceShuffleMode.all,
+                                        );
+                                      },
+                                      tooltip: 'Aleatorio',
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.skip_previous),
+                                      color: Colors.white,
+                                      iconSize: sideIconSize,
+                                      onPressed: () =>
+                                          audioHandler.skipToPrevious(),
+                                    ),
+                                    Padding(
+                                      padding: EdgeInsets.symmetric(
+                                        horizontal: iconSize / 4,
                                       ),
-                                      IconButton(
-                                        icon: const Icon(Icons.skip_previous),
+                                      child: Material(
                                         color: Colors.white,
-                                        iconSize: sideIconSize,
-                                        onPressed: () =>
-                                            audioHandler.skipToPrevious(),
-                                      ),
-                                      Padding(
-                                        padding: EdgeInsets.symmetric(
-                                          horizontal: iconSize / 4,
+                                        borderRadius: BorderRadius.circular(
+                                          mainIconSize / 4,
                                         ),
-                                        child: Material(
-                                          color: Colors.white,
+                                        child: InkWell(
                                           borderRadius: BorderRadius.circular(
-                                            mainIconSize / 4,
+                                            mainIconSize / 3.5,
                                           ),
-                                          child: InkWell(
-                                            borderRadius: BorderRadius.circular(
-                                              mainIconSize / 3.5,
-                                            ),
-                                            splashColor: Colors.transparent,
-                                            highlightColor: Colors.transparent,
-                                            onTap: () {
-                                              isPlaying
-                                                  ? audioHandler.pause()
-                                                  : audioHandler.play();
-                                            },
-                                            child: SizedBox(
-                                              width: mainIconSize,
-                                              height: mainIconSize,
-                                              child: Center(
-                                                child: Icon(
-                                                  isPlaying
-                                                      ? Icons.pause
-                                                      : Icons.play_arrow,
-                                                  color: Colors.black87,
-                                                  size: playIconSize,
-                                                ),
+                                          splashColor: Colors.transparent,
+                                          highlightColor: Colors.transparent,
+                                          onTap: () {
+                                            isPlaying
+                                                ? audioHandler.pause()
+                                                : audioHandler.play();
+                                          },
+                                          child: SizedBox(
+                                            width: mainIconSize,
+                                            height: mainIconSize,
+                                            child: Center(
+                                              child: Icon(
+                                                isPlaying
+                                                    ? Icons.pause
+                                                    : Icons.play_arrow,
+                                                color: Colors.black87,
+                                                size: playIconSize,
                                               ),
                                             ),
                                           ),
                                         ),
                                       ),
-                                      IconButton(
-                                        icon: const Icon(Icons.skip_next),
-                                        color: Colors.white,
-                                        iconSize: sideIconSize,
-                                        onPressed: () =>
-                                            audioHandler.skipToNext(),
-                                      ),
-                                      IconButton(
-                                        icon: Icon(repeatIcon),
-                                        color: repeatColor,
-                                        iconSize: iconSize,
-                                        onPressed: () {
-                                          AudioServiceRepeatMode newMode;
-                                          if (repeatMode ==
-                                              AudioServiceRepeatMode.none) {
-                                            newMode =
-                                                AudioServiceRepeatMode.all;
-                                          } else if (repeatMode ==
-                                              AudioServiceRepeatMode.all) {
-                                            newMode =
-                                                AudioServiceRepeatMode.one;
-                                          } else {
-                                            newMode =
-                                                AudioServiceRepeatMode.none;
-                                          }
-                                          audioHandler.setRepeatMode(newMode);
-                                        },
-                                        tooltip: 'Repetir',
-                                      ),
-                                    ],
-                                  ),
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.skip_next),
+                                      color: Colors.white,
+                                      iconSize: sideIconSize,
+                                      onPressed: () =>
+                                          audioHandler.skipToNext(),
+                                    ),
+                                    IconButton(
+                                      icon: Icon(repeatIcon),
+                                      color: repeatColor,
+                                      iconSize: iconSize,
+                                      onPressed: () {
+                                        AudioServiceRepeatMode newMode;
+                                        if (repeatMode ==
+                                            AudioServiceRepeatMode.none) {
+                                          newMode = AudioServiceRepeatMode.all;
+                                        } else if (repeatMode ==
+                                            AudioServiceRepeatMode.all) {
+                                          newMode = AudioServiceRepeatMode.one;
+                                        } else {
+                                          newMode = AudioServiceRepeatMode.none;
+                                        }
+                                        audioHandler.setRepeatMode(newMode);
+                                      },
+                                      tooltip: 'Repetir',
+                                    ),
+                                  ],
                                 ),
                               );
                             },
@@ -675,30 +674,13 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                           builder: (context, constraints) {
                             final isSmall = constraints.maxWidth < 380;
 
-                            return ShaderMask(
-                              shaderCallback: (Rect bounds) {
-                                return LinearGradient(
-                                  begin: Alignment.centerLeft,
-                                  end: Alignment.centerRight,
-                                  colors: [
-                                    Colors.transparent,
-                                    Colors.white,
-                                    Colors.white,
-                                    Colors.transparent,
-                                  ],
-                                  stops: const [0.0, 0.08, 0.92, 1.0],
-                                ).createShader(bounds);
-                              },
-                              blendMode: BlendMode.dstIn,
+                            return SizedBox(
                               child: SingleChildScrollView(
                                 scrollDirection: Axis.horizontal,
                                 child: Row(
-                                  mainAxisAlignment: MainAxisAlignment
-                                      .center, // Centra los botones
-                                  mainAxisSize: MainAxisSize.min,
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceEvenly,
                                   children: [
-                                    SizedBox(width: 20),
-
                                     // Botón Guardar
                                     AnimatedTapButton(
                                       onTap: () async {
@@ -712,8 +694,8 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                           ),
                                         ),
                                         padding: EdgeInsets.symmetric(
-                                          horizontal: isSmall ? 8 : 10,
-                                          vertical: 10,
+                                          horizontal: isSmall ? 12 : 14,
+                                          vertical: 14,
                                         ),
                                         margin: EdgeInsets.only(
                                           right: isSmall ? 8 : 12,
@@ -753,7 +735,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                         ),
                                         padding: EdgeInsets.symmetric(
                                           horizontal: isSmall ? 14 : 20,
-                                          vertical: 10,
+                                          vertical: 14,
                                         ),
                                         margin: EdgeInsets.only(
                                           right: isSmall ? 8 : 12,
@@ -901,7 +883,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                         ),
                                         padding: EdgeInsets.symmetric(
                                           horizontal: isSmall ? 14 : 20,
-                                          vertical: 10,
+                                          vertical: 16,
                                         ),
                                         child: InkWell(
                                           splashColor: Colors
@@ -928,15 +910,6 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                 color: Colors.white,
                                                 size: isSmall ? 18 : 22,
                                               ),
-                                              SizedBox(width: isSmall ? 6 : 8),
-                                              Text(
-                                                'Compartir',
-                                                style: TextStyle(
-                                                  color: Colors.white,
-                                                  fontWeight: FontWeight.w600,
-                                                  fontSize: isSmall ? 14 : 16,
-                                                ),
-                                              ),
                                             ],
                                           ),
                                         ),
@@ -949,8 +922,6 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                           },
                         ),
                       ),
-
-                      const SizedBox(height: 24),
                     ],
                   ),
                 ),

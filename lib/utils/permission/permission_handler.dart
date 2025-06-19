@@ -1,20 +1,24 @@
 // permisos.dart
 import 'package:permission_handler/permission_handler.dart';
+import 'package:device_info_plus/device_info_plus.dart';
+import 'dart:io';
 
-Future<void> pedirPermisoAudio() async {
-  if (await Permission.audio.isGranted) return;
+Future<void> pedirPermisosMedia() async {
+  if (!Platform.isAndroid) return;
 
-  await Permission.audio.request();
-}
+  final androidInfo = await DeviceInfoPlugin().androidInfo;
+  final sdkInt = androidInfo.version.sdkInt;
 
-Future<bool> requestMusicPermission() async {
-  // Para Android 13+ (API 33)
-  if (await Permission.audio.isGranted) return true;
-  if (await Permission.audio.request().isGranted) return true;
-
-  // Para Android <= 12
-  if (await Permission.storage.isGranted) return true;
-  if (await Permission.storage.request().isGranted) return true;
-
-  return false;
+  if (sdkInt >= 33) {
+    // Android 13+
+    await Permission.audio.request();
+    await Permission.photos.request();
+  } else if (sdkInt >= 30) {
+    // Android 11-12
+    await Permission.storage.request();
+    await Permission.manageExternalStorage.request();
+  } else {
+    // Android 10 o menor (incluye Android 9)
+    await Permission.storage.request();
+  }
 }

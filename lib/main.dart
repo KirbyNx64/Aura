@@ -12,7 +12,7 @@ late final AudioHandler audioHandler;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await pedirPermisoAudio();
+  await pedirPermisosMedia();
   audioHandler = await initAudioService();
   runApp(const MainApp());
 }
