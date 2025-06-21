@@ -16,6 +16,7 @@ import 'package:device_info_plus/device_info_plus.dart';
 import 'package:dio/dio.dart';
 import 'package:music/screens/download/stream_provider.dart';
 import 'package:path/path.dart' as p;
+import 'package:music/main.dart';
 
 class DownloadScreen extends StatefulWidget {
   const DownloadScreen({super.key});
@@ -586,6 +587,32 @@ class _DownloadScreenState extends State<DownloadScreen>
     final baseName = title.replaceAll(RegExp(r'[\\/:*?"<>|]'), '').trim();
     final saveDir = File(inputPath).parent.path;
     final mp3Path = '$saveDir/$baseName.mp3';
+
+    if (await File(mp3Path).exists()) {
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Archivo existente'),
+            content: const Text(
+              'Ya existe un archivo con este nombre en la carpeta seleccionada. Elimina o renombra el archivo antes de descargar de nuevo.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+      }
+      setState(() {
+        _isProcessing = false;
+        _isDownloading = false;
+      });
+      return;
+    }
+
     final metaPath = '$saveDir/${baseName}_meta.mp3';
     final tempDir = await getTemporaryDirectory();
     final coverPath = '${tempDir.path}/${baseName}_cover.jpg';
@@ -699,6 +726,39 @@ class _DownloadScreenState extends State<DownloadScreen>
       }
 
       setState(() => _progress = 0.9);
+
+      final currentMediaItem =
+          audioHandler.mediaItem.value; // O usa handler.mediaItem.value
+      final isPlayingCurrent =
+          currentMediaItem != null && currentMediaItem.id == mp3Path;
+
+      if (isPlayingCurrent) {
+        await File(mp3Path).delete();
+        await File(inputPath).delete();
+        await File(coverPath).delete();
+        if (mounted) {
+          showDialog(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Text('Archivo en reproducción'),
+              content: const Text(
+                'No se puede sobrescribir el archivo porque está en reproducción. Por favor, detén la reproducción antes de descargar de nuevo.',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('OK'),
+                ),
+              ],
+            ),
+          );
+        }
+        setState(() {
+          _isProcessing = false;
+          _isDownloading = false;
+        });
+        return;
+      }
 
       // 3. Limpiar: borrar input y mp3 sin metadata, renombrar meta a mp3 final
       await File(mp3Path).delete();

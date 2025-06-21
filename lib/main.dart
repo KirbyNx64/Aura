@@ -7,12 +7,17 @@ import 'screens/home/home_screen.dart';
 import 'screens/likes/favorites_screen.dart';
 import 'screens/folders/folders_screen.dart';
 import 'screens/download/download_screen.dart';
+import 'package:flutter/services.dart';
 
 late final AudioHandler audioHandler;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await pedirPermisosMedia();
+  await SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+    DeviceOrientation.portraitDown,
+  ]);
   audioHandler = await initAudioService();
   runApp(const MainApp());
 }

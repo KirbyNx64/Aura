@@ -138,7 +138,9 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
           final audioSource = AudioSource.uri(Uri.file(song.data));
           await _player.setAudioSource(audioSource, preload: false);
           dur = await _player.setFilePath(song.data);
-        } catch (e) {}
+        } catch (e) {
+          // Si falla, asigna una duración nula
+        }
       }
 
       Uri? artUri;

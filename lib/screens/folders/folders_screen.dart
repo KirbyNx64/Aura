@@ -30,17 +30,12 @@ class _FoldersScreenState extends State<FoldersScreen>
 
   double _lastBottomInset = 0.0;
 
-  final int _pageSize = 50;
-  int _currentMax = 50;
-  late ScrollController _scrollController;
-
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     cargarCanciones();
     foldersShouldReload.addListener(_onFoldersShouldReload);
-    _scrollController = ScrollController()..addListener(_onScroll);
   }
 
   @override
@@ -54,8 +49,11 @@ class _FoldersScreenState extends State<FoldersScreen>
   }
 
   Future<void> cargarCanciones() async {
-    final permiso = await _audioQuery.permissionsRequest();
-    if (!permiso) return;
+    final permiso = await _audioQuery.permissionsStatus();
+    if (!permiso) {
+      final solicitado = await _audioQuery.permissionsRequest();
+      if (!solicitado) return;
+    }
 
     final lista = await _audioQuery.querySongs();
 
@@ -125,21 +123,13 @@ class _FoldersScreenState extends State<FoldersScreen>
   }
 
   Future<void> _playSong(SongModel song) async {
-    const int maxQueueSongs = 200;
     final playlist = songsByFolder[carpetaSeleccionada] ?? [];
     final index = playlist.indexWhere((s) => s.id == song.id);
 
     if (index != -1) {
-      int before = (maxQueueSongs / 2).floor();
-      int after = maxQueueSongs - before;
-      int start = (index - before).clamp(0, playlist.length);
-      int end = (index + after).clamp(0, playlist.length);
-      List<SongModel> limitedQueue = playlist.sublist(start, end);
-      int newIndex = index - start;
-
       await (audioHandler as MyAudioHandler).setQueueFromSongs(
-        limitedQueue,
-        initialIndex: newIndex,
+        playlist,
+        initialIndex: index,
       );
       await audioHandler.play();
     }
@@ -158,7 +148,7 @@ class _FoldersScreenState extends State<FoldersScreen>
   void _onSongSelected(SongModel song) {
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 300), () async {
-      if (!mounted) return;
+      if (!mounted) return; // <-- Agrega esta línea
       await _playSong(song);
     });
   }
@@ -185,24 +175,7 @@ class _FoldersScreenState extends State<FoldersScreen>
           return title.contains(query) || artist.contains(query);
         }).toList();
       }
-      _currentMax = _pageSize;
     });
-  }
-
-  void _onScroll() {
-    if (_scrollController.position.pixels >=
-        _scrollController.position.maxScrollExtent) {
-      // Estás en el final de la lista, carga más elementos
-      _loadMore();
-    }
-  }
-
-  void _loadMore() {
-    if (_currentMax < songsByFolder.length) {
-      setState(() {
-        _currentMax += _pageSize;
-      });
-    }
   }
 
   @override
@@ -212,7 +185,6 @@ class _FoldersScreenState extends State<FoldersScreen>
     _searchController.dispose();
     _searchFocusNode.dispose();
     foldersShouldReload.removeListener(_onFoldersShouldReload);
-    _scrollController.dispose();
     super.dispose();
   }
 
@@ -271,7 +243,7 @@ class _FoldersScreenState extends State<FoldersScreen>
                     final canciones = entry.value;
 
                     return ListTile(
-                      leading: const Icon(Icons.folder, size: 36),
+                      leading: const Icon(Icons.folder, size: 38),
                       title: Text(nombre),
                       subtitle: Text('${canciones.length} canciones'),
                       onTap: () {
@@ -279,7 +251,6 @@ class _FoldersScreenState extends State<FoldersScreen>
                           carpetaSeleccionada = entry.key;
                           _searchController.clear();
                           _filteredSongs = List.from(canciones);
-                          _currentMax = _pageSize;
                         });
                       },
                     );
@@ -372,7 +343,6 @@ class _FoldersScreenState extends State<FoldersScreen>
                             ),
                           )
                         : ListView.builder(
-                            controller: _scrollController,
                             itemCount: _filteredSongs.length,
                             itemBuilder: (context, i) {
                               final song = _filteredSongs[i];

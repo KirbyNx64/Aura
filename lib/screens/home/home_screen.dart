@@ -10,7 +10,6 @@ import 'package:music/utils/notifiers.dart';
 import 'package:flutter/services.dart';
 import 'package:music/utils/db/playlists_db.dart';
 import 'package:audio_service/audio_service.dart';
-import 'package:music/screens/home/settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   final void Function(int)? onTabChange;
@@ -32,7 +31,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   List<SongModel> _mostPlayed = [];
   final PageController _pageController = PageController(viewportFraction: 0.95);
   final PageController _quickPickPageController = PageController(
-    viewportFraction: 0.95,
+    viewportFraction: 0.90,
   );
   List<Map<String, dynamic>> _playlists = [];
 
@@ -57,6 +56,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       setState(() {});
     });
     _loadPlaylists();
+    playlistsShouldReload.addListener(_onPlaylistsShouldReload);
   }
 
   void _initQuickPickPages() {
@@ -143,6 +143,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     });
   }
 
+  void _onPlaylistsShouldReload() {
+    _loadPlaylists();
+  }
+
   String _quitarDiacriticos(String texto) {
     const conAcentos = 'áàäâãéèëêíìïîóòöôõúùüûÁÀÄÂÃÉÈËÊÍÌÏÎÓÒÖÔÕÚÙÜÛ';
     const sinAcentos = 'aaaaaeeeeiiiiooooouuuuaaaaaeeeeiiiiooooouuuu';
@@ -166,6 +170,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    playlistsShouldReload.removeListener(_onPlaylistsShouldReload);
     _pageController.dispose();
     _searchRecentsController.dispose();
     _searchRecentsFocus.dispose();
@@ -321,12 +326,61 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     onPressed: _loadRecents,
                   ),
                   IconButton(
-                    icon: const Icon(Icons.settings_outlined, size: 28),
-                    tooltip: 'Ajustes',
+                    icon: const Icon(Icons.info_outline, size: 28),
+                    tooltip: 'Acerca de',
                     onPressed: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (context) => const SettingsScreen(),
+                      showDialog(
+                        context: context,
+                        builder: (context) => AlertDialog(
+                          contentPadding: const EdgeInsets.fromLTRB(
+                            24,
+                            24,
+                            24,
+                            8,
+                          ),
+                          content: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(16),
+                                child: Image.asset(
+                                  'assets/icon.png',
+                                  width: 64,
+                                  height: 64,
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              const Text(
+                                'Aura Music',
+                                style: TextStyle(
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                              const SizedBox(height: 4),
+                              const Text(
+                                'v1.0.0',
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  color: Colors.white70,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                              const SizedBox(height: 12),
+                              const Text(
+                                'Music es una app para reproducir tu música local de forma rápida y sencilla. '
+                                'Disfruta de tus canciones favoritas, crea playlists y mucho más.',
+                                textAlign: TextAlign.center,
+                              ),
+                            ],
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.of(context).pop(),
+                              child: const Text('Cerrar'),
+                            ),
+                          ],
                         ),
                       );
                     },
@@ -778,9 +832,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                         } else {
                                           return Container(
                                             decoration: BoxDecoration(
-                                              color: Theme.of(context)
-                                                  .colorScheme
-                                                  .surfaceContainerHighest,
+                                              color: Theme.of(
+                                                context,
+                                              ).colorScheme.surfaceContainer,
                                               borderRadius:
                                                   BorderRadius.circular(12),
                                             ),
@@ -863,6 +917,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                   ),
                                                   child: ListTile(
                                                     key: ValueKey(song.id),
+                                                    contentPadding:
+                                                        const EdgeInsets.symmetric(
+                                                          horizontal: 0,
+                                                        ),
+                                                    splashColor:
+                                                        Colors.transparent,
                                                     leading: ClipRRect(
                                                       borderRadius:
                                                           BorderRadius.circular(
@@ -872,7 +932,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                         id: song.id,
                                                         type: ArtworkType.AUDIO,
                                                         artworkHeight: 60,
-                                                        artworkWidth: 60,
+                                                        artworkWidth: 57,
                                                         artworkBorder:
                                                             BorderRadius.zero,
                                                         artworkFit:
@@ -882,8 +942,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                           color: Theme.of(context)
                                                               .colorScheme
                                                               .surfaceContainer,
-                                                          width: 44,
-                                                          height: 44,
+                                                          width: 60,
+                                                          height: 67,
                                                           child: const Icon(
                                                             Icons.music_note,
                                                             color:
@@ -908,6 +968,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                       maxLines: 1,
                                                       overflow:
                                                           TextOverflow.ellipsis,
+                                                    ),
+                                                    trailing: const Opacity(
+                                                      opacity: 0,
+                                                      child: Icon(
+                                                        Icons.more_vert,
+                                                      ), // Ícono invisible, sin splash
                                                     ),
                                                     onTap: () => _playSong(
                                                       song,
@@ -1244,88 +1310,6 @@ class _AnimatedTapButtonState extends State<AnimatedTapButton> {
         curve: Curves.easeOut,
         child: widget.child,
       ),
-    );
-  }
-}
-
-class QuickPickSection extends StatefulWidget {
-  final List<SongModel> mostPlayed;
-  final void Function(SongModel) onTap;
-  final void Function(BuildContext, SongModel) onLongPress;
-
-  const QuickPickSection({
-    super.key,
-    required this.mostPlayed,
-    required this.onTap,
-    required this.onLongPress,
-  });
-
-  @override
-  State<QuickPickSection> createState() => _QuickPickSectionState();
-}
-
-class _QuickPickSectionState extends State<QuickPickSection> {
-  late final List<SongModel> _quickPickSongs;
-
-  @override
-  void initState() {
-    super.initState();
-    final randomSongs = List<SongModel>.from(widget.mostPlayed);
-    randomSongs.shuffle();
-    _quickPickSongs = randomSongs.take(4).toList();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (_quickPickSongs.isEmpty) {
-      return const Padding(
-        padding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-        child: Text('No hay canciones para mostrar.'),
-      );
-    }
-    return ListView.separated(
-      key: const PageStorageKey('quick_pick_list'),
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: _quickPickSongs.length,
-      separatorBuilder: (_, __) => const SizedBox.shrink(),
-      itemBuilder: (context, index) {
-        final song = _quickPickSongs[index];
-        return ListTile(
-          key: ValueKey(song.id),
-          minLeadingWidth: 56, // <-- Esto fuerza el espacio cuadrado
-          contentPadding: EdgeInsets.zero,
-          leading: ClipRRect(
-            borderRadius: BorderRadius.circular(
-              8,
-            ), // cuadrado con esquinas levemente redondeadas
-            child: QueryArtworkWidget(
-              id: song.id,
-              type: ArtworkType.AUDIO,
-              artworkBorder: BorderRadius.circular(8), // igual que arriba
-              artworkHeight: 44,
-              artworkWidth: 44,
-              keepOldArtwork: true,
-              nullArtworkWidget: Container(
-                color: Theme.of(context).colorScheme.surfaceContainer,
-                width: 44,
-                height: 44,
-                child: const Icon(Icons.music_note, color: Colors.white70),
-              ),
-            ),
-          ),
-          title: Text(song.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-          subtitle: Text(
-            (song.artist?.trim().isEmpty ?? true)
-                ? 'Desconocido'
-                : song.artist!,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          onTap: () => widget.onTap(song),
-          onLongPress: () => widget.onLongPress(context, song),
-        );
-      },
     );
   }
 }

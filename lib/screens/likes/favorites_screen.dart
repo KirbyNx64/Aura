@@ -164,25 +164,6 @@ class _FavoritesScreenState extends State<FavoritesScreen>
             const Text('Me gusta'),
           ],
         ),
-        actions: [
-          AnimatedBuilder(
-            animation: _refreshController,
-            builder: (context, child) {
-              return Transform.rotate(
-                angle: _refreshController.value * 6.3,
-                child: IconButton(
-                  icon: const Icon(Icons.refresh),
-                  tooltip: 'Recargar',
-                  onPressed: () {
-                    if (!_isReloading) {
-                      _loadFavorites();
-                    }
-                  },
-                ),
-              );
-            },
-          ),
-        ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(56),
           child: Padding(

@@ -361,6 +361,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                       controller,
                       mediaItem,
                     );
+                    playlistsShouldReload.value = !playlistsShouldReload.value;
                   },
                 ),
               ],
