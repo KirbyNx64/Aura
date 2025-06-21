@@ -3,8 +3,11 @@ import 'package:music/main.dart';
 import 'package:flutter/material.dart';
 import 'package:music/widgets/now_playing_overlay.dart';
 
+typedef PageBuilderWithTabChange =
+    Widget Function(BuildContext context, void Function(int) onTabChange);
+
 class Material3BottomNav extends StatefulWidget {
-  final List<WidgetBuilder> pageBuilders;
+  final List<PageBuilderWithTabChange> pageBuilders;
   final int initialIndex;
 
   const Material3BottomNav({
@@ -26,23 +29,29 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
     super.initState();
     _selectedIndex = widget.initialIndex;
     _pages = List<Widget?>.filled(widget.pageBuilders.length, null);
-    // Construye la página inicial
-    _pages[_selectedIndex] = widget.pageBuilders[_selectedIndex](context);
+    _pages[_selectedIndex] = widget.pageBuilders[_selectedIndex](
+      context,
+      _onTabChange,
+    );
   }
 
   void _onItemTapped(int index) {
     setState(() {
       _selectedIndex = index;
-      // Construye la página solo si no existe
-      _pages[index] ??= widget.pageBuilders[index](context);
+      _pages[index] ??= widget.pageBuilders[index](context, _onTabChange);
     });
+  }
+
+  // Nuevo: función para cambiar de pestaña desde hijos
+  void _onTabChange(int index) {
+    _onItemTapped(index);
   }
 
   static const _navBarItems = [
     NavigationDestination(
-      icon: Icon(Icons.queue_music_outlined),
-      selectedIcon: Icon(Icons.queue_music),
-      label: 'Listas',
+      icon: Icon(Icons.home_outlined),
+      selectedIcon: Icon(Icons.home),
+      label: 'Inicio',
     ),
     NavigationDestination(
       icon: Icon(Icons.favorite_border),

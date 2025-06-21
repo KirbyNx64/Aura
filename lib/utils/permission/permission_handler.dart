@@ -13,6 +13,7 @@ Future<void> pedirPermisosMedia() async {
     // Android 13+
     await Permission.audio.request();
     await Permission.photos.request();
+    await Permission.storage.request();
   } else if (sdkInt >= 30) {
     // Android 11-12
     await Permission.storage.request();

@@ -38,10 +38,10 @@ class MainApp extends StatelessWidget {
       ),
       home: Material3BottomNav(
         pageBuilders: [
-          (context) => HomeScreen(),
-          (context) => FavoritesScreen(),
-          (context) => FoldersScreen(),
-          (context) => DownloadScreen(),
+          (context, onTabChange) => HomeScreen(onTabChange: onTabChange),
+          (context, onTabChange) => FavoritesScreen(),
+          (context, onTabChange) => FoldersScreen(),
+          (context, onTabChange) => DownloadScreen(),
         ],
       ),
     );

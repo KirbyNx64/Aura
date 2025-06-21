@@ -117,10 +117,17 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   }) async {
     _initializing = true;
 
-    final items = <MediaItem>[];
-    final sources = <AudioSource>[];
+    final int start = (initialIndex - 2).clamp(0, songs.length - 1);
+    final int end = (initialIndex + 2).clamp(0, songs.length - 1);
 
-    for (int i = 0; i < songs.length; i++) {
+    // 1. Prepara todas las fuentes de audio
+    final sources = <AudioSource>[
+      for (final song in songs) AudioSource.uri(Uri.file(song.data)),
+    ];
+
+    // 2. Prepara solo los MediaItem de la ventana inicial
+    final items = <MediaItem>[];
+    for (int i = start; i <= end; i++) {
       final song = songs[i];
       Duration? dur = (song.duration != null && song.duration! > 0)
           ? Duration(milliseconds: song.duration!)
@@ -131,9 +138,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
           final audioSource = AudioSource.uri(Uri.file(song.data));
           await _player.setAudioSource(audioSource, preload: false);
           dur = await _player.setFilePath(song.data);
-        } catch (e) {
-          // Si algo falla, lo ignoramos y seguimos sin duración real
-        }
+        } catch (e) {}
       }
 
       Uri? artUri;
@@ -167,61 +172,79 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
           },
         ),
       );
-
-      sources.add(AudioSource.uri(Uri.file(song.data)));
     }
 
+    // 3. Llena la cola visual con los MediaItem de la ventana y placeholders para el resto
     _mediaQueue
       ..clear()
-      ..addAll(items);
+      ..addAll([
+        ...List.generate(
+          start,
+          (i) => MediaItem(id: songs[i].data, title: songs[i].title),
+        ),
+        ...items,
+        ...List.generate(
+          songs.length - end - 1,
+          (i) => MediaItem(
+            id: songs[end + 1 + i].data,
+            title: songs[end + 1 + i].title,
+          ),
+        ),
+      ]);
     queue.add(_mediaQueue);
 
+    // 4. Carga todas las fuentes en el reproductor
     await _player.setAudioSources(
       sources,
       initialIndex: initialIndex,
       initialPosition: Duration.zero,
     );
-
     if (initialIndex >= 0 && initialIndex < _mediaQueue.length) {
       mediaItem.add(_mediaQueue[initialIndex]);
     }
 
     _initializing = false;
-  }
 
-  Future<void> setQueueFromFavorites(
-    List<Map<String, dynamic>> favorites, {
-    int initialIndex = 0,
-  }) async {
-    final mediaItems = favorites.map((song) {
-      return MediaItem(
-        id: song['id'].toString(),
-        album: song['album'] ?? '',
-        title: song['title'] ?? '',
-        artist: song['artist'] ?? '',
-        artUri: song['artUri'] != null ? Uri.parse(song['artUri']) : null,
-        extras: {'data': song['artUri']},
-      );
-    }).toList();
-
-    final audioSources = favorites.map((song) {
-      return AudioSource.uri(Uri.parse(song['artUri']));
-    }).toList();
-
-    _mediaQueue
-      ..clear()
-      ..addAll(mediaItems);
-    queue.add(_mediaQueue);
-
-    await _player.setAudioSources(
-      audioSources,
-      initialIndex: initialIndex,
-      initialPosition: Duration.zero,
-    );
-
-    if (initialIndex >= 0 && initialIndex < _mediaQueue.length) {
-      mediaItem.add(_mediaQueue[initialIndex]);
-    }
+    // 5. En segundo plano, completa los MediaItem faltantes
+    Future(() async {
+      for (int i = 0; i < songs.length; i++) {
+        if (i >= start && i <= end) continue; // Ya están completos
+        final song = songs[i];
+        Duration? dur = (song.duration != null && song.duration! > 0)
+            ? Duration(milliseconds: song.duration!)
+            : null;
+        Uri? artUri;
+        try {
+          final albumArt = await OnAudioQuery().queryArtwork(
+            song.id,
+            ArtworkType.AUDIO,
+          );
+          if (albumArt != null) {
+            final tempDir = await getTemporaryDirectory();
+            final file = await File(
+              '${tempDir.path}/artwork_${song.id}.jpg',
+            ).writeAsBytes(albumArt);
+            artUri = Uri.file(file.path);
+          }
+        } catch (e) {
+          artUri = null;
+        }
+        _mediaQueue[i] = MediaItem(
+          id: song.data,
+          album: song.album ?? '',
+          title: song.title,
+          artist: song.artist ?? '',
+          duration: dur,
+          artUri: artUri,
+          extras: {
+            'songId': song.id,
+            'albumId': song.albumId,
+            'data': song.data,
+          },
+        );
+        queue.add(_mediaQueue);
+      }
+    });
   }
 
   AudioPlayer get player => _player;

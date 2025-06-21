@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
@@ -12,6 +13,9 @@ import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit.dart';
 import 'package:media_scanner/media_scanner.dart';
 import 'package:http/http.dart' as http;
 import 'package:device_info_plus/device_info_plus.dart';
+import 'package:dio/dio.dart';
+import 'package:music/screens/download/stream_provider.dart';
+import 'package:path/path.dart' as p;
 
 class DownloadScreen extends StatefulWidget {
   const DownloadScreen({super.key});
@@ -26,10 +30,13 @@ class _DownloadScreenState extends State<DownloadScreen>
   final _focusNode = FocusNode();
   bool _isDownloading = false;
   bool _isProcessing = false;
+
+  bool _usarExplode = false;
+
   double _progress = 0.0;
   String? _directoryPath;
 
-  double _lastBottomInset = 0.0; // <-- Ya está declarado
+  double _lastBottomInset = 0.0;
 
   @override
   void initState() {
@@ -282,44 +289,13 @@ class _DownloadScreenState extends State<DownloadScreen>
   //   }
   // }
 
-  Future<Video> _intentarObtenerVideo(
-    String url, {
-    int maxIntentos = 10,
-  }) async {
-    for (int intento = 1; intento <= maxIntentos; intento++) {
-      print('👻 Intento $intento...');
-
-      final yt = YoutubeExplode(
-        YoutubeHttpClient(),
-      ); // Nuevo cliente en cada intento
-
-      try {
-        final video = await yt.videos.get(url);
-        yt.close(); // Cerrar cliente después del éxito
-        print('📹 Video obtenido: ${video.title}');
-        return video;
-      } on VideoUnavailableException {
-        yt.close();
-        print('❌ Video no disponible, reintentando...');
-        await Future.delayed(const Duration(seconds: 3));
-      } catch (e) {
-        yt.close();
-        print('⚠️ Error inesperado: $e');
-        await Future.delayed(const Duration(seconds: 3));
-      }
-    }
-
-    throw VideoUnavailableException(
-      '✖️ ERROR: El video no está disponible después de varios intentos.',
-    );
-  }
-
-  Future<void> _downloadAudioOnly() async {
+  Future<void> _downloadAudioOnlyExplode() async {
     final url = _urlController.text.trim();
     if (url.isEmpty) return;
     if (!await _ensurePermissions()) return;
 
-    if (Platform.isAndroid && _directoryPath == null) {
+    if (Platform.isAndroid && _directoryPath == null ||
+        _directoryPath!.isEmpty) {
       if (mounted) {
         showDialog(
           context: context,
@@ -381,6 +357,7 @@ class _DownloadScreenState extends State<DownloadScreen>
       if (!await file.exists()) throw Exception('La descarga falló.');
 
       await _procesarAudio(
+        video.id.toString(),
         filePath,
         video.title,
         video.author,
@@ -431,7 +408,6 @@ class _DownloadScreenState extends State<DownloadScreen>
         );
       }
     } finally {
-      yt.close();
       if (mounted) {
         setState(() {
           _isDownloading = false;
@@ -441,7 +417,163 @@ class _DownloadScreenState extends State<DownloadScreen>
     }
   }
 
+  Future<Video> _intentarObtenerVideo(
+    String url, {
+    int maxIntentos = 10,
+  }) async {
+    for (int intento = 1; intento <= maxIntentos; intento++) {
+      final yt = YoutubeExplode(YoutubeHttpClient());
+
+      try {
+        final video = await yt.videos.get(url);
+        yt.close();
+        return video;
+      } on VideoUnavailableException {
+        yt.close();
+        await Future.delayed(const Duration(seconds: 3));
+      } catch (e) {
+        yt.close();
+        await Future.delayed(const Duration(seconds: 3));
+      }
+    }
+
+    throw VideoUnavailableException(
+      '✖️ ERROR: El video no está disponible después de varios intentos.',
+    );
+  }
+
+  Future<void> _downloadAudioOnly() async {
+    final url = _urlController.text.trim();
+    if (url.isEmpty) return;
+    if (!await _ensurePermissions()) return;
+
+    if (Platform.isAndroid && _directoryPath == null ||
+        _directoryPath!.isEmpty) {
+      _mostrarAlerta(
+        titulo: 'Carpeta no seleccionada',
+        mensaje: 'Debes seleccionar una carpeta antes de descargar el audio.',
+      );
+      return;
+    }
+
+    setState(() {
+      _isDownloading = true;
+      _isProcessing = false;
+      _progress = 0.0;
+    });
+
+    try {
+      // Extraer videoId de la URL
+      final videoId = VideoId.parseVideoId(url);
+      if (videoId == null) throw Exception('URL inválida');
+
+      // Reintento para obtener video + manifest
+      late Video video;
+      late StreamManifest manifest;
+
+      for (int intento = 1; intento <= 1; intento++) {
+        final yt = YoutubeExplode();
+        try {
+          video = await yt.videos.get(videoId);
+          manifest = await yt.videos.streamsClient.getManifest(videoId);
+          yt.close();
+          break;
+        } on VideoUnavailableException {
+          yt.close();
+          await Future.delayed(const Duration(seconds: 3));
+        } catch (_) {
+          yt.close();
+          await Future.delayed(const Duration(seconds: 3));
+        }
+
+        if (intento == 1) {
+          throw VideoUnavailableException('No se pudo obtener el video.');
+        }
+      }
+
+      // Crear StreamProvider desde el manifest
+      final streamProvider = StreamProvider.fromManifest(manifest);
+
+      if (!streamProvider.playable || streamProvider.audioFormats == null) {
+        _mostrarAlerta(
+          titulo: 'Audio no disponible',
+          mensaje: 'No se pudo obtener el stream de audio.',
+        );
+        return;
+      }
+
+      // Elegir mejor stream de audio
+      final audio =
+          streamProvider.highestBitrateOpusAudio ??
+          streamProvider.highestBitrateMp4aAudio;
+
+      if (audio == null) {
+        throw Exception('No se encontró stream de audio válido.');
+      }
+
+      final ext = audio.audioCodec == Codec.opus ? 'opus' : 'm4a';
+      final safeTitle = video.title
+          .replaceAll(RegExp(r'[\\/:*?"<>|]'), '')
+          .trim();
+
+      final dir = Platform.isAndroid
+          ? _directoryPath!
+          : (await getApplicationDocumentsDirectory()).path;
+
+      final filePath = '$dir/$safeTitle.$ext';
+
+      final dio = Dio();
+      await dio.download(
+        audio.url,
+        filePath,
+        onReceiveProgress: (count, total) {
+          if (total > 0) {
+            setState(() => _progress = (count / total) * 0.6);
+          }
+        },
+        options: Options(headers: {"Range": "bytes=0-${audio.size}"}),
+      );
+
+      if (!await File(filePath).exists()) throw Exception("La descarga falló.");
+
+      await _procesarAudio(
+        video.id.toString(),
+        filePath,
+        video.title,
+        video.author,
+        video.thumbnails.highResUrl,
+      );
+    } catch (e) {
+      _mostrarAlerta(titulo: 'Error', mensaje: e.toString());
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isDownloading = false;
+          _isProcessing = false;
+        });
+      }
+    }
+  }
+
+  void _mostrarAlerta({required String titulo, required String mensaje}) {
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text(titulo),
+        content: Text(mensaje),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _procesarAudio(
+    String videoId,
     String inputPath,
     String title,
     String author,
@@ -450,37 +582,87 @@ class _DownloadScreenState extends State<DownloadScreen>
     setState(() {
       _isProcessing = true;
     });
-    final saveDir = File(inputPath).parent.path;
-    final tempDir = await getTemporaryDirectory();
+
     final baseName = title.replaceAll(RegExp(r'[\\/:*?"<>|]'), '').trim();
+    final saveDir = File(inputPath).parent.path;
     final mp3Path = '$saveDir/$baseName.mp3';
     final metaPath = '$saveDir/${baseName}_meta.mp3';
+    final tempDir = await getTemporaryDirectory();
     final coverPath = '${tempDir.path}/${baseName}_cover.jpg';
 
-    for (final path in [mp3Path, metaPath, coverPath]) {
-      final file = File(path);
-      if (file.existsSync()) await file.delete();
+    final metaFolder = Directory(p.dirname(saveDir));
+    if (!await metaFolder.exists()) {
+      await metaFolder.create(recursive: true);
     }
 
     try {
       setState(() => _progress = 0.65);
 
-      // Conversión a MP3 (sin video)
+      // 1. Convertir a MP3 (sin metadatos) directo en carpeta final
       final convertSession = await FFmpegKit.execute(
-        '-i "$inputPath" -vn -acodec libmp3lame "$mp3Path"',
+        '-y -i "$inputPath" '
+        '-vn -acodec libmp3lame -ar 44100 -ac 2 '
+        '"$mp3Path"',
       );
+      final convertCode = await convertSession.getReturnCode();
+      if (convertCode == null || !convertCode.isValueSuccess()) {
+        // Obtener logs estándar
+        // final logs = await convertSession.getAllLogs();
+        // final allMessages = logs.map((e) => e.getMessage()).join('\n');
 
-      if (!(await convertSession.getReturnCode())!.isValueSuccess()) {
-        throw Exception('Error al convertir a MP3');
+        // Solo las últimas 20 líneas del log
+        // final lastLines = allMessages
+        //     .split('\n')
+        //     .where((line) => line.trim().isNotEmpty)
+        //     .toList()
+        //     .reversed
+        //     .take(20)
+        //     .toList()
+        //     .reversed
+        //     .join('\n');
+
+        // print('👻 Error al convertir a MP3 (últimas líneas):\n$lastLines');
+        throw Exception(
+          'Error al procesar el audio, intenta usar otra carpeta.',
+        );
       }
-
       // Descargar portada
       setState(() => _progress = 0.75);
-      final response = await http.get(Uri.parse(thumbnailUrl));
-      await File(coverPath).writeAsBytes(response.bodyBytes);
+      final coverUrlMax =
+          'https://img.youtube.com/vi/$videoId/maxresdefault.jpg';
+      final coverUrlHQ = 'https://img.youtube.com/vi/$videoId/hqdefault.jpg';
+      final client = HttpClient();
 
-      // Insertar metadata ID3
-      setState(() => _progress = 0.85);
+      Uint8List? bytes;
+
+      try {
+        // 1. Intentar maxresdefault
+        final request = await client.getUrl(Uri.parse(coverUrlMax));
+        final response = await request.close();
+        if (response.statusCode == 200) {
+          bytes = Uint8List.fromList(await consolidateResponseBytes(response));
+        } else {
+          // 2. Intentar hqdefault
+          final requestHQ = await client.getUrl(Uri.parse(coverUrlHQ));
+          final responseHQ = await requestHQ.close();
+          if (responseHQ.statusCode == 200) {
+            bytes = Uint8List.fromList(
+              await consolidateResponseBytes(responseHQ),
+            );
+          } else {
+            // 3. Fallback: usar thumbnailUrl con http
+            final httpResponse = await http.get(Uri.parse(thumbnailUrl));
+            if (httpResponse.statusCode == 200) {
+              bytes = httpResponse.bodyBytes;
+            } else {
+              throw Exception('No se pudo descargar ninguna portada');
+            }
+          }
+        }
+        await File(coverPath).writeAsBytes(bytes);
+      } finally {
+        client.close();
+      }
 
       final cleanedAuthor = author.replaceFirst(
         RegExp(r' - Topic$', caseSensitive: false),
@@ -488,30 +670,46 @@ class _DownloadScreenState extends State<DownloadScreen>
       );
 
       final metaSession = await FFmpegKit.execute(
-        '-i "$mp3Path" -i "$coverPath" '
+        '-y -i "$mp3Path" -i "$coverPath" '
         '-map 0:a -map 1 '
-        '-metadata title="$baseName" '
-        '-metadata artist="$cleanedAuthor" '
-        '-metadata:s:v title="Album cover" '
-        '-metadata:s:v comment="Cover (front)" '
+        '-metadata title=\'$baseName\' '
+        '-metadata artist=\'$cleanedAuthor\' '
+        '-metadata:s:v title=\'Album cover\' '
+        '-metadata:s:v comment=\'Cover (front)\' '
         '-id3v2_version 3 -write_id3v1 1 '
         '-codec copy "$metaPath"',
       );
 
-      if (!(await metaSession.getReturnCode())!.isValueSuccess()) {
-        throw Exception('Error al escribir metadatos');
+      final metaCode = await metaSession.getReturnCode();
+      if (metaCode == null || !metaCode.isValueSuccess()) {
+        // Obtener logs detallados
+        // final logs = await metaSession.getAllLogs();
+        // final lastLines = logs
+        //     .map((e) => e.getMessage())
+        //     .where((line) => line.trim().isNotEmpty)
+        //     .toList()
+        //     .reversed
+        //     .take(30)
+        //     .toList()
+        //     .reversed
+        //     .join('\n');
+
+        // print('🧨 Error al agregar metadatos (últimas líneas):\n$lastLines');
+        throw Exception('Error al escribir metadatos en el auido');
       }
 
-      // Limpiar archivos temporales
-      await File(inputPath).delete();
+      setState(() => _progress = 0.9);
+
+      // 3. Limpiar: borrar input y mp3 sin metadata, renombrar meta a mp3 final
       await File(mp3Path).delete();
+      await File(inputPath).delete();
       await File(coverPath).delete();
       await File(metaPath).rename(mp3Path);
 
-      // Indexar en Android
+      // 4. Indexar en Android
       MediaScanner.loadMedia(path: mp3Path);
-      setState(() => _progress = 1.0);
 
+      setState(() => _progress = 1.0);
       await Future.delayed(const Duration(seconds: 2));
       foldersShouldReload.value = !foldersShouldReload.value;
 
@@ -525,7 +723,7 @@ class _DownloadScreenState extends State<DownloadScreen>
           context: context,
           builder: (context) => AlertDialog(
             title: const Text('Error al procesar audio'),
-            content: Text('Detalles: ${e.toString()}'),
+            content: Text(e.toString()),
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(context).pop(),
@@ -534,15 +732,27 @@ class _DownloadScreenState extends State<DownloadScreen>
             ],
           ),
         );
-        if (mounted) {
-          setState(() {
-            _isProcessing = false;
-          });
-        }
       }
     } finally {
-      if (mounted) setState(() => _isDownloading = false);
+      if (mounted) {
+        setState(() {
+          _isProcessing = false;
+          _isDownloading = false;
+        });
+      }
     }
+  }
+
+  Future<List<int>> consolidateResponseBytes(HttpClientResponse response) {
+    final completer = Completer<List<int>>();
+    final contents = <int>[];
+    response.listen(
+      (data) => contents.addAll(data),
+      onDone: () => completer.complete(contents),
+      onError: (e) => completer.completeError(e),
+      cancelOnError: true,
+    );
+    return completer.future;
   }
 
   @override
@@ -713,7 +923,15 @@ class _DownloadScreenState extends State<DownloadScreen>
                 color: Theme.of(context).colorScheme.primaryContainer,
                 child: InkWell(
                   borderRadius: BorderRadius.circular(8),
-                  onTap: _isDownloading ? null : _downloadAudioOnly,
+                  onTap: _isDownloading
+                      ? null
+                      : () {
+                          if (_usarExplode) {
+                            _downloadAudioOnlyExplode();
+                          } else {
+                            _downloadAudioOnly();
+                          }
+                        },
                   child: Center(
                     child: Text(
                       _isDownloading
@@ -754,6 +972,37 @@ class _DownloadScreenState extends State<DownloadScreen>
                     ),
                     overflow: TextOverflow.ellipsis,
                   ),
+                ),
+              ],
+            ),
+            // NUEVO: Selector de método de descarga
+            const SizedBox(height: 16),
+
+            Row(
+              mainAxisAlignment: MainAxisAlignment.start,
+              children: [
+                Icon(
+                  Icons.download,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                const SizedBox(width: 8),
+                const Text('Método:'),
+                const SizedBox(width: 8),
+                ChoiceChip(
+                  label: const Text('Explode'),
+                  selected: _usarExplode,
+                  onSelected: (v) {
+                    setState(() => _usarExplode = true);
+                  },
+                ),
+                const SizedBox(width: 8),
+                ChoiceChip(
+                  label: const Text('Directo'),
+
+                  selected: !_usarExplode,
+                  onSelected: (v) {
+                    setState(() => _usarExplode = false);
+                  },
                 ),
               ],
             ),

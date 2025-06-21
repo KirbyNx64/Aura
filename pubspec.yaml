@@ -24,13 +24,19 @@ dependencies:
   share_plus: ^11.0.0
   cross_file: ^0.3.4+2
   http: ^1.4.0
-  youtube_explode_dart: ^2.4.2
+  youtube_explode_dart:
+    git:
+      url: https://github.com/anandnet/youtube_explode_dart.git
+      ref: 1d9ec9baa806705b1d859260eeb389ec28c6b024
   file_selector: ^1.0.3
   audiotags: ^1.4.5
   url_launcher: ^6.3.1
   ffmpeg_kit_flutter_new: ^2.0.0
   media_scanner: ^2.2.0
   device_info_plus: ^11.5.0
+  dio: ^5.8.0+1
+  smooth_page_indicator: ^1.2.1
+  image: ^4.5.4
 
 dev_dependencies:
   flutter_test:

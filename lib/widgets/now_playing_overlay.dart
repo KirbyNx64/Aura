@@ -6,6 +6,9 @@ import 'package:music/widgets/hero_cached.dart';
 import 'package:music/utils/audio/background_audio_handler.dart';
 import 'package:music/utils/db/recent_db.dart';
 import 'package:marquee/marquee.dart';
+import 'package:music/utils/db/mostplayer_db.dart';
+import 'package:on_audio_query/on_audio_query.dart';
+// ...existing code...
 
 class NowPlayingOverlay extends StatelessWidget {
   final bool showBar;
@@ -28,6 +31,15 @@ class NowPlayingOverlay extends StatelessWidget {
           final path = song.extras?['data'];
           if (path != null) {
             RecentsDB().addRecentPath(path);
+
+            // Nuevo: sumar 1 a la base de datos de más escuchadas
+            final query = OnAudioQuery();
+            query.querySongs().then((allSongs) {
+              final match = allSongs.where((s) => s.data == path);
+              if (match.isNotEmpty) {
+                MostPlayedDB().incrementPlayCount(match.first);
+              }
+            });
           }
         }
 

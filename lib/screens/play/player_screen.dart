@@ -10,6 +10,7 @@ import 'package:music/utils/audio/background_audio_handler.dart';
 import 'package:music/utils/db/favorites_db.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 import 'package:music/utils/notifiers.dart';
+import 'package:music/utils/db/playlists_db.dart';
 
 final OnAudioQuery _audioQuery = OnAudioQuery();
 
@@ -169,6 +170,18 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
               },
             ),
             ListTile(
+              leading: const Icon(Icons.queue_music),
+              title: const Text('Añadir a playlist'),
+              onTap: () async {
+                if (!mounted) {
+                  return;
+                }
+                final safeContext = context;
+                Navigator.of(safeContext).pop();
+                await _showAddToPlaylistDialog(safeContext, mediaItem);
+              },
+            ),
+            ListTile(
               leading: () {
                 final isActive =
                     (audioHandler as MyAudioHandler).sleepTimeRemaining != null;
@@ -238,6 +251,149 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Añadido a me gusta')));
+    }
+  }
+
+  Future<void> _showAddToPlaylistDialog(
+    BuildContext safeContext,
+    MediaItem mediaItem,
+  ) async {
+    final playlists = await PlaylistsDB().getAllPlaylists();
+    final TextEditingController controller = TextEditingController();
+
+    if (!safeContext.mounted) return;
+
+    showModalBottomSheet(
+      context: safeContext,
+      isScrollControlled: true,
+      builder: (context) => Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom,
+          left: 16,
+          right: 16,
+          top: 24,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Guardar en playlist',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+            ),
+            const SizedBox(height: 16),
+            if (playlists.isEmpty)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Text(
+                  'No tienes playlists aún.\nCrea una nueva abajo.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.white70),
+                ),
+              ),
+            if (playlists.isNotEmpty)
+              Flexible(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 240),
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: playlists.length,
+                    itemBuilder: (context, i) {
+                      final pl = playlists[i];
+                      return ListTile(
+                        leading: const Icon(Icons.queue_music, size: 32),
+                        title: Text(
+                          pl['name'],
+                          style: const TextStyle(fontSize: 18),
+                        ),
+                        onTap: () async {
+                          final allSongs = await _audioQuery.querySongs();
+                          final songList = allSongs
+                              .where(
+                                (s) =>
+                                    s.data == (mediaItem.extras?['data'] ?? ''),
+                              )
+                              .toList();
+
+                          if (songList.isNotEmpty) {
+                            await PlaylistsDB().addSongToPlaylist(
+                              pl['id'],
+                              songList.first,
+                            );
+                            if (context.mounted) Navigator.of(context).pop();
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Añadido a "${pl['name']}"'),
+                                ),
+                              );
+                            }
+                          }
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ),
+            const Divider(height: 28),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: controller,
+                    autofocus: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Nueva playlist',
+                    ),
+                    onSubmitted: (value) async {
+                      await _createPlaylistAndAddSong(
+                        context,
+                        controller,
+                        mediaItem,
+                      );
+                    },
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.add),
+                  onPressed: () async {
+                    await _createPlaylistAndAddSong(
+                      context,
+                      controller,
+                      mediaItem,
+                    );
+                  },
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _createPlaylistAndAddSong(
+    BuildContext context,
+    TextEditingController controller,
+    MediaItem mediaItem,
+  ) async {
+    final name = controller.text.trim();
+    if (name.isEmpty) return;
+
+    final playlistId = await PlaylistsDB().createPlaylist(name);
+    final allSongs = await _audioQuery.querySongs();
+    final songList = allSongs
+        .where((s) => s.data == (mediaItem.extras?['data'] ?? ''))
+        .toList();
+
+    if (songList.isNotEmpty) {
+      await PlaylistsDB().addSongToPlaylist(playlistId, songList.first);
+      if (context.mounted) Navigator.of(context).pop();
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Añadido a "$name"')));
+      }
     }
   }
 
@@ -684,7 +840,15 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                     // Botón Guardar
                                     AnimatedTapButton(
                                       onTap: () async {
-                                        // Acción del botón
+                                        if (!mounted) {
+                                          return;
+                                        }
+
+                                        final safeContext = context;
+                                        await _showAddToPlaylistDialog(
+                                          safeContext,
+                                          mediaItem,
+                                        );
                                       },
                                       child: Container(
                                         decoration: BoxDecoration(

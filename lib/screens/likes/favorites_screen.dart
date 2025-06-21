@@ -77,11 +77,20 @@ class _FavoritesScreenState extends State<FavoritesScreen>
   }
 
   Future<void> _playSong(SongModel song) async {
+    const int maxQueueSongs = 200;
     final index = _favorites.indexWhere((s) => s.data == song.data);
+
     if (index != -1) {
+      int before = (maxQueueSongs / 2).floor();
+      int after = maxQueueSongs - before;
+      int start = (index - before).clamp(0, _favorites.length);
+      int end = (index + after).clamp(0, _favorites.length);
+      List<SongModel> limitedQueue = _favorites.sublist(start, end);
+      int newIndex = index - start;
+
       await (audioHandler as MyAudioHandler).setQueueFromSongs(
-        _favorites,
-        initialIndex: index,
+        limitedQueue,
+        initialIndex: newIndex,
       );
       await audioHandler.play();
     }
