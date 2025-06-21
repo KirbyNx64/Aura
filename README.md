@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/icon.png" alt="Aura Music Icon" width="120" />
+</p>
+
 # 🎧 Aura Music
 
 **Aura Music** es una aplicación de música para Android desarrollada con Flutter. Permite reproducir archivos locales, descargar canciones desde YouTube en formato MP3 con carátula y metadatos, y disfrutar de una interfaz moderna y fluida.
