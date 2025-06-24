@@ -6,6 +6,10 @@ import 'package:music/utils/audio/background_audio_handler.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:music/utils/notifiers.dart';
 
+enum OrdenFavoritos { normal, alfabetico, invertido, ultimoAgregado }
+
+OrdenFavoritos _orden = OrdenFavoritos.normal;
+
 class FavoritesScreen extends StatefulWidget {
   const FavoritesScreen({super.key});
 
@@ -16,6 +20,7 @@ class FavoritesScreen extends StatefulWidget {
 class _FavoritesScreenState extends State<FavoritesScreen>
     with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   List<SongModel> _favorites = [];
+  List<SongModel> _originalFavorites = [];
   late AnimationController _refreshController;
   bool _isReloading = false;
   final TextEditingController _searchController = TextEditingController();
@@ -67,9 +72,10 @@ class _FavoritesScreenState extends State<FavoritesScreen>
       // Espera un poco para que la animación sea visible
       await Future.delayed(const Duration(milliseconds: 600));
     }
-    if (!mounted) return; // <-- Agrega esta línea
+    if (!mounted) return;
     setState(() {
       _favorites = favs;
+      _originalFavorites = List.from(favs);
       _isReloading = false;
       _refreshController.stop();
       _refreshController.reset();
@@ -99,11 +105,6 @@ class _FavoritesScreenState extends State<FavoritesScreen>
   Future<void> _removeFromFavorites(SongModel song) async {
     await FavoritesDB().removeFavorite(song.data);
     await _loadFavorites();
-    if (mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Eliminado de me gusta')));
-    }
   }
 
   void _onSearchChanged() {
@@ -120,6 +121,27 @@ class _FavoritesScreenState extends State<FavoritesScreen>
         final artist = quitarDiacriticos(song.artist ?? '');
         return title.contains(query) || artist.contains(query);
       }).toList();
+    });
+  }
+
+  void _ordenarFavoritos() {
+    setState(() {
+      switch (_orden) {
+        case OrdenFavoritos.normal:
+          _favorites = List.from(
+            _originalFavorites,
+          ); // Restaura el orden original
+          break;
+        case OrdenFavoritos.alfabetico:
+          _favorites.sort((a, b) => a.title.compareTo(b.title));
+          break;
+        case OrdenFavoritos.invertido:
+          _favorites.sort((a, b) => b.title.compareTo(a.title));
+          break;
+        case OrdenFavoritos.ultimoAgregado:
+          _favorites = List.from(_originalFavorites.reversed);
+          break;
+      }
     });
   }
 
@@ -164,6 +186,35 @@ class _FavoritesScreenState extends State<FavoritesScreen>
             const Text('Me gusta'),
           ],
         ),
+        actions: [
+          PopupMenuButton<OrdenFavoritos>(
+            icon: const Icon(Icons.sort, size: 28),
+            onSelected: (orden) {
+              setState(() {
+                _orden = orden;
+                _ordenarFavoritos();
+              });
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: OrdenFavoritos.normal,
+                child: Text('Ultimo añadido'),
+              ),
+              const PopupMenuItem(
+                value: OrdenFavoritos.ultimoAgregado,
+                child: Text('Invertir orden'),
+              ),
+              const PopupMenuItem(
+                value: OrdenFavoritos.alfabetico,
+                child: Text('Alfabético (A-Z)'),
+              ),
+              const PopupMenuItem(
+                value: OrdenFavoritos.invertido,
+                child: Text('Alfabético (Z-A)'),
+              ),
+            ],
+          ),
+        ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(56),
           child: Padding(

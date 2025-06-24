@@ -11,6 +11,8 @@ import 'package:flutter/services.dart';
 import 'package:music/utils/db/playlists_db.dart';
 import 'package:audio_service/audio_service.dart';
 
+enum OrdenCancionesPlaylist { normal, alfabetico, invertido, ultimoAgregado }
+
 class HomeScreen extends StatefulWidget {
   final void Function(int)? onTabChange;
   const HomeScreen({super.key, this.onTabChange});
@@ -39,6 +41,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       TextEditingController();
   final FocusNode _searchRecentsFocus = FocusNode();
   List<SongModel> _filteredRecents = [];
+  // OrdenCancionesPlaylist _ordenCancionesPlaylist =
+  //     OrdenCancionesPlaylist.normal;
 
   // Controladores y estados para búsqueda en playlist
   final TextEditingController _searchPlaylistController =
@@ -58,6 +62,29 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _loadPlaylists();
     playlistsShouldReload.addListener(_onPlaylistsShouldReload);
   }
+
+  // void _ordenarCancionesPlaylist() {
+  //   setState(() {
+  //     switch (_ordenCancionesPlaylist) {
+  //       case OrdenCancionesPlaylist.normal:
+  //         _playlistSongs.sort((a, b) => a.id.compareTo(b.id)); // Por id
+  //         break;
+  //       case OrdenCancionesPlaylist.alfabetico:
+  //         _playlistSongs.sort(
+  //           (a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()),
+  //         );
+  //         break;
+  //       case OrdenCancionesPlaylist.invertido:
+  //         _playlistSongs.sort(
+  //           (a, b) => b.title.toLowerCase().compareTo(a.title.toLowerCase()),
+  //         );
+  //         break;
+  //       case OrdenCancionesPlaylist.ultimoAgregado:
+  //         _playlistSongs = _playlistSongs.reversed.toList();
+  //         break;
+  //     }
+  //   });
+  // }
 
   void _initQuickPickPages() {
     _quickPickPages.clear();
@@ -223,15 +250,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Future<void> _addToFavorites(SongModel song) async {
     await FavoritesDB().addFavorite(song);
     favoritesShouldReload.value = !favoritesShouldReload.value;
-    if (mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Añadido a me gusta')));
-    }
   }
 
   Future<void> _handleLongPress(BuildContext context, SongModel song) async {
-    HapticFeedback.mediumImpact(); // <--- Vibración al mantener presionado
+    HapticFeedback.mediumImpact();
     final isFavorite = await FavoritesDB().isFavorite(song.data);
 
     if (!context.mounted) return;
@@ -254,10 +276,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
                 if (isFavorite) {
                   await FavoritesDB().removeFavorite(song.data);
-                  if (!context.mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Eliminado de me gusta')),
-                  );
+                  favoritesShouldReload.value = !favoritesShouldReload.value;
                 } else {
                   await _addToFavorites(song);
                 }
@@ -279,6 +298,21 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           ? _mostPlayed.sublist(start, end)
           : <SongModel>[];
     });
+
+    final screenHeight = MediaQuery.of(context).size.height;
+    final isSmallScreen = screenHeight < 650;
+
+    final sizeScreen = MediaQuery.of(context).size;
+    final aspectRatio = sizeScreen.height / sizeScreen.width;
+
+    // Para 16:9 (≈1.77)
+    final is16by9 = (aspectRatio < 1.85);
+
+    // Para 18:9 (≈2.0)
+    // final is18by9 = (aspectRatio >= 1.95 && aspectRatio < 2.05);
+
+    // Para 19.5:9 (≈2.16)
+    // final is195by9 = (aspectRatio >= 2.10);
 
     return WillPopScope(
       onWillPop: _onWillPop,
@@ -544,17 +578,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                   favoritesShouldReload.value =
                                                       !favoritesShouldReload
                                                           .value;
-                                                  if (context.mounted) {
-                                                    ScaffoldMessenger.of(
-                                                      context,
-                                                    ).showSnackBar(
-                                                      const SnackBar(
-                                                        content: Text(
-                                                          'Eliminado de me gusta',
-                                                        ),
-                                                      ),
-                                                    );
-                                                  }
                                                 } else {
                                                   await _addToFavorites(song);
                                                 }
@@ -692,17 +715,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                   favoritesShouldReload.value =
                                                       !favoritesShouldReload
                                                           .value;
-                                                  if (context.mounted) {
-                                                    ScaffoldMessenger.of(
-                                                      context,
-                                                    ).showSnackBar(
-                                                      const SnackBar(
-                                                        content: Text(
-                                                          'Eliminado de me gusta',
-                                                        ),
-                                                      ),
-                                                    );
-                                                  }
                                                 } else {
                                                   await _addToFavorites(song);
                                                 }
@@ -725,16 +737,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                       );
                                                   await _loadPlaylistSongs(
                                                     _selectedPlaylist!,
-                                                  );
-                                                  if (!context.mounted) return;
-                                                  ScaffoldMessenger.of(
-                                                    context,
-                                                  ).showSnackBar(
-                                                    const SnackBar(
-                                                      content: Text(
-                                                        'Canción eliminada de la playlist',
-                                                      ),
-                                                    ),
                                                   );
                                                 },
                                               ),
@@ -770,7 +772,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 0),
                             child: SizedBox(
-                              height: MediaQuery.of(context).size.height * 0.30,
+                              height: is16by9
+                                  ? screenHeight * 0.38
+                                  : isSmallScreen
+                                  ? screenHeight * 0.32
+                                  : screenHeight * 0.30,
                               child: PageView(
                                 controller: _pageController,
                                 onPageChanged: (_) {},
@@ -799,6 +805,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                       itemBuilder: (context, index) {
                                         if (index < items.length) {
                                           final song = items[index];
+                                          audioHandler
+                                                  .mediaItem
+                                                  .value
+                                                  ?.extras?['data'] ==
+                                              song.data;
                                           return AnimatedTapButton(
                                             onTap: () {
                                               _playSong(song, _mostPlayed);
@@ -896,7 +907,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                         itemBuilder: (context, pageIndex) {
                                           final songs =
                                               _quickPickPages[pageIndex];
-                                          // Reemplaza este fragmento dentro del PageView.builder de Selección rápida:
                                           return Padding(
                                             padding: const EdgeInsets.symmetric(
                                               horizontal: 0,
@@ -973,7 +983,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                       opacity: 0,
                                                       child: Icon(
                                                         Icons.more_vert,
-                                                      ), // Ícono invisible, sin splash
+                                                      ),
                                                     ),
                                                     onTap: () => _playSong(
                                                       song,
@@ -1021,6 +1031,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                     fontWeight: FontWeight.w600,
                                   ),
                                 ),
+
                                 IconButton(
                                   icon: const Icon(Icons.add, size: 28),
                                   tooltip: 'Crear nueva playlist',
@@ -1060,15 +1071,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                         result,
                                       );
                                       await _loadPlaylists();
-                                      if (context.mounted) {
-                                        ScaffoldMessenger.of(
-                                          context,
-                                        ).showSnackBar(
-                                          const SnackBar(
-                                            content: Text('Playlist creada'),
-                                          ),
-                                        );
-                                      }
                                     }
                                   },
                                 ),
@@ -1174,17 +1176,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                         result,
                                                       );
                                                   await _loadPlaylists();
-                                                  if (context.mounted) {
-                                                    ScaffoldMessenger.of(
-                                                      context,
-                                                    ).showSnackBar(
-                                                      const SnackBar(
-                                                        content: Text(
-                                                          'Playlist renombrada',
-                                                        ),
-                                                      ),
-                                                    );
-                                                  }
                                                 }
                                               },
                                             ),
@@ -1234,17 +1225,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                         playlist['id'],
                                                       );
                                                   await _loadPlaylists();
-                                                  if (context.mounted) {
-                                                    ScaffoldMessenger.of(
-                                                      context,
-                                                    ).showSnackBar(
-                                                      const SnackBar(
-                                                        content: Text(
-                                                          'Playlist eliminada',
-                                                        ),
-                                                      ),
-                                                    );
-                                                  }
                                                 }
                                               },
                                             ),

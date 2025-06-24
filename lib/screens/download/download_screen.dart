@@ -94,7 +94,8 @@ class _DownloadScreenState extends State<DownloadScreen>
     final androidInfo = await DeviceInfoPlugin().androidInfo;
     final sdkInt = androidInfo.version.sdkInt;
 
-    if (sdkInt < 29) {
+    // Si es Android 9 (API 28) o inferior, usar carpeta Música por defecto
+    if (sdkInt <= 28) {
       final path = await _getDefaultMusicDir();
       setState(() => _directoryPath = path);
       await _saveDirectory(path);
@@ -349,7 +350,7 @@ class _DownloadScreenState extends State<DownloadScreen>
       await for (final chunk in stream) {
         received += chunk.length;
         sink.add(chunk);
-        setState(() => _progress = received / totalBytes * 0.6); // 0-60%
+        setState(() => _progress = received / totalBytes * 0.6);
       }
 
       await sink.flush();
@@ -387,8 +388,6 @@ class _DownloadScreenState extends State<DownloadScreen>
           ),
         );
       }
-
-      // Ya no es necesario el resto del código aquí, pues _procesarAudio se encarga del resto
     } catch (e) {
       if (mounted) {
         showDialog(
@@ -589,28 +588,9 @@ class _DownloadScreenState extends State<DownloadScreen>
     final mp3Path = '$saveDir/$baseName.mp3';
 
     if (await File(mp3Path).exists()) {
-      if (mounted) {
-        showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('Archivo existente'),
-            content: const Text(
-              'Ya existe un archivo con este nombre en la carpeta seleccionada. Elimina o renombra el archivo antes de descargar de nuevo.',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('OK'),
-              ),
-            ],
-          ),
-        );
-      }
-      setState(() {
-        _isProcessing = false;
-        _isDownloading = false;
-      });
-      return;
+      await File(mp3Path).delete();
+      await Future.delayed(const Duration(seconds: 1));
+      // print('🗑️ Archivo MP3 existente eliminado: $mp3Path');
     }
 
     final metaPath = '$saveDir/${baseName}_meta.mp3';
@@ -691,25 +671,37 @@ class _DownloadScreenState extends State<DownloadScreen>
         client.close();
       }
 
-      final cleanedAuthor = author.replaceFirst(
-        RegExp(r' - Topic$', caseSensitive: false),
-        '',
-      );
+      final coverFile = File(coverPath);
+      final bool coverExists = await coverFile.exists();
+      final bool coverIsValid = coverExists && await coverFile.length() > 1000;
 
-      final metaSession = await FFmpegKit.execute(
-        '-y -i "$mp3Path" -i "$coverPath" '
-        '-map 0:a -map 1 '
-        '-metadata title=\'$baseName\' '
-        '-metadata artist=\'$cleanedAuthor\' '
-        '-metadata:s:v title=\'Album cover\' '
-        '-metadata:s:v comment=\'Cover (front)\' '
-        '-id3v2_version 3 -write_id3v1 1 '
-        '-codec copy "$metaPath"',
+      final cleanedAuthor = limpiarMetadato(
+        author.replaceFirst(RegExp(r' - Topic$', caseSensitive: false), ''),
       );
+      final safeTitle = limpiarMetadato(baseName);
+
+      final ffmpegCmd = coverIsValid
+          ? '-y -i "$mp3Path" -i "$coverPath" '
+                '-map 0:a -map 1 '
+                '-metadata title="${safeTitle.replaceAll('"', '\\"')}" '
+                '-metadata artist="${cleanedAuthor.replaceAll('"', '\\"')}" '
+                '-metadata:s:v title="Album cover" '
+                '-metadata:s:v comment="Cover (front)" '
+                '-id3v2_version 3 -write_id3v1 1 '
+                '-codec copy "$metaPath"'
+          : '-y -i "$mp3Path" '
+                '-metadata title="${safeTitle.replaceAll('"', '\\"')}" '
+                '-metadata artist="${cleanedAuthor.replaceAll('"', '\\"')}" '
+                '-id3v2_version 3 -write_id3v1 1 '
+                '-codec copy "$metaPath"';
+
+      final metaSession = await FFmpegKit.execute(ffmpegCmd);
 
       final metaCode = await metaSession.getReturnCode();
       if (metaCode == null || !metaCode.isValueSuccess()) {
-        // Obtener logs detallados
+        await File(mp3Path).delete();
+        await File(inputPath).delete();
+        await File(coverPath).delete();
         // final logs = await metaSession.getAllLogs();
         // final lastLines = logs
         //     .map((e) => e.getMessage())
@@ -803,6 +795,14 @@ class _DownloadScreenState extends State<DownloadScreen>
     }
   }
 
+  String limpiarMetadato(String texto) {
+    return texto
+        .replaceAll('"', '\\"') // Escapar comillas dobles
+        .replaceAll(RegExp(r'[\n\r]'), ' ') // Quitar saltos de línea
+        .replaceAll(RegExp(r'[&;|<>$]'), '') // Quitar símbolos peligrosos
+        .trim(); // Eliminar espacios al inicio y fin
+  }
+
   Future<List<int>> consolidateResponseBytes(HttpClientResponse response) {
     final completer = Completer<List<int>>();
     final contents = <int>[];
@@ -834,7 +834,7 @@ class _DownloadScreenState extends State<DownloadScreen>
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.downloading),
+            icon: const Icon(Icons.downloading, size: 28),
             tooltip: 'Recomendar Seal',
             onPressed: () {
               showDialog(
@@ -878,7 +878,7 @@ class _DownloadScreenState extends State<DownloadScreen>
           ),
 
           IconButton(
-            icon: const Icon(Icons.info_outline),
+            icon: const Icon(Icons.info_outline, size: 28),
             tooltip: 'Información',
             onPressed: () {
               showDialog(
@@ -948,7 +948,7 @@ class _DownloadScreenState extends State<DownloadScreen>
                   ),
                 ),
                 const SizedBox(width: 8),
-                // Botón de carpeta (ya existente)
+                // Botón de carpeta
                 SizedBox(
                   height: 56,
                   width: 56,

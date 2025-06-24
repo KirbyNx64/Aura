@@ -18,7 +18,7 @@ Future<String?> fetchLyrics(String artist, String title) async {
   try {
     final response = await http
         .get(Uri.parse('https://api.lyrics.ovh/v1/$artist/$title'))
-        .timeout(const Duration(seconds: 8)); // Timeout de 8 segundos
+        .timeout(const Duration(seconds: 8));
 
     if (response.statusCode == 200) {
       final data = json.decode(response.body);
@@ -45,9 +45,15 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
   double? _dragValueSeconds;
 
   String _formatDuration(Duration duration) {
-    final minutes = duration.inMinutes.remainder(60).toString().padLeft(2, '0');
-    final seconds = duration.inSeconds.remainder(60).toString().padLeft(2, '0');
-    return '$minutes:$seconds';
+    final hours = duration.inHours;
+    final minutes = duration.inMinutes.remainder(60);
+    final seconds = duration.inSeconds.remainder(60);
+
+    if (hours > 0) {
+      return '$hours:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+    } else {
+      return '${minutes.toString()}:${seconds.toString().padLeft(2, '0')}';
+    }
   }
 
   Widget buildArtwork(MediaItem mediaItem, double size) {
@@ -85,11 +91,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
         color: Colors.grey[900],
         borderRadius: BorderRadius.circular(16),
       ),
-      child: Icon(
-        Icons.music_note,
-        color: Colors.white54,
-        size: size * 0.5, // Ícono grande y centrado
-      ),
+      child: Icon(Icons.music_note, color: Colors.white54, size: size * 0.5),
     );
   }
 
@@ -123,11 +125,6 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                 if (isFav) {
                   await FavoritesDB().removeFavorite(path);
                   favoritesShouldReload.value = !favoritesShouldReload.value;
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Eliminado de me gusta')),
-                    );
-                  }
                 } else {
                   if (path.isEmpty) {
                     if (context.mounted) {
@@ -160,12 +157,6 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
 
                   final song = songList.first;
                   await _addToFavorites(song);
-
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Añadido a me gusta')),
-                    );
-                  }
                 }
               },
             ),
@@ -179,6 +170,19 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                 final safeContext = context;
                 Navigator.of(safeContext).pop();
                 await _showAddToPlaylistDialog(safeContext, mediaItem);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.share),
+              title: const Text('Compartir archivo de audio'),
+              onTap: () async {
+                Navigator.of(context).pop();
+                final dataPath = mediaItem.extras?['data'] as String?;
+                if (dataPath != null && dataPath.isNotEmpty) {
+                  await Share.shareXFiles([
+                    XFile(dataPath),
+                  ], text: mediaItem.title);
+                }
               },
             ),
             ListTile(
@@ -247,11 +251,6 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
   Future<void> _addToFavorites(SongModel song) async {
     await FavoritesDB().addFavorite(song);
     favoritesShouldReload.value = !favoritesShouldReload.value;
-    if (mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Añadido a me gusta')));
-    }
   }
 
   Future<void> _showAddToPlaylistDialog(
@@ -320,13 +319,6 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                               songList.first,
                             );
                             if (context.mounted) Navigator.of(context).pop();
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('Añadido a "${pl['name']}"'),
-                                ),
-                              );
-                            }
                           }
                         },
                       );
@@ -390,11 +382,6 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     if (songList.isNotEmpty) {
       await PlaylistsDB().addSongToPlaylist(playlistId, songList.first);
       if (context.mounted) Navigator.of(context).pop();
-      if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Añadido a "$name"')));
-      }
     }
   }
 
@@ -405,20 +392,45 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     final height = size.height;
 
     // Tamaños relativos
-    final artworkSize = width * 0.8;
+    final sizeScreen = MediaQuery.of(context).size;
+    final aspectRatio = sizeScreen.height / sizeScreen.width;
+
+    // Para 16:9 (≈1.77)
+    final is16by9 = (aspectRatio < 1.85);
+
+    // Para 18:9 (≈2.0)
+    final is18by9 = (aspectRatio >= 1.95 && aspectRatio < 2.05);
+
+    // Para 19.5:9 (≈2.16)
+    // final is195by9 = (aspectRatio >= 2.10 && aspectRatio < 2.22);
+
+    final isSmallScreen = height < 650;
+    final artworkSize = isSmallScreen ? width * 0.6 : width * 0.8;
     double progressBarWidth;
     if (width <= 400) {
-      progressBarWidth = artworkSize * 1.2;
+      progressBarWidth = isSmallScreen
+          ? artworkSize * 2
+          : is16by9
+          ? artworkSize * 1.8
+          : artworkSize * 2;
     } else if (width <= 800) {
-      progressBarWidth = artworkSize * 1.3;
+      progressBarWidth = isSmallScreen
+          ? artworkSize * 1.3
+          : is16by9
+          ? artworkSize * 1.2
+          : artworkSize * 1.3;
     } else {
-      progressBarWidth = (artworkSize * 1.5).clamp(0, width * 0.9);
+      progressBarWidth = isSmallScreen
+          ? (artworkSize * 1.5).clamp(0, width * 0.9)
+          : is16by9
+          ? (artworkSize * 1.4).clamp(0, width * 0.9)
+          : (artworkSize * 1.5).clamp(0, width * 0.9);
     }
     final buttonFontSize = width * 0.04 + 10;
 
     return GestureDetector(
       onVerticalDragUpdate: (details) {
-        if (details.primaryDelta != null && details.primaryDelta! > 12) {
+        if (details.primaryDelta != null && details.primaryDelta! > 6) {
           Navigator.of(context).maybePop();
         }
       },
@@ -458,13 +470,13 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                 ),
               ],
             ),
-            resizeToAvoidBottomInset: true, // Asegúrate de que esté en true
+            resizeToAvoidBottomInset: true,
             body: SafeArea(
               child: Center(
                 child: Padding(
                   padding: EdgeInsets.symmetric(
-                    horizontal: width * 0.04,
-                    vertical: height * 0.03,
+                    horizontal: isSmallScreen ? width * 0.010 : width * 0.035,
+                    vertical: isSmallScreen ? height * 0.015 : height * 0.03,
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.center,
@@ -479,15 +491,22 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                         currentIndex: currentIndex,
                         songIdList: songIdList,
                       ),
-                      SizedBox(height: height * 0.03),
                       SizedBox(
-                        width: artworkSize,
+                        height: isSmallScreen
+                            ? 20
+                            : is16by9
+                            ? height * 0.045
+                            : height * 0.03,
+                      ),
+                      SizedBox(
+                        width: isSmallScreen ? 300 : artworkSize,
                         child: Row(
                           children: [
                             Expanded(
                               child: TitleMarquee(
                                 text: mediaItem.title,
-                                maxWidth: artworkSize - 40,
+                                maxWidth:
+                                    artworkSize - (isSmallScreen ? 60 : 40),
                                 style: Theme.of(context).textTheme.headlineSmall
                                     ?.copyWith(
                                       color: Colors.white,
@@ -514,15 +533,6 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                           !favoritesShouldReload.value;
                                       if (mounted) setState(() {});
                                       if (!context.mounted) return;
-                                      ScaffoldMessenger.of(
-                                        context,
-                                      ).showSnackBar(
-                                        const SnackBar(
-                                          content: Text(
-                                            'Eliminado de me gusta',
-                                          ),
-                                        ),
-                                      );
                                     } else {
                                       final allSongs = await _audioQuery
                                           .querySongs();
@@ -548,13 +558,6 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                       await _addToFavorites(song);
                                       if (mounted) setState(() {});
                                       if (!context.mounted) return;
-                                      ScaffoldMessenger.of(
-                                        context,
-                                      ).showSnackBar(
-                                        const SnackBar(
-                                          content: Text('Añadido a me gusta'),
-                                        ),
-                                      );
                                     }
                                   },
                                   child: Icon(
@@ -572,7 +575,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                       ),
                       SizedBox(height: height * 0.01),
                       SizedBox(
-                        width: artworkSize,
+                        width: isSmallScreen ? 300 : artworkSize,
                         child: Text(
                           (mediaItem.artist == null ||
                                   mediaItem.artist!.trim().isEmpty)
@@ -663,8 +666,16 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                   .toInt(),
                                             ),
                                           ),
+                                          style: TextStyle(
+                                            fontSize: is16by9 ? 18 : 15,
+                                          ),
                                         ),
-                                        Text(_formatDuration(duration)),
+                                        Text(
+                                          _formatDuration(duration),
+                                          style: TextStyle(
+                                            fontSize: is16by9 ? 18 : 15,
+                                          ),
+                                        ),
                                       ],
                                     ),
                                   ),
@@ -675,7 +686,13 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                         },
                       ),
 
-                      SizedBox(height: 12),
+                      SizedBox(
+                        height: isSmallScreen
+                            ? 12
+                            : is16by9
+                            ? 24
+                            : 12,
+                      ),
                       // Controles de reproducción
                       StreamBuilder<PlaybackState>(
                         stream: audioHandler.playbackState,
@@ -713,9 +730,9 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                           return LayoutBuilder(
                             builder: (context, constraints) {
                               // Cálculo responsivo de tamaños
-                              final double maxControlsWidth = constraints
-                                  .maxWidth
-                                  .clamp(280, 420);
+                              final double maxControlsWidth = is16by9
+                                  ? constraints.maxWidth.clamp(280, 350)
+                                  : constraints.maxWidth.clamp(340, 480);
 
                               final double iconSize =
                                   (maxControlsWidth / 400 * 44).clamp(34, 60);
@@ -727,97 +744,106 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                   (maxControlsWidth / 400 * 52).clamp(40, 80);
 
                               return Center(
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  mainAxisSize: MainAxisSize.max,
-                                  children: [
-                                    IconButton(
-                                      icon: const Icon(Icons.shuffle),
-                                      color: isShuffle
-                                          ? Theme.of(
-                                              context,
-                                            ).colorScheme.primary
-                                          : Colors.white,
-                                      iconSize: iconSize,
-                                      onPressed: () {
-                                        audioHandler.setShuffleMode(
-                                          isShuffle
-                                              ? AudioServiceShuffleMode.none
-                                              : AudioServiceShuffleMode.all,
-                                        );
-                                      },
-                                      tooltip: 'Aleatorio',
-                                    ),
-                                    IconButton(
-                                      icon: const Icon(Icons.skip_previous),
-                                      color: Colors.white,
-                                      iconSize: sideIconSize,
-                                      onPressed: () =>
-                                          audioHandler.skipToPrevious(),
-                                    ),
-                                    Padding(
-                                      padding: EdgeInsets.symmetric(
-                                        horizontal: iconSize / 4,
+                                child: Container(
+                                  alignment: Alignment.center,
+                                  constraints: BoxConstraints(
+                                    maxWidth: progressBarWidth,
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    mainAxisSize: MainAxisSize.max,
+                                    children: [
+                                      IconButton(
+                                        icon: const Icon(Icons.shuffle),
+                                        color: isShuffle
+                                            ? Theme.of(
+                                                context,
+                                              ).colorScheme.primary
+                                            : Colors.white,
+                                        iconSize: iconSize,
+                                        onPressed: () {
+                                          audioHandler.setShuffleMode(
+                                            isShuffle
+                                                ? AudioServiceShuffleMode.none
+                                                : AudioServiceShuffleMode.all,
+                                          );
+                                        },
+                                        tooltip: 'Aleatorio',
                                       ),
-                                      child: Material(
+                                      IconButton(
+                                        icon: const Icon(Icons.skip_previous),
                                         color: Colors.white,
-                                        borderRadius: BorderRadius.circular(
-                                          mainIconSize / 4,
+                                        iconSize: sideIconSize,
+                                        onPressed: () =>
+                                            audioHandler.skipToPrevious(),
+                                      ),
+                                      Padding(
+                                        padding: EdgeInsets.symmetric(
+                                          horizontal: iconSize / 4,
                                         ),
-                                        child: InkWell(
+                                        child: Material(
+                                          color: Colors.white,
                                           borderRadius: BorderRadius.circular(
-                                            mainIconSize / 3.5,
+                                            mainIconSize / 4,
                                           ),
-                                          splashColor: Colors.transparent,
-                                          highlightColor: Colors.transparent,
-                                          onTap: () {
-                                            isPlaying
-                                                ? audioHandler.pause()
-                                                : audioHandler.play();
-                                          },
-                                          child: SizedBox(
-                                            width: mainIconSize,
-                                            height: mainIconSize,
-                                            child: Center(
-                                              child: Icon(
-                                                isPlaying
-                                                    ? Icons.pause
-                                                    : Icons.play_arrow,
-                                                color: Colors.black87,
-                                                size: playIconSize,
+                                          child: InkWell(
+                                            borderRadius: BorderRadius.circular(
+                                              mainIconSize / 3.5,
+                                            ),
+                                            splashColor: Colors.transparent,
+                                            highlightColor: Colors.transparent,
+                                            onTap: () {
+                                              isPlaying
+                                                  ? audioHandler.pause()
+                                                  : audioHandler.play();
+                                            },
+                                            child: SizedBox(
+                                              width: mainIconSize,
+                                              height: mainIconSize,
+                                              child: Center(
+                                                child: Icon(
+                                                  isPlaying
+                                                      ? Icons.pause
+                                                      : Icons.play_arrow,
+                                                  color: Colors.black87,
+                                                  size: playIconSize,
+                                                ),
                                               ),
                                             ),
                                           ),
                                         ),
                                       ),
-                                    ),
-                                    IconButton(
-                                      icon: const Icon(Icons.skip_next),
-                                      color: Colors.white,
-                                      iconSize: sideIconSize,
-                                      onPressed: () =>
-                                          audioHandler.skipToNext(),
-                                    ),
-                                    IconButton(
-                                      icon: Icon(repeatIcon),
-                                      color: repeatColor,
-                                      iconSize: iconSize,
-                                      onPressed: () {
-                                        AudioServiceRepeatMode newMode;
-                                        if (repeatMode ==
-                                            AudioServiceRepeatMode.none) {
-                                          newMode = AudioServiceRepeatMode.all;
-                                        } else if (repeatMode ==
-                                            AudioServiceRepeatMode.all) {
-                                          newMode = AudioServiceRepeatMode.one;
-                                        } else {
-                                          newMode = AudioServiceRepeatMode.none;
-                                        }
-                                        audioHandler.setRepeatMode(newMode);
-                                      },
-                                      tooltip: 'Repetir',
-                                    ),
-                                  ],
+                                      IconButton(
+                                        icon: const Icon(Icons.skip_next),
+                                        color: Colors.white,
+                                        iconSize: sideIconSize,
+                                        onPressed: () =>
+                                            audioHandler.skipToNext(),
+                                      ),
+                                      IconButton(
+                                        icon: Icon(repeatIcon),
+                                        color: repeatColor,
+                                        iconSize: iconSize,
+                                        onPressed: () {
+                                          AudioServiceRepeatMode newMode;
+                                          if (repeatMode ==
+                                              AudioServiceRepeatMode.none) {
+                                            newMode =
+                                                AudioServiceRepeatMode.all;
+                                          } else if (repeatMode ==
+                                              AudioServiceRepeatMode.all) {
+                                            newMode =
+                                                AudioServiceRepeatMode.one;
+                                          } else {
+                                            newMode =
+                                                AudioServiceRepeatMode.none;
+                                          }
+                                          audioHandler.setRepeatMode(newMode);
+                                        },
+                                        tooltip: 'Repetir',
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               );
                             },
@@ -825,203 +851,57 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                         },
                       ),
 
-                      const SizedBox(height: 34),
-                      SafeArea(
-                        child: LayoutBuilder(
-                          builder: (context, constraints) {
-                            final isSmall = constraints.maxWidth < 380;
+                      if (!is16by9 && !isSmallScreen) ...[
+                        SizedBox(height: is18by9 ? 20 : 24),
+                        SafeArea(
+                          child: LayoutBuilder(
+                            builder: (context, constraints) {
+                              final isSmall = constraints.maxWidth < 380;
 
-                            return SizedBox(
-                              child: SingleChildScrollView(
-                                scrollDirection: Axis.horizontal,
-                                child: Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceEvenly,
-                                  children: [
-                                    // Botón Guardar
-                                    AnimatedTapButton(
-                                      onTap: () async {
-                                        if (!mounted) {
-                                          return;
-                                        }
+                              return SizedBox(
+                                child: SingleChildScrollView(
+                                  scrollDirection: Axis.horizontal,
+                                  child: Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceEvenly,
+                                    children: [
+                                      // Botón Guardar
+                                      AnimatedTapButton(
+                                        onTap: () async {
+                                          if (!mounted) {
+                                            return;
+                                          }
 
-                                        final safeContext = context;
-                                        await _showAddToPlaylistDialog(
-                                          safeContext,
-                                          mediaItem,
-                                        );
-                                      },
-                                      child: Container(
-                                        decoration: BoxDecoration(
-                                          color: Colors.white10,
-                                          borderRadius: BorderRadius.circular(
-                                            26,
-                                          ),
-                                        ),
-                                        padding: EdgeInsets.symmetric(
-                                          horizontal: isSmall ? 12 : 14,
-                                          vertical: 14,
-                                        ),
-                                        margin: EdgeInsets.only(
-                                          right: isSmall ? 8 : 12,
-                                        ),
-                                        child: Row(
-                                          children: [
-                                            Icon(
-                                              Icons.playlist_add,
-                                              color: Colors.white,
-                                              size: isSmall ? 20 : 24,
+                                          final safeContext = context;
+                                          await _showAddToPlaylistDialog(
+                                            safeContext,
+                                            mediaItem,
+                                          );
+                                        },
+                                        child: Container(
+                                          decoration: BoxDecoration(
+                                            color: Colors.white10,
+                                            borderRadius: BorderRadius.circular(
+                                              26,
                                             ),
-                                            SizedBox(width: isSmall ? 6 : 8),
-                                            Text(
-                                              'Guardar',
-                                              style: TextStyle(
-                                                color: Colors.white,
-                                                fontWeight: FontWeight.w600,
-                                                fontSize: isSmall ? 14 : 16,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-
-                                    // Botón Letra
-                                    AnimatedTapButton(
-                                      onTap: () async {
-                                        // Acción del botón
-                                      },
-                                      child: Container(
-                                        decoration: BoxDecoration(
-                                          color: Colors.white10,
-                                          borderRadius: BorderRadius.circular(
-                                            26,
                                           ),
-                                        ),
-                                        padding: EdgeInsets.symmetric(
-                                          horizontal: isSmall ? 14 : 20,
-                                          vertical: 14,
-                                        ),
-                                        margin: EdgeInsets.only(
-                                          right: isSmall ? 8 : 12,
-                                        ),
-                                        child: InkWell(
-                                          borderRadius: BorderRadius.circular(
-                                            26,
+                                          padding: EdgeInsets.symmetric(
+                                            horizontal: isSmall ? 12 : 14,
+                                            vertical: 14,
                                           ),
-                                          splashColor: Colors
-                                              .transparent, // <-- Quita el splash
-                                          highlightColor: Colors.transparent,
-                                          onTap: () async {
-                                            showDialog(
-                                              context: context,
-                                              barrierDismissible: false,
-                                              builder: (dialogContext) => AlertDialog(
-                                                backgroundColor: Theme.of(
-                                                  dialogContext,
-                                                ).scaffoldBackgroundColor,
-                                                content: SizedBox(
-                                                  width:
-                                                      MediaQuery.of(
-                                                        dialogContext,
-                                                      ).size.width *
-                                                      0.7,
-                                                  child: Row(
-                                                    children: [
-                                                      const CircularProgressIndicator(),
-                                                      const SizedBox(width: 16),
-                                                      const Column(
-                                                        crossAxisAlignment:
-                                                            CrossAxisAlignment
-                                                                .start,
-                                                        mainAxisSize:
-                                                            MainAxisSize.min,
-                                                        children: [
-                                                          Text(
-                                                            "Buscando letra",
-                                                            style: TextStyle(
-                                                              color:
-                                                                  Colors.white,
-                                                            ),
-                                                          ),
-                                                          SizedBox(height: 8),
-                                                          Text(
-                                                            "⚠️ Función experimental.",
-                                                            style: TextStyle(
-                                                              color:
-                                                                  Colors.orange,
-                                                              fontWeight:
-                                                                  FontWeight
-                                                                      .bold,
-                                                              fontSize: 13,
-                                                            ),
-                                                          ),
-                                                        ],
-                                                      ),
-                                                    ],
-                                                  ),
-                                                ),
-                                              ),
-                                            );
-
-                                            final lyrics = await fetchLyrics(
-                                              (mediaItem.artist ?? '').split(
-                                                ',',
-                                              )[0],
-                                              mediaItem.title,
-                                            );
-
-                                            if (!context.mounted) return;
-                                            Navigator.of(context).pop();
-                                            if (!context.mounted) return;
-
-                                            showDialog(
-                                              context: context,
-                                              builder: (dialogContext) => AlertDialog(
-                                                backgroundColor: Theme.of(
-                                                  dialogContext,
-                                                ).scaffoldBackgroundColor,
-                                                title: const Text(
-                                                  'Letra',
-                                                  style: TextStyle(
-                                                    color: Colors.white,
-                                                  ),
-                                                ),
-                                                content: SizedBox(
-                                                  width: double.maxFinite,
-                                                  child: SingleChildScrollView(
-                                                    child: Text(
-                                                      lyrics ??
-                                                          'Letra no encontrada.',
-                                                      style: const TextStyle(
-                                                        fontSize: 16,
-                                                        color: Colors.white,
-                                                      ),
-                                                    ),
-                                                  ),
-                                                ),
-                                                actions: [
-                                                  TextButton(
-                                                    child: const Text('Cerrar'),
-                                                    onPressed: () =>
-                                                        Navigator.of(
-                                                          dialogContext,
-                                                        ).pop(),
-                                                  ),
-                                                ],
-                                              ),
-                                            );
-                                          },
+                                          margin: EdgeInsets.only(
+                                            right: isSmall ? 8 : 12,
+                                          ),
                                           child: Row(
                                             children: [
                                               Icon(
-                                                Icons.lyrics,
+                                                Icons.playlist_add,
                                                 color: Colors.white,
                                                 size: isSmall ? 20 : 24,
                                               ),
                                               SizedBox(width: isSmall ? 6 : 8),
                                               Text(
-                                                'Letra',
+                                                'Guardar',
                                                 style: TextStyle(
                                                   color: Colors.white,
                                                   fontWeight: FontWeight.w600,
@@ -1032,61 +912,213 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                           ),
                                         ),
                                       ),
-                                    ),
 
-                                    // Botón Compartir
-                                    AnimatedTapButton(
-                                      onTap: () async {
-                                        // Acción del botón
-                                      },
-                                      child: Container(
-                                        decoration: BoxDecoration(
-                                          color: Colors.white10,
-                                          borderRadius: BorderRadius.circular(
-                                            26,
+                                      // Botón Letra
+                                      AnimatedTapButton(
+                                        onTap: () async {
+                                          // Acción del botón
+                                        },
+                                        child: Container(
+                                          decoration: BoxDecoration(
+                                            color: Colors.white10,
+                                            borderRadius: BorderRadius.circular(
+                                              26,
+                                            ),
                                           ),
-                                        ),
-                                        padding: EdgeInsets.symmetric(
-                                          horizontal: isSmall ? 14 : 20,
-                                          vertical: 16,
-                                        ),
-                                        child: InkWell(
-                                          splashColor: Colors
-                                              .transparent, // <-- Quita el splash
-                                          highlightColor: Colors.transparent,
-                                          borderRadius: BorderRadius.circular(
-                                            26,
+                                          padding: EdgeInsets.symmetric(
+                                            horizontal: isSmall ? 14 : 20,
+                                            vertical: 14,
                                           ),
-                                          onTap: () async {
-                                            final dataPath =
-                                                mediaItem.extras?['data']
-                                                    as String?;
-                                            if (dataPath != null &&
-                                                dataPath.isNotEmpty) {
-                                              await Share.shareXFiles([
-                                                XFile(dataPath),
-                                              ], text: mediaItem.title);
-                                            }
-                                          },
-                                          child: Row(
-                                            children: [
-                                              Icon(
-                                                Icons.share,
-                                                color: Colors.white,
-                                                size: isSmall ? 18 : 22,
-                                              ),
-                                            ],
+                                          margin: EdgeInsets.only(
+                                            right: isSmall ? 8 : 12,
+                                          ),
+                                          child: InkWell(
+                                            borderRadius: BorderRadius.circular(
+                                              26,
+                                            ),
+                                            splashColor: Colors.transparent,
+                                            highlightColor: Colors.transparent,
+                                            onTap: () async {
+                                              showDialog(
+                                                context: context,
+                                                barrierDismissible: false,
+                                                builder: (dialogContext) => AlertDialog(
+                                                  backgroundColor: Theme.of(
+                                                    dialogContext,
+                                                  ).scaffoldBackgroundColor,
+                                                  content: SizedBox(
+                                                    width:
+                                                        MediaQuery.of(
+                                                          dialogContext,
+                                                        ).size.width *
+                                                        0.7,
+                                                    child: Row(
+                                                      children: [
+                                                        const CircularProgressIndicator(),
+                                                        const SizedBox(
+                                                          width: 16,
+                                                        ),
+                                                        const Column(
+                                                          crossAxisAlignment:
+                                                              CrossAxisAlignment
+                                                                  .start,
+                                                          mainAxisSize:
+                                                              MainAxisSize.min,
+                                                          children: [
+                                                            Text(
+                                                              "Buscando letra",
+                                                              style: TextStyle(
+                                                                color: Colors
+                                                                    .white,
+                                                              ),
+                                                            ),
+                                                            SizedBox(height: 8),
+                                                            Text(
+                                                              "⚠️ Función experimental.",
+                                                              style: TextStyle(
+                                                                color: Colors
+                                                                    .orange,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .bold,
+                                                                fontSize: 13,
+                                                              ),
+                                                            ),
+                                                          ],
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                ),
+                                              );
+
+                                              final lyrics = await fetchLyrics(
+                                                (mediaItem.artist ?? '').split(
+                                                  ',',
+                                                )[0],
+                                                mediaItem.title,
+                                              );
+
+                                              if (!context.mounted) return;
+                                              Navigator.of(context).pop();
+                                              if (!context.mounted) return;
+
+                                              showDialog(
+                                                context: context,
+                                                builder: (dialogContext) => AlertDialog(
+                                                  backgroundColor: Theme.of(
+                                                    dialogContext,
+                                                  ).scaffoldBackgroundColor,
+                                                  title: const Text(
+                                                    'Letra',
+                                                    style: TextStyle(
+                                                      color: Colors.white,
+                                                    ),
+                                                  ),
+                                                  content: SizedBox(
+                                                    width: double.maxFinite,
+                                                    child: SingleChildScrollView(
+                                                      child: Text(
+                                                        lyrics ??
+                                                            'Letra no encontrada.',
+                                                        style: const TextStyle(
+                                                          fontSize: 16,
+                                                          color: Colors.white,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  actions: [
+                                                    TextButton(
+                                                      child: const Text(
+                                                        'Cerrar',
+                                                      ),
+                                                      onPressed: () =>
+                                                          Navigator.of(
+                                                            dialogContext,
+                                                          ).pop(),
+                                                    ),
+                                                  ],
+                                                ),
+                                              );
+                                            },
+                                            child: Row(
+                                              children: [
+                                                Icon(
+                                                  Icons.lyrics,
+                                                  color: Colors.white,
+                                                  size: isSmall ? 20 : 24,
+                                                ),
+                                                SizedBox(
+                                                  width: isSmall ? 6 : 8,
+                                                ),
+                                                Text(
+                                                  'Letra',
+                                                  style: TextStyle(
+                                                    color: Colors.white,
+                                                    fontWeight: FontWeight.w600,
+                                                    fontSize: isSmall ? 14 : 16,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
                                           ),
                                         ),
                                       ),
-                                    ),
-                                  ],
+
+                                      // Botón Compartir
+                                      AnimatedTapButton(
+                                        onTap: () async {
+                                          // Acción del botón
+                                        },
+                                        child: Container(
+                                          decoration: BoxDecoration(
+                                            color: Colors.white10,
+                                            borderRadius: BorderRadius.circular(
+                                              26,
+                                            ),
+                                          ),
+                                          padding: EdgeInsets.symmetric(
+                                            horizontal: isSmall ? 14 : 20,
+                                            vertical: 16,
+                                          ),
+                                          child: InkWell(
+                                            splashColor: Colors.transparent,
+                                            highlightColor: Colors.transparent,
+                                            borderRadius: BorderRadius.circular(
+                                              26,
+                                            ),
+                                            onTap: () async {
+                                              final dataPath =
+                                                  mediaItem.extras?['data']
+                                                      as String?;
+                                              if (dataPath != null &&
+                                                  dataPath.isNotEmpty) {
+                                                await Share.shareXFiles([
+                                                  XFile(dataPath),
+                                                ], text: mediaItem.title);
+                                              }
+                                            },
+                                            child: Row(
+                                              children: [
+                                                Icon(
+                                                  Icons.share,
+                                                  color: Colors.white,
+                                                  size: isSmall ? 18 : 22,
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                              ),
-                            );
-                          },
+                              );
+                            },
+                          ),
                         ),
-                      ),
+                      ],
                     ],
                   ),
                 ),
@@ -1230,18 +1262,15 @@ class SleepTimerOptionsSheet extends StatelessWidget {
   void _setTimer(BuildContext context, Duration duration) {
     (audioHandler as MyAudioHandler).startSleepTimer(duration);
     Navigator.of(context).pop();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Temporizador: ${_formatDuration(duration)}')),
-    );
-  }
-
-  static String _formatDuration(Duration duration) {
-    if (duration.inMinutes == 60) return '1 hora';
-    return '${duration.inMinutes} minuto${duration.inMinutes > 1 ? 's' : ''}';
   }
 
   @override
   Widget build(BuildContext context) {
+    final mediaItem = audioHandler.mediaItem.valueOrNull;
+    final playbackState = audioHandler.playbackState.valueOrNull;
+    final position = playbackState?.position ?? Duration.zero;
+    final duration = mediaItem?.duration ?? Duration.zero;
+    final remaining = duration > position ? duration - position : Duration.zero;
     return SafeArea(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -1266,15 +1295,18 @@ class SleepTimerOptionsSheet extends StatelessWidget {
             title: const Text('1 hora'),
             onTap: () => _setTimer(context, const Duration(minutes: 60)),
           ),
+          ListTile(
+            title: const Text('Hasta que la canción termine'),
+            onTap: remaining > Duration.zero
+                ? () => _setTimer(context, remaining)
+                : null,
+          ),
           const Divider(),
           ListTile(
             title: const Text('Cancelar temporizador'),
             onTap: () {
               (audioHandler as MyAudioHandler).cancelSleepTimer();
               Navigator.of(context).pop();
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Temporizador cancelado')),
-              );
             },
           ),
         ],

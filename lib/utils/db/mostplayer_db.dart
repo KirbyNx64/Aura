@@ -49,7 +49,14 @@ class MostPlayedDB {
         whereArgs: [song.data],
       );
     } else {
-      await db.insert('most_played', {'path': song.data, 'play_count': 1});
+      await db.insert('most_played', {
+        'path': song.data,
+        'play_count': 1,
+      }, conflictAlgorithm: ConflictAlgorithm.ignore);
+      await db.rawUpdate(
+        'UPDATE most_played SET play_count = play_count + 1 WHERE path = ?',
+        [song.data],
+      );
     }
   }
 

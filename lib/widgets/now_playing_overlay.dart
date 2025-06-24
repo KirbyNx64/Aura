@@ -8,7 +8,6 @@ import 'package:music/utils/db/recent_db.dart';
 import 'package:marquee/marquee.dart';
 import 'package:music/utils/db/mostplayer_db.dart';
 import 'package:on_audio_query/on_audio_query.dart';
-// ...existing code...
 
 class NowPlayingOverlay extends StatelessWidget {
   final bool showBar;
@@ -55,18 +54,65 @@ class NowPlayingOverlay extends StatelessWidget {
           behavior: HitTestBehavior.translucent,
           onTap: () {
             final currentSong = song;
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => FullPlayerScreen(initialMediaItem: currentSong),
-                maintainState: true,
+            Navigator.of(context).push(
+              PageRouteBuilder(
+                pageBuilder: (context, animation, secondaryAnimation) =>
+                    FullPlayerScreen(initialMediaItem: currentSong),
+                transitionsBuilder:
+                    (context, animation, secondaryAnimation, child) {
+                      final offsetAnimation =
+                          Tween<Offset>(
+                            begin: const Offset(0, 1), // Empieza abajo
+                            end: Offset.zero, // Termina en su lugar
+                          ).animate(
+                            CurvedAnimation(
+                              parent: animation,
+                              curve: Curves.easeOutCubic,
+                            ),
+                          );
+                      return SlideTransition(
+                        position: offsetAnimation,
+                        child: child,
+                      );
+                    },
+                transitionDuration: const Duration(milliseconds: 350),
               ),
             );
+          },
+          onVerticalDragEnd: (details) {
+            if (details.primaryVelocity != null &&
+                details.primaryVelocity! < 0) {
+              final currentSong = song;
+              Navigator.of(context).push(
+                PageRouteBuilder(
+                  pageBuilder: (context, animation, secondaryAnimation) =>
+                      FullPlayerScreen(initialMediaItem: currentSong),
+                  transitionsBuilder:
+                      (context, animation, secondaryAnimation, child) {
+                        final offsetAnimation =
+                            Tween<Offset>(
+                              begin: const Offset(0, 1),
+                              end: Offset.zero,
+                            ).animate(
+                              CurvedAnimation(
+                                parent: animation,
+                                curve: Curves.easeOutCubic,
+                              ),
+                            );
+                        return SlideTransition(
+                          position: offsetAnimation,
+                          child: child,
+                        );
+                      },
+                  transitionDuration: const Duration(milliseconds: 350),
+                ),
+              );
+            }
           },
           child: Container(
             margin: const EdgeInsets.symmetric(horizontal: 12),
             decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surfaceContainerHighest,
+              color: Theme.of(context).colorScheme.surfaceContainer,
               borderRadius: BorderRadius.circular(16),
               boxShadow: [
                 BoxShadow(

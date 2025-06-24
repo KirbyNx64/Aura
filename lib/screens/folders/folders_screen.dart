@@ -93,12 +93,6 @@ class _FoldersScreenState extends State<FoldersScreen>
                 if (isFavorite) {
                   await FavoritesDB().removeFavorite(song.data);
                   favoritesShouldReload.value = !favoritesShouldReload.value;
-
-                  if (!context.mounted) return;
-
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Eliminado de me gusta')),
-                  );
                 } else {
                   await _addToFavorites(song);
                   favoritesShouldReload.value = !favoritesShouldReload.value;
@@ -148,18 +142,13 @@ class _FoldersScreenState extends State<FoldersScreen>
   void _onSongSelected(SongModel song) {
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 300), () async {
-      if (!mounted) return; // <-- Agrega esta línea
+      if (!mounted) return;
       await _playSong(song);
     });
   }
 
   Future<void> _addToFavorites(SongModel song) async {
     await FavoritesDB().addFavorite(song);
-    if (mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Añadido a me gusta')));
-    }
   }
 
   void _onSearchChanged(List<SongModel> canciones) {

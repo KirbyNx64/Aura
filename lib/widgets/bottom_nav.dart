@@ -116,6 +116,7 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
         },
       ),
       bottomNavigationBar: NavigationBar(
+        backgroundColor: Theme.of(context).colorScheme.surface,
         animationDuration: const Duration(milliseconds: 400),
         selectedIndex: _selectedIndex,
         onDestinationSelected: _onItemTapped,

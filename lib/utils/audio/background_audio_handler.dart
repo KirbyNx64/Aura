@@ -10,9 +10,10 @@ Future<AudioHandler> initAudioService() {
   return AudioService.init(
     builder: () => MyAudioHandler(),
     config: const AudioServiceConfig(
-      androidNotificationChannelId: 'com.tuapp.music.channel',
-      androidNotificationChannelName: 'Reproducción de música',
+      androidNotificationChannelId: 'com.aura.music.channel',
+      androidNotificationChannelName: 'Aura Music',
       androidNotificationOngoing: true,
+      // androidNotificationIcon: 'mipmap/ic_stat_music_note',
     ),
   );
 }
@@ -48,7 +49,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
             MediaAction.seekForward,
             MediaAction.seekBackward,
           },
-          androidCompactActionIndices: const [0, 1, 3],
+          androidCompactActionIndices: const [0, 1, 2],
           processingState: processingState,
           playing: playing,
           updatePosition: _player.position,
@@ -111,11 +112,15 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     }
   }
 
+  int _loadVersion = 0;
+
   Future<void> setQueueFromSongs(
     List<SongModel> songs, {
     int initialIndex = 0,
   }) async {
     _initializing = true;
+    _loadVersion++;
+    final int currentVersion = _loadVersion;
 
     final int start = (initialIndex - 2).clamp(0, songs.length - 1);
     final int end = (initialIndex + 2).clamp(0, songs.length - 1);
@@ -195,14 +200,21 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       ]);
     queue.add(_mediaQueue);
 
+    if (currentVersion != _loadVersion) return;
+
     // 4. Carga todas las fuentes en el reproductor
-    await _player.setAudioSources(
-      sources,
-      initialIndex: initialIndex,
-      initialPosition: Duration.zero,
-    );
-    if (initialIndex >= 0 && initialIndex < _mediaQueue.length) {
-      mediaItem.add(_mediaQueue[initialIndex]);
+    try {
+      await _player.setAudioSources(
+        sources,
+        initialIndex: initialIndex,
+        initialPosition: Duration.zero,
+      );
+      if (currentVersion != _loadVersion) return;
+      if (initialIndex >= 0 && initialIndex < _mediaQueue.length) {
+        mediaItem.add(_mediaQueue[initialIndex]);
+      }
+    } catch (e) {
+      // print('👻 Error al cargar las fuentes de audio: $e');
     }
 
     _initializing = false;
@@ -210,7 +222,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     // 5. En segundo plano, completa los MediaItem faltantes
     Future(() async {
       for (int i = 0; i < songs.length; i++) {
-        if (i >= start && i <= end) continue; // Ya están completos
+        if (i >= start && i <= end) continue;
         final song = songs[i];
         Duration? dur = (song.duration != null && song.duration! > 0)
             ? Duration(milliseconds: song.duration!)
