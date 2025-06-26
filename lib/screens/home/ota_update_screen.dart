@@ -82,6 +82,12 @@ class _UpdateScreenState extends State<UpdateScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Tamaños relativos
+    final sizeScreen = MediaQuery.of(context).size;
+    final aspectRatio = sizeScreen.height / sizeScreen.width;
+
+    // Para 16:9 (≈1.77)
+    final is16by9 = (aspectRatio < 1.85);
     return Scaffold(
       appBar: AppBar(
         title: const Text('Actualización'),
@@ -92,14 +98,55 @@ class _UpdateScreenState extends State<UpdateScreen> {
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: _isDownloading
-            ? Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  LinearProgressIndicator(value: _progress),
-                  const SizedBox(height: 8),
-                  Text('Estado: $_status'),
-                ],
-              )
+      ? Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Descargando actualización...',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Versión: $_version',
+                      style: const TextStyle(fontSize: 16),
+                    ),
+                    const SizedBox(height: 42),
+                    Text(
+                      'Cambios:',
+                      style: Theme.of(context).textTheme.titleMedium ??
+                          const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      height: is16by9 ? 240 : 360,
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        margin: const EdgeInsets.only(bottom: 16),
+                        decoration: BoxDecoration(
+                          color: Colors.white10,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.white24),
+                        ),
+                        child: SingleChildScrollView(
+                          child: Text(_changelog),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text('Por favor, no salgas de la app mientras se descarga.'),
+            const SizedBox(height: 8),
+            LinearProgressIndicator(value: _progress),
+          ],
+            )
             : _version.isEmpty && !_hasChecked
                 ? Stack(
                     children: [
@@ -124,7 +171,7 @@ class _UpdateScreenState extends State<UpdateScreen> {
                       Positioned(
                         bottom: 16,
                         right: 16,
-                        child: ElevatedButton(
+                        child: TextButton(
                           onPressed: _checkUpdate,
                           child: const Text('Buscar actualización'),
                         ),
@@ -136,12 +183,12 @@ class _UpdateScreenState extends State<UpdateScreen> {
                     : Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          SizedBox(height: 40),
                           const Text(
-                            'Nueva actualización disponible',
+                            '¡Nueva actualización disponible!',
                             style: TextStyle(
                                 fontSize: 18, fontWeight: FontWeight.bold),
                           ),
+                          const SizedBox(height: 8),
                           Text(
                             'Versión: $_version',
                             style:
@@ -156,13 +203,26 @@ class _UpdateScreenState extends State<UpdateScreen> {
                                     fontSize: 18, fontWeight: FontWeight.w600),
                           ),
                           const SizedBox(height: 8),
-                          Expanded(
-                              child: SingleChildScrollView(child: Text(_changelog))),
-                          const SizedBox(height: 60),
+                          SizedBox(
+                            height: is16by9 ? 240 : 360, // Ajusta este valor según prefieras
+                            child: Container(
+                              padding: const EdgeInsets.all(12),
+                              margin: const EdgeInsets.only(bottom: 16),
+                              decoration: BoxDecoration(
+                                color: Colors.white10,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: Colors.white24),
+                              ),
+                              child: SingleChildScrollView(
+                                child: Text(_changelog),
+                              ),
+                            ),
+                          ),       
+                          const Spacer(),
+                          Text('Estado: $_status'),
+                          const SizedBox(height: 16),
                           LinearProgressIndicator(value: _progress),
                           const SizedBox(height: 16),
-                          Text('Estado: $_status'),
-                          const Spacer(),
                           Row(
                             mainAxisAlignment: MainAxisAlignment.end,
                             children: [
@@ -170,7 +230,7 @@ class _UpdateScreenState extends State<UpdateScreen> {
                                 onPressed: () => Navigator.pop(context),
                                 child: const Text('Cancelar'),
                               ),
-                              ElevatedButton(
+                              TextButton(
                                 onPressed: _startDownload,
                                 child: const Text('Actualizar'),
                               ),
