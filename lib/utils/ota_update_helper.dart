@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:ota_update/ota_update.dart';
@@ -7,43 +6,37 @@ import 'package:ota_update/ota_update.dart';
 class OtaUpdateHelper {
   static const String _urlJson = 'https://raw.githubusercontent.com/KirbyNx64/Aura/main/update/version.json';
 
-  static Future<void> verificarYActualizar(BuildContext context) async {
+  // Consulta la versión remota y compara con local. Devuelve info o null si no hay nueva versión.
+  static Future<UpdateInfo?> checkForUpdate() async {
     try {
       final response = await http.get(Uri.parse(_urlJson));
+      if (response.statusCode != 200) return null;
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final String remoteVersion = data['version'];
-        final String apkUrl = data['apk_url'];
-        final String changelog = data['changelog'] ?? '';
+      final data = jsonDecode(response.body);
+      final remoteVersion = data['version'] as String;
+      final apkUrl = data['apk_url'] as String;
+      final changelog = data['changelog'] ?? '';
 
-        final info = await PackageInfo.fromPlatform();
-        final String localVersion = info.version;
+      final info = await PackageInfo.fromPlatform();
+      final localVersion = info.version;
 
-        if (_esNuevaVersion(localVersion, remoteVersion)) {
-          if (context.mounted) {
-            _mostrarDialogo(context, remoteVersion, apkUrl, changelog);
-          }
-        } else {
-          if (context.mounted) {
-            _mostrarSnackbar(context, 'Ya tienes la última versión ($localVersion).');
-          }
-        }
-      } else {
-        if (context.mounted) {
-          _mostrarSnackbar(context, 'Error al obtener la versión remota');
-        }
+      if (_isNewVersion(localVersion, remoteVersion)) {
+        return UpdateInfo(version: remoteVersion, apkUrl: apkUrl, changelog: changelog);
       }
+      return null;
     } catch (e) {
-      if (context.mounted) {
-        _mostrarSnackbar(context, 'Error: $e');
-      }
+      return null;
     }
   }
 
-  static bool _esNuevaVersion(String local, String remota) {
+  // Método para iniciar la descarga y retornar stream de eventos
+  static Stream<OtaEvent> startDownload(String apkUrl) {
+    return OtaUpdate().execute(apkUrl, destinationFilename: 'aura_update.apk');
+  }
+
+  static bool _isNewVersion(String local, String remote) {
     final lv = local.split('.').map(int.parse).toList();
-    final rv = remota.split('.').map(int.parse).toList();
+    final rv = remote.split('.').map(int.parse).toList();
 
     for (int i = 0; i < lv.length; i++) {
       if (rv[i] > lv[i]) return true;
@@ -51,50 +44,16 @@ class OtaUpdateHelper {
     }
     return false;
   }
+}
 
-  static void _mostrarDialogo(
-    BuildContext context,
-    String version,
-    String apkUrl,
-    String changelog,
-  ) {
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: Text('Nueva versión disponible ($version)'),
-        content: Text('Cambios:\n$changelog'),
-        actions: [
-          TextButton(
-            child: const Text('Cancelar'),
-            onPressed: () => Navigator.pop(context),
-          ),
-          ElevatedButton(
-            child: const Text('Actualizar'),
-            onPressed: () {
-              Navigator.pop(context);
-              _iniciarDescarga(context, apkUrl);
-            },
-          ),
-        ],
-      ),
-    );
-  }
+class UpdateInfo {
+  final String version;
+  final String apkUrl;
+  final String changelog;
 
-  static void _iniciarDescarga(BuildContext context, String apkUrl) {
-    try {
-      OtaUpdate()
-          .execute(apkUrl, destinationFilename: 'aura_update.apk')
-          .listen((event) {
-        debugPrint('OTA Estado: ${event.status}, Valor: ${event.value}');
-      });
-    } catch (e) {
-      if (context.mounted) {
-        _mostrarSnackbar(context, 'Error al descargar: $e');
-      }
-    }
-  }
-
-  static void _mostrarSnackbar(BuildContext context, String mensaje) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(mensaje)));
-  }
+  UpdateInfo({
+    required this.version,
+    required this.apkUrl,
+    required this.changelog,
+  });
 }

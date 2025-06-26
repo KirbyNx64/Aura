@@ -10,7 +10,7 @@ import 'package:music/utils/notifiers.dart';
 import 'package:flutter/services.dart';
 import 'package:music/utils/db/playlists_db.dart';
 import 'package:audio_service/audio_service.dart';
-import 'package:music/utils/ota_update_helper.dart';
+import 'package:music/screens/home/ota_update_screen.dart';
 
 enum OrdenCancionesPlaylist { normal, alfabetico, invertido, ultimoAgregado }
 
@@ -379,6 +379,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           actions: (!_showingRecents && !_showingPlaylistSongs)
               ? [
                   IconButton(
+  icon: const Icon(Icons.system_update_alt, size: 28),
+  tooltip: 'Buscar actualización',
+  onPressed: () {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const UpdateScreen()),
+    );
+  },
+),
+                  IconButton(
                     icon: const Icon(Icons.history, size: 28),
                     tooltip: 'Canciones recientes',
                     onPressed: _loadRecents,
@@ -434,12 +444,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                             ],
                           ),
                           actions: [
-                            TextButton(
-                              onPressed: () async {
-                                await OtaUpdateHelper.verificarYActualizar(context);
-                              },
-                              child: const Text('Buscar actualización'),
-                            ),
                             TextButton(
                               onPressed: () => Navigator.of(context).pop(),
                               child: const Text('Cerrar'),
