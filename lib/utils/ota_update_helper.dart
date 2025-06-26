@@ -5,7 +5,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:ota_update/ota_update.dart';
 
 class OtaUpdateHelper {
-  static const String _urlJson = 'https://raw.githubusercontent.com/KirbyNx64/Aura/update/version.json';
+  static const String _urlJson = 'https://raw.githubusercontent.com/KirbyNx64/Aura/main/update/version.json';
 
   static Future<void> verificarYActualizar(BuildContext context) async {
     try {
