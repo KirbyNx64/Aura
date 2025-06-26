@@ -1,5 +1,5 @@
 {
   "version": "1.1.0",
   "apk_url": "https://github.com/KirbyNx64/Aura/releases/download/v1.1.0/Aura-1.1.0.apk",
-  "changelog": "• Test\n• Test 2\n• Test update\n• Test 3"
+  "changelog": "• Las imágenes de carátula en accesos directos y en la notificación del reproductor ahora se muestran con mayor calidad.\n• Se añadió la función de deslizar hacia arriba en la pantalla del reproductor para ver la lista de reproducción actual.\n• El temporizador ahora muestra también los segundos restantes mientras está activo.\n• La lista de playlists ahora muestra una imagen representativa compuesta por las carátulas de las canciones que contiene, en lugar de un ícono genérico.\n• La barra de reproducción flotante (overlay) ahora tiene bordes redondeados, mejorando su apariencia visual.\n• Se realizaron ajustes visuales en el botón de 'letra' para una mejor claridad.\n• Se añadió la opción para solicitar permiso de gestión total de archivos del dispositivo, útil si ocurre algún problema al procesar audio desde las descargas."
 }
