@@ -10,6 +10,7 @@ import 'package:music/utils/notifiers.dart';
 import 'package:flutter/services.dart';
 import 'package:music/utils/db/playlists_db.dart';
 import 'package:audio_service/audio_service.dart';
+import 'package:music/utils/ota_update_helper.dart';
 
 enum OrdenCancionesPlaylist { normal, alfabetico, invertido, ultimoAgregado }
 
@@ -50,11 +51,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   final FocusNode _searchPlaylistFocus = FocusNode();
   List<SongModel> _filteredPlaylistSongs = [];
   final List<List<SongModel>> _quickPickPages = [];
+  List<SongModel> allSongs = [];
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _loadAllSongs();
     _loadMostPlayed().then((_) {
       _initQuickPickPages();
       setState(() {});
@@ -100,10 +103,31 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
+  Future<void> _loadAllSongs() async {
+    final query = OnAudioQuery();
+    final songs = await query.querySongs();
+    setState(() {
+      allSongs = songs;
+    });
+  }
+
   Future<void> _loadPlaylists() async {
     final playlists = await PlaylistsDB().getAllPlaylists();
+    final db = PlaylistsDB();
+    List<Map<String, dynamic>> playlistsWithSongs = [];
+    for (final playlist in playlists) {
+      final dbInstance = await db.database;
+      final songsRows = await dbInstance.query(
+        'playlist_songs',
+        where: 'playlist_id = ?',
+        whereArgs: [playlist['id']],
+        orderBy: 'id DESC',
+      );
+      final songPaths = songsRows.map((e) => e['song_path'] as String).toList();
+      playlistsWithSongs.add({...playlist, 'songs': songPaths});
+    }
     setState(() {
-      _playlists = playlists;
+      _playlists = playlistsWithSongs;
     });
   }
 
@@ -394,7 +418,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                               ),
                               const SizedBox(height: 4),
                               const Text(
-                                'v1.0.0',
+                                'v1.1.0',
                                 style: TextStyle(
                                   fontSize: 15,
                                   color: Colors.white70,
@@ -403,13 +427,19 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                               ),
                               const SizedBox(height: 12),
                               const Text(
-                                'Music es una app para reproducir tu música local de forma rápida y sencilla. '
-                                'Disfruta de tus canciones favoritas, crea playlists y mucho más.',
+                                'Aura Music es una app para reproducir tu música local de forma rápida y sencilla. '
+                                'Disfruta de tus canciones favoritas, crea playlists y más.',
                                 textAlign: TextAlign.center,
                               ),
                             ],
                           ),
                           actions: [
+                            TextButton(
+                              onPressed: () async {
+                                await OtaUpdateHelper.verificarYActualizar(context);
+                              },
+                              child: const Text('Buscar actualización'),
+                            ),
                             TextButton(
                               onPressed: () => Navigator.of(context).pop(),
                               child: const Text('Cerrar'),
@@ -827,6 +857,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                 artworkBorder:
                                                     BorderRadius.circular(12),
                                                 keepOldArtwork: true,
+                                                artworkHeight: 120,
+                                                artworkWidth: 120,
+                                                artworkQuality:
+                                                    FilterQuality.high,
+                                                size: 400,
                                                 nullArtworkWidget: Container(
                                                   color: Theme.of(context)
                                                       .colorScheme
@@ -1093,146 +1128,213 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                               itemCount: _playlists.length,
                               itemBuilder: (context, index) {
                                 final playlist = _playlists[index];
-                                return ListTile(
-                                  leading: const Icon(
-                                    Icons.queue_music,
-                                    size: 32,
-                                    color: Colors.white70,
-                                  ),
-                                  title: Text(
-                                    playlist['name'],
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  onTap: () {
-                                    _loadPlaylistSongs(playlist);
-                                  },
-                                  onLongPress: () async {
-                                    showModalBottomSheet(
-                                      context: context,
-                                      builder: (context) => SafeArea(
-                                        child: Column(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            ListTile(
-                                              leading: const Icon(Icons.edit),
-                                              title: const Text(
-                                                'Renombrar playlist',
-                                              ),
-                                              onTap: () async {
-                                                Navigator.of(context).pop();
-                                                final controller =
-                                                    TextEditingController(
-                                                      text: playlist['name'],
-                                                    );
-                                                final result = await showDialog<String>(
-                                                  context: context,
-                                                  builder: (context) => AlertDialog(
-                                                    title: const Text(
-                                                      'Renombrar playlist',
-                                                    ),
-                                                    content: TextField(
-                                                      controller: controller,
-                                                      autofocus: true,
-                                                      decoration:
-                                                          const InputDecoration(
-                                                            labelText:
-                                                                'Nuevo nombre',
-                                                          ),
-                                                    ),
-                                                    actions: [
-                                                      TextButton(
-                                                        onPressed: () =>
-                                                            Navigator.of(
-                                                              context,
-                                                            ).pop(),
-                                                        child: const Text(
-                                                          'Cancelar',
-                                                        ),
-                                                      ),
-                                                      TextButton(
-                                                        onPressed: () {
-                                                          Navigator.of(
-                                                            context,
-                                                          ).pop(
-                                                            controller.text
-                                                                .trim(),
-                                                          );
-                                                        },
-                                                        child: const Text(
-                                                          'Guardar',
-                                                        ),
-                                                      ),
-                                                    ],
-                                                  ),
-                                                );
-                                                if (result != null &&
-                                                    result.isNotEmpty &&
-                                                    result !=
-                                                        playlist['name']) {
-                                                  await PlaylistsDB()
-                                                      .renamePlaylist(
-                                                        playlist['id'],
-                                                        result,
-                                                      );
-                                                  await _loadPlaylists();
-                                                }
-                                              },
+                                return Column(
+                                  children: [
+                                    ListTile(
+                                      leading: (() {
+                                        final rawList =
+                                            playlist['songs'] as List?;
+                                        // Filtra solo rutas válidas (no nulos ni vacíos)
+                                        final filtered = (rawList ?? [])
+                                            .where(
+                                              (e) =>
+                                                  e != null &&
+                                                  e.toString().isNotEmpty,
+                                            )
+                                            .map((e) => e.toString())
+                                            .toList();
+                                        final firstSongPath =
+                                            filtered.isNotEmpty
+                                            ? filtered[0]
+                                            : null;
+                                        final songIndex = allSongs.indexWhere(
+                                          (s) => s.data == firstSongPath,
+                                        );
+                                        if (songIndex != -1) {
+                                          final song = allSongs[songIndex];
+                                          return ClipRRect(
+                                            borderRadius: BorderRadius.circular(
+                                              8,
                                             ),
-                                            ListTile(
-                                              leading: const Icon(
-                                                Icons.delete_outline,
+                                            child: QueryArtworkWidget(
+                                              id: song.id,
+                                              type: ArtworkType.AUDIO,
+                                              artworkHeight: 60,
+                                              artworkWidth: 57,
+                                              artworkBorder:
+                                                  BorderRadius.circular(8),
+                                              nullArtworkWidget: Container(
+                                                color: Theme.of(
+                                                  context,
+                                                ).colorScheme.surfaceContainer,
+                                                width: 50,
+                                                height: 50,
+                                                child: const Icon(
+                                                  Icons.music_note,
+                                                  color: Colors.white70,
+                                                ),
                                               ),
-                                              title: const Text(
-                                                'Eliminar playlist',
-                                              ),
-                                              onTap: () async {
-                                                Navigator.of(context).pop();
-                                                final confirm = await showDialog<bool>(
-                                                  context: context,
-                                                  builder: (context) => AlertDialog(
-                                                    title: const Text(
-                                                      'Eliminar playlist',
-                                                    ),
-                                                    content: const Text(
-                                                      '¿Seguro que deseas eliminar esta playlist?',
-                                                    ),
-                                                    actions: [
-                                                      TextButton(
-                                                        onPressed: () =>
-                                                            Navigator.of(
-                                                              context,
-                                                            ).pop(false),
-                                                        child: const Text(
-                                                          'Cancelar',
-                                                        ),
-                                                      ),
-                                                      TextButton(
-                                                        onPressed: () =>
-                                                            Navigator.of(
-                                                              context,
-                                                            ).pop(true),
-                                                        child: const Text(
-                                                          'Eliminar',
-                                                        ),
-                                                      ),
-                                                    ],
-                                                  ),
-                                                );
-                                                if (confirm == true) {
-                                                  await PlaylistsDB()
-                                                      .deletePlaylist(
-                                                        playlist['id'],
-                                                      );
-                                                  await _loadPlaylists();
-                                                }
-                                              },
                                             ),
-                                          ],
-                                        ),
+                                          );
+                                        } else {
+                                          return Container(
+                                            width: 57,
+                                            height: 57,
+                                            decoration: BoxDecoration(
+                                              color: Theme.of(
+                                                context,
+                                              ).colorScheme.surfaceContainer,
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                            ),
+                                            child: const Icon(
+                                              Icons.music_note,
+                                              color: Colors.white70,
+                                            ),
+                                          );
+                                        }
+                                      })(),
+                                      title: Text(
+                                        playlist['name'],
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
                                       ),
-                                    );
-                                  },
+                                      onTap: () {
+                                        _loadPlaylistSongs(playlist);
+                                      },
+                                      onLongPress: () async {
+                                        showModalBottomSheet(
+                                          context: context,
+                                          builder: (context) => SafeArea(
+                                            child: Column(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                ListTile(
+                                                  leading: const Icon(
+                                                    Icons.edit,
+                                                  ),
+                                                  title: const Text(
+                                                    'Renombrar playlist',
+                                                  ),
+                                                  onTap: () async {
+                                                    Navigator.of(context).pop();
+                                                    final controller =
+                                                        TextEditingController(
+                                                          text:
+                                                              playlist['name'],
+                                                        );
+                                                    final result = await showDialog<String>(
+                                                      context: context,
+                                                      builder: (context) => AlertDialog(
+                                                        title: const Text(
+                                                          'Renombrar playlist',
+                                                        ),
+                                                        content: TextField(
+                                                          controller:
+                                                              controller,
+                                                          autofocus: true,
+                                                          decoration:
+                                                              const InputDecoration(
+                                                                labelText:
+                                                                    'Nuevo nombre',
+                                                              ),
+                                                        ),
+                                                        actions: [
+                                                          TextButton(
+                                                            onPressed: () =>
+                                                                Navigator.of(
+                                                                  context,
+                                                                ).pop(),
+                                                            child: const Text(
+                                                              'Cancelar',
+                                                            ),
+                                                          ),
+                                                          TextButton(
+                                                            onPressed: () {
+                                                              Navigator.of(
+                                                                context,
+                                                              ).pop(
+                                                                controller.text
+                                                                    .trim(),
+                                                              );
+                                                            },
+                                                            child: const Text(
+                                                              'Guardar',
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    );
+                                                    if (result != null &&
+                                                        result.isNotEmpty &&
+                                                        result !=
+                                                            playlist['name']) {
+                                                      await PlaylistsDB()
+                                                          .renamePlaylist(
+                                                            playlist['id'],
+                                                            result,
+                                                          );
+                                                      await _loadPlaylists();
+                                                    }
+                                                  },
+                                                ),
+                                                ListTile(
+                                                  leading: const Icon(
+                                                    Icons.delete_outline,
+                                                  ),
+                                                  title: const Text(
+                                                    'Eliminar playlist',
+                                                  ),
+                                                  onTap: () async {
+                                                    Navigator.of(context).pop();
+                                                    final confirm = await showDialog<bool>(
+                                                      context: context,
+                                                      builder: (context) => AlertDialog(
+                                                        title: const Text(
+                                                          'Eliminar playlist',
+                                                        ),
+                                                        content: const Text(
+                                                          '¿Seguro que deseas eliminar esta playlist?',
+                                                        ),
+                                                        actions: [
+                                                          TextButton(
+                                                            onPressed: () =>
+                                                                Navigator.of(
+                                                                  context,
+                                                                ).pop(false),
+                                                            child: const Text(
+                                                              'Cancelar',
+                                                            ),
+                                                          ),
+                                                          TextButton(
+                                                            onPressed: () =>
+                                                                Navigator.of(
+                                                                  context,
+                                                                ).pop(true),
+                                                            child: const Text(
+                                                              'Eliminar',
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    );
+                                                    if (confirm == true) {
+                                                      await PlaylistsDB()
+                                                          .deletePlaylist(
+                                                            playlist['id'],
+                                                          );
+                                                      await _loadPlaylists();
+                                                    }
+                                                  },
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                    const SizedBox(height: 20),
+                                  ],
                                 );
                               },
                             ),

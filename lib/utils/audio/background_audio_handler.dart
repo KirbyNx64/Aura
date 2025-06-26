@@ -153,6 +153,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         final albumArt = await OnAudioQuery().queryArtwork(
           song.id,
           ArtworkType.AUDIO,
+          size: 512,
         );
         if (albumArt != null) {
           final tempDir = await getTemporaryDirectory();

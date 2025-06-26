@@ -1,7 +1,7 @@
 name: music
 description: "A new Flutter project."
 publish_to: 'none'
-version: 1.0.0+1
+version: 1.1.0+1
 
 environment:
   sdk: ^3.8.1
@@ -37,6 +37,10 @@ dependencies:
   dio: ^5.8.0+1
   smooth_page_indicator: ^1.2.1
   image: ^4.5.4
+  android_intent_plus: ^5.3.0
+  package_info_plus: ^8.3.0
+  palette_generator: ^0.3.3+7
+  ota_update: ^7.0.2
 
 dev_dependencies:
   flutter_test:

@@ -1,6 +1,9 @@
 import 'dart:io';
 import 'dart:async';
 import 'package:flutter/material.dart';
+// import 'package:android_intent_plus/android_intent.dart';
+// import 'package:android_intent_plus/flag.dart';
+// import 'package:package_info_plus/package_info_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import 'package:file_selector/file_selector.dart';
@@ -80,15 +83,15 @@ class _DownloadScreenState extends State<DownloadScreen>
     await prefs.setString('download_directory', path);
   }
 
-  Future<bool> _ensurePermissions() async {
-    if (!Platform.isAndroid) return true;
-    if (await Permission.storage.isGranted) return true;
-    if (await Permission.audio.isGranted) return true;
-    final s = await Permission.storage.request();
-    if (s.isGranted) return true;
-    final a = await Permission.audio.request();
-    return a.isGranted;
-  }
+  // Future<bool> _ensurePermissions() async {
+  //   if (!Platform.isAndroid) return true;
+  //   if (await Permission.storage.isGranted) return true;
+  //   if (await Permission.audio.isGranted) return true;
+  //   final s = await Permission.storage.request();
+  //   if (s.isGranted) return true;
+  //   final a = await Permission.audio.request();
+  //   return a.isGranted;
+  // }
 
   Future<void> _pickDirectory() async {
     final androidInfo = await DeviceInfoPlugin().androidInfo;
@@ -294,7 +297,6 @@ class _DownloadScreenState extends State<DownloadScreen>
   Future<void> _downloadAudioOnlyExplode() async {
     final url = _urlController.text.trim();
     if (url.isEmpty) return;
-    if (!await _ensurePermissions()) return;
 
     if (Platform.isAndroid && _directoryPath == null ||
         _directoryPath!.isEmpty) {
@@ -445,7 +447,6 @@ class _DownloadScreenState extends State<DownloadScreen>
   Future<void> _downloadAudioOnly() async {
     final url = _urlController.text.trim();
     if (url.isEmpty) return;
-    if (!await _ensurePermissions()) return;
 
     if (Platform.isAndroid && _directoryPath == null ||
         _directoryPath!.isEmpty) {
@@ -555,6 +556,96 @@ class _DownloadScreenState extends State<DownloadScreen>
     }
   }
 
+  Future<void> _verificarPermisoArchivos() async {
+    // Solo mostrar en Android 11+ (SDK 30+)
+    if (Platform.isAndroid) {
+      final androidInfo = await DeviceInfoPlugin().androidInfo;
+      final sdkInt = androidInfo.version.sdkInt;
+      if (sdkInt < 30) {
+        _mostrarAlerta(
+          titulo: 'No necesario',
+          mensaje:
+              'No necesitas otorgar este permiso en tu versión de Android.',
+        );
+        return;
+      }
+    } else {
+      _mostrarAlerta(
+        titulo: 'Solo Android',
+        mensaje: 'Esta función solo aplica para Android.',
+      );
+      return;
+    }
+
+    // Mostrar advertencia antes de solicitar el permiso
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('¿Otorgar permisos de archivos?'),
+        content: const Text(
+          'Esta función NO es necesaria para la mayoría de usuarios.\n\n'
+          'Úsala solo si tienes problemas al procesar el audio o guardar archivos.\n\n'
+          '¿Quieres continuar y otorgar permisos de acceso a todos los archivos?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.of(context).pop();
+              // Ahora sí solicita el permiso
+              if (await Permission.manageExternalStorage.isGranted) {
+                _mostrarAlerta(
+                  titulo: 'Permiso concedido',
+                  mensaje: 'Ya tienes acceso a todos los archivos.',
+                );
+              } else {
+                final status = await Permission.manageExternalStorage.request();
+                if (status.isGranted) {
+                  _mostrarAlerta(
+                    titulo: 'Permiso concedido',
+                    mensaje: 'Ahora tienes acceso a todos los archivos.',
+                  );
+                } else {
+                  _mostrarAlerta(
+                    titulo: 'Permiso denegado',
+                    mensaje:
+                        'No se concedió el permiso. Ve a ajustes para otorgarlo manualmente.',
+                  );
+                }
+              }
+            },
+            child: const Text('Otorgar permisos'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Future<void> _abrirPermisoArchivos() async {
+  //   // Intento abrir la pantalla de "Acceso a todos los archivos"
+  //   const url = 'package:com.android.settings/files_access_permission';
+  //   if (await canLaunchUrl(Uri.parse(url))) {
+  //     await launchUrl(Uri.parse(url));
+  //   } else {
+  //     // Fallback: abrir la configuración de la app
+  //     final intent = AndroidIntent(
+  //       action: 'android.settings.APPLICATION_DETAILS_SETTINGS',
+  //       data: 'package:${await _getPackageName()}',
+  //       flags: <int>[Flag.FLAG_ACTIVITY_NEW_TASK],
+  //     );
+  //     await intent.launch();
+  //   }
+  // }
+
+  // Future<String> _getPackageName() async {
+  //   final packageInfo = await PackageInfo.fromPlatform();
+  //   return packageInfo.packageName;
+  // }
+
   void _mostrarAlerta({required String titulo, required String mensaje}) {
     if (!mounted) return;
     showDialog(
@@ -588,9 +679,16 @@ class _DownloadScreenState extends State<DownloadScreen>
     final mp3Path = '$saveDir/$baseName.mp3';
 
     if (await File(mp3Path).exists()) {
-      await File(mp3Path).delete();
-      await Future.delayed(const Duration(seconds: 1));
-      // print('🗑️ Archivo MP3 existente eliminado: $mp3Path');
+      try {
+        await File(mp3Path).delete();
+        await Future.delayed(const Duration(seconds: 1));
+        // print('🗑️ Archivo MP3 existente eliminado: $mp3Path');
+      } catch (e) {
+        await File(inputPath).delete();
+        // print('⚠️ Error al eliminar archivo MP3 existente: $mp3Path');
+        // print('Detalles del error: $e');
+        throw Exception('El archivo MP3 ya existe y no se pudo eliminar.');
+      }
     }
 
     final metaPath = '$saveDir/${baseName}_meta.mp3';
@@ -641,6 +739,8 @@ class _DownloadScreenState extends State<DownloadScreen>
       final client = HttpClient();
 
       Uint8List? bytes;
+
+      // print('🌐 Descargando portada de: $coverUrlMax');
 
       try {
         // 1. Intentar maxresdefault
@@ -947,8 +1047,52 @@ class _DownloadScreenState extends State<DownloadScreen>
                     ),
                   ),
                 ),
+              ],
+            ),
+
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: SizedBox(
+                    height: 56,
+                    width: double.infinity,
+                    child: Material(
+                      borderRadius: BorderRadius.circular(8),
+                      color: Theme.of(context).colorScheme.primaryContainer,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(8),
+                        onTap: _isDownloading
+                            ? null
+                            : () {
+                                if (_usarExplode) {
+                                  _downloadAudioOnlyExplode();
+                                } else {
+                                  _downloadAudioOnly();
+                                }
+                              },
+                        child: Center(
+                          child: Text(
+                            _isDownloading
+                                ? (_isProcessing
+                                      ? 'Procesando audio...'
+                                      : 'Descargando... ${((_progress / 0.6).clamp(0, 1) * 100).toStringAsFixed(0)}%')
+                                : 'Descargar Audio',
+                            style: TextStyle(
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onPrimaryContainer,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
                 const SizedBox(width: 8),
-                // Botón de carpeta
+                // Botón de carpeta a la derecha del botón de descarga
                 SizedBox(
                   height: 56,
                   width: 56,
@@ -972,42 +1116,29 @@ class _DownloadScreenState extends State<DownloadScreen>
                     ),
                   ),
                 ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            SizedBox(
-              height: 56,
-              width: double.infinity,
-              child: Material(
-                borderRadius: BorderRadius.circular(8),
-                color: Theme.of(context).colorScheme.primaryContainer,
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(8),
-                  onTap: _isDownloading
-                      ? null
-                      : () {
-                          if (_usarExplode) {
-                            _downloadAudioOnlyExplode();
-                          } else {
-                            _downloadAudioOnly();
-                          }
-                        },
-                  child: Center(
-                    child: Text(
-                      _isDownloading
-                          ? (_isProcessing
-                                ? 'Procesando audio...'
-                                : 'Descargando... ${((_progress / 0.6).clamp(0, 1) * 100).toStringAsFixed(0)}%')
-                          : 'Descargar Audio',
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.onPrimaryContainer,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
+                const SizedBox(width: 8),
+                SizedBox(
+                  height: 56,
+                  width: 56,
+                  child: Material(
+                    borderRadius: BorderRadius.circular(8),
+                    color: Theme.of(context).colorScheme.secondaryContainer,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(8),
+                      onTap: _verificarPermisoArchivos,
+                      child: Tooltip(
+                        message: 'Permisos de archivos',
+                        child: Icon(
+                          Icons.security,
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onSecondaryContainer,
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
+              ],
             ),
             const SizedBox(height: 16),
             if (_isDownloading)

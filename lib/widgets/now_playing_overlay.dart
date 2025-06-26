@@ -210,14 +210,17 @@ class NowPlayingOverlay extends StatelessWidget {
 
                         return Column(
                           children: [
-                            LinearProgressIndicator(
-                              key: ValueKey(total),
-                              value: total > 0 ? current / total : 0,
-                              minHeight: 4,
-                              backgroundColor: Theme.of(
-                                context,
-                              ).colorScheme.onSurface.withAlpha(60),
-                              color: Theme.of(context).colorScheme.primary,
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: LinearProgressIndicator(
+                                key: ValueKey(total),
+                                value: total > 0 ? current / total : 0,
+                                minHeight: 4,
+                                backgroundColor: Theme.of(
+                                  context,
+                                ).colorScheme.onSurface.withAlpha(60),
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
                             ),
                           ],
                         );
