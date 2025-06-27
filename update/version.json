@@ -1,9 +1,9 @@
 {
-  "version": "1.2.0",
+  "version": "1.1.1",
   "apk_urls": {
     "arm64-v8a": "https://github.com/KirbyNx64/Aura/releases/download/v1.1.0/AuraMusic-v1.1.0-arm64-v8a.apk",
     "armeabi-v7a": "https://github.com/KirbyNx64/Aura/releases/download/v1.1.0/AuraMusic-v1.1.0-armeabi-v7a.apk",
     "x86_64": "https://github.com/KirbyNx64/Aura/releases/download/v1.1.0/AuraMusic-v1.1.0-x86_64.apk"
   },
-  "changelog": "• Las imágenes de carátula en accesos directos y en la notificación del reproductor ahora se muestran con mayor calidad.\n\n• Se añadió la función de deslizar hacia arriba en la pantalla del reproductor para ver la lista de reproducción actual.\n\n• El temporizador ahora muestra también los segundos restantes mientras está activo.\n\n• La lista de playlists ahora muestra una imagen representativa compuesta por las carátulas de las canciones que contiene, en lugar de un ícono genérico.\n\n• La barra de reproducción flotante (overlay) ahora tiene bordes redondeados, mejorando su apariencia visual.\n\n• Se realizaron ajustes visuales en el botón de 'letra' para una mejor claridad.\n\n• Se añadió la opción para solicitar permiso de gestión total de archivos del dispositivo, útil si ocurre algún problema al procesar audio desde las descargas."
+  "changelog": "• Nuevo método de procesar audio usando la librería AudioTags, lo que permite mayor rapidez de procesamiento.\n\n• Se añadió opción de recibir actualizaciones de la app vía OTA.\n\n• Las imágenes de carátula en accesos directos y en la notificación del reproductor ahora se muestran con mayor calidad.\n\n• Se añadió la función de deslizar hacia arriba en la pantalla del reproductor para ver la lista de reproducción actual.\n\n• El temporizador ahora muestra también los segundos restantes mientras está activo.\n\n• La lista de playlists ahora muestra una imagen representativa compuesta por las carátulas de las canciones que contiene, en lugar de un ícono genérico.\n\n• La barra de reproducción flotante (overlay) ahora tiene bordes redondeados, mejorando su apariencia visual.\n\n• Se realizaron ajustes visuales en el botón de 'letra' para una mejor claridad.\n\n• Se añadió la opción para solicitar permiso de gestión total de archivos del dispositivo, útil si ocurre algún problema al procesar audio desde las descargas."
 }

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:ota_update/ota_update.dart';
 import 'package:music/utils/ota_update_helper.dart';
+import 'dart:io';
+import 'package:path_provider/path_provider.dart';
 
 class UpdateScreen extends StatefulWidget {
   const UpdateScreen({super.key});
@@ -51,7 +53,7 @@ class _UpdateScreenState extends State<UpdateScreen> {
     }
   }
 
-  void _startDownload() {
+  void _startDownload() async {
     if (_apkUrl == null) return;
 
     setState(() {
@@ -59,6 +61,8 @@ class _UpdateScreenState extends State<UpdateScreen> {
       _progress = 0.0;
       _status = 'Descargando...';
     });
+
+    await _borrarApkPrevio();
 
     OtaUpdate()
         .execute(_apkUrl!, destinationFilename: 'aura_update.apk')
@@ -78,6 +82,16 @@ class _UpdateScreenState extends State<UpdateScreen> {
         _isDownloading = false;
       });
     });
+  }
+
+  Future<void> _borrarApkPrevio() async {
+    try {
+      final dir = await getExternalStorageDirectory();
+      final apkFile = File('${dir?.path}/aura_update.apk');
+      if (await apkFile.exists()) {
+        await apkFile.delete();
+      }
+    } catch (_) {}
   }
 
   @override

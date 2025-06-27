@@ -11,6 +11,7 @@ import 'package:flutter/services.dart';
 import 'package:music/utils/db/playlists_db.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:music/screens/home/ota_update_screen.dart';
+import 'package:music/utils/ota_update_helper.dart';
 
 enum OrdenCancionesPlaylist { normal, alfabetico, invertido, ultimoAgregado }
 
@@ -29,6 +30,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   List<SongModel> _playlistSongs = [];
   Map<String, dynamic>? _selectedPlaylist;
   double _lastBottomInset = 0.0;
+  String? _updateVersion;
+  String? _updateApkUrl;
+  bool _updateChecked = false;
 
   // NUEVO: canciones más escuchadas
   List<SongModel> _mostPlayed = [];
@@ -64,6 +68,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     });
     _loadPlaylists();
     playlistsShouldReload.addListener(_onPlaylistsShouldReload);
+    _buscarActualizacion();
   }
 
   // void _ordenarCancionesPlaylist() {
@@ -100,6 +105,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       if (start < songs.length) {
         _quickPickPages.add(songs.sublist(start, end));
       }
+    }
+  }
+
+  Future<void> _buscarActualizacion() async {
+    if (_updateChecked) return;
+    _updateChecked = true;
+    final updateInfo = await OtaUpdateHelper.checkForUpdate();
+    if (mounted && updateInfo != null) {
+      setState(() {
+        _updateVersion = updateInfo.version;
+        _updateApkUrl = updateInfo.apkUrl;
+      });
     }
   }
 
@@ -379,15 +396,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           actions: (!_showingRecents && !_showingPlaylistSongs)
               ? [
                   IconButton(
-  icon: const Icon(Icons.system_update_alt, size: 28),
-  tooltip: 'Buscar actualización',
-  onPressed: () {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const UpdateScreen()),
-    );
-  },
-),
+                    icon: const Icon(Icons.system_update_alt, size: 28),
+                    tooltip: 'Buscar actualización',
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const UpdateScreen()),
+                      );
+                    },
+                  ),
                   IconButton(
                     icon: const Icon(Icons.history, size: 28),
                     tooltip: 'Canciones recientes',
@@ -791,6 +808,38 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          if (_updateVersion != null && _updateVersion!.isNotEmpty && _updateApkUrl != null)
+                            ...[
+                              const SizedBox(height: 16),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+                                child: Material(
+                                  color: Theme.of(context).colorScheme.surfaceContainer,
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: ListTile(
+                                    leading: const Icon(Icons.system_update, color: Colors.white),
+                                    title: Text(
+                                      '¡Nueva versión $_updateVersion disponible!',
+                                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                                    ),
+                                    trailing: TextButton(
+                                      style: TextButton.styleFrom(
+                                        foregroundColor: Colors.white,
+                                        backgroundColor: Colors.black26,
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                      ),
+                                      child: const Text('Actualizar'),
+                                      onPressed: () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(builder: (_) => const UpdateScreen()),
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
                           const SizedBox(height: 16),
                           const Padding(
                             padding: EdgeInsets.symmetric(horizontal: 20),

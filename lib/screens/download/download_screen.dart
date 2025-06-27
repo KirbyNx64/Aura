@@ -18,8 +18,10 @@ import 'package:http/http.dart' as http;
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:dio/dio.dart';
 import 'package:music/screens/download/stream_provider.dart';
+import 'package:audiotags/audiotags.dart';
 import 'package:path/path.dart' as p;
 import 'package:music/main.dart';
+import 'package:image/image.dart' as img;
 
 class DownloadScreen extends StatefulWidget {
   const DownloadScreen({super.key});
@@ -36,9 +38,14 @@ class _DownloadScreenState extends State<DownloadScreen>
   bool _isProcessing = false;
 
   bool _usarExplode = false;
+  bool _usarFFmpeg = false;
 
   double _progress = 0.0;
   String? _directoryPath;
+
+  String? _currentTitle;
+  String? _currentArtist;
+  Uint8List? _currentCoverBytes;
 
   double _lastBottomInset = 0.0;
 
@@ -324,6 +331,8 @@ class _DownloadScreenState extends State<DownloadScreen>
       _isDownloading = true;
       _isProcessing = false;
       _progress = 0.0;
+      _currentTitle = null;
+      _currentArtist = null;
     });
 
     final yt = YoutubeExplode();
@@ -331,7 +340,15 @@ class _DownloadScreenState extends State<DownloadScreen>
       final video = await _intentarObtenerVideo(url);
       final manifest = await yt.videos.streamsClient.getManifest(video.id);
 
-      final audioStreamInfo = manifest.audioOnly.withHighestBitrate();
+      final audioList = manifest.audioOnly
+          .where((s) => s.codec.mimeType == 'audio/mp4' || s.codec.toString().contains('mp4a'))
+          .toList()
+        ..sort((a, b) => b.bitrate.compareTo(a.bitrate));
+      final audioStreamInfo = audioList.isNotEmpty ? audioList.first : null;
+
+      if (audioStreamInfo == null) {
+        throw Exception('No se encontró un stream AAC/mp4a válido.');
+      }
       final safeTitle = video.title
           .replaceAll(RegExp(r'[\\/:*?"<>|]'), '')
           .trim();
@@ -340,6 +357,52 @@ class _DownloadScreenState extends State<DownloadScreen>
           ? _directoryPath!
           : (await getApplicationDocumentsDirectory()).path;
       final filePath = '$saveDir/$safeTitle.m4a';
+
+      final coverUrlMax = 'https://img.youtube.com/vi/${video.id}/maxresdefault.jpg';
+      final coverUrlHQ = 'https://img.youtube.com/vi/${video.id}/hqdefault.jpg';
+
+      Uint8List? bytes;
+      final client = HttpClient();
+      try {
+        // 1. Intentar maxresdefault
+        final request = await client.getUrl(Uri.parse(coverUrlMax));
+        final response = await request.close();
+        if (response.statusCode == 200) {
+          bytes = Uint8List.fromList(await consolidateResponseBytes(response));
+        } else {
+          // 2. Intentar hqdefault
+          final requestHQ = await client.getUrl(Uri.parse(coverUrlHQ));
+          final responseHQ = await requestHQ.close();
+          if (responseHQ.statusCode == 200) {
+            bytes = Uint8List.fromList(await consolidateResponseBytes(responseHQ));
+          } else {
+            // 3. Fallback: usar thumbnailUrl con http
+            final httpResponse = await http.get(Uri.parse(video.thumbnails.highResUrl));
+            if (httpResponse.statusCode == 200) {
+              bytes = httpResponse.bodyBytes;
+            } else {
+              throw Exception('No se pudo descargar ninguna portada');
+            }
+          }
+        }
+        // Recortar a cuadrado centrado
+        final original = img.decodeImage(bytes);
+        if (original != null) {
+          final minSide = original.width < original.height ? original.width : original.height;
+          final offsetX = (original.width - minSide) ~/ 2;
+          final offsetY = (original.height - minSide) ~/ 2;
+          final square = img.copyCrop(original, x: offsetX, y: offsetY, width: minSide, height: minSide);
+          bytes = img.encodeJpg(square);
+        }
+      } finally {
+        client.close();
+      }
+
+      setState(() {
+        _currentTitle = video.title;
+        _currentArtist = video.author;
+        _currentCoverBytes = bytes;
+      });
 
       final file = File(filePath);
       if (file.existsSync()) await file.delete();
@@ -360,13 +423,25 @@ class _DownloadScreenState extends State<DownloadScreen>
 
       if (!await file.exists()) throw Exception('La descarga falló.');
 
-      await _procesarAudio(
-        video.id.toString(),
-        filePath,
-        video.title,
-        video.author,
-        video.thumbnails.highResUrl,
-      );
+      if (_usarFFmpeg) {
+        await _procesarAudio(
+          video.id.toString(),
+          filePath,
+          video.title,
+          video.author,
+          video.thumbnails.highResUrl,
+          bytes,
+        );
+      } else {
+        await _procesarAudioSinFFmpeg(
+          video.id.toString(),
+          filePath,
+          video.title,
+          video.author,
+          video.thumbnails.highResUrl,
+          bytes,
+        );
+      }
     } on VideoUnavailableException {
       if (mounted) {
         showDialog(
@@ -414,6 +489,7 @@ class _DownloadScreenState extends State<DownloadScreen>
         setState(() {
           _isDownloading = false;
           _isProcessing = false;
+          _currentCoverBytes = null;
         });
       }
     }
@@ -461,6 +537,8 @@ class _DownloadScreenState extends State<DownloadScreen>
       _isDownloading = true;
       _isProcessing = false;
       _progress = 0.0;
+      _currentTitle = null;
+      _currentArtist = null;
     });
 
     try {
@@ -504,15 +582,13 @@ class _DownloadScreenState extends State<DownloadScreen>
       }
 
       // Elegir mejor stream de audio
-      final audio =
-          streamProvider.highestBitrateOpusAudio ??
-          streamProvider.highestBitrateMp4aAudio;
+      final audio = streamProvider.highestBitrateMp4aAudio;
 
       if (audio == null) {
         throw Exception('No se encontró stream de audio válido.');
       }
 
-      final ext = audio.audioCodec == Codec.opus ? 'opus' : 'm4a';
+      final ext = 'm4a';
       final safeTitle = video.title
           .replaceAll(RegExp(r'[\\/:*?"<>|]'), '')
           .trim();
@@ -520,6 +596,52 @@ class _DownloadScreenState extends State<DownloadScreen>
       final dir = Platform.isAndroid
           ? _directoryPath!
           : (await getApplicationDocumentsDirectory()).path;
+
+      final coverUrlMax = 'https://img.youtube.com/vi/${video.id}/maxresdefault.jpg';
+      final coverUrlHQ = 'https://img.youtube.com/vi/${video.id}/hqdefault.jpg';
+
+      Uint8List? bytes;
+      final client = HttpClient();
+      try {
+        // 1. Intentar maxresdefault
+        final request = await client.getUrl(Uri.parse(coverUrlMax));
+        final response = await request.close();
+        if (response.statusCode == 200) {
+          bytes = Uint8List.fromList(await consolidateResponseBytes(response));
+        } else {
+          // 2. Intentar hqdefault
+          final requestHQ = await client.getUrl(Uri.parse(coverUrlHQ));
+          final responseHQ = await requestHQ.close();
+          if (responseHQ.statusCode == 200) {
+            bytes = Uint8List.fromList(await consolidateResponseBytes(responseHQ));
+          } else {
+            // 3. Fallback: usar thumbnailUrl con http
+            final httpResponse = await http.get(Uri.parse(video.thumbnails.highResUrl));
+            if (httpResponse.statusCode == 200) {
+              bytes = httpResponse.bodyBytes;
+            } else {
+              throw Exception('No se pudo descargar ninguna portada');
+            }
+          }
+        }
+        // Recortar a cuadrado centrado
+        final original = img.decodeImage(bytes);
+        if (original != null) {
+          final minSide = original.width < original.height ? original.width : original.height;
+          final offsetX = (original.width - minSide) ~/ 2;
+          final offsetY = (original.height - minSide) ~/ 2;
+          final square = img.copyCrop(original, x: offsetX, y: offsetY, width: minSide, height: minSide);
+          bytes = img.encodeJpg(square);
+        }
+      } finally {
+        client.close();
+      }
+
+      setState(() {
+        _currentTitle = video.title;
+        _currentArtist = video.author;
+        _currentCoverBytes = bytes;
+      });
 
       final filePath = '$dir/$safeTitle.$ext';
 
@@ -536,14 +658,27 @@ class _DownloadScreenState extends State<DownloadScreen>
       );
 
       if (!await File(filePath).exists()) throw Exception("La descarga falló.");
+      MediaScanner.loadMedia(path: filePath);
 
-      await _procesarAudio(
-        video.id.toString(),
-        filePath,
-        video.title,
-        video.author,
-        video.thumbnails.highResUrl,
-      );
+      if (_usarFFmpeg) {
+        await _procesarAudio(
+          video.id.toString(),
+          filePath,
+          video.title,
+          video.author,
+          video.thumbnails.highResUrl,
+          bytes,
+        );
+      } else {
+        await _procesarAudioSinFFmpeg(
+          video.id.toString(),
+          filePath,
+          video.title,
+          video.author,
+          video.thumbnails.highResUrl,
+          bytes,
+        );
+      }
     } catch (e) {
       _mostrarAlerta(titulo: 'Error', mensaje: e.toString());
     } finally {
@@ -669,6 +804,7 @@ class _DownloadScreenState extends State<DownloadScreen>
     String title,
     String author,
     String thumbnailUrl,
+    Uint8List coverBytes,
   ) async {
     setState(() {
       _isProcessing = true;
@@ -694,6 +830,7 @@ class _DownloadScreenState extends State<DownloadScreen>
     final metaPath = '$saveDir/${baseName}_meta.mp3';
     final tempDir = await getTemporaryDirectory();
     final coverPath = '${tempDir.path}/${baseName}_cover.jpg';
+    await File(coverPath).writeAsBytes(coverBytes);
 
     final metaFolder = Directory(p.dirname(saveDir));
     if (!await metaFolder.exists()) {
@@ -730,45 +867,6 @@ class _DownloadScreenState extends State<DownloadScreen>
         throw Exception(
           'Error al procesar el audio, intenta usar otra carpeta.',
         );
-      }
-      // Descargar portada
-      setState(() => _progress = 0.75);
-      final coverUrlMax =
-          'https://img.youtube.com/vi/$videoId/maxresdefault.jpg';
-      final coverUrlHQ = 'https://img.youtube.com/vi/$videoId/hqdefault.jpg';
-      final client = HttpClient();
-
-      Uint8List? bytes;
-
-      // print('🌐 Descargando portada de: $coverUrlMax');
-
-      try {
-        // 1. Intentar maxresdefault
-        final request = await client.getUrl(Uri.parse(coverUrlMax));
-        final response = await request.close();
-        if (response.statusCode == 200) {
-          bytes = Uint8List.fromList(await consolidateResponseBytes(response));
-        } else {
-          // 2. Intentar hqdefault
-          final requestHQ = await client.getUrl(Uri.parse(coverUrlHQ));
-          final responseHQ = await requestHQ.close();
-          if (responseHQ.statusCode == 200) {
-            bytes = Uint8List.fromList(
-              await consolidateResponseBytes(responseHQ),
-            );
-          } else {
-            // 3. Fallback: usar thumbnailUrl con http
-            final httpResponse = await http.get(Uri.parse(thumbnailUrl));
-            if (httpResponse.statusCode == 200) {
-              bytes = httpResponse.bodyBytes;
-            } else {
-              throw Exception('No se pudo descargar ninguna portada');
-            }
-          }
-        }
-        await File(coverPath).writeAsBytes(bytes);
-      } finally {
-        client.close();
       }
 
       final coverFile = File(coverPath);
@@ -890,6 +988,89 @@ class _DownloadScreenState extends State<DownloadScreen>
         setState(() {
           _isProcessing = false;
           _isDownloading = false;
+          _currentCoverBytes = null;
+        });
+      }
+    }
+  }
+
+  Future<void> _procesarAudioSinFFmpeg(
+    String videoId,
+    String inputPath,
+    String title,
+    String author,
+    String thumbnailUrl,
+    Uint8List bytes,
+  ) async {
+    setState(() {
+      _isProcessing = true;
+    });
+
+    final baseName = title.replaceAll(RegExp(r'[\\/:*?"<>|]'), '').trim();
+    final m4aPath = inputPath;
+
+    try {
+
+      // Escribir metadatos con audiotags
+      setState(() => _progress = 0.75);
+
+      final cleanedAuthor = limpiarMetadato(
+        author.replaceFirst(RegExp(r' - Topic$', caseSensitive: false), ''),
+      );
+      final safeTitle = limpiarMetadato(baseName);
+
+      try {
+        final tag = Tag(
+          title: safeTitle,
+          trackArtist: cleanedAuthor,
+          pictures: [
+            Picture(
+              bytes: bytes,
+              mimeType: null,
+              pictureType: PictureType.other,
+            )
+          ],
+        );
+        await AudioTags.write(m4aPath, tag);
+      } catch (e) {
+        await File(m4aPath).delete();
+        throw Exception('Error al escribir metadatos');
+      }
+
+      // Indexar en Android
+      MediaScanner.loadMedia(path: m4aPath);
+
+      setState(() => _progress = 1.0);
+      await Future.delayed(const Duration(seconds: 2));
+      foldersShouldReload.value = !foldersShouldReload.value;
+
+      if (mounted) {
+        _urlController.clear();
+        _focusNode.unfocus();
+      }
+    } catch (e) {
+      // print('👻 Error al procesar audio sin FFmpeg: $e');
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Error al procesar audio'),
+            content: Text(e.toString()),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isProcessing = false;
+          _isDownloading = false;
+          _currentCoverBytes = null;
         });
       }
     }
@@ -976,6 +1157,52 @@ class _DownloadScreenState extends State<DownloadScreen>
               );
             },
           ),
+          IconButton(
+            icon: const Icon(Icons.help_outline, size: 28),
+            tooltip: '¿Qué significa cada opción?',
+            onPressed: () {
+              showDialog(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: const Text('¿Qué significa cada opción?'),
+                  content: SizedBox(
+                    width: double.maxFinite,
+                    // Limita el alto para que el scroll funcione
+                    child: SingleChildScrollView(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: const [
+                          Text(
+                            'Método de descarga:',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          Text(
+                            '• Explode: Usa la librería youtube_explode_dart para obtener streams y descargar el audio de YouTube.\n'
+                            '• Directo: Descarga el audio directamente desde el streams proporcionado por youtube_explode_dart.',
+                          ),
+                          SizedBox(height: 16),
+                          Text(
+                            'Procesar audio:',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          Text(
+                            '• FFmpeg: Convierte y agrega metadatos usando FFmpeg. Permite mayor compatibilidad y calidad, pero requiere más recursos.\n'
+                            '• AudioTags: Solo agrega metadatos usando la librería audiotags. Más rápido, pero menos flexible.',
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text('Entendido'),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
 
           IconButton(
             icon: const Icon(Icons.info_outline, size: 28),
@@ -1004,200 +1231,304 @@ class _DownloadScreenState extends State<DownloadScreen>
       ),
       body: Padding(
         padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _urlController,
-                    focusNode: _focusNode,
-                    decoration: const InputDecoration(
-                      labelText: 'Enlace de YouTube',
-                      border: OutlineInputBorder(),
+        child: SingleChildScrollView(
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _urlController,
+                      focusNode: _focusNode,
+                      decoration: const InputDecoration(
+                        labelText: 'Enlace de YouTube',
+                        border: OutlineInputBorder(),
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                SizedBox(
-                  height: 56,
-                  width: 56,
-                  child: Material(
-                    borderRadius: BorderRadius.circular(8),
-                    color: Theme.of(context).colorScheme.secondaryContainer,
-                    child: InkWell(
+                  const SizedBox(width: 8),
+                  SizedBox(
+                    height: 56,
+                    width: 56,
+                    child: Material(
                       borderRadius: BorderRadius.circular(8),
-                      onTap: () async {
-                        final data = await Clipboard.getData('text/plain');
-                        if (data != null && data.text != null) {
-                          setState(() {
-                            _urlController.text = data.text!;
-                          });
-                        }
-                      },
-                      child: Tooltip(
-                        message: 'Pegar enlace',
-                        child: Icon(
-                          Icons.paste,
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.onSecondaryContainer,
+                      color: Theme.of(context).colorScheme.secondaryContainer,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(8),
+                        onTap: () async {
+                          final data = await Clipboard.getData('text/plain');
+                          if (data != null && data.text != null) {
+                            setState(() {
+                              _urlController.text = data.text!;
+                            });
+                          }
+                        },
+                        child: Tooltip(
+                          message: 'Pegar enlace',
+                          child: Icon(
+                            Icons.paste,
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onSecondaryContainer,
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: SizedBox(
-                    height: 56,
-                    width: double.infinity,
-                    child: Material(
-                      borderRadius: BorderRadius.circular(8),
-                      color: Theme.of(context).colorScheme.primaryContainer,
-                      child: InkWell(
+                ],
+              ),
+          
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: SizedBox(
+                      height: 56,
+                      width: double.infinity,
+                      child: Material(
                         borderRadius: BorderRadius.circular(8),
-                        onTap: _isDownloading
-                            ? null
-                            : () {
-                                if (_usarExplode) {
-                                  _downloadAudioOnlyExplode();
-                                } else {
-                                  _downloadAudioOnly();
-                                }
-                              },
-                        child: Center(
-                          child: Text(
-                            _isDownloading
-                                ? (_isProcessing
-                                      ? 'Procesando audio...'
-                                      : 'Descargando... ${((_progress / 0.6).clamp(0, 1) * 100).toStringAsFixed(0)}%')
-                                : 'Descargar Audio',
-                            style: TextStyle(
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.onPrimaryContainer,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
+                        color: Theme.of(context).colorScheme.primaryContainer,
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(8),
+                          onTap: _isDownloading
+                              ? null
+                              : () {
+                                  if (_usarExplode) {
+                                    _downloadAudioOnlyExplode();
+                                  } else {
+                                    _downloadAudioOnly();
+                                  }
+                                },
+                          child: Center(
+                            child: Text(
+                              _isDownloading
+                                  ? (_isProcessing
+                                        ? 'Procesando audio...'
+                                        : 'Descargando... ${((_progress / 0.6).clamp(0, 1) * 100).toStringAsFixed(0)}%')
+                                  : 'Descargar Audio',
+                              style: TextStyle(
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onPrimaryContainer,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                              ),
                             ),
                           ),
                         ),
                       ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                // Botón de carpeta a la derecha del botón de descarga
-                SizedBox(
-                  height: 56,
-                  width: 56,
-                  child: Material(
-                    borderRadius: BorderRadius.circular(8),
-                    color: Theme.of(context).colorScheme.secondaryContainer,
-                    child: InkWell(
+                  const SizedBox(width: 8),
+                  // Botón de carpeta a la derecha del botón de descarga
+                  SizedBox(
+                    height: 56,
+                    width: 56,
+                    child: Material(
                       borderRadius: BorderRadius.circular(8),
-                      onTap: _pickDirectory,
-                      child: Tooltip(
-                        message: _directoryPath == null
-                            ? 'Elegir carpeta'
-                            : 'Carpeta lista',
-                        child: Icon(
-                          Icons.folder_open,
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.onSecondaryContainer,
+                      color: Theme.of(context).colorScheme.secondaryContainer,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(8),
+                        onTap: _pickDirectory,
+                        child: Tooltip(
+                          message: _directoryPath == null
+                              ? 'Elegir carpeta'
+                              : 'Carpeta lista',
+                          child: Icon(
+                            Icons.folder_open,
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onSecondaryContainer,
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                SizedBox(
-                  height: 56,
-                  width: 56,
-                  child: Material(
-                    borderRadius: BorderRadius.circular(8),
-                    color: Theme.of(context).colorScheme.secondaryContainer,
-                    child: InkWell(
+                  const SizedBox(width: 8),
+                  SizedBox(
+                    height: 56,
+                    width: 56,
+                    child: Material(
                       borderRadius: BorderRadius.circular(8),
-                      onTap: _verificarPermisoArchivos,
-                      child: Tooltip(
-                        message: 'Permisos de archivos',
-                        child: Icon(
-                          Icons.security,
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.onSecondaryContainer,
+                      color: Theme.of(context).colorScheme.secondaryContainer,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(8),
+                        onTap: _verificarPermisoArchivos,
+                        child: Tooltip(
+                          message: 'Permisos de archivos',
+                          child: Icon(
+                            Icons.security,
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onSecondaryContainer,
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            if (_isDownloading)
-              LinearProgressIndicator(value: _progress, minHeight: 8),
-            const SizedBox(height: 24),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  Icons.folder,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    _directoryPath ??
-                        (Platform.isAndroid
-                            ? 'No seleccionada'
-                            : 'Documentos de la app'),
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ],
+              ),
+              const SizedBox(height: 16),
+              if (_isDownloading)
+              Container(
+                width: double.infinity,
+                margin: const EdgeInsets.symmetric(vertical: 8),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surfaceContainer,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withAlpha((0.05 * 255).toInt()),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
                     ),
-                    overflow: TextOverflow.ellipsis,
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Carátula a la izquierda
+                        if (_currentCoverBytes != null)
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Image.memory(
+                              _currentCoverBytes!,
+                              width: 56,
+                              height: 56,
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                        if (_currentCoverBytes != null)
+                          const SizedBox(width: 16),
+                        // Info
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              if (_currentTitle != null && _currentArtist != null) ...[
+                                Text(
+                                  _currentTitle!,
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  _currentArtist!.replaceFirst(RegExp(r' - Topic$'), ''),
+                                  style: TextStyle(
+                                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                    fontSize: 14,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ] else ...[
+                                const Text(
+                                  'Obteniendo información...',
+                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    LinearProgressIndicator(
+                      value: _progress,
+                      minHeight: 8,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.folder,
+                    color: Theme.of(context).colorScheme.primary,
                   ),
-                ),
-              ],
-            ),
-            // NUEVO: Selector de método de descarga
-            const SizedBox(height: 16),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _directoryPath ??
+                          (Platform.isAndroid
+                              ? 'No seleccionada'
+                              : 'Documentos de la app'),
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+              // NUEVO: Selector de método de descarga
+              const SizedBox(height: 16),
 
-            Row(
-              mainAxisAlignment: MainAxisAlignment.start,
-              children: [
-                Icon(
-                  Icons.download,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-                const SizedBox(width: 8),
-                const Text('Método:'),
-                const SizedBox(width: 8),
-                ChoiceChip(
-                  label: const Text('Explode'),
-                  selected: _usarExplode,
-                  onSelected: (v) {
-                    setState(() => _usarExplode = true);
-                  },
-                ),
-                const SizedBox(width: 8),
-                ChoiceChip(
-                  label: const Text('Directo'),
-
-                  selected: !_usarExplode,
-                  onSelected: (v) {
-                    setState(() => _usarExplode = false);
-                  },
-                ),
-              ],
-            ),
-          ],
+              Row(
+                mainAxisAlignment: MainAxisAlignment.start,
+                children: [
+                  Icon(
+                    Icons.download,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                  const SizedBox(width: 8),
+                  const Text('Descarga:'),
+                  const SizedBox(width: 8),
+                  DropdownButton<bool>(
+                    value: _usarExplode,
+                    items: const [
+                      DropdownMenuItem(
+                        value: true,
+                        child: Text('Explode'),
+                      ),
+                      DropdownMenuItem(
+                        value: false,
+                        child: Text('Directo'),
+                      ),
+                    ],
+                    onChanged: (v) {
+                      if (v != null) setState(() => _usarExplode = v);
+                    },
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.start,
+                children: [
+                  Icon(
+                    Icons.settings,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                  const SizedBox(width: 8),
+                  const Text('Procesar audio:'),
+                  const SizedBox(width: 8),
+                  DropdownButton<bool>(
+                    value: _usarFFmpeg,
+                    items: const [
+                      DropdownMenuItem(
+                        value: true,
+                        child: Text('FFmpeg'),
+                      ),
+                      DropdownMenuItem(
+                        value: false,
+                        child: Text('AudioTags'),
+                      ),
+                    ],
+                    onChanged: (v) {
+                      if (v != null) setState(() => _usarFFmpeg = v);
+                    },
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
