@@ -54,6 +54,11 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
       label: 'Inicio',
     ),
     NavigationDestination(
+      icon: Icon(Icons.search),
+      selectedIcon: Icon(Icons.search),
+      label: 'Buscar',
+    ),
+    NavigationDestination(
       icon: Icon(Icons.favorite_border),
       selectedIcon: Icon(Icons.favorite),
       label: 'Me gusta',

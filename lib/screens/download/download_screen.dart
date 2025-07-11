@@ -49,11 +49,47 @@ class _DownloadScreenState extends State<DownloadScreen>
 
   double _lastBottomInset = 0.0;
 
+  // Nuevas variables para playlists
+  bool _isPlaylist = false;
+  List<Video> _playlistVideos = [];
+  int _currentVideoIndex = 0;
+  int _totalVideos = 0;
+  int _downloadedVideos = 0;
+  String? _playlistTitle;
+  bool _isPlaylistDownloading = false;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _loadSavedDirectory();
+    
+    // Escuchar cambios en el controlador de URL
+    _urlController.addListener(_onUrlChanged);
+  }
+
+  void _onUrlChanged() {
+    final url = _urlController.text.trim();
+    if (url.isEmpty && _isPlaylist) {
+      setState(() {
+        _isPlaylist = false;
+        _playlistVideos = [];
+        _currentVideoIndex = 0;
+        _totalVideos = 0;
+        _downloadedVideos = 0;
+        _playlistTitle = null;
+        _isPlaylistDownloading = false;
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _urlController.removeListener(_onUrlChanged);
+    _urlController.dispose();
+    _focusNode.dispose();
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
   }
 
   @override
@@ -82,6 +118,396 @@ class _DownloadScreenState extends State<DownloadScreen>
       setState(() {
         _directoryPath = savedPath;
       });
+    }
+  }
+
+  // Nuevo método para detectar si es playlist
+  bool _isPlaylistUrl(String url) {
+    return url.contains('playlist?list=') || 
+           url.contains('&list=') ||
+           url.contains('youtube.com/playlist');
+  }
+
+  // Nuevo método para obtener información de playlist
+  Future<void> _fetchPlaylistInfo(String url) async {
+    setState(() {
+      _isDownloading = true;
+      _isPlaylist = true;
+      _playlistVideos = [];
+      _currentVideoIndex = 0;
+      _downloadedVideos = 0;
+    });
+
+    final yt = YoutubeExplode();
+    try {
+      // Extraer playlist ID de la URL
+      final playlistId = _extractPlaylistId(url);
+      if (playlistId == null) {
+        throw Exception('No se pudo extraer el ID de la playlist');
+      }
+
+      final playlist = await yt.playlists.get(playlistId);
+      setState(() {
+        _playlistTitle = playlist.title;
+        _totalVideos = playlist.videoCount ?? 0;
+      });
+
+      // Obtener videos de la playlist
+      final videos = <Video>[];
+      await for (final video in yt.playlists.getVideos(playlistId)) {
+        videos.add(video);
+        setState(() {
+          _playlistVideos = videos;
+        });
+      }
+
+      if (videos.isEmpty) {
+        throw Exception('No se encontraron videos en la playlist');
+      }
+
+    } catch (e) {
+      setState(() {
+        _isDownloading = false;
+        _isPlaylist = false;
+      });
+      _mostrarAlerta(
+        titulo: 'Error al obtener playlist',
+        mensaje: 'No se pudo obtener la información de la playlist: ${e.toString()}',
+      );
+    } finally {
+      yt.close();
+    }
+  }
+
+  // Método para extraer playlist ID
+  String? _extractPlaylistId(String url) {
+    final uri = Uri.parse(url);
+    return uri.queryParameters['list'];
+  }
+
+  // Nuevo método para descargar playlist completa
+  Future<void> _downloadPlaylist() async {
+    if (_playlistVideos.isEmpty) return;
+
+    setState(() {
+      _isPlaylistDownloading = true;
+      _downloadedVideos = 0;
+    });
+
+    try {
+      for (int i = 0; i < _playlistVideos.length; i++) {
+        final video = _playlistVideos[i];
+        
+        setState(() {
+          _currentVideoIndex = i + 1;
+          _currentTitle = video.title;
+          _currentArtist = video.author;
+          _progress = 0.0;
+        });
+
+        try {
+          // Descargar video individual usando el método seleccionado
+          if (_usarExplode) {
+            await _downloadSingleVideoFromPlaylistExplode(video);
+          } else {
+            await _downloadSingleVideoFromPlaylistDirect(video);
+          }
+          
+          setState(() {
+            _downloadedVideos++;
+          });
+
+          // Pequeña pausa entre descargas
+          await Future.delayed(const Duration(seconds: 1));
+          
+        } catch (e) {
+          // Continuar con el siguiente video si falla uno
+          // print('Error descargando video ${video.title}: $e');
+          continue;
+        }
+      }
+
+      // Playlist completada
+      setState(() {
+        _progress = 1.0;
+      });
+
+      await Future.delayed(const Duration(seconds: 2));
+      foldersShouldReload.value = !foldersShouldReload.value;
+
+      if (mounted) {
+        _urlController.clear();
+        _focusNode.unfocus();
+        _mostrarAlerta(
+          titulo: 'Playlist completada',
+          mensaje: 'Se descargaron $_downloadedVideos de $_totalVideos videos de la playlist.',
+        );
+      }
+
+    } catch (e) {
+      _mostrarAlerta(
+        titulo: 'Error en playlist',
+        mensaje: 'Error al descargar la playlist: ${e.toString()}',
+      );
+    } finally {
+      setState(() {
+        _isPlaylistDownloading = false;
+        _isDownloading = false;
+        _isPlaylist = false;
+        _playlistVideos = [];
+        _currentCoverBytes = null;
+      });
+    }
+  }
+
+  // Método para descargar un video individual de la playlist usando Explode
+  Future<void> _downloadSingleVideoFromPlaylistExplode(Video video) async {
+    final yt = YoutubeExplode();
+    try {
+      final manifest = await yt.videos.streamsClient.getManifest(video.id);
+
+      final audioList = manifest.audioOnly
+          .where((s) => s.codec.mimeType == 'audio/mp4' || s.codec.toString().contains('mp4a'))
+          .toList()
+        ..sort((a, b) => b.bitrate.compareTo(a.bitrate));
+      final audioStreamInfo = audioList.isNotEmpty ? audioList.first : null;
+
+      if (audioStreamInfo == null) {
+        throw Exception('No se encontró un stream AAC/mp4a válido.');
+      }
+
+      final safeTitle = video.title
+          .replaceAll(RegExp(r'[\\/:*?"<>|]'), '')
+          .trim();
+
+      final saveDir = Platform.isAndroid
+          ? _directoryPath!
+          : (await getApplicationDocumentsDirectory()).path;
+      final filePath = '$saveDir/$safeTitle.m4a';
+
+      // Descargar portada
+      final coverUrlMax = 'https://img.youtube.com/vi/${video.id}/maxresdefault.jpg';
+      final coverUrlHQ = 'https://img.youtube.com/vi/${video.id}/hqdefault.jpg';
+
+      Uint8List? bytes;
+      final client = HttpClient();
+      try {
+        final request = await client.getUrl(Uri.parse(coverUrlMax));
+        final response = await request.close();
+        if (response.statusCode == 200) {
+          bytes = Uint8List.fromList(await consolidateResponseBytes(response));
+        } else {
+          final requestHQ = await client.getUrl(Uri.parse(coverUrlHQ));
+          final responseHQ = await requestHQ.close();
+          if (responseHQ.statusCode == 200) {
+            bytes = Uint8List.fromList(await consolidateResponseBytes(responseHQ));
+          } else {
+            final httpResponse = await http.get(Uri.parse(video.thumbnails.highResUrl));
+            if (httpResponse.statusCode == 200) {
+              bytes = httpResponse.bodyBytes;
+            }
+          }
+        }
+        
+        if (bytes != null) {
+          final original = img.decodeImage(bytes);
+          if (original != null) {
+            final minSide = original.width < original.height ? original.width : original.height;
+            final offsetX = (original.width - minSide) ~/ 2;
+            final offsetY = (original.height - minSide) ~/ 2;
+            final square = img.copyCrop(original, x: offsetX, y: offsetY, width: minSide, height: minSide);
+            bytes = img.encodeJpg(square);
+          }
+        }
+      } finally {
+        client.close();
+      }
+
+      setState(() {
+        _currentCoverBytes = bytes;
+      });
+
+      final file = File(filePath);
+      if (file.existsSync()) await file.delete();
+
+      final stream = yt.videos.streamsClient.get(audioStreamInfo);
+      final sink = file.openWrite();
+      final totalBytes = audioStreamInfo.size.totalBytes;
+      var received = 0;
+
+      await for (final chunk in stream) {
+        received += chunk.length;
+        sink.add(chunk);
+        setState(() => _progress = received / totalBytes * 0.6);
+      }
+
+      await sink.flush();
+      await sink.close();
+
+      if (!await file.exists()) throw Exception('La descarga falló.');
+
+      // Procesar audio
+      if (_usarFFmpeg) {
+        await _procesarAudio(
+          video.id.toString(),
+          filePath,
+          video.title,
+          video.author,
+          video.thumbnails.highResUrl,
+          bytes ?? Uint8List(0),
+          isPlaylistDownload: true,
+        );
+      } else {
+        await _procesarAudioSinFFmpeg(
+          video.id.toString(),
+          filePath,
+          video.title,
+          video.author,
+          video.thumbnails.highResUrl,
+          bytes ?? Uint8List(0),
+          isPlaylistDownload: true,
+        );
+      }
+
+    } catch (e) {
+      throw Exception('Error descargando ${video.title}: $e');
+    } finally {
+      yt.close();
+    }
+  }
+
+  // Método para descargar un video individual de la playlist usando Directo
+  Future<void> _downloadSingleVideoFromPlaylistDirect(Video video) async {
+    try {
+      // Extraer videoId
+      final videoId = video.id.toString();
+
+      // Reintento para obtener video + manifest
+      late StreamManifest manifest;
+
+      for (int intento = 1; intento <= 1; intento++) {
+        final yt = YoutubeExplode();
+        try {
+          manifest = await yt.videos.streamsClient.getManifest(videoId);
+          yt.close();
+          break;
+        } on VideoUnavailableException {
+          yt.close();
+          await Future.delayed(const Duration(seconds: 3));
+        } catch (_) {
+          yt.close();
+          await Future.delayed(const Duration(seconds: 3));
+        }
+
+        if (intento == 1) {
+          throw VideoUnavailableException('No se pudo obtener el video.');
+        }
+      }
+
+      // Crear StreamProvider desde el manifest
+      final streamProvider = StreamProvider.fromManifest(manifest);
+
+      if (!streamProvider.playable || streamProvider.audioFormats == null) {
+        throw Exception('No se pudo obtener el stream de audio.');
+      }
+
+      // Elegir mejor stream de audio
+      final audio = streamProvider.highestBitrateMp4aAudio;
+
+      if (audio == null) {
+        throw Exception('No se encontró stream de audio válido.');
+      }
+
+      final ext = 'm4a';
+      final safeTitle = video.title
+          .replaceAll(RegExp(r'[\\/:*?"<>|]'), '')
+          .trim();
+
+      final dir = Platform.isAndroid
+          ? _directoryPath!
+          : (await getApplicationDocumentsDirectory()).path;
+
+      final coverUrlMax = 'https://img.youtube.com/vi/${video.id}/maxresdefault.jpg';
+      final coverUrlHQ = 'https://img.youtube.com/vi/${video.id}/hqdefault.jpg';
+
+      Uint8List? bytes;
+      final client = HttpClient();
+      try {
+        // 1. Intentar maxresdefault
+        final request = await client.getUrl(Uri.parse(coverUrlMax));
+        final response = await request.close();
+        if (response.statusCode == 200) {
+          bytes = Uint8List.fromList(await consolidateResponseBytes(response));
+        } else {
+          // 2. Intentar hqdefault
+          final requestHQ = await client.getUrl(Uri.parse(coverUrlHQ));
+          final responseHQ = await requestHQ.close();
+          if (responseHQ.statusCode == 200) {
+            bytes = Uint8List.fromList(await consolidateResponseBytes(responseHQ));
+          } else {
+            // 3. Fallback: usar thumbnailUrl con http
+            final httpResponse = await http.get(Uri.parse(video.thumbnails.highResUrl));
+            if (httpResponse.statusCode == 200) {
+              bytes = httpResponse.bodyBytes;
+            } else {
+              throw Exception('No se pudo descargar ninguna portada');
+            }
+          }
+        }
+        // Recortar a cuadrado centrado
+        final original = img.decodeImage(bytes);
+        if (original != null) {
+          final minSide = original.width < original.height ? original.width : original.height;
+          final offsetX = (original.width - minSide) ~/ 2;
+          final offsetY = (original.height - minSide) ~/ 2;
+          final square = img.copyCrop(original, x: offsetX, y: offsetY, width: minSide, height: minSide);
+          bytes = img.encodeJpg(square);
+        }
+      } finally {
+        client.close();
+      }
+
+      setState(() {
+        _currentCoverBytes = bytes;
+      });
+
+      final filePath = '$dir/$safeTitle.$ext';
+
+      await downloadAudioInParallel(
+        url: audio.url,
+        filePath: filePath,
+        totalSize: audio.size,
+        onProgress: (progress) {
+          setState(() => _progress = progress * 0.6);
+        },
+      );
+
+      if (!await File(filePath).exists()) throw Exception("La descarga falló.");
+      MediaScanner.loadMedia(path: filePath);
+
+      if (_usarFFmpeg) {
+        await _procesarAudio(
+          video.id.toString(),
+          filePath,
+          video.title,
+          video.author,
+          video.thumbnails.highResUrl,
+          bytes,
+          isPlaylistDownload: true,
+        );
+      } else {
+        await _procesarAudioSinFFmpeg(
+          video.id.toString(),
+          filePath,
+          video.title,
+          video.author,
+          video.thumbnails.highResUrl,
+          bytes,
+          isPlaylistDownload: true,
+        );
+      }
+    } catch (e) {
+      throw Exception('Error descargando ${video.title}: $e');
     }
   }
 
@@ -520,6 +946,73 @@ class _DownloadScreenState extends State<DownloadScreen>
     );
   }
 
+    Future<void> downloadAudioInParallel({
+    required String url,
+    required String filePath,
+    required int totalSize,
+    required void Function(double progress) onProgress,
+    int parts = 4,
+    int maxRetries = 3,
+  }) async {
+    final dio = Dio();
+    final file = File(filePath);
+    final raf = file.openSync(mode: FileMode.write);
+    final chunkSize = (totalSize / parts).ceil();
+    int downloaded = 0;
+    final lock = Object();
+
+    Future<void> downloadChunk(int index) async {
+      final start = index * chunkSize;
+      int end = ((index + 1) * chunkSize) - 1;
+      if (end >= totalSize) end = totalSize - 1;
+
+      int attempt = 0;
+      while (attempt < maxRetries) {
+        attempt++;
+        try {
+          final response = await dio.get<ResponseBody>(
+            url,
+            options: Options(
+              responseType: ResponseType.stream,
+              headers: {'Range': 'bytes=$start-$end'},
+            ),
+          );
+
+          final bytes = <int>[];
+          await response.data!.stream.listen(
+            (chunk) {
+              bytes.addAll(chunk);
+              synchronized(lock, () {
+                downloaded += chunk.length;
+                onProgress(downloaded / totalSize);
+              });
+            },
+            onDone: () {},
+            onError: (e) => throw Exception('Error en chunk $index: $e'),
+          ).asFuture();
+
+          raf.setPositionSync(start);
+          raf.writeFromSync(bytes);
+          break; // Éxito, salimos del while
+        } catch (e) {
+          if (attempt >= maxRetries) {
+            throw Exception('Error permanente en el chunk $index después de $attempt intentos: $e');
+          } else {
+            await Future.delayed(const Duration(seconds: 1));
+          }
+        }
+      }
+    }
+
+    await Future.wait(List.generate(parts, (i) => downloadChunk(i)));
+
+    await raf.close();
+  }
+
+  Future<T> synchronized<T>(Object lock, FutureOr<T> Function() func) async {
+    return await Future.sync(() => func());
+  }
+
   Future<void> _downloadAudioOnly() async {
     final url = _urlController.text.trim();
     if (url.isEmpty) return;
@@ -645,16 +1138,13 @@ class _DownloadScreenState extends State<DownloadScreen>
 
       final filePath = '$dir/$safeTitle.$ext';
 
-      final dio = Dio();
-      await dio.download(
-        audio.url,
-        filePath,
-        onReceiveProgress: (count, total) {
-          if (total > 0) {
-            setState(() => _progress = (count / total) * 0.6);
-          }
+      await downloadAudioInParallel(
+        url: audio.url,
+        filePath: filePath,
+        totalSize: audio.size,
+        onProgress: (progress) {
+          setState(() => _progress = progress * 0.6);
         },
-        options: Options(headers: {"Range": "bytes=0-${audio.size}"}),
       );
 
       if (!await File(filePath).exists()) throw Exception("La descarga falló.");
@@ -804,8 +1294,9 @@ class _DownloadScreenState extends State<DownloadScreen>
     String title,
     String author,
     String thumbnailUrl,
-    Uint8List coverBytes,
-  ) async {
+    Uint8List coverBytes, {
+    bool isPlaylistDownload = false,
+  }) async {
     setState(() {
       _isProcessing = true;
     });
@@ -961,9 +1452,13 @@ class _DownloadScreenState extends State<DownloadScreen>
 
       setState(() => _progress = 1.0);
       await Future.delayed(const Duration(seconds: 2));
-      foldersShouldReload.value = !foldersShouldReload.value;
+      
+      // Solo actualizar folders si no es descarga de playlist
+      if (!isPlaylistDownload) {
+        foldersShouldReload.value = !foldersShouldReload.value;
+      }
 
-      if (mounted) {
+      if (mounted && !_isPlaylistDownloading) {
         _urlController.clear();
         _focusNode.unfocus();
       }
@@ -1000,8 +1495,9 @@ class _DownloadScreenState extends State<DownloadScreen>
     String title,
     String author,
     String thumbnailUrl,
-    Uint8List bytes,
-  ) async {
+    Uint8List bytes, {
+    bool isPlaylistDownload = false,
+  }) async {
     setState(() {
       _isProcessing = true;
     });
@@ -1010,7 +1506,6 @@ class _DownloadScreenState extends State<DownloadScreen>
     final m4aPath = inputPath;
 
     try {
-
       // Escribir metadatos con audiotags
       setState(() => _progress = 0.75);
 
@@ -1042,9 +1537,12 @@ class _DownloadScreenState extends State<DownloadScreen>
 
       setState(() => _progress = 1.0);
       await Future.delayed(const Duration(seconds: 2));
-      foldersShouldReload.value = !foldersShouldReload.value;
+      // Solo actualizar folders si no es descarga de playlist
+      if (!isPlaylistDownload) {
+        foldersShouldReload.value = !foldersShouldReload.value;
+      }
 
-      if (mounted) {
+      if (mounted && !_isPlaylistDownloading) {
         _urlController.clear();
         _focusNode.unfocus();
       }
@@ -1108,7 +1606,7 @@ class _DownloadScreenState extends State<DownloadScreen>
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.ondemand_video, size: 28),
+            Icon(Icons.download_outlined, size: 28),
             const SizedBox(width: 8),
             const Text('Descargar'),
           ],
@@ -1178,7 +1676,8 @@ class _DownloadScreenState extends State<DownloadScreen>
                           ),
                           Text(
                             '• Explode: Usa la librería youtube_explode_dart para obtener streams y descargar el audio de YouTube.\n'
-                            '• Directo: Descarga el audio directamente desde el streams proporcionado por youtube_explode_dart.',
+                            '• Directo: Descarga el audio directamente desde el streams proporcionado por youtube_explode_dart.\n\n'
+                            'Ambos métodos funcionan para videos individuales y playlists.',
                           ),
                           SizedBox(height: 16),
                           Text(
@@ -1213,9 +1712,12 @@ class _DownloadScreenState extends State<DownloadScreen>
                 builder: (context) => AlertDialog(
                   title: const Text('Información'),
                   content: const Text(
-                    'Esta función descarga únicamente el audio de videos individuales de YouTube o YouTube Music.\n\n'
-                    'No funciona con playlists, videos privados, ni contenido protegido por derechos de autor.\n\n'
-                    'La descargar puede fallar por bloqueos de YouTube.',
+                    'Esta función descarga el audio de videos individuales y playlists completas de YouTube o YouTube Music.\n\n'
+                    'Funciona con:\n'
+                    '• Videos individuales\n'
+                    '• Playlists públicas\n\n'
+                    'No funciona con videos privados ni contenido protegido por derechos de autor.\n\n'
+                    'La descarga puede fallar por bloqueos de YouTube.',
                   ),
                   actions: [
                     TextButton(
@@ -1252,17 +1754,21 @@ class _DownloadScreenState extends State<DownloadScreen>
                     width: 56,
                     child: Material(
                       borderRadius: BorderRadius.circular(8),
-                      color: Theme.of(context).colorScheme.secondaryContainer,
+                      color: (_isDownloading || _isPlaylistDownloading)
+                          ? Theme.of(context).colorScheme.surfaceContainer
+                          : Theme.of(context).colorScheme.secondaryContainer,
                       child: InkWell(
                         borderRadius: BorderRadius.circular(8),
-                        onTap: () async {
-                          final data = await Clipboard.getData('text/plain');
-                          if (data != null && data.text != null) {
-                            setState(() {
-                              _urlController.text = data.text!;
-                            });
-                          }
-                        },
+                        onTap: (_isDownloading || _isPlaylistDownloading) 
+                            ? null 
+                            : () async {
+                                final data = await Clipboard.getData('text/plain');
+                                if (data != null && data.text != null) {
+                                  setState(() {
+                                    _urlController.text = data.text!;
+                                  });
+                                }
+                              },
                         child: Tooltip(
                           message: 'Pegar enlace',
                           child: Icon(
@@ -1290,22 +1796,42 @@ class _DownloadScreenState extends State<DownloadScreen>
                         color: Theme.of(context).colorScheme.primaryContainer,
                         child: InkWell(
                           borderRadius: BorderRadius.circular(8),
-                          onTap: _isDownloading
-                              ? null
-                              : () {
-                                  if (_usarExplode) {
-                                    _downloadAudioOnlyExplode();
+                                                  onTap: (_isDownloading || _isPlaylistDownloading)
+                            ? null
+                            : () async {
+                                  final url = _urlController.text.trim();
+                                  if (url.isEmpty) return;
+
+                                  if (Platform.isAndroid && _directoryPath == null ||
+                                      _directoryPath!.isEmpty) {
+                                    _mostrarAlerta(
+                                      titulo: 'Carpeta no seleccionada',
+                                      mensaje: 'Debes seleccionar una carpeta antes de descargar el audio.',
+                                    );
+                                    return;
+                                  }
+
+                                  // Detectar si es playlist
+                                  if (_isPlaylistUrl(url)) {
+                                    await _fetchPlaylistInfo(url);
                                   } else {
-                                    _downloadAudioOnly();
+                                    // Descarga de video individual
+                                    if (_usarExplode) {
+                                      _downloadAudioOnlyExplode();
+                                    } else {
+                                      _downloadAudioOnly();
+                                    }
                                   }
                                 },
-                          child: Center(
-                            child: Text(
-                              _isDownloading
-                                  ? (_isProcessing
-                                        ? 'Procesando audio...'
-                                        : 'Descargando... ${((_progress / 0.6).clamp(0, 1) * 100).toStringAsFixed(0)}%')
-                                  : 'Descargar Audio',
+                                                  child: Center(
+                          child: Text(
+                            (_isDownloading || _isPlaylistDownloading)
+                                ? (_isProcessing
+                                      ? 'Procesando audio...'
+                                      : (_isPlaylist 
+                                          ? 'Descargando playlist...'
+                                          : 'Descargando... ${((_progress / 0.6).clamp(0, 1) * 100).toStringAsFixed(0)}%'))
+                                : 'Descargar Audio',
                               style: TextStyle(
                                 color: Theme.of(
                                   context,
@@ -1326,10 +1852,12 @@ class _DownloadScreenState extends State<DownloadScreen>
                     width: 56,
                     child: Material(
                       borderRadius: BorderRadius.circular(8),
-                      color: Theme.of(context).colorScheme.secondaryContainer,
+                      color: (_isDownloading || _isPlaylistDownloading)
+                          ? Theme.of(context).colorScheme.surfaceContainer
+                          : Theme.of(context).colorScheme.secondaryContainer,
                       child: InkWell(
                         borderRadius: BorderRadius.circular(8),
-                        onTap: _pickDirectory,
+                        onTap: (_isDownloading || _isPlaylistDownloading) ? null : _pickDirectory,
                         child: Tooltip(
                           message: _directoryPath == null
                               ? 'Elegir carpeta'
@@ -1350,10 +1878,12 @@ class _DownloadScreenState extends State<DownloadScreen>
                     width: 56,
                     child: Material(
                       borderRadius: BorderRadius.circular(8),
-                      color: Theme.of(context).colorScheme.secondaryContainer,
+                      color: (_isDownloading || _isPlaylistDownloading)
+                          ? Theme.of(context).colorScheme.surfaceContainer
+                          : Theme.of(context).colorScheme.secondaryContainer,
                       child: InkWell(
                         borderRadius: BorderRadius.circular(8),
-                        onTap: _verificarPermisoArchivos,
+                        onTap: (_isDownloading || _isPlaylistDownloading) ? null : _verificarPermisoArchivos,
                         child: Tooltip(
                           message: 'Permisos de archivos',
                           child: Icon(
@@ -1369,7 +1899,7 @@ class _DownloadScreenState extends State<DownloadScreen>
                 ],
               ),
               const SizedBox(height: 16),
-              if (_isDownloading)
+              if (_isDownloading && !_isPlaylist)
               Container(
                 width: double.infinity,
                 margin: const EdgeInsets.symmetric(vertical: 8),
@@ -1444,6 +1974,136 @@ class _DownloadScreenState extends State<DownloadScreen>
                   ],
                 ),
               ),
+              // Nuevo: UI para playlist detectada
+              if (_isPlaylist && _playlistVideos.isNotEmpty && !_isPlaylistDownloading)
+              Container(
+                width: double.infinity,
+                margin: const EdgeInsets.symmetric(vertical: 8),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primaryContainer.withAlpha(25),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: Theme.of(context).colorScheme.primary.withAlpha(76),
+                    width: 1,
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.playlist_play,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            _playlistTitle ?? 'Playlist detectada',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      '$_totalVideos videos encontrados',
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: _downloadPlaylist,
+                        icon: const Icon(Icons.download),
+                        label: const Text('Descargar Playlist Completa'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Theme.of(context).colorScheme.primary,
+                          foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // Nuevo: UI para progreso de playlist
+              if (_isPlaylistDownloading)
+              Container(
+                width: double.infinity,
+                margin: const EdgeInsets.symmetric(vertical: 8),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surfaceContainer,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withAlpha((0.05 * 255).toInt()),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.playlist_play,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            _playlistTitle ?? 'Playlist',
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Video $_currentVideoIndex de $_totalVideos',
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Descargados: $_downloadedVideos',
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    if (_currentTitle != null) ...[
+                      Text(
+                        _currentTitle!,
+                        style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+                    LinearProgressIndicator(
+                      value: _progress,
+                      minHeight: 8,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ],
+                ),
+              ),
               const SizedBox(height: 14),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -1455,8 +2115,9 @@ class _DownloadScreenState extends State<DownloadScreen>
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      _directoryPath ??
-                          (Platform.isAndroid
+                      _directoryPath != null
+                          ? _directoryPath!.replaceFirst('/storage/emulated/0', '')
+                          : (Platform.isAndroid
                               ? 'No seleccionada'
                               : 'Documentos de la app'),
                       style: TextStyle(
@@ -1492,9 +2153,11 @@ class _DownloadScreenState extends State<DownloadScreen>
                         child: Text('Directo'),
                       ),
                     ],
-                    onChanged: (v) {
-                      if (v != null) setState(() => _usarExplode = v);
-                    },
+                    onChanged: (_isDownloading || _isPlaylistDownloading) 
+                        ? null 
+                        : (v) {
+                            if (v != null) setState(() => _usarExplode = v);
+                          },
                   ),
                 ],
               ),
@@ -1521,9 +2184,11 @@ class _DownloadScreenState extends State<DownloadScreen>
                         child: Text('AudioTags'),
                       ),
                     ],
-                    onChanged: (v) {
-                      if (v != null) setState(() => _usarFFmpeg = v);
-                    },
+                    onChanged: (_isDownloading || _isPlaylistDownloading) 
+                        ? null 
+                        : (v) {
+                            if (v != null) setState(() => _usarFFmpeg = v);
+                          },
                   ),
                 ],
               ),

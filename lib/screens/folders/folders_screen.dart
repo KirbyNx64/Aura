@@ -20,6 +20,7 @@ class _FoldersScreenState extends State<FoldersScreen>
   final OnAudioQuery _audioQuery = OnAudioQuery();
 
   Map<String, List<SongModel>> songsByFolder = {};
+  Map<String, String> folderDisplayNames = {}; // Mapa para nombres de visualización
   String? carpetaSeleccionada;
 
   Timer? _debounce;
@@ -58,15 +59,61 @@ class _FoldersScreenState extends State<FoldersScreen>
     final lista = await _audioQuery.querySongs();
 
     final agrupado = <String, List<SongModel>>{};
+    final displayNames = <String, String>{};
+    
     for (var song in lista) {
-      var carpeta = p.normalize(p.dirname(song.data)).trim();
-      agrupado.putIfAbsent(carpeta, () => []).add(song);
+      // Obtener la ruta original para el nombre de visualización
+      var originalPath = p.dirname(song.data);
+      var originalDisplayName = p.basename(originalPath);
+      
+      // Normalizar la ruta para evitar duplicados
+      var carpetaNormalizada = _normalizeFolderPath(song.data);
+      
+      // Agrupar canciones por ruta normalizada
+      agrupado.putIfAbsent(carpetaNormalizada, () => []).add(song);
+      
+      // Guardar el nombre de visualización original (mantener la primera que encontremos)
+      if (!displayNames.containsKey(carpetaNormalizada)) {
+        displayNames[carpetaNormalizada] = originalDisplayName;
+      }
     }
 
     setState(() {
       songsByFolder = agrupado;
+      folderDisplayNames = displayNames;
       carpetaSeleccionada = null;
     });
+  }
+
+  /// Normaliza la ruta de la carpeta de manera más robusta para evitar duplicados
+  String _normalizeFolderPath(String filePath) {
+    // Primero normalizar la ruta completa
+    var normalizedPath = p.normalize(filePath);
+    
+    // Obtener el directorio padre
+    var dirPath = p.dirname(normalizedPath);
+    
+    // Normalizar el directorio padre también
+    dirPath = p.normalize(dirPath);
+    
+    // En Windows, convertir todas las barras a barras invertidas para consistencia
+    if (dirPath.contains('/')) {
+      dirPath = dirPath.replaceAll('/', '\\');
+    }
+    
+    // Remover cualquier espacio en blanco al final
+    dirPath = dirPath.trim();
+    
+    // Si la ruta termina con una barra invertida, removerla (excepto para rutas de unidad como C:\)
+    if (dirPath.endsWith('\\') && dirPath.length > 3) {
+      dirPath = dirPath.substring(0, dirPath.length - 1);
+    }
+    
+    // Normalizar mayúsculas/minúsculas para evitar duplicados
+    // En Android, convertir todo a minúsculas para consistencia
+    dirPath = dirPath.toLowerCase();
+    
+    return dirPath;
   }
 
   void _handleLongPress(BuildContext context, SongModel song) async {
@@ -222,13 +269,12 @@ class _FoldersScreenState extends State<FoldersScreen>
                   itemBuilder: (context, i) {
                     final sortedEntries = songsByFolder.entries.toList()
                       ..sort(
-                        (a, b) => p
-                            .basename(a.key)
+                        (a, b) => folderDisplayNames[a.key]!
                             .toLowerCase()
-                            .compareTo(p.basename(b.key).toLowerCase()),
+                            .compareTo(folderDisplayNames[b.key]!.toLowerCase()),
                       );
                     final entry = sortedEntries[i];
-                    final nombre = p.basename(entry.key);
+                    final nombre = folderDisplayNames[entry.key]!;
                     final canciones = entry.value;
 
                     return ListTile(
@@ -282,7 +328,7 @@ class _FoldersScreenState extends State<FoldersScreen>
                 });
               },
             ),
-            title: Text(p.basename(carpetaSeleccionada!)),
+            title: Text(folderDisplayNames[carpetaSeleccionada] ?? 'Carpeta'),
             bottom: PreferredSize(
               preferredSize: const Size.fromHeight(56),
               child: Padding(
@@ -359,9 +405,9 @@ class _FoldersScreenState extends State<FoldersScreen>
                                       ).colorScheme.surfaceContainer,
                                       width: 50,
                                       height: 50,
-                                      child: const Icon(
+                                      child: Icon(
                                         Icons.music_note,
-                                        color: Colors.white70,
+                                        color: Theme.of(context).colorScheme.onSurface,
                                       ),
                                     ),
                                   ),

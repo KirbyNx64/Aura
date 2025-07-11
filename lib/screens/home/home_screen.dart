@@ -17,7 +17,8 @@ enum OrdenCancionesPlaylist { normal, alfabetico, invertido, ultimoAgregado }
 
 class HomeScreen extends StatefulWidget {
   final void Function(int)? onTabChange;
-  const HomeScreen({super.key, this.onTabChange});
+  final VoidCallback? toggleTheme;
+  const HomeScreen({super.key, this.onTabChange, this.toggleTheme});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -396,6 +397,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           actions: (!_showingRecents && !_showingPlaylistSongs)
               ? [
                   IconButton(
+                    icon: Icon(
+                      Theme.of(context).brightness == Brightness.dark 
+                          ? Icons.light_mode 
+                          : Icons.dark_mode,
+                      size: 28
+                    ),
+                    tooltip: 'Cambiar tema',
+                    onPressed: widget.toggleTheme,
+                  ),
+                  IconButton(
                     icon: const Icon(Icons.system_update_alt, size: 28),
                     tooltip: 'Buscar actualización',
                     onPressed: () {
@@ -445,10 +456,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                               ),
                               const SizedBox(height: 4),
                               const Text(
-                                'v1.1.0',
+                                'v1.2.1',
                                 style: TextStyle(
                                   fontSize: 15,
-                                  color: Colors.white70,
                                 ),
                                 textAlign: TextAlign.center,
                               ),
@@ -548,9 +558,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                     ).colorScheme.surfaceContainer,
                                     width: 50,
                                     height: 50,
-                                    child: const Icon(
+                                    child: Icon(
                                       Icons.music_note,
-                                      color: Colors.white70,
+                                      color: Theme.of(context).colorScheme.onSurface,
                                     ),
                                   ),
                                 ),
@@ -559,11 +569,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                 song.title,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: isCurrent
-                                    ? const TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                      )
-                                    : null,
+                                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
+                                  color: isCurrent 
+                                      ? Theme.of(context,).colorScheme.primary
+                                      : Theme.of(context).colorScheme.onSurface,
+                                ),
                               ),
                               subtitle: Text(
                                 (song.artist?.trim().isEmpty ?? true)
@@ -687,9 +698,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                     ).colorScheme.surfaceContainer,
                                     width: 50,
                                     height: 50,
-                                    child: const Icon(
+                                    child: Icon(
                                       Icons.music_note,
-                                      color: Colors.white70,
+                                      color: Theme.of(context).colorScheme.onSurface,
                                     ),
                                   ),
                                 ),
@@ -698,11 +709,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                 song.title,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: isCurrent
-                                    ? const TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                      )
-                                    : null,
+                                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
+                                  color: isCurrent 
+                                      ? Theme.of(context,).colorScheme.primary
+                                      : Theme.of(context).colorScheme.onSurface,
+                                ),
                               ),
                               subtitle: Text(
                                 (song.artist?.trim().isEmpty ?? true)
@@ -817,18 +829,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                   color: Theme.of(context).colorScheme.surfaceContainer,
                                   borderRadius: BorderRadius.circular(12),
                                   child: ListTile(
-                                    leading: const Icon(Icons.system_update, color: Colors.white),
+                                    leading: Icon(Icons.system_update, color: Theme.of(context).colorScheme.onSurface),
                                     title: Text(
-                                      '¡Nueva versión $_updateVersion disponible!',
-                                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                                      '¡Nueva versión  $_updateVersion disponible!',
+                                      style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontWeight: FontWeight.bold),
                                     ),
                                     trailing: TextButton(
                                       style: TextButton.styleFrom(
-                                        foregroundColor: Colors.white,
-                                        backgroundColor: Colors.black26,
+                                        foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                                        backgroundColor: Theme.of(context).colorScheme.primaryContainer,
                                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                       ),
-                                      child: const Text('Actualizar'),
+                                      child: Text('Actualizar', style: TextStyle(color: Theme.of(context).colorScheme.onSurface),),
                                       onPressed: () {
                                         Navigator.push(
                                           context,
@@ -903,28 +915,72 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                             child: ClipRRect(
                                               borderRadius:
                                                   BorderRadius.circular(12),
-                                              child: QueryArtworkWidget(
-                                                id: song.id,
-                                                type: ArtworkType.AUDIO,
-                                                artworkFit: BoxFit.cover,
-                                                artworkBorder:
-                                                    BorderRadius.circular(12),
-                                                keepOldArtwork: true,
-                                                artworkHeight: 120,
-                                                artworkWidth: 120,
-                                                artworkQuality:
-                                                    FilterQuality.high,
-                                                size: 400,
-                                                nullArtworkWidget: Container(
-                                                  color: Theme.of(context)
-                                                      .colorScheme
-                                                      .surfaceContainer,
-                                                  child: const Icon(
-                                                    Icons.music_note,
-                                                    color: Colors.white70,
-                                                    size: 36,
+                                              child: Stack(
+                                                children: [
+                                                  QueryArtworkWidget(
+                                                    id: song.id,
+                                                    type: ArtworkType.AUDIO,
+                                                    artworkFit: BoxFit.cover,
+                                                    artworkBorder:
+                                                        BorderRadius.circular(12),
+                                                    keepOldArtwork: true,
+                                                    artworkHeight: 120,
+                                                    artworkWidth: 120,
+                                                    artworkQuality:
+                                                        FilterQuality.high,
+                                                    size: 400,
+                                                    nullArtworkWidget: Container(
+                                                      width: 120,
+                                                      height: 120,
+                                                      decoration: BoxDecoration(
+                                                        color: Theme.of(context).colorScheme.surfaceContainer,
+                                                        borderRadius: BorderRadius.circular(12),
+                                                      ),
+                                                      child: Center(
+                                                        child: Icon(
+                                                          Icons.music_note,
+                                                          color: Theme.of(context).colorScheme.onSurface,
+                                                          size: 48,
+                                                        ),
+                                                      ),
+                                                    ),
                                                   ),
-                                                ),
+                                                  Positioned(
+                                                    left: 0,
+                                                    right: 0,
+                                                    bottom: 0,
+                                                    child: Container(
+                                                      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 6),
+                                                      decoration: BoxDecoration(
+                                                        gradient: LinearGradient(
+                                                          begin: Alignment.bottomCenter,
+                                                          end: Alignment.topCenter,
+                                                          colors: [
+                                                            Colors.black.withAlpha(140),
+                                                            Colors.transparent,
+                                                          ],
+                                                        ),
+                                                      ),
+                                                      child: Text(
+                                                        song.title,
+                                                        maxLines: 1,
+                                                        overflow: TextOverflow.ellipsis,
+                                                        style: const TextStyle(
+                                                          color: Colors.white,
+                                                          fontWeight: FontWeight.w600,
+                                                          fontSize: 13,
+                                                          shadows: [
+                                                            Shadow(
+                                                              blurRadius: 8,
+                                                              color: Colors.black54,
+                                                              offset: Offset(0, 2),
+                                                            ),
+                                                          ],
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
                                               ),
                                             ),
                                           );
@@ -937,9 +993,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                               borderRadius:
                                                   BorderRadius.circular(12),
                                             ),
-                                            child: const Icon(
+                                            child: Icon(
                                               Icons.music_note,
-                                              color: Colors.white70,
+                                              color: Theme.of(context).colorScheme.onSurface,
                                               size: 36,
                                             ),
                                           );
@@ -959,12 +1015,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                               effect: WormEffect(
                                 dotHeight: 8,
                                 dotWidth: 8,
-                                activeDotColor: Colors.white70,
-                                dotColor: Colors.white24,
+                                activeDotColor: Theme.of(context).colorScheme.primary,
+                                dotColor: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.24)
                               ),
                             ),
                           ),
-                          const Divider(height: 32, thickness: 1),
+                          const SizedBox(height: 32),
 
                           const Padding(
                             padding: EdgeInsets.symmetric(horizontal: 20),
@@ -1042,10 +1098,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                               .surfaceContainer,
                                                           width: 60,
                                                           height: 67,
-                                                          child: const Icon(
+                                                          child: Icon(
                                                             Icons.music_note,
-                                                            color:
-                                                                Colors.white70,
+                                                            color: Theme.of(context).colorScheme.onSurface,
                                                           ),
                                                         ),
                                                       ),
@@ -1097,13 +1152,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                       effect: WormEffect(
                                         dotHeight: 8,
                                         dotWidth: 8,
-                                        activeDotColor: Colors.white70,
-                                        dotColor: Colors.white24,
+                                        activeDotColor: Theme.of(context).colorScheme.primary,
+                                        dotColor: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.24),
                                       ),
                                     ),
                                   ],
                                 ),
-                          const Divider(height: 32, thickness: 1),
+                          const SizedBox(height: 32),
                           Padding(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 20,
@@ -1222,9 +1277,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                 ).colorScheme.surfaceContainer,
                                                 width: 50,
                                                 height: 50,
-                                                child: const Icon(
+                                                child: Icon(
                                                   Icons.music_note,
-                                                  color: Colors.white70,
+                                                  color: Theme.of(context).colorScheme.onSurface,
                                                 ),
                                               ),
                                             ),
@@ -1240,9 +1295,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                               borderRadius:
                                                   BorderRadius.circular(8),
                                             ),
-                                            child: const Icon(
+                                            child: Icon(
                                               Icons.music_note,
-                                              color: Colors.white70,
+                                              color: Theme.of(context).colorScheme.onSurface,
                                             ),
                                           );
                                         }

@@ -49,10 +49,12 @@ class NowPlayingOverlay extends StatelessWidget {
             .toList()
             .cast<int>();
         final currentIndex = songIdList.indexOf(currentSongId);
+        final isLoading = (audioHandler as MyAudioHandler).initializingNotifier.value;
 
         return GestureDetector(
           behavior: HitTestBehavior.translucent,
           onTap: () {
+            if (isLoading) return;
             final currentSong = song;
             Navigator.of(context).push(
               PageRouteBuilder(
@@ -80,6 +82,7 @@ class NowPlayingOverlay extends StatelessWidget {
             );
           },
           onVerticalDragEnd: (details) {
+            if (isLoading) return;
             if (details.primaryVelocity != null &&
                 details.primaryVelocity! < 0) {
               final currentSong = song;
@@ -114,13 +117,6 @@ class NowPlayingOverlay extends StatelessWidget {
             decoration: BoxDecoration(
               color: Theme.of(context).colorScheme.surfaceContainer,
               borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withAlpha((0.1 * 255).toInt()),
-                  blurRadius: 5,
-                  offset: const Offset(0, -4),
-                ),
-              ],
             ),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             child: Column(
@@ -128,14 +124,35 @@ class NowPlayingOverlay extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    ArtworkHeroCached(
-                      songId: song.extras?['songId'] ?? 0,
-                      size: 50,
-                      borderRadius: BorderRadius.circular(12),
-                      heroTag:
-                          'now_playing_artwork_${song.extras?['songId'] ?? song.id}',
-                      currentIndex: currentIndex,
-                      songIdList: songIdList,
+                    ValueListenableBuilder<bool>(
+                      valueListenable: (audioHandler as MyAudioHandler).initializingNotifier,
+                      builder: (context, isLoading, child) {
+                        if (isLoading) {
+                          return Container(
+                            width: 50,
+                            height: 50,
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Center(
+                              child: SizedBox(
+                                width: 28,
+                                height: 28,
+                                child: CircularProgressIndicator(strokeWidth: 3),
+                              ),
+                            ),
+                          );
+                        }
+                        return ArtworkHeroCached(
+                          songId: song.extras?['songId'] ?? 0,
+                          size: 50,
+                          borderRadius: BorderRadius.circular(12),
+                          heroTag: 'now_playing_artwork_${song.extras?['songId'] ?? song.id}',
+                          currentIndex: currentIndex,
+                          songIdList: songIdList,
+                        );
+                      },
                     ),
                     const SizedBox(width: 8),
                     Expanded(

@@ -142,9 +142,15 @@ class _UpdateScreenState extends State<UpdateScreen> {
                         padding: const EdgeInsets.all(12),
                         margin: const EdgeInsets.only(bottom: 16),
                         decoration: BoxDecoration(
-                          color: Colors.white10,
+                          color: Theme.of(context).brightness == Brightness.light
+                              ? Theme.of(context).colorScheme.surfaceContainer
+                              : Colors.white10,
                           borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.white24),
+                          border: Border.all(
+                            color: Theme.of(context).brightness == Brightness.light
+                                ? Theme.of(context).colorScheme.surfaceContainer
+                                : Colors.white24,
+                          ),
                         ),
                         child: SingleChildScrollView(
                           child: Text(_changelog),
@@ -167,11 +173,13 @@ class _UpdateScreenState extends State<UpdateScreen> {
                       Center(
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
-                          children: const [
+                          children: [
                             Icon(
                               Icons.update,
                               size: 100,
-                              color: Colors.white70,
+                              color: Theme.of(context).brightness == Brightness.light
+                              ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7)
+                              : Theme.of(context).colorScheme.onSurface,
                             ),
                             SizedBox(height: 16),
                             Text(
@@ -223,9 +231,15 @@ class _UpdateScreenState extends State<UpdateScreen> {
                               padding: const EdgeInsets.all(12),
                               margin: const EdgeInsets.only(bottom: 16),
                               decoration: BoxDecoration(
-                                color: Colors.white10,
+                                color: Theme.of(context).brightness == Brightness.light
+                                    ? Theme.of(context).colorScheme.surfaceContainer
+                                    : Colors.white10,
                                 borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: Colors.white24),
+                                border: Border.all(
+                                  color: Theme.of(context).brightness == Brightness.light
+                                      ? Theme.of(context).colorScheme.surfaceContainer
+                                      : Colors.white24,
+                                ),
                               ),
                               child: SingleChildScrollView(
                                 child: Text(_changelog),

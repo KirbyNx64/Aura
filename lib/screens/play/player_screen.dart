@@ -14,7 +14,8 @@ import 'package:music/utils/db/playlists_db.dart';
 import 'package:music/utils/audio/synced_lyrics_service.dart';
 import 'package:palette_generator/palette_generator.dart';
 import 'dart:typed_data';
-import 'dart:ui';
+import 'dart:async';
+import 'package:scroll_to_index/scroll_to_index.dart';
 
 final OnAudioQuery _audioQuery = OnAudioQuery();
 
@@ -35,10 +36,10 @@ final OnAudioQuery _audioQuery = OnAudioQuery();
 //   }
 // }
 
-class _LyricLine {
+class LyricLine {
   final Duration time;
   final String text;
-  _LyricLine(this.time, this.text);
+  LyricLine(this.time, this.text);
 }
 
 class FullPlayerScreen extends StatefulWidget {
@@ -56,14 +57,13 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
   bool _showLyrics = false;
   String? _syncedLyrics;
   bool _loadingLyrics = false;
-  List<_LyricLine> _lyricLines = [];
+  List<LyricLine> _lyricLines = [];
   int _currentLyricIndex = 0;
   final ScrollController _lyricsScrollController = ScrollController();
-  List<GlobalKey> _lyricLineKeys = [];
   String? _lastMediaItemId;
   Color? _dominantColor;
-  Color? _secondaryColor;
   bool _loadingDominantColor = false;
+  Timer? _seekDebounceTimer;
 
   Future<void> _updateDominantColor(MediaItem mediaItem) async {
     try {
@@ -75,6 +75,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
           songId,
           ArtworkType.AUDIO,
           format: ArtworkFormat.PNG,
+          size: 512, // Usa alta calidad para el análisis de color
         );
       }
 
@@ -132,10 +133,6 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
 
       setState(() {
         _dominantColor = nearest;
-        _secondaryColor = predefinedColors.firstWhere(
-          (c) => c != nearest,
-          orElse: () => nearest,
-        );
       });
     } catch (e) {
       if (!mounted) return;
@@ -189,7 +186,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
         color: Colors.grey[900],
         borderRadius: BorderRadius.circular(16),
       ),
-      child: Icon(Icons.music_note, color: Colors.white54, size: size * 0.5),
+      child: Icon(Icons.music_note, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.54), size: size * 0.5),
     );
   }
 
@@ -207,7 +204,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     final synced = lyricsData?['synced'];
     if (synced != null) {
       final lines = synced.split('\n');
-      final parsed = <_LyricLine>[];
+      final parsed = <LyricLine>[];
       final reg = RegExp(r'\[(\d{2}):(\d{2})(?:\.(\d{2,3}))?\](.*)');
       for (final line in lines) {
         final match = reg.firstMatch(line);
@@ -219,7 +216,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
               : 0;
           final text = match.group(4)!.trim();
           parsed.add(
-            _LyricLine(
+            LyricLine(
               Duration(minutes: min, seconds: sec, milliseconds: ms),
               text,
             ),
@@ -229,7 +226,6 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
       if (!mounted) return; // chequeo antes de actualizar
       setState(() {
         _lyricLines = parsed;
-        _lyricLineKeys = List.generate(parsed.length, (_) => GlobalKey());
         _loadingLyrics = false;
       });
     } else {
@@ -243,6 +239,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
 
   @override
   void dispose() {
+    _seekDebounceTimer?.cancel();
     _lyricsScrollController.dispose();
     super.dispose();
   }
@@ -331,9 +328,12 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                 Navigator.of(context).pop();
                 final dataPath = mediaItem.extras?['data'] as String?;
                 if (dataPath != null && dataPath.isNotEmpty) {
-                  await Share.shareXFiles([
-                    XFile(dataPath),
-                  ], text: mediaItem.title);
+                  await SharePlus.instance.share(
+                    ShareParams(
+                      text: mediaItem.title,
+                      files: [XFile(dataPath)],
+                    ),
+                  );
                 }
               },
             ),
@@ -439,7 +439,6 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                 child: Text(
                   'No tienes playlists aún.\nCrea una nueva abajo.',
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.white70),
                 ),
               ),
             if (playlists.isNotEmpty)
@@ -560,7 +559,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     final is195by9 = (aspectRatio >= 2.10);
 
     final isSmallScreen = height < 650;
-    final artworkSize = isSmallScreen ? width * 0.6 : width * 0.8;
+    final artworkSize = isSmallScreen ? width * 0.6 : width * 0.85;
     double progressBarWidth;
     if (width <= 400) {
       progressBarWidth = isSmallScreen
@@ -729,7 +728,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
               child: Center(
                 child: Padding(
                   padding: EdgeInsets.symmetric(
-                    horizontal: isSmallScreen ? width * 0.010 : width * 0.035,
+                    horizontal: isSmallScreen ? width * 0.005 : width * 0.013,
                     vertical: isSmallScreen ? height * 0.015 : height * 0.03,
                   ),
                   child: Column(
@@ -749,187 +748,89 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                 'now_playing_artwork_${mediaItem.extras?['songId'] ?? mediaItem.id}',
                             currentIndex: currentIndex,
                             songIdList: songIdList,
+                            forceHighQuality: true, // Forzar alta calidad en el player
                           ),
                           if (_showLyrics)
                             ClipRRect(
                               borderRadius: BorderRadius.circular(
                                 artworkSize * 0.06,
                               ),
-                              child: BackdropFilter(
-                                filter: ImageFilter.blur(sigmaX: 3, sigmaY: 3),
-                                child: Container(
-                                  width: artworkSize,
-                                  height: artworkSize,
-                                  decoration: BoxDecoration(
-                                    color: Colors.black.withAlpha(
-                                      (0.75 * 255).toInt(),
-                                    ),
-                                    borderRadius: BorderRadius.circular(
-                                      artworkSize * 0.06,
-                                    ),
+                              child: Container(
+                                width: artworkSize,
+                                height: artworkSize,
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withAlpha(
+                                    (0.75 * 255).toInt(),
                                   ),
-                                  alignment: Alignment.center,
-                                  padding: const EdgeInsets.all(18),
-                                  child: _loadingDominantColor
-    ? const Center(
-        child: CircularProgressIndicator(
-          color: Colors.white,
-        ),
-      )
-    : _loadingLyrics
-                                      ? const CircularProgressIndicator(
+                                  borderRadius: BorderRadius.circular(
+                                    artworkSize * 0.06,
+                                  ),
+                                ),
+                                alignment: Alignment.center,
+                                padding: const EdgeInsets.all(18),
+                                child: _loadingDominantColor
+                                    ? const Center(
+                                        child: CircularProgressIndicator(
                                           color: Colors.white,
-                                        )
-                                      : _lyricLines.isEmpty
-                                      ? Text(
-                                          _syncedLyrics ??
-                                              'Letra no encontrada.',
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 16,
-                                          ),
-                                          textAlign: TextAlign.center,
-                                        )
-                                      : StreamBuilder<Duration>(
-                                          stream:
-                                              (audioHandler as MyAudioHandler)
-                                                  .positionStream,
-                                          builder: (context, posSnapshot) {
-                                            final position =
-                                                posSnapshot.data ??
-                                                Duration.zero;
-                                            int idx = 0;
-                                            for (
-                                              int i = 0;
-                                              i < _lyricLines.length;
-                                              i++
-                                            ) {
-                                              if (position >=
-                                                  _lyricLines[i].time) {
-                                                idx = i;
-                                              } else {
-                                                break;
+                                        ),
+                                      )
+                                    : _loadingLyrics
+                                    ? const CircularProgressIndicator(
+                                        color: Colors.white,
+                                      )
+                                    : _lyricLines.isEmpty
+                                    ? Text(
+                                        _syncedLyrics ??
+                                            'Letra no encontrada.',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 16,
+                                        ),
+                                        textAlign: TextAlign.center,
+                                      )
+                                    : StreamBuilder<Duration>(
+                                        stream:
+                                            (audioHandler as MyAudioHandler)
+                                                .positionStream,
+                                        builder: (context, posSnapshot) {
+                                          final position =
+                                              posSnapshot.data ??
+                                              Duration.zero;
+                                          int idx = 0;
+                                          for (
+                                            int i = 0;
+                                            i < _lyricLines.length;
+                                            i++
+                                          ) {
+                                            if (position >=
+                                                _lyricLines[i].time) {
+                                              idx = i;
+                                            } else {
+                                              break;
+                                            }
+                                          }
+                                          // Solo actualiza si cambia el índice
+                                          WidgetsBinding.instance.addPostFrameCallback((
+                                            _,
+                                          ) {
+                                            if (mounted) {
+                                              if (_currentLyricIndex != idx) {
+                                                setState(
+                                                  () => _currentLyricIndex =
+                                                      idx,
+                                                );
                                               }
                                             }
-                                            // Solo actualiza si cambia el índice
-                                            WidgetsBinding.instance.addPostFrameCallback((
-                                              _,
-                                            ) {
-                                              if (mounted) {
-                                                if (_currentLyricIndex != idx) {
-                                                  setState(
-                                                    () => _currentLyricIndex =
-                                                        idx,
-                                                  );
-                                                }
-                                                // Scroll automático para centrar la línea resaltada SIEMPRE
-                                                if (_lyricLineKeys.length >
-                                                    idx) {
-                                                  final context =
-                                                      _lyricLineKeys[idx]
-                                                          .currentContext;
-                                                  if (context != null) {
-                                                    Scrollable.ensureVisible(
-                                                      context,
-                                                      duration: const Duration(
-                                                        milliseconds: 350,
-                                                      ),
-                                                      alignment: 0.5,
-                                                      curve: Curves.easeOut,
-                                                    );
-                                                  } else if (_lyricsScrollController
-                                                      .hasClients) {
-                                                    // Respaldo: scroll manual si el widget aún no está montado
-                                                    final lineHeight =
-                                                        32.0; // Ajusta según tu diseño
-                                                    final offset =
-                                                        (idx + 1) * lineHeight -
-                                                        (_lyricsScrollController
-                                                                .position
-                                                                .viewportDimension /
-                                                            2) +
-                                                        (lineHeight / 2);
-                                                    _lyricsScrollController.animateTo(
-                                                      offset.clamp(
-                                                        _lyricsScrollController
-                                                            .position
-                                                            .minScrollExtent,
-                                                        _lyricsScrollController
-                                                            .position
-                                                            .maxScrollExtent,
-                                                      ),
-                                                      duration: const Duration(
-                                                        milliseconds: 350,
-                                                      ),
-                                                      curve: Curves.easeOut,
-                                                    );
-                                                  }
-                                                }
-                                              }
-                                            });
-                                            return ListView.builder(
-                                              controller:
-                                                  _lyricsScrollController,
-                                              physics:
-                                                  const NeverScrollableScrollPhysics(),
-                                              itemCount:
-                                                  _lyricLines.length +
-                                                  2, // +2: espacio arriba y abajo
-                                              shrinkWrap: true,
-                                              itemBuilder: (context, i) {
-                                                if (i == 0 ||
-                                                    i ==
-                                                        _lyricLines.length +
-                                                            1) {
-                                                  return SizedBox(
-                                                    height: artworkSize / 10,
-                                                  );
-                                                }
-                                                final lyricIndex = i - 1;
-                                                if (lyricIndex < 0 ||
-                                                    lyricIndex >=
-                                                        _lyricLines.length) {
-                                                  return const SizedBox.shrink();
-                                                }
-                                                return SizedBox(
-                                                  key:
-                                                      _lyricLineKeys.length >
-                                                          lyricIndex
-                                                      ? _lyricLineKeys[lyricIndex]
-                                                      : null,
-                                                  child: Text(
-                                                    _lyricLines[lyricIndex]
-                                                        .text,
-                                                    textAlign: TextAlign.center,
-                                                    style: TextStyle(
-                                                      color:
-                                                          lyricIndex ==
-                                                              _currentLyricIndex
-                                                          ? (_dominantColor ??
-                                                                Theme.of(
-                                                                      context,
-                                                                    )
-                                                                    .colorScheme
-                                                                    .primary)
-                                                          : Colors.white70,
-                                                      fontWeight:
-                                                          lyricIndex ==
-                                                              _currentLyricIndex
-                                                          ? FontWeight.bold
-                                                          : FontWeight.normal,
-                                                      fontSize:
-                                                          lyricIndex ==
-                                                              _currentLyricIndex
-                                                          ? 18
-                                                          : 15,
-                                                    ),
-                                                  ),
-                                                );
-                                              },
-                                            );
-                                          },
-                                        ),
-                                ),
+                                          });
+                                          return VerticalMarqueeLyrics(
+                                            lyricLines: _lyricLines,
+                                            currentLyricIndex: _currentLyricIndex,
+                                            dominantColor: _dominantColor,
+                                            context: context,
+                                            artworkSize: artworkSize,
+                                          );
+                                        },
+                                      ),
                               ),
                             ),
                         ],
@@ -952,7 +853,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                     artworkSize - (isSmallScreen ? 60 : 40),
                                 style: Theme.of(context).textTheme.headlineSmall
                                     ?.copyWith(
-                                      color: Colors.white,
+                                      color: Theme.of(context).colorScheme.onSurface,
                                       fontSize: buttonFontSize + 0.75,
                                     ),
                               ),
@@ -1008,7 +909,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                         ? Icons.favorite
                                         : Icons.favorite_border,
                                     size: 38,
-                                    color: Colors.white,
+                                    color: Theme.of(context).colorScheme.onSurface,
                                   ),
                                 );
                               },
@@ -1026,6 +927,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                               : mediaItem.artist!,
                           style: Theme.of(context).textTheme.titleMedium
                               ?.copyWith(
+                                color: Theme.of(context).colorScheme.onSurface,
                                 fontWeight: FontWeight.w400,
                                 fontSize: 18,
                               ),
@@ -1085,6 +987,10 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                         });
                                       },
                                       onChangeEnd: (value) {
+                                        // Cancela el timer anterior si existe
+                                        _seekDebounceTimer?.cancel();
+                                        
+                                        // Ejecuta el seek inmediatamente al soltar
                                         audioHandler.seek(
                                           Duration(seconds: value.toInt()),
                                         );
@@ -1167,7 +1073,9 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                               break;
                             default:
                               repeatIcon = Icons.repeat;
-                              repeatColor = Colors.white;
+                              repeatColor = Theme.of(context).brightness == Brightness.light
+                                              ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.9)
+                                              : Theme.of(context).colorScheme.onSurface;
                           }
 
                           return LayoutBuilder(
@@ -1202,7 +1110,9 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                             ? Theme.of(
                                                 context,
                                               ).colorScheme.primary
-                                            : Colors.white,
+                                            : Theme.of(context).brightness == Brightness.light
+                                              ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.9)
+                                              : Theme.of(context).colorScheme.onSurface,
                                         iconSize: iconSize,
                                         onPressed: () {
                                           audioHandler.setShuffleMode(
@@ -1215,7 +1125,9 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                       ),
                                       IconButton(
                                         icon: const Icon(Icons.skip_previous),
-                                        color: Colors.white,
+                                        color: Theme.of(context).brightness == Brightness.light
+                                              ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.9)
+                                              : Theme.of(context).colorScheme.onSurface,
                                         iconSize: sideIconSize,
                                         onPressed: () =>
                                             audioHandler.skipToPrevious(),
@@ -1225,7 +1137,9 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                           horizontal: iconSize / 4,
                                         ),
                                         child: Material(
-                                          color: Colors.white,
+                                          color: Theme.of(context).brightness == Brightness.light
+                                              ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.9)
+                                              : Theme.of(context).colorScheme.onSurface,
                                           borderRadius: BorderRadius.circular(
                                             mainIconSize / 4,
                                           ),
@@ -1248,7 +1162,9 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                   isPlaying
                                                       ? Icons.pause
                                                       : Icons.play_arrow,
-                                                  color: Colors.black87,
+                                                  color: Theme.of(context).brightness == Brightness.light
+                                                      ? Theme.of(context).colorScheme.surface.withValues(alpha: 0.9)
+                                                      : Theme.of(context).colorScheme.surface,
                                                   size: playIconSize,
                                                 ),
                                               ),
@@ -1258,7 +1174,9 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                       ),
                                       IconButton(
                                         icon: const Icon(Icons.skip_next),
-                                        color: Colors.white,
+                                        color: Theme.of(context).brightness == Brightness.light
+                                              ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.9)
+                                              : Theme.of(context).colorScheme.onSurface,
                                         iconSize: sideIconSize,
                                         onPressed: () =>
                                             audioHandler.skipToNext(),
@@ -1329,7 +1247,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                         },
                                         child: Container(
                                           decoration: BoxDecoration(
-                                            color: Colors.white10,
+                                            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
                                             borderRadius: BorderRadius.circular(
                                               26,
                                             ),
@@ -1345,14 +1263,14 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                             children: [
                                               Icon(
                                                 Icons.playlist_add,
-                                                color: Colors.white,
+                                                color: Theme.of(context).colorScheme.onSurface,
                                                 size: isSmall ? 20 : 24,
                                               ),
                                               SizedBox(width: isSmall ? 6 : 8),
                                               Text(
                                                 'Guardar',
                                                 style: TextStyle(
-                                                  color: Colors.white,
+                                                  color: Theme.of(context).colorScheme.onSurface,
                                                   fontWeight: FontWeight.w600,
                                                   fontSize: isSmall ? 14 : 16,
                                                 ),
@@ -1365,25 +1283,25 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                       // Botón Letra
                                       AnimatedTapButton(
                                         onTap: () async {
-    if (!_showLyrics) {
-      setState(() {
-        _loadingDominantColor = true;
-        _showLyrics = true;
-      });
-      await _updateDominantColor(mediaItem);
-      setState(() {
-        _loadingDominantColor = false;
-      });
-      await _loadLyrics(mediaItem);
-    } else {
-      setState(() {
-        _showLyrics = false;
-      });
-    }
-  },
+                                          if (!_showLyrics) {
+                                            setState(() {
+                                              _loadingDominantColor = true;
+                                              _showLyrics = true;
+                                            });
+                                            await _updateDominantColor(mediaItem);
+                                            setState(() {
+                                              _loadingDominantColor = false;
+                                            });
+                                            await _loadLyrics(mediaItem);
+                                          } else {
+                                            setState(() {
+                                              _showLyrics = false;
+                                            });
+                                          }
+                                        },
                                         child: Container(
                                           decoration: BoxDecoration(
-                                            color: Colors.white10,
+                                            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
                                             borderRadius: BorderRadius.circular(
                                               26,
                                             ),
@@ -1399,14 +1317,14 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                             children: [
                                               Icon(
                                                 Icons.lyrics,
-                                                color: Colors.white,
+                                                color: Theme.of(context).colorScheme.onSurface,
                                                 size: isSmall ? 20 : 24,
                                               ),
                                               SizedBox(width: isSmall ? 6 : 8),
                                               Text(
                                                 'Letra',
                                                 style: TextStyle(
-                                                  color: Colors.white,
+                                                  color: Theme.of(context).colorScheme.onSurface,
                                                   fontWeight: FontWeight.w600,
                                                   fontSize: isSmall ? 14 : 16,
                                                 ),
@@ -1423,7 +1341,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                         },
                                         child: Container(
                                           decoration: BoxDecoration(
-                                            color: Colors.white10,
+                                            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
                                             borderRadius: BorderRadius.circular(
                                               26,
                                             ),
@@ -1444,16 +1362,19 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                       as String?;
                                               if (dataPath != null &&
                                                   dataPath.isNotEmpty) {
-                                                await Share.shareXFiles([
-                                                  XFile(dataPath),
-                                                ], text: mediaItem.title);
+                                                await SharePlus.instance.share(
+                                                  ShareParams(
+                                                    text: mediaItem.title,
+                                                    files: [XFile(dataPath)],
+                                                  ),
+                                                );
                                               }
                                             },
                                             child: Row(
                                               children: [
                                                 Icon(
                                                   Icons.share,
-                                                  color: Colors.white,
+                                                  color: Theme.of(context).colorScheme.onSurface,
                                                   size: isSmall ? 18 : 22,
                                                 ),
                                               ],
@@ -1660,6 +1581,126 @@ class SleepTimerOptionsSheet extends StatelessWidget {
             },
           ),
         ],
+      ),
+    );
+  }
+}
+
+class VerticalMarqueeLyrics extends StatefulWidget {
+  final List<LyricLine> lyricLines;
+  final int currentLyricIndex;
+  final Color? dominantColor;
+  final BuildContext context;
+  final double artworkSize;
+
+  const VerticalMarqueeLyrics({
+    super.key,
+    required this.lyricLines,
+    required this.currentLyricIndex,
+    required this.dominantColor,
+    required this.context,
+    required this.artworkSize,
+  });
+
+  @override
+  State<VerticalMarqueeLyrics> createState() => _VerticalMarqueeLyricsState();
+}
+
+class _VerticalMarqueeLyricsState extends State<VerticalMarqueeLyrics>
+    with TickerProviderStateMixin {
+  late final AutoScrollController _scrollController;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController = AutoScrollController();
+    // Centrar la línea actual al iniciar
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scrollToCurrentLyric();
+    });
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(covariant VerticalMarqueeLyrics oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.currentLyricIndex != oldWidget.currentLyricIndex) {
+      _scrollToCurrentLyric();
+    }
+  }
+
+  Future<void> _scrollToCurrentLyric() async {
+    await _scrollController.scrollToIndex(
+      widget.currentLyricIndex,
+      preferPosition: AutoScrollPosition.middle,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final idx = widget.currentLyricIndex;
+    final lines = widget.lyricLines;
+    return SizedBox(
+      width: widget.artworkSize,
+      height: widget.artworkSize,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(widget.artworkSize * 0.06),
+        child: ShaderMask(
+          shaderCallback: (Rect bounds) {
+            return LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Colors.transparent,
+                Colors.white,
+                Colors.white,
+                Colors.transparent,
+              ],
+              stops: const [0.0, 0.1, 0.9, 1.0],
+            ).createShader(bounds);
+          },
+          blendMode: BlendMode.dstIn,
+          child: ListView.builder(
+            controller: _scrollController,
+            physics: const NeverScrollableScrollPhysics(),
+            padding: EdgeInsets.symmetric(
+              vertical: 0,
+              horizontal: 10,
+            ),
+            itemCount: lines.length,
+            itemBuilder: (context, index) {
+              final isCurrent = index == idx;
+              final textStyle = TextStyle(
+                color: isCurrent
+                    ? (widget.dominantColor ?? Theme.of(context).colorScheme.primary)
+                    : Colors.white70,
+                fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
+                fontSize: isCurrent ? 18 : 15,
+              );
+              return AutoScrollTag(
+                key: ValueKey(index),
+                controller: _scrollController,
+                index: index,
+                child: Container(
+                  margin: const EdgeInsets.symmetric(vertical: 4),
+                  alignment: Alignment.center,
+                  child: Text(
+                    lines[index].text,
+                    textAlign: TextAlign.center,
+                    style: textStyle,
+                    maxLines: null,
+                    softWrap: true,
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
       ),
     );
   }

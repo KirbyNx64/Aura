@@ -313,9 +313,9 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                                         ).colorScheme.surfaceContainer,
                                         width: 50,
                                         height: 50,
-                                        child: const Icon(
+                                        child: Icon(
                                           Icons.music_note,
-                                          color: Colors.white70,
+                                          color: Theme.of(context).colorScheme.onSurface,
                                         ),
                                       ),
                                     ),

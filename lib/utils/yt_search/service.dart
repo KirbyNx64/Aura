@@ -1,188 +1,407 @@
-// import 'dart:convert';
-// import 'package:dio/dio.dart';
-// import 'package:sqflite/sqflite.dart';
-// import 'package:path/path.dart';
+import 'dart:convert';
+import 'package:dio/dio.dart';
 
-// const domain = "https://music.youtube.com/";
-// const String baseUrl = '${domain}youtubei/v1/';
-// const String fixedParms = '?prettyPrint=false&key=AIzaSyC9XL3ZjWddXya6X74dJoCTL-WEYFDNX30';
-// const userAgent =
-//     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36';
+const domain = "https://music.youtube.com/";
+const String baseUrl = '${domain}youtubei/v1/';
+const fixedParms =
+    '?prettyPrint=false&alt=json&key=AIzaSyC9XL3ZjWddXya6X74dJoCTL-WEYFDNX30';
+const userAgent =
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36';
 
-// class YtMusicSong {
-//   final String title;
-//   final String artist;
-//   final String videoId;
-//   final String duration;
-//   final String thumbnailUrl;
+final Map<String, String> headers = {
+  'user-agent': userAgent,
+  'accept': '*/*',
+  'accept-encoding': 'gzip, deflate',
+  'content-type': 'application/json',
+  'content-encoding': 'gzip',
+  'origin': domain,
+  'cookie': 'CONSENT=YES+1',
+};
 
-//   YtMusicSong({
-//     required this.title,
-//     required this.artist,
-//     required this.videoId,
-//     required this.duration,
-//     required this.thumbnailUrl,
-//   });
-// }
+final Map<String, dynamic> context = {
+  'context': {
+    'client': {"clientName": "WEB_REMIX", "clientVersion": "1.20230213.01.00"},
+    'user': {},
+  },
+};
 
-// class MusicServices {
-//   final Map<String, String> _headers = {
-//     'user-agent': userAgent,
-//     'accept': '*/*',
-//     'accept-encoding': 'gzip, deflate',
-//     'content-type': 'application/json',
-//     'origin': domain,
-//     'cookie': 'CONSENT=YES+1',
-//   };
+class YtMusicResult {
+  final String? title;
+  final String? artist;
+  final String? thumbUrl;
+  final String? videoId;
 
-//   final Map<String, dynamic> _context = {
-//     'context': {
-//       'client': {
-//         "clientName": "WEB_REMIX",
-//         "clientVersion": "1.20240625.01.00",
-//         "hl": "es"
-//       },
-//       'user': {}
-//     }
-//   };
+  YtMusicResult({this.title, this.artist, this.thumbUrl, this.videoId});
+}
 
-//   Database? _db;
-//   final dio = Dio();
+// Función para generar parámetros de búsqueda específicos para canciones
+String? getSearchParams(String? filter, String? scope, bool ignoreSpelling) {
+  String filteredParam1 = 'EgWKAQI';
+  String? params;
+  String? param1;
+  String? param2;
+  String? param3;
 
-//   Future<void> _initDb() async {
-//     if (_db != null) return;
-//     final dbPath = await getDatabasesPath();
-//     _db = await openDatabase(
-//       join(dbPath, 'app_prefs.db'),
-//       version: 1,
-//       onCreate: (db, version) async {
-//         await db.execute('''
-//           CREATE TABLE IF NOT EXISTS AppPrefs (
-//             key TEXT PRIMARY KEY,
-//             value TEXT,
-//             exp INTEGER
-//           )
-//         ''');
-//       },
-//     );
-//   }
+  if (filter == null && scope == null && !ignoreSpelling) {
+    return params;
+  }
 
-//   Future<void> saveVisitorId(String visitorId, int exp) async {
-//     await _initDb();
-//     await _db!.insert(
-//       'AppPrefs',
-//       {'key': 'visitorId', 'value': visitorId, 'exp': exp},
-//       conflictAlgorithm: ConflictAlgorithm.replace,
-//     );
-//   }
+  if (scope == null && filter != null) {
+    if (filter == 'playlists') {
+      params = 'Eg-KAQwIABAAGAAgACgB';
+      if (!ignoreSpelling) {
+        params += 'MABqChAEEAMQCRAFEAo%3D';
+      } else {
+        params += 'MABCAggBagoQBBADEAkQBRAK';
+      }
+    } else if (filter.contains('playlists')) {
+      param1 = 'EgeKAQQoA';
+      if (filter == 'featured_playlists') {
+        param2 = 'Dg';
+      } else {
+        param2 = 'EA';
+      }
+      if (!ignoreSpelling) {
+        param3 = 'BagwQDhAKEAMQBBAJEAU%3D';
+      } else {
+        param3 = 'BQgIIAWoMEA4QChADEAQQCRAF';
+      }
+    } else {
+      param1 = filteredParam1;
+      param2 = _getParam2(filter);
+      if (!ignoreSpelling) {
+        param3 = 'AWoMEA4QChADEAQQCRAF';
+      } else {
+        param3 = 'AUICCAFqDBAOEAoQAxAEEAkQBQ%3D%3D';
+      }
+    }
+  }
 
-//   Future<Map<String, dynamic>?> getVisitorId() async {
-//     await _initDb();
-//     final result = await _db!.query(
-//       'AppPrefs',
-//       where: 'key = ?',
-//       whereArgs: ['visitorId'],
-//       limit: 1,
-//     );
-//     if (result.isNotEmpty) {
-//       return result.first;
-//     }
-//     return null;
-//   }
+  if (scope == null && filter == null && ignoreSpelling) {
+    params = 'EhGKAQ4IARABGAEgASgAOAFAAUICCAE%3D';
+  }
 
-//   Future<void> init() async {
-//     final date = DateTime.now();
-//     _context['context']['client']['clientVersion'] =
-//         "1.${date.year}${date.month.toString().padLeft(2, '0')}${date.day.toString().padLeft(2, '0')}.01.00";
+  return params ?? (param1! + param2! + param3!);
+}
 
-//     final visitorData = await getVisitorId();
-//     String? visitorId;
-//     int now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-//     if (visitorData != null && visitorData['exp'] != null && visitorData['exp'] > now) {
-//       visitorId = visitorData['value'] as String;
-//     } else {
-//       visitorId = await genrateVisitorId();
-//       int exp = now + 2592000; // 30 días
-//       if (visitorId != null) {
-//         await saveVisitorId(visitorId, exp);
-//       } else {
-//         visitorId = "CgttN24wcmd5UzNSWSi2lvq2BjIKCgJKUBIEGgAgYQ%3D%3D";
-//       }
-//     }
-//     _headers['X-Goog-Visitor-Id'] = visitorId;
-//     _headers['x-youtube-client-name'] = '67';
-//     _headers['x-youtube-client-version'] = _context['context']['client']['clientVersion'];
-//     _headers['x-origin'] = domain;
-//     _headers['x-goog-authuser'] = '0';
-//     _headers['x-youtube-bootstrap-logged-in'] = 'false';
-//   }
+// Función para generar parámetros con límite de resultados
+String? getSearchParamsWithLimit(String? filter, String? scope, bool ignoreSpelling, {int limit = 50}) {
+  final baseParams = getSearchParams(filter, scope, ignoreSpelling);
+  if (baseParams == null) return null;
+  
+  // Agregar parámetro de límite si es necesario
+  // YouTube Music usa diferentes parámetros para controlar el número de resultados
+  return baseParams;
+}
 
-//   Future<String?> genrateVisitorId() async {
-//     try {
-//       final response = await dio.get(domain, options: Options(headers: _headers));
-//       final reg = RegExp(r'ytcfg\.set\s*\(\s*({.+?})\s*\)\s*;');
-//       final matches = reg.firstMatch(response.data.toString());
-//       if (matches != null) {
-//         final ytcfg = json.decode(matches.group(1).toString());
-//         return ytcfg['VISITOR_DATA']?.toString();
-//       }
-//       return null;
-//     } catch (e) {
-//       return null;
-//     }
-//   }
+String? _getParam2(String filter) {
+  final filterParams = {
+    'songs': 'I',      // Parámetro específico para canciones
+    'videos': 'Q',
+    'albums': 'Y',
+    'artists': 'g',
+    'playlists': 'o'
+  };
+  return filterParams[filter];
+}
 
-//   Future<List<YtMusicSong>> buscarCanciones(String query) async {
-//     await init();
-//     final data = Map.from(_context);
-//     data['query'] = query;
+// Función utilitaria para navegar el JSON
+dynamic nav(dynamic data, List<dynamic> path) {
+  dynamic current = data;
+  for (final key in path) {
+    if (current == null) return null;
+    if (key is int) {
+      if (current is List && key < current.length) {
+        current = current[key];
+      } else {
+        return null;
+      }
+    } else if (key is String) {
+      if (current is Map && current.containsKey(key)) {
+        current = current[key];
+      } else {
+        return null;
+      }
+    }
+  }
+  return current;
+}
 
-//     try {
-//       final response = await dio.post(
-//         "$baseUrl/search$fixedParms",
-//         data: data,
-//         options: Options(headers: _headers),
-//       );
+// Función para enviar la petición
+Future<Response> sendRequest(String action, Map<dynamic, dynamic> data, {String additionalParams = ""}) async {
+  final dio = Dio();
+  final url = "$baseUrl$action$fixedParms$additionalParams";
+  return await dio.post(
+    url,
+    options: Options(headers: headers),
+    data: jsonEncode(data),
+  );
+}
 
-//       final json = response.data;
-//       return _parseSongs(json);
-//     } catch (e) {
-//       print('Error en la búsqueda: $e');
-//       return [];
-//     }
-//   }
+// Función para parsear canciones específicamente
+void parseSongs(List items, List<YtMusicResult> results) {
+  for (var item in items) {
+    final renderer = item['musicResponsiveListItemRenderer'];
+    if (renderer != null) {
+      // Verificar si es una canción (no un video)
+      final videoType = nav(renderer, [
+        'overlay',
+        'musicItemThumbnailOverlayRenderer',
+        'content',
+        'musicPlayButtonRenderer',
+        'playNavigationEndpoint',
+        'watchEndpoint',
+        'watchEndpointMusicSupportedConfigs',
+        'watchEndpointMusicConfig',
+        'musicVideoType'
+      ]);
+      
+      // Solo procesar si es una canción (MUSIC_VIDEO_TYPE_ATV) o si no hay tipo específico
+      if (videoType == null || videoType == 'MUSIC_VIDEO_TYPE_ATV') {
+        final title = renderer['flexColumns']?[0]
+            ?['musicResponsiveListItemFlexColumnRenderer']?['text']?['runs']?[0]?['text'];
 
-//   List<YtMusicSong> _parseSongs(dynamic json) {
-//     final List<YtMusicSong> canciones = [];
-//     try {
-//       final sections = json['contents']?['sectionListRenderer']?['contents'] ?? [];
-//       for (final section in sections) {
-//         final shelf = section['musicShelfRenderer'];
-//         if (shelf != null) {
-//           for (final item in shelf['contents']) {
-//             final video = item['musicResponsiveListItemRenderer'];
-//             if (video != null) {
-//               final title = video['flexColumns'][0]['musicResponsiveListItemFlexColumnRenderer']['text']['runs'][0]['text'];
-//               final subtitle = video['flexColumns'][1]['musicResponsiveListItemFlexColumnRenderer']['text']['runs'][0]['text'];
-//               final videoId = video['navigationEndpoint']?['watchEndpoint']?['videoId'];
-//               final duration = video['fixedColumns']?[0]?['musicResponsiveListItemFixedColumnRenderer']?['text']?['runs']?[0]?['text'];
-//               final thumbnailUrl = video['thumbnail']?['musicThumbnailRenderer']?['thumbnail']?['thumbnails']?.last?['url'] ?? '';
-//               if (videoId != null && duration != null) {
-//                 canciones.add(YtMusicSong(
-//                   title: title,
-//                   artist: subtitle,
-//                   videoId: videoId,
-//                   duration: duration,
-//                   thumbnailUrl: thumbnailUrl,
-//                 ));
-//               }
-//             }
-//           }
-//         }
-//       }
-//     } catch (e) {
-//       // Si falla el parseo, retorna vacío
-//     }
-//     return canciones;
-//   }
-// }
+        final subtitleRuns = renderer['flexColumns']?[1]
+            ?['musicResponsiveListItemFlexColumnRenderer']?['text']?['runs'];
+        String? artist;
+        if (subtitleRuns is List) {
+          for (var run in subtitleRuns) {
+            if (run['navigationEndpoint']?['browseEndpoint']?['browseEndpointContextSupportedConfigs'] != null ||
+                run['navigationEndpoint']?['browseEndpoint']?['browseId']?.startsWith('UC') == true) {
+              artist = run['text'];
+              break;
+            }
+          }
+          artist ??= subtitleRuns.firstWhere(
+            (run) => run['text'] != ' • ',
+            orElse: () => {'text': null},
+          )['text'];
+        }
+
+        String? thumbUrl;
+        final thumbnails = renderer['thumbnail']?['musicThumbnailRenderer']?['thumbnail']?['thumbnails'];
+        if (thumbnails is List && thumbnails.isNotEmpty) {
+          thumbUrl = thumbnails.last['url'];
+        }
+
+        final videoId = renderer['overlay']?['musicItemThumbnailOverlayRenderer']?['content']?['musicPlayButtonRenderer']?['playNavigationEndpoint']?['watchEndpoint']?['videoId'];
+
+        if (videoId != null && title != null) {
+          results.add(
+            YtMusicResult(
+              title: title,
+              artist: artist,
+              thumbUrl: thumbUrl,
+              videoId: videoId,
+            ),
+          );
+        }
+      }
+    }
+  }
+}
+
+// Función para buscar solo canciones con paginación
+Future<List<YtMusicResult>> searchSongsOnly(String query, {String? continuationToken}) async {
+  final data = {
+    ...context,
+    'query': query,
+    'params': getSearchParams('songs', null, false),
+  };
+
+  // Si hay un token de continuación, usarlo para obtener más resultados
+  if (continuationToken != null) {
+    data['continuation'] = continuationToken;
+  }
+
+  final response = (await sendRequest("search", data)).data;
+  final results = <YtMusicResult>[];
+
+  // Si es una búsqueda inicial
+  if (continuationToken == null) {
+    final contents = nav(response, [
+      'contents',
+      'tabbedSearchResultsRenderer',
+      'tabs',
+      0,
+      'tabRenderer',
+      'content',
+      'sectionListRenderer',
+      'contents',
+      0,
+      'musicShelfRenderer',
+      'contents'
+    ]);
+
+    if (contents is List) {
+      parseSongs(contents, results);
+    }
+  } else {
+    // Si es una continuación, la estructura es diferente
+    // print('Respuesta de continuación: ${response.keys.toList()}');
+    
+    // Intentar diferentes rutas para la continuación
+    var contents = nav(response, [
+      'onResponseReceivedActions',
+      0,
+      'appendContinuationItemsAction',
+      'continuationItems'
+    ]);
+
+    contents ??= nav(response, [
+      'continuationContents',
+      'musicShelfContinuation',
+      'contents'
+    ]);
+
+    // print('Continuación - elementos encontrados: ${contents?.length ?? 0}');
+    
+    if (contents is List) {
+      // Filtrar solo los elementos que son canciones (no el token de continuación)
+      final songItems = contents.where((item) => 
+        item['musicResponsiveListItemRenderer'] != null
+      ).toList();
+      
+      // print('Continuación - canciones encontradas: ${songItems.length}');
+      
+      if (songItems.isNotEmpty) {
+        parseSongs(songItems, results);
+      }
+    }
+  }
+
+  return results;
+}
+
+// Función para buscar con más resultados por página
+Future<List<YtMusicResult>> searchSongsWithMoreResults(String query) async {
+  final data = {
+    ...context,
+    'query': query,
+    'params': getSearchParams('songs', null, false),
+  };
+
+  final response = (await sendRequest("search", data)).data;
+  final results = <YtMusicResult>[];
+
+  // Obtener todos los contenidos de la respuesta
+  final contents = nav(response, [
+    'contents',
+    'tabbedSearchResultsRenderer',
+    'tabs',
+    0,
+    'tabRenderer',
+    'content',
+    'sectionListRenderer',
+    'contents'
+  ]);
+
+  if (contents is List) {
+    // Procesar todas las secciones que contengan canciones
+    for (var section in contents) {
+      final shelfRenderer = section['musicShelfRenderer'];
+      if (shelfRenderer != null) {
+        final sectionContents = shelfRenderer['contents'];
+        if (sectionContents is List) {
+          parseSongs(sectionContents, results);
+        }
+      }
+    }
+  }
+
+  return results;
+}
+
+// Función para obtener el token de continuación
+String? getContinuationToken(Map<String, dynamic> response) {
+  try {
+    final shelfRenderer = nav(response, [
+      'contents',
+      'tabbedSearchResultsRenderer',
+      'tabs',
+      0,
+      'tabRenderer',
+      'content',
+      'sectionListRenderer',
+      'contents',
+      0,
+      'musicShelfRenderer'
+    ]);
+
+    if (shelfRenderer != null && shelfRenderer['continuations'] != null) {
+      return shelfRenderer['continuations'][0]['nextContinuationData']['continuation'];
+    }
+  } catch (e) {
+    // Si no hay token de continuación, retornar null
+  }
+  return null;
+}
+
+// Función para buscar con múltiples páginas
+Future<List<YtMusicResult>> searchSongsWithPagination(String query, {int maxPages = 3}) async {
+  final allResults = <YtMusicResult>[];
+  String? continuationToken;
+  int currentPage = 0;
+
+  while (currentPage < maxPages) {
+    // print('Buscando página ${currentPage + 1}...');
+    final results = await searchSongsOnly(query, continuationToken: continuationToken);
+    // print('Resultados en página ${currentPage + 1}: ${results.length}');
+    allResults.addAll(results);
+
+    // Si no hay más resultados, parar
+    if (results.isEmpty) {
+      // print('No hay más resultados, parando...');
+      break;
+    }
+
+    // Obtener el token de continuación para la siguiente página
+    if (currentPage == 0) {
+      final response = (await sendRequest("search", {
+        ...context,
+        'query': query,
+        'params': getSearchParams('songs', null, false),
+      })).data;
+      continuationToken = getContinuationToken(response);
+      // print('Token de continuación obtenido: ${continuationToken != null ? 'Sí' : 'No'}');
+    } else {
+      // Para páginas subsiguientes, necesitamos hacer otra petición para obtener el siguiente token
+      final response = (await sendRequest("search", {
+        ...context,
+        'continuation': continuationToken,
+      })).data;
+      
+      // Obtener el siguiente token de continuación
+      try {
+        final nextToken = nav(response, [
+          'onResponseReceivedActions',
+          0,
+          'appendContinuationItemsAction',
+          'continuationItems',
+          0,
+          'continuationItemRenderer',
+          'continuationEndpoint',
+          'continuationCommand',
+          'token'
+        ]);
+        continuationToken = nextToken;
+        // print('Siguiente token obtenido: ${continuationToken != null ? 'Sí' : 'No'}');
+      } catch (e) {
+        // print('Error obteniendo siguiente token: $e');
+        continuationToken = null;
+      }
+    }
+
+    // Si no hay token de continuación, parar
+    if (continuationToken == null) {
+      // print('No hay token de continuación, parando...');
+      break;
+    }
+
+    currentPage++;
+  }
+
+  // print('Total de resultados obtenidos: ${allResults.length}');
+  return allResults;
+}
+

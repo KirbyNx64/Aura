@@ -2,6 +2,7 @@ import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
 import 'package:music/utils/audio/background_audio_handler.dart';
 import 'package:music/utils/permission/permission_handler.dart';
+import 'package:music/utils/theme_preferences.dart';
 import 'widgets/bottom_nav.dart';
 import 'screens/home/home_screen.dart';
 import 'screens/likes/favorites_screen.dart';
@@ -9,6 +10,7 @@ import 'screens/folders/folders_screen.dart';
 import 'screens/download/download_screen.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter/services.dart';
+import 'package:music/utils/yt_search/yt_screen.dart';
 
 late final AudioHandler audioHandler;
 
@@ -133,25 +135,76 @@ class _PermisosScreenState extends State<PermisosScreen>
   }
 }
 
-class MainApp extends StatelessWidget {
+class MainApp extends StatefulWidget {
   const MainApp({super.key});
 
   @override
+  State<MainApp> createState() => _MainAppState();
+}
+
+class _MainAppState extends State<MainApp> {
+  bool _isDarkMode = true;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadThemePreference();
+  }
+
+  Future<void> _loadThemePreference() async {
+    final savedThemeMode = await ThemePreferences.getThemeMode();
+    if (mounted) {
+      setState(() {
+        _isDarkMode = savedThemeMode;
+        _isLoading = false;
+      });
+    }
+  }
+
+  void _toggleTheme() async {
+    final newThemeMode = !_isDarkMode;
+    setState(() {
+      _isDarkMode = newThemeMode;
+    });
+    // Guardar la preferencia
+    await ThemePreferences.setThemeMode(newThemeMode);
+  }
+
+  @override
   Widget build(BuildContext context) {
+    // Mostrar pantalla de carga mientras se cargan las preferencias
+    if (_isLoading) {
+      return MaterialApp(
+        debugShowCheckedModeBanner: false,
+        theme: ThemeData(
+          useMaterial3: true,
+          colorSchemeSeed: Colors.deepPurple,
+          brightness: Brightness.dark,
+        ),
+        home: const Scaffold(
+          body: Center(
+            child: CircularProgressIndicator(),
+          ),
+        ),
+      );
+    }
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       SystemChrome.setSystemUIOverlayStyle(
         SystemUiOverlayStyle(
-          systemNavigationBarColor: Color(0xff151218),
-          systemNavigationBarIconBrightness: Brightness.light,
+          systemNavigationBarColor: _isDarkMode ? Color(0xff151218) : Color(0xfffef7ff),
+          systemNavigationBarIconBrightness: _isDarkMode ? Brightness.light : Brightness.dark,
           statusBarColor: Colors.transparent,
-          statusBarIconBrightness: Brightness.light,
+          statusBarIconBrightness: _isDarkMode ? Brightness.light : Brightness.dark,
         ),
       );
     });
+    
     return MaterialApp(
       title: 'Mi App de Música',
       debugShowCheckedModeBanner: false,
-      themeMode: ThemeMode.dark,
+      themeMode: _isDarkMode ? ThemeMode.dark : ThemeMode.light,
       theme: ThemeData(
         useMaterial3: true,
         colorSchemeSeed: Colors.deepPurple,
@@ -164,7 +217,8 @@ class MainApp extends StatelessWidget {
       ),
       home: Material3BottomNav(
         pageBuilders: [
-          (context, onTabChange) => HomeScreen(onTabChange: onTabChange),
+          (context, onTabChange) => HomeScreen(onTabChange: onTabChange, toggleTheme: _toggleTheme),
+          (context, onTabChange) => YtSearchTestScreen(),
           (context, onTabChange) => FavoritesScreen(),
           (context, onTabChange) => FoldersScreen(),
           (context, onTabChange) => DownloadScreen(),
