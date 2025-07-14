@@ -11,11 +11,14 @@ import 'screens/download/download_screen.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter/services.dart';
 import 'package:music/utils/yt_search/yt_screen.dart';
+import 'package:music/l10n/locale_provider.dart';
+import 'package:music/utils/notifiers.dart';
 
 late final AudioHandler audioHandler;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await LocaleProvider.loadLocale();
   final permisosOk = await pedirPermisosMedia();
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
@@ -36,7 +39,7 @@ void main() async {
     return;
   }
   audioHandler = await initAudioService();
-  runApp(const MainApp());
+  runApp(MyRootApp());
 }
 
 class PermisosScreen extends StatefulWidget {
@@ -72,7 +75,7 @@ class _PermisosScreenState extends State<PermisosScreen>
         if (!mounted) return;
         // Usa pushAndRemoveUntil para limpiar el stack y evitar problemas de contexto
         Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const MainApp()),
+          MaterialPageRoute(builder: (_) => MainApp(currentLanguage: languageNotifier.value)),
           (route) => false,
         );
       }
@@ -136,39 +139,90 @@ class _PermisosScreenState extends State<PermisosScreen>
 }
 
 class MainApp extends StatefulWidget {
-  const MainApp({super.key});
+  final String currentLanguage;
+  
+  const MainApp({super.key, required this.currentLanguage});
 
   @override
   State<MainApp> createState() => _MainAppState();
 }
 
 class _MainAppState extends State<MainApp> {
-  bool _isDarkMode = true;
+  AppThemeMode _themeMode = AppThemeMode.system;
   bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _loadThemePreference();
+    _loadThemePreferences();
   }
 
-  Future<void> _loadThemePreference() async {
+  Future<void> _loadThemePreferences() async {
     final savedThemeMode = await ThemePreferences.getThemeMode();
+    final savedColorScheme = await ThemePreferences.getColorScheme();
     if (mounted) {
       setState(() {
-        _isDarkMode = savedThemeMode;
+        _themeMode = savedThemeMode;
         _isLoading = false;
       });
+      // Inicializar el notifier con el color guardado
+      colorSchemeNotifier.value = savedColorScheme;
     }
   }
 
-  void _toggleTheme() async {
-    final newThemeMode = !_isDarkMode;
+  void _setThemeMode(AppThemeMode themeMode) async {
     setState(() {
-      _isDarkMode = newThemeMode;
+      _themeMode = themeMode;
     });
     // Guardar la preferencia
-    await ThemePreferences.setThemeMode(newThemeMode);
+    await ThemePreferences.setThemeMode(themeMode);
+  }
+
+  void _setColorScheme(AppColorScheme colorScheme) async {
+    // Actualizar el notifier para que el tema se actualice inmediatamente
+    colorSchemeNotifier.value = colorScheme;
+    // Guardar la preferencia
+    await ThemePreferences.setColorScheme(colorScheme);
+  }
+
+  ThemeData _buildTheme(Brightness brightness) {
+    final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
+    if (isAmoled && brightness == Brightness.dark) {
+      return ThemeData(
+        useMaterial3: true,
+        brightness: Brightness.dark,
+        scaffoldBackgroundColor: Colors.black,
+        canvasColor: Colors.black,
+        cardColor: Colors.black,
+        // dialogBackgroundColor: Colors.black, // deprecated
+        appBarTheme: const AppBarTheme(backgroundColor: Colors.black, foregroundColor: Colors.white),
+        dialogTheme: const DialogThemeData(backgroundColor: Colors.black),
+        colorScheme: const ColorScheme.dark(
+          primary: Colors.white,
+          onPrimary: Colors.black,
+          secondary: Colors.white70,
+          onSecondary: Colors.black,
+          surface: Colors.black,
+          onSurface: Colors.white,
+          error: Colors.red,
+          onError: Colors.white,
+        ),
+        iconTheme: const IconThemeData(color: Colors.white),
+        textTheme: const TextTheme(
+          bodyLarge: TextStyle(color: Colors.white),
+          bodyMedium: TextStyle(color: Colors.white),
+          bodySmall: TextStyle(color: Colors.white70),
+          titleLarge: TextStyle(color: Colors.white),
+          titleMedium: TextStyle(color: Colors.white),
+          titleSmall: TextStyle(color: Colors.white70),
+        ),
+      );
+    }
+    return ThemeData(
+      useMaterial3: true,
+      colorSchemeSeed: ThemePreferences.getColorFromScheme(colorSchemeNotifier.value),
+      brightness: brightness,
+    );
   }
 
   @override
@@ -177,11 +231,7 @@ class _MainAppState extends State<MainApp> {
     if (_isLoading) {
       return MaterialApp(
         debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-          useMaterial3: true,
-          colorSchemeSeed: Colors.deepPurple,
-          brightness: Brightness.dark,
-        ),
+        theme: _buildTheme(Brightness.dark),
         home: const Scaffold(
           body: Center(
             child: CircularProgressIndicator(),
@@ -190,40 +240,74 @@ class _MainAppState extends State<MainApp> {
       );
     }
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      SystemChrome.setSystemUIOverlayStyle(
-        SystemUiOverlayStyle(
-          systemNavigationBarColor: _isDarkMode ? Color(0xff151218) : Color(0xfffef7ff),
-          systemNavigationBarIconBrightness: _isDarkMode ? Brightness.light : Brightness.dark,
-          statusBarColor: Colors.transparent,
-          statusBarIconBrightness: _isDarkMode ? Brightness.light : Brightness.dark,
-        ),
-      );
-    });
-    
-    return MaterialApp(
-      title: 'Mi App de Música',
-      debugShowCheckedModeBanner: false,
-      themeMode: _isDarkMode ? ThemeMode.dark : ThemeMode.light,
-      theme: ThemeData(
-        useMaterial3: true,
-        colorSchemeSeed: Colors.deepPurple,
-        brightness: Brightness.light,
-      ),
-      darkTheme: ThemeData(
-        useMaterial3: true,
-        colorSchemeSeed: Colors.deepPurple,
-        brightness: Brightness.dark,
-      ),
-      home: Material3BottomNav(
-        pageBuilders: [
-          (context, onTabChange) => HomeScreen(onTabChange: onTabChange, toggleTheme: _toggleTheme),
-          (context, onTabChange) => YtSearchTestScreen(),
-          (context, onTabChange) => FavoritesScreen(),
-          (context, onTabChange) => FoldersScreen(),
-          (context, onTabChange) => DownloadScreen(),
-        ],
-      ),
+    // Determinar el brightness basado en el tema seleccionado
+    Brightness? brightness;
+    switch (_themeMode) {
+      case AppThemeMode.light:
+        brightness = Brightness.light;
+        break;
+      case AppThemeMode.dark:
+        brightness = Brightness.dark;
+        break;
+      case AppThemeMode.system:
+        brightness = null; // Usar el del sistema
+        break;
+    }
+
+    return ValueListenableBuilder<AppColorScheme>(
+      valueListenable: colorSchemeNotifier,
+      builder: (context, colorScheme, child) {
+        // Actualizar la barra de navegación cuando cambie el color
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          final isDark = brightness == Brightness.dark || 
+                        (brightness == null && MediaQuery.of(context).platformBrightness == Brightness.dark);
+          
+          // Crear un tema temporal para obtener los colores del sistema
+          final tempTheme = _buildTheme(isDark ? Brightness.dark : Brightness.light);
+          
+          SystemChrome.setSystemUIOverlayStyle(
+            SystemUiOverlayStyle(
+              systemNavigationBarColor: tempTheme.colorScheme.surface,
+              systemNavigationBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+              statusBarColor: Colors.transparent,
+              statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+            ),
+          );
+        });
+        
+        return MaterialApp(
+          title: 'Mi App de Música',
+          debugShowCheckedModeBanner: false,
+          themeMode: _themeMode == AppThemeMode.system ? ThemeMode.system : 
+                     _themeMode == AppThemeMode.dark ? ThemeMode.dark : ThemeMode.light,
+          theme: _buildTheme(Brightness.light),
+          darkTheme: _buildTheme(Brightness.dark),
+          home: Material3BottomNav(
+            pageBuilders: [
+              (context, onTabChange) => HomeScreen(onTabChange: onTabChange, setThemeMode: _setThemeMode, setColorScheme: _setColorScheme),
+              (context, onTabChange) => YtSearchTestScreen(),
+              (context, onTabChange) => FavoritesScreen(),
+              (context, onTabChange) => FoldersScreen(),
+              (context, onTabChange) => DownloadScreen(),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class MyRootApp extends StatelessWidget {
+  const MyRootApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<String>(
+      valueListenable: languageNotifier,
+      builder: (context, lang, _) {
+        // print('DEBUG: MyRootApp rebuilding with language: $lang');
+        return MainApp(currentLanguage: lang);
+      },
     );
   }
 }

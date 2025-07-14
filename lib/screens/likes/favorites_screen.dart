@@ -5,6 +5,8 @@ import 'package:music/main.dart';
 import 'package:music/utils/audio/background_audio_handler.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:music/utils/notifiers.dart';
+import 'package:music/l10n/locale_provider.dart';
+import 'package:music/utils/theme_preferences.dart';
 
 enum OrdenFavoritos { normal, alfabetico, invertido, ultimoAgregado }
 
@@ -183,7 +185,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
           children: [
             Icon(Icons.favorite_border, size: 28),
             const SizedBox(width: 8),
-            const Text('Me gusta'),
+            TranslatedText('favorites'),
           ],
         ),
         actions: [
@@ -196,21 +198,21 @@ class _FavoritesScreenState extends State<FavoritesScreen>
               });
             },
             itemBuilder: (context) => [
-              const PopupMenuItem(
+              PopupMenuItem(
                 value: OrdenFavoritos.normal,
-                child: Text('Ultimo añadido'),
+                child: TranslatedText('last_added'),
               ),
-              const PopupMenuItem(
+              PopupMenuItem(
                 value: OrdenFavoritos.ultimoAgregado,
-                child: Text('Invertir orden'),
+                child: TranslatedText('invert_order'),
               ),
-              const PopupMenuItem(
+              PopupMenuItem(
                 value: OrdenFavoritos.alfabetico,
-                child: Text('Alfabético (A-Z)'),
+                child: TranslatedText('alphabetical_az'),
               ),
-              const PopupMenuItem(
+              PopupMenuItem(
                 value: OrdenFavoritos.invertido,
-                child: Text('Alfabético (Z-A)'),
+                child: TranslatedText('alphabetical_za'),
               ),
             ],
           ),
@@ -219,18 +221,23 @@ class _FavoritesScreenState extends State<FavoritesScreen>
           preferredSize: const Size.fromHeight(56),
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: TextField(
-              controller: _searchController,
-              focusNode: _searchFocusNode,
-              onChanged: (_) => _onSearchChanged(),
-              decoration: InputDecoration(
-                hintText: 'Buscar por título o artista',
-                prefixIcon: const Icon(Icons.search),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(24),
-                ),
-                contentPadding: const EdgeInsets.symmetric(vertical: 0),
-              ),
+            child: ValueListenableBuilder<String>(
+              valueListenable: languageNotifier,
+              builder: (context, lang, child) {
+                return TextField(
+                  controller: _searchController,
+                  focusNode: _searchFocusNode,
+                  onChanged: (_) => _onSearchChanged(),
+                  decoration: InputDecoration(
+                    hintText: LocaleProvider.tr('search_by_title_or_artist'),
+                    prefixIcon: const Icon(Icons.search),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(vertical: 0),
+                  ),
+                );
+              },
             ),
           ),
         ),
@@ -246,7 +253,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                       ? _filteredFavorites
                       : _favorites;
                   if (songsToShow.isEmpty) {
-                    return const Center(child: Text('No hay canciones'));
+                    return Center(child: TranslatedText('no_songs'));
                   }
                   return StreamBuilder<MediaItem?>(
                     stream: audioHandler.mediaItem,
@@ -268,6 +275,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                                 final song = songsToShow[index];
                                 final isCurrent =
                                     current?.extras?['data'] == song.data;
+                                final isAmoledTheme = colorSchemeNotifier.value == AppColorScheme.amoled;
                                 return ListTile(
                                   onLongPress: () async {
                                     showModalBottomSheet(
@@ -280,8 +288,8 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                                               leading: const Icon(
                                                 Icons.delete_outline,
                                               ),
-                                              title: const Text(
-                                                'Eliminar de me gusta',
+                                              title: TranslatedText(
+                                                'remove_from_favorites',
                                               ),
                                               onTap: () async {
                                                 Navigator.of(context).pop();
@@ -325,7 +333,10 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: isCurrent
-                                        ? const TextStyle(
+                                        ? TextStyle(
+                                            color: isAmoledTheme
+                                                ? Colors.white
+                                                : Theme.of(context).colorScheme.primary,
                                             fontWeight: FontWeight.bold,
                                           )
                                         : null,
@@ -333,7 +344,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                                   subtitle: Text(
                                     (song.artist == null ||
                                             song.artist!.trim().isEmpty)
-                                        ? 'Desconocido'
+                                        ? LocaleProvider.tr('unknown_artist')
                                         : song.artist!,
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
@@ -355,9 +366,9 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                                     },
                                   ),
                                   selected: isCurrent,
-                                  selectedTileColor: Theme.of(
-                                    context,
-                                  ).colorScheme.primaryContainer,
+                                  selectedTileColor: isAmoledTheme
+                                      ? Colors.white.withValues(alpha: 0.1)
+                                      : Theme.of(context).colorScheme.primaryContainer,
                                   onTap: () => _playSong(song),
                                 );
                               },

@@ -405,3 +405,35 @@ Future<List<YtMusicResult>> searchSongsWithPagination(String query, {int maxPage
   return allResults;
 }
 
+// Función para obtener sugerencias de búsqueda de YouTube Music
+Future<List<String>> getSearchSuggestion(String queryStr) async {
+  try {
+    final data = Map<String, dynamic>.from(context);
+    data['input'] = queryStr;
+    
+    final response = await sendRequest("music/get_search_suggestions", data);
+    final responseData = response.data;
+    
+    final suggestions = nav(responseData, [
+      'contents', 
+      0, 
+      'searchSuggestionsSectionRenderer', 
+      'contents'
+    ]) ?? [];
+    
+    return suggestions
+        .map<String?>((item) {
+          return nav(item, [
+            'searchSuggestionRenderer',
+            'navigationEndpoint',
+            'searchEndpoint',
+            'query'
+          ])?.toString();
+        })
+        .whereType<String>()
+        .toList();
+  } catch (e) {
+    return [];
+  }
+}
+

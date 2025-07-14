@@ -1,7 +1,7 @@
 name: music
 description: "A new Flutter project."
 publish_to: 'none'
-version: 1.2.1+1
+version: 1.3.0+1
 
 environment:
   sdk: ^3.8.1
@@ -42,6 +42,7 @@ dependencies:
   palette_generator: ^0.3.3+7
   ota_update: ^7.0.2
   scroll_to_index: ^3.0.1
+
 
 dev_dependencies:
   flutter_test:

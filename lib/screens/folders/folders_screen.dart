@@ -7,6 +7,12 @@ import 'package:audio_service/audio_service.dart';
 import 'package:music/utils/audio/background_audio_handler.dart';
 import 'package:music/utils/db/favorites_db.dart';
 import 'package:music/utils/notifiers.dart';
+import 'package:music/l10n/locale_provider.dart';
+import 'package:music/utils/theme_preferences.dart';
+
+enum OrdenCarpetas { normal, alfabetico, invertido, ultimoAgregado }
+
+OrdenCarpetas _orden = OrdenCarpetas.normal;
 
 class FoldersScreen extends StatefulWidget {
   const FoldersScreen({super.key});
@@ -28,6 +34,7 @@ class _FoldersScreenState extends State<FoldersScreen>
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
   List<SongModel> _filteredSongs = [];
+  List<SongModel> _originalSongs = []; // Lista original para restaurar orden
 
   double _lastBottomInset = 0.0;
 
@@ -131,8 +138,8 @@ class _FoldersScreenState extends State<FoldersScreen>
               leading: Icon(
                 isFavorite ? Icons.delete_outline : Icons.favorite_border,
               ),
-              title: Text(
-                isFavorite ? 'Eliminar de me gusta' : 'Añadir a me gusta',
+              title: TranslatedText(
+                isFavorite ? 'remove_from_favorites' : 'add_to_favorites',
               ),
               onTap: () async {
                 Navigator.of(context).pop();
@@ -155,16 +162,16 @@ class _FoldersScreenState extends State<FoldersScreen>
   MediaItem songToMediaItem(SongModel song) {
     return MediaItem(
       id: song.id.toString(),
-      album: song.album ?? 'Desconocido',
+      album: song.album ?? LocaleProvider.tr('unknown_artist'),
       title: song.title,
-      artist: song.artist ?? 'Desconocido',
+      artist: song.artist ?? LocaleProvider.tr('unknown_artist'),
       artUri: song.uri != null ? Uri.parse(song.uri!) : null,
       extras: {'data': song.data},
     );
   }
 
   Future<void> _playSong(SongModel song) async {
-    final playlist = songsByFolder[carpetaSeleccionada] ?? [];
+    final playlist = _filteredSongs; // Usa la lista filtrada/ordenada
     final index = playlist.indexWhere((s) => s.id == song.id);
 
     if (index != -1) {
@@ -198,20 +205,45 @@ class _FoldersScreenState extends State<FoldersScreen>
     await FavoritesDB().addFavorite(song);
   }
 
+  void _ordenarCanciones() {
+    setState(() {
+      switch (_orden) {
+        case OrdenCarpetas.normal:
+          _filteredSongs = List.from(_originalSongs); // Restaura el orden original
+          break;
+        case OrdenCarpetas.alfabetico:
+          _filteredSongs.sort((a, b) => a.title.compareTo(b.title));
+          break;
+        case OrdenCarpetas.invertido:
+          _filteredSongs.sort((a, b) => b.title.compareTo(a.title));
+          break;
+        case OrdenCarpetas.ultimoAgregado:
+          _filteredSongs = List.from(_originalSongs.reversed);
+          break;
+      }
+    });
+  }
+
   void _onSearchChanged(List<SongModel> canciones) {
     final query = quitarDiacriticos(_searchController.text.toLowerCase());
 
+    List<SongModel> filteredList;
+    if (query.isEmpty) {
+      filteredList = List.from(canciones);
+    } else {
+      filteredList = canciones.where((song) {
+        final title = quitarDiacriticos(song.title);
+        final artist = quitarDiacriticos(song.artist ?? '');
+        return title.contains(query) || artist.contains(query);
+      }).toList();
+    }
+
     setState(() {
-      if (query.isEmpty) {
-        _filteredSongs = List.from(canciones);
-      } else {
-        _filteredSongs = canciones.where((song) {
-          final title = quitarDiacriticos(song.title);
-          final artist = quitarDiacriticos(song.artist ?? '');
-          return title.contains(query) || artist.contains(query);
-        }).toList();
-      }
+      _filteredSongs = filteredList;
     });
+    
+    // Aplicar el ordenamiento actual después del filtrado
+    _ordenarCanciones();
   }
 
   @override
@@ -253,7 +285,7 @@ class _FoldersScreenState extends State<FoldersScreen>
               children: [
                 Icon(Icons.folder_outlined, size: 28),
                 const SizedBox(width: 8),
-                const Text('Carpetas'),
+                TranslatedText('folders_title'),
               ],
             ),
           ),
@@ -280,12 +312,14 @@ class _FoldersScreenState extends State<FoldersScreen>
                     return ListTile(
                       leading: const Icon(Icons.folder, size: 38),
                       title: Text(nombre),
-                      subtitle: Text('${canciones.length} canciones'),
+                      subtitle: Text('${canciones.length} ${LocaleProvider.tr('songs')}'),
                       onTap: () {
                         setState(() {
                           carpetaSeleccionada = entry.key;
                           _searchController.clear();
+                          _originalSongs = List.from(canciones);
                           _filteredSongs = List.from(canciones);
+                          _ordenarCanciones();
                         });
                       },
                     );
@@ -328,7 +362,36 @@ class _FoldersScreenState extends State<FoldersScreen>
                 });
               },
             ),
-            title: Text(folderDisplayNames[carpetaSeleccionada] ?? 'Carpeta'),
+            title: Text(folderDisplayNames[carpetaSeleccionada] ?? LocaleProvider.tr('folders')),
+            actions: [
+              PopupMenuButton<OrdenCarpetas>(
+                icon: const Icon(Icons.sort, size: 28),
+                onSelected: (orden) {
+                  setState(() {
+                    _orden = orden;
+                    _ordenarCanciones();
+                  });
+                },
+                itemBuilder: (context) => [
+                  PopupMenuItem(
+                    value: OrdenCarpetas.normal,
+                    child: TranslatedText('default'),
+                  ),
+                  PopupMenuItem(
+                    value: OrdenCarpetas.ultimoAgregado,
+                    child: TranslatedText('invert_order'),
+                  ),
+                  PopupMenuItem(
+                    value: OrdenCarpetas.alfabetico,
+                    child: TranslatedText('alphabetical_az'),
+                  ),
+                  PopupMenuItem(
+                    value: OrdenCarpetas.invertido,
+                    child: TranslatedText('alphabetical_za'),
+                  ),
+                ],
+              ),
+            ],
             bottom: PreferredSize(
               preferredSize: const Size.fromHeight(56),
               child: Padding(
@@ -336,21 +399,26 @@ class _FoldersScreenState extends State<FoldersScreen>
                   horizontal: 16,
                   vertical: 8,
                 ),
-                child: TextField(
-                  controller: _searchController,
-                  focusNode: _searchFocusNode,
-                  onChanged: (_) => _onSearchChanged(canciones),
-                  onEditingComplete: () {
-                    _searchFocusNode.unfocus();
+                child: ValueListenableBuilder<String>(
+                  valueListenable: languageNotifier,
+                  builder: (context, lang, child) {
+                    return TextField(
+                      controller: _searchController,
+                      focusNode: _searchFocusNode,
+                      onChanged: (_) => _onSearchChanged(canciones),
+                      onEditingComplete: () {
+                        _searchFocusNode.unfocus();
+                      },
+                      decoration: InputDecoration(
+                        hintText: LocaleProvider.tr('search_by_title_or_artist'),
+                        prefixIcon: const Icon(Icons.search),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(24),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(vertical: 0),
+                      ),
+                    );
                   },
-                  decoration: InputDecoration(
-                    hintText: 'Buscar por título o artista',
-                    prefixIcon: const Icon(Icons.search),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(24),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(vertical: 0),
-                  ),
                 ),
               ),
             ),
@@ -358,6 +426,8 @@ class _FoldersScreenState extends State<FoldersScreen>
           body: StreamBuilder<MediaItem?>(
             stream: audioHandler.mediaItem,
             builder: (context, currentSnapshot) {
+              // Detectar si el tema AMOLED está activo
+              final isAmoledTheme = colorSchemeNotifier.value == AppColorScheme.amoled;
               final current = currentSnapshot.data;
               return StreamBuilder<bool>(
                 stream: audioHandler.playbackState
@@ -371,9 +441,9 @@ class _FoldersScreenState extends State<FoldersScreen>
                   return Padding(
                     padding: EdgeInsets.only(bottom: space),
                     child: _filteredSongs.isEmpty
-                        ? const Center(
-                            child: Text(
-                              'No se encontraron canciones.',
+                        ? Center(
+                            child: TranslatedText(
+                              'no_songs_in_folder',
                               style: TextStyle(fontSize: 16),
                             ),
                           )
@@ -418,15 +488,15 @@ class _FoldersScreenState extends State<FoldersScreen>
                                   overflow: TextOverflow.ellipsis,
                                   style: isCurrent
                                       ? TextStyle(
-                                          color: Theme.of(
-                                            context,
-                                          ).colorScheme.primary,
+                                          color: isAmoledTheme
+                                              ? Colors.white
+                                              : Theme.of(context).colorScheme.primary,
                                           fontWeight: FontWeight.bold,
                                         )
                                       : null,
                                 ),
                                 subtitle: Text(
-                                  song.artist ?? 'Desconocido',
+                                  song.artist ?? LocaleProvider.tr('unknown_artist'),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                 ),
@@ -452,9 +522,9 @@ class _FoldersScreenState extends State<FoldersScreen>
                                   },
                                 ),
                                 selected: isCurrent,
-                                selectedTileColor: Theme.of(
-                                  context,
-                                ).colorScheme.primaryContainer,
+                                selectedTileColor: isAmoledTheme
+                                   ? Colors.white.withValues(alpha: 0.1) // Blanco muy transparente para AMOLED
+                                   : Theme.of(context).colorScheme.primaryContainer,
                               );
                             },
                           ),

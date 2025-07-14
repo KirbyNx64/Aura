@@ -49,4 +49,9 @@ class ArtworkDB {
     }
     return null;
   }
+
+  static Future<void> clearCache() async {
+    final db = await database;
+    await db.delete('artwork_cache');
+  }
 }

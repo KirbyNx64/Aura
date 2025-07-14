@@ -2,6 +2,7 @@ import 'package:audio_service/audio_service.dart';
 import 'package:music/main.dart';
 import 'package:flutter/material.dart';
 import 'package:music/widgets/now_playing_overlay.dart';
+import 'package:music/l10n/locale_provider.dart';
 
 typedef PageBuilderWithTabChange =
     Widget Function(BuildContext context, void Function(int) onTabChange);
@@ -47,31 +48,31 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
     _onItemTapped(index);
   }
 
-  static const _navBarItems = [
+  List<NavigationDestination> get _navBarItems => [
     NavigationDestination(
       icon: Icon(Icons.home_outlined),
       selectedIcon: Icon(Icons.home),
-      label: 'Inicio',
+      label: LocaleProvider.tr('home'),
     ),
     NavigationDestination(
       icon: Icon(Icons.search),
       selectedIcon: Icon(Icons.search),
-      label: 'Buscar',
+      label: LocaleProvider.tr('nav_search'),
     ),
     NavigationDestination(
       icon: Icon(Icons.favorite_border),
       selectedIcon: Icon(Icons.favorite),
-      label: 'Me gusta',
+      label: LocaleProvider.tr('nav_favorites'),
     ),
     NavigationDestination(
       icon: Icon(Icons.folder_outlined),
       selectedIcon: Icon(Icons.folder),
-      label: 'Carpetas',
+      label: LocaleProvider.tr('folders'),
     ),
     NavigationDestination(
       icon: Icon(Icons.download_outlined),
       selectedIcon: Icon(Icons.download),
-      label: 'Descargar',
+      label: LocaleProvider.tr('nav_downloads'),
     ),
   ];
 
@@ -120,12 +121,17 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
           );
         },
       ),
-      bottomNavigationBar: NavigationBar(
-        backgroundColor: Theme.of(context).colorScheme.surface,
-        animationDuration: const Duration(milliseconds: 400),
-        selectedIndex: _selectedIndex,
-        onDestinationSelected: _onItemTapped,
-        destinations: _navBarItems,
+      bottomNavigationBar: ValueListenableBuilder<String>(
+        valueListenable: languageNotifier,
+        builder: (context, lang, child) {
+          return NavigationBar(
+            backgroundColor: Theme.of(context).colorScheme.surface,
+            animationDuration: const Duration(milliseconds: 400),
+            selectedIndex: _selectedIndex,
+            onDestinationSelected: _onItemTapped,
+            destinations: _navBarItems,
+          );
+        },
       ),
     );
   }

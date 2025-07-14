@@ -233,6 +233,7 @@ class NowPlayingOverlay extends StatelessWidget {
                                 key: ValueKey(total),
                                 value: total > 0 ? current / total : 0,
                                 minHeight: 4,
+                                borderRadius: BorderRadius.circular(8),
                                 backgroundColor: Theme.of(
                                   context,
                                 ).colorScheme.onSurface.withAlpha(60),

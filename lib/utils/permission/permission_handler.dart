@@ -12,18 +12,16 @@ Future<bool> pedirPermisosMedia() async {
   if (sdkInt >= 33) {
     // Android 13+
     final audio = await Permission.audio.status;
-    final photos = await Permission.photos.status;
 
-    // print('audio: $audio, photos: $photos');
+    // print('audio: $audio');
 
-    if (audio.isGranted && photos.isGranted) {
+    if (audio.isGranted) {
       return true;
     }
 
-    final result = await [Permission.audio, Permission.photos].request();
+    final result = await [Permission.audio].request();
 
-    return result[Permission.audio]?.isGranted == true &&
-        result[Permission.photos]?.isGranted == true;
+    return result[Permission.audio]?.isGranted == true;
   } else if (sdkInt >= 30) {
     // Android 11-12
     final storage = await Permission.storage.status;

@@ -3,6 +3,7 @@ import 'package:ota_update/ota_update.dart';
 import 'package:music/utils/ota_update_helper.dart';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
+import 'package:music/l10n/locale_provider.dart';
 
 class UpdateScreen extends StatefulWidget {
   const UpdateScreen({super.key});
@@ -26,7 +27,7 @@ class _UpdateScreenState extends State<UpdateScreen> {
 
   Future<void> _checkUpdate() async {
     setState(() {
-      _status = 'Buscando actualización...';
+      _status = LocaleProvider.tr('checking_update');
       _hasChecked = true;
       _version = '';
       _changelog = '';
@@ -38,7 +39,7 @@ class _UpdateScreenState extends State<UpdateScreen> {
     if (updateInfo == null) {
       if (mounted) {
         setState(() {
-          _status = 'No hay actualizaciones disponibles.';
+          _status = LocaleProvider.tr('no_updates_available');
         });
       }
     } else {
@@ -47,7 +48,7 @@ class _UpdateScreenState extends State<UpdateScreen> {
           _version = updateInfo.version;
           _changelog = updateInfo.changelog;
           _apkUrl = updateInfo.apkUrl;
-          _status = 'Lista para descargar';
+          _status = LocaleProvider.tr('ready_to_download');
         });
       }
     }
@@ -59,7 +60,7 @@ class _UpdateScreenState extends State<UpdateScreen> {
     setState(() {
       _isDownloading = true;
       _progress = 0.0;
-      _status = 'Descargando...';
+      _status = LocaleProvider.tr('downloading');
     });
 
     await _borrarApkPrevio();
@@ -78,7 +79,7 @@ class _UpdateScreenState extends State<UpdateScreen> {
     }, onError: (error) {
       if (!mounted) return;
       setState(() {
-        _status = 'Error: $error';
+        _status = '${LocaleProvider.tr('error')}: $error';
         _isDownloading = false;
       });
     });
@@ -104,7 +105,7 @@ class _UpdateScreenState extends State<UpdateScreen> {
     final is16by9 = (aspectRatio < 1.85);
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Actualización'),
+        title: Text(LocaleProvider.tr('update')),
         leading: _isDownloading
             ? Container() // Sin botón back mientras descarga
             : null,
@@ -120,18 +121,18 @@ class _UpdateScreenState extends State<UpdateScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Descargando actualización...',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    Text(
+                      LocaleProvider.tr('downloading_update'),
+                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Versión: $_version',
+                      '${LocaleProvider.tr('version')}: $_version',
                       style: const TextStyle(fontSize: 16),
                     ),
                     const SizedBox(height: 42),
                     Text(
-                      'Cambios:',
+                      LocaleProvider.tr('changes'),
                       style: Theme.of(context).textTheme.titleMedium ??
                           const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
                     ),
@@ -162,7 +163,7 @@ class _UpdateScreenState extends State<UpdateScreen> {
               ),
             ),
             const SizedBox(height: 16),
-            Text('Por favor, no salgas de la app mientras se descarga.'),
+            Text(LocaleProvider.tr('dont_exit_app')),
             const SizedBox(height: 8),
             LinearProgressIndicator(value: _progress),
           ],
@@ -181,10 +182,10 @@ class _UpdateScreenState extends State<UpdateScreen> {
                               ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7)
                               : Theme.of(context).colorScheme.onSurface,
                             ),
-                            SizedBox(height: 16),
+                            const SizedBox(height: 16),
                             Text(
-                              'Presiona el botón para buscar actualización',
-                              style: TextStyle(fontSize: 18),
+                              LocaleProvider.tr('press_button_to_check'),
+                              style: const TextStyle(fontSize: 18),
                               textAlign: TextAlign.center,
                             ),
                           ],
@@ -195,7 +196,7 @@ class _UpdateScreenState extends State<UpdateScreen> {
                         right: 16,
                         child: TextButton(
                           onPressed: _checkUpdate,
-                          child: const Text('Buscar actualización'),
+                          child: Text(LocaleProvider.tr('check_for_update')),
                         ),
                       ),
                     ],
@@ -205,24 +206,21 @@ class _UpdateScreenState extends State<UpdateScreen> {
                     : Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
-                            '¡Nueva actualización disponible!',
-                            style: TextStyle(
+                          Text(
+                            LocaleProvider.tr('new_update_available'),
+                            style: const TextStyle(
                                 fontSize: 18, fontWeight: FontWeight.bold),
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'Versión: $_version',
-                            style:
-                                const TextStyle(
-                                    fontSize: 16),
+                            '${LocaleProvider.tr('version')}: $_version',
+                            style: const TextStyle(fontSize: 16),
                           ),
                           const SizedBox(height: 42),
                           Text(
-                            'Cambios:',
+                            LocaleProvider.tr('changes'),
                             style: Theme.of(context).textTheme.titleMedium ??
-                                const TextStyle(
-                                    fontSize: 18, fontWeight: FontWeight.w600),
+                                const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
                           ),
                           const SizedBox(height: 8),
                           SizedBox(
@@ -247,7 +245,7 @@ class _UpdateScreenState extends State<UpdateScreen> {
                             ),
                           ),       
                           const Spacer(),
-                          Text('Estado: $_status'),
+                          Text('${LocaleProvider.tr('status')}: $_status'),
                           const SizedBox(height: 16),
                           LinearProgressIndicator(value: _progress),
                           const SizedBox(height: 16),
@@ -256,11 +254,11 @@ class _UpdateScreenState extends State<UpdateScreen> {
                             children: [
                               TextButton(
                                 onPressed: () => Navigator.pop(context),
-                                child: const Text('Cancelar'),
+                                child: Text(LocaleProvider.tr('cancel')),
                               ),
                               TextButton(
                                 onPressed: _startDownload,
-                                child: const Text('Actualizar'),
+                                child: Text(LocaleProvider.tr('update')),
                               ),
                             ],
                           ),

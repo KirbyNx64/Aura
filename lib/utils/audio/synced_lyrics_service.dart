@@ -74,4 +74,9 @@ class SyncedLyricsService {
     }
     return null;
   }
+
+  static Future<void> clearLyrics() async {
+    final db = await database;
+    await db.delete('lyrics');
+  }
 }

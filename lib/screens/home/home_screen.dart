@@ -11,14 +11,18 @@ import 'package:flutter/services.dart';
 import 'package:music/utils/db/playlists_db.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:music/screens/home/ota_update_screen.dart';
+import 'package:music/screens/home/settings_screen.dart';
 import 'package:music/utils/ota_update_helper.dart';
+import 'package:music/utils/theme_preferences.dart';
+import 'package:music/l10n/locale_provider.dart';
 
 enum OrdenCancionesPlaylist { normal, alfabetico, invertido, ultimoAgregado }
 
 class HomeScreen extends StatefulWidget {
   final void Function(int)? onTabChange;
-  final VoidCallback? toggleTheme;
-  const HomeScreen({super.key, this.onTabChange, this.toggleTheme});
+  final void Function(AppThemeMode)? setThemeMode;
+  final void Function(AppColorScheme)? setColorScheme;
+  const HomeScreen({super.key, this.onTabChange, this.setThemeMode, this.setColorScheme});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -47,14 +51,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       TextEditingController();
   final FocusNode _searchRecentsFocus = FocusNode();
   List<SongModel> _filteredRecents = [];
-  // OrdenCancionesPlaylist _ordenCancionesPlaylist =
-  //     OrdenCancionesPlaylist.normal;
+  OrdenCancionesPlaylist _ordenCancionesPlaylist = OrdenCancionesPlaylist.normal;
 
   // Controladores y estados para búsqueda en playlist
   final TextEditingController _searchPlaylistController =
       TextEditingController();
   final FocusNode _searchPlaylistFocus = FocusNode();
   List<SongModel> _filteredPlaylistSongs = [];
+  List<SongModel> _originalPlaylistSongs = []; // Lista original para restaurar orden
   final List<List<SongModel>> _quickPickPages = [];
   List<SongModel> allSongs = [];
 
@@ -72,28 +76,24 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _buscarActualizacion();
   }
 
-  // void _ordenarCancionesPlaylist() {
-  //   setState(() {
-  //     switch (_ordenCancionesPlaylist) {
-  //       case OrdenCancionesPlaylist.normal:
-  //         _playlistSongs.sort((a, b) => a.id.compareTo(b.id)); // Por id
-  //         break;
-  //       case OrdenCancionesPlaylist.alfabetico:
-  //         _playlistSongs.sort(
-  //           (a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()),
-  //         );
-  //         break;
-  //       case OrdenCancionesPlaylist.invertido:
-  //         _playlistSongs.sort(
-  //           (a, b) => b.title.toLowerCase().compareTo(a.title.toLowerCase()),
-  //         );
-  //         break;
-  //       case OrdenCancionesPlaylist.ultimoAgregado:
-  //         _playlistSongs = _playlistSongs.reversed.toList();
-  //         break;
-  //     }
-  //   });
-  // }
+  void _ordenarCancionesPlaylist() {
+    setState(() {
+      switch (_ordenCancionesPlaylist) {
+        case OrdenCancionesPlaylist.normal:
+          _playlistSongs = List.from(_originalPlaylistSongs); // Restaura el orden original
+          break;
+        case OrdenCancionesPlaylist.alfabetico:
+          _playlistSongs.sort((a, b) => a.title.compareTo(b.title));
+          break;
+        case OrdenCancionesPlaylist.invertido:
+          _playlistSongs.sort((a, b) => b.title.compareTo(a.title));
+          break;
+        case OrdenCancionesPlaylist.ultimoAgregado:
+          _playlistSongs = List.from(_originalPlaylistSongs.reversed);
+          break;
+      }
+    });
+  }
 
   void _initQuickPickPages() {
     _quickPickPages.clear();
@@ -152,11 +152,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Future<void> _loadPlaylistSongs(Map<String, dynamic> playlist) async {
     final songs = await PlaylistsDB().getSongsFromPlaylist(playlist['id']);
     setState(() {
+      _originalPlaylistSongs = List.from(songs);
       _playlistSongs = songs;
       _selectedPlaylist = playlist;
       _showingPlaylistSongs = true;
       _showingRecents = false;
     });
+    _ordenarCancionesPlaylist();
   }
 
   Future<void> _loadMostPlayed() async {
@@ -203,12 +205,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       setState(() => _filteredPlaylistSongs = []);
       return;
     }
+    List<SongModel> filteredList = _playlistSongs.where((song) {
+      final title = _quitarDiacriticos(song.title);
+      final artist = _quitarDiacriticos(song.artist ?? '');
+      return title.contains(query) || artist.contains(query);
+    }).toList();
+    
     setState(() {
-      _filteredPlaylistSongs = _playlistSongs.where((song) {
-        final title = _quitarDiacriticos(song.title);
-        final artist = _quitarDiacriticos(song.artist ?? '');
-        return title.contains(query) || artist.contains(query);
-      }).toList();
+      _filteredPlaylistSongs = filteredList;
     });
   }
 
@@ -310,8 +314,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               leading: Icon(
                 isFavorite ? Icons.delete_outline : Icons.favorite_border,
               ),
-              title: Text(
-                isFavorite ? 'Eliminar de me gusta' : 'Añadir a me gusta',
+              title: TranslatedText(
+                isFavorite ? 'remove_from_favorites' : 'add_to_favorites',
               ),
               onTap: () async {
                 Navigator.of(context).pop();
@@ -378,110 +382,83 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               if (!_showingRecents && !_showingPlaylistSongs)
                 const SizedBox(width: 8),
               Expanded(
-                child: Text(
-                  _showingRecents
-                      ? 'Recientes'
-                      : _showingPlaylistSongs
-                      ? ((_selectedPlaylist?['name'] ?? 'Playlist').length > 15
-                            ? (_selectedPlaylist?['name'] ?? 'Playlist')
-                                      .substring(0, 15) +
-                                  '...'
-                            : (_selectedPlaylist?['name'] ?? 'Playlist'))
-                      : 'Inicio',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
+                child: _showingRecents
+                    ? TranslatedText('recent', maxLines: 1, overflow: TextOverflow.ellipsis)
+                    : _showingPlaylistSongs
+                        ? ((_selectedPlaylist?['name'] ?? '').isNotEmpty
+                            ? Text(
+                                (_selectedPlaylist?['name'] ?? '').length > 15
+                                    ? (_selectedPlaylist?['name'] ?? '').substring(0, 15) + '...'
+                                    : (_selectedPlaylist?['name'] ?? ''),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              )
+                            : TranslatedText('playlists', maxLines: 1, overflow: TextOverflow.ellipsis))
+                        : TranslatedText('home', maxLines: 1, overflow: TextOverflow.ellipsis),
               ),
             ],
           ),
           actions: (!_showingRecents && !_showingPlaylistSongs)
               ? [
                   IconButton(
-                    icon: Icon(
-                      Theme.of(context).brightness == Brightness.dark 
-                          ? Icons.light_mode 
-                          : Icons.dark_mode,
-                      size: 28
-                    ),
-                    tooltip: 'Cambiar tema',
-                    onPressed: widget.toggleTheme,
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.system_update_alt, size: 28),
-                    tooltip: 'Buscar actualización',
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const UpdateScreen()),
-                      );
-                    },
-                  ),
-                  IconButton(
                     icon: const Icon(Icons.history, size: 28),
-                    tooltip: 'Canciones recientes',
+                    tooltip: LocaleProvider.tr('recent_songs'),
                     onPressed: _loadRecents,
                   ),
                   IconButton(
-                    icon: const Icon(Icons.info_outline, size: 28),
-                    tooltip: 'Acerca de',
+                    icon: const Icon(Icons.settings_outlined, size: 28),
+                    tooltip: LocaleProvider.tr('settings'),
                     onPressed: () {
-                      showDialog(
-                        context: context,
-                        builder: (context) => AlertDialog(
-                          contentPadding: const EdgeInsets.fromLTRB(
-                            24,
-                            24,
-                            24,
-                            8,
-                          ),
-                          content: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(16),
-                                child: Image.asset(
-                                  'assets/icon.png',
-                                  width: 64,
-                                  height: 64,
-                                ),
-                              ),
-                              const SizedBox(height: 16),
-                              const Text(
-                                'Aura Music',
-                                style: TextStyle(
-                                  fontSize: 22,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                              const SizedBox(height: 4),
-                              const Text(
-                                'v1.2.1',
-                                style: TextStyle(
-                                  fontSize: 15,
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                              const SizedBox(height: 12),
-                              const Text(
-                                'Aura Music es una app para reproducir tu música local de forma rápida y sencilla. '
-                                'Disfruta de tus canciones favoritas, crea playlists y más.',
-                                textAlign: TextAlign.center,
-                              ),
-                            ],
-                          ),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.of(context).pop(),
-                              child: const Text('Cerrar'),
-                            ),
-                          ],
+                      Navigator.of(context).push(
+                        PageRouteBuilder(
+                          pageBuilder: (context, animation, secondaryAnimation) =>
+                              SettingsScreen(setThemeMode: widget.setThemeMode, setColorScheme: widget.setColorScheme),
+                          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                            const begin = Offset(1.0, 0.0);
+                            const end = Offset.zero;
+                            const curve = Curves.ease;
+                            final tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+                            return SlideTransition(
+                              position: animation.drive(tween),
+                              child: child,
+                            );
+                          },
                         ),
                       );
                     },
                   ),
                 ]
-              : null,
+              : _showingPlaylistSongs
+                  ? [
+                      PopupMenuButton<OrdenCancionesPlaylist>(
+                        icon: const Icon(Icons.sort, size: 28),
+                        onSelected: (orden) {
+                          setState(() {
+                            _ordenCancionesPlaylist = orden;
+                            _ordenarCancionesPlaylist();
+                          });
+                        },
+                        itemBuilder: (context) => [
+                          PopupMenuItem(
+                            value: OrdenCancionesPlaylist.normal,
+                            child: TranslatedText('last_added'),
+                          ),
+                          PopupMenuItem(
+                            value: OrdenCancionesPlaylist.ultimoAgregado,
+                            child: TranslatedText('invert_order'),
+                          ),
+                          PopupMenuItem(
+                            value: OrdenCancionesPlaylist.alfabetico,
+                            child: TranslatedText('alphabetical_az'),
+                          ),
+                          PopupMenuItem(
+                            value: OrdenCancionesPlaylist.invertido,
+                            child: TranslatedText('alphabetical_za'),
+                          ),
+                        ],
+                      ),
+                    ]
+                  : null,
           bottom: (_showingRecents || _showingPlaylistSongs)
               ? PreferredSize(
                   preferredSize: const Size.fromHeight(56),
@@ -498,7 +475,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           ? _onSearchRecentsChanged()
                           : _onSearchPlaylistChanged(),
                       decoration: InputDecoration(
-                        hintText: 'Buscar por título o artista',
+                        hintText: LocaleProvider.tr('search_by_title_or_artist'),
                         prefixIcon: const Icon(Icons.search),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(24),
@@ -527,10 +504,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                             : _recentSongs;
                         if (songsToShow.isEmpty) {
                           return const Center(
-                            child: Text(
-                              'No hay canciones recientes.',
-                              style: TextStyle(fontSize: 16),
-                            ),
+                            child: TranslatedText('no_recent_songs', style: TextStyle(fontSize: 16)),
                           );
                         }
                         return ListView.builder(
@@ -542,6 +516,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                 song.data;
                             final isPlaying =
                                 audioHandler.playbackState.value.playing;
+                            final isAmoledTheme = colorSchemeNotifier.value == AppColorScheme.amoled;
                             return ListTile(
                               leading: ClipRRect(
                                 borderRadius: BorderRadius.circular(8),
@@ -571,14 +546,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                 overflow: TextOverflow.ellipsis,
                                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
                                   fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
-                                  color: isCurrent 
-                                      ? Theme.of(context,).colorScheme.primary
+                                  color: isCurrent
+                                      ? (isAmoledTheme
+                                          ? Colors.white
+                                          : Theme.of(context).colorScheme.primary)
                                       : Theme.of(context).colorScheme.onSurface,
                                 ),
                               ),
                               subtitle: Text(
                                 (song.artist?.trim().isEmpty ?? true)
-                                    ? 'Desconocido'
+                                    ? LocaleProvider.tr('unknown_artist')
                                     : song.artist!,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
@@ -600,9 +577,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                 },
                               ),
                               selected: isCurrent,
-                              selectedTileColor: Theme.of(
-                                context,
-                              ).colorScheme.primaryContainer,
+                              selectedTileColor: isAmoledTheme
+                                  ? Colors.white.withValues(alpha: 0.1)
+                                  : Theme.of(context).colorScheme.primaryContainer,
                               onTap: () async {
                                 await _playSong(song, songsToShow);
                               },
@@ -625,10 +602,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                     ? Icons.delete_outline
                                                     : Icons.favorite_border,
                                               ),
-                                              title: Text(
+                                              title: TranslatedText(
                                                 isFav
-                                                    ? 'Eliminar de me gusta'
-                                                    : 'Añadir a me gusta',
+                                                    ? 'remove_from_favorites'
+                                                    : 'add_to_favorites',
                                               ),
                                               onTap: () async {
                                                 Navigator.of(context).pop();
@@ -666,10 +643,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                             : _playlistSongs;
                         if (songsToShow.isEmpty) {
                           return const Center(
-                            child: Text(
-                              'No hay canciones en esta playlist.',
-                              style: TextStyle(fontSize: 16),
-                            ),
+                            child: TranslatedText('no_songs_in_playlist', style: TextStyle(fontSize: 16)),
                           );
                         }
                         return ListView.builder(
@@ -681,7 +655,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                 song.data;
                             final isPlaying =
                                 audioHandler.playbackState.value.playing;
-
+                            final isAmoledTheme = colorSchemeNotifier.value == AppColorScheme.amoled;
                             return ListTile(
                               leading: ClipRRect(
                                 borderRadius: BorderRadius.circular(8),
@@ -711,14 +685,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                 overflow: TextOverflow.ellipsis,
                                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
                                   fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
-                                  color: isCurrent 
-                                      ? Theme.of(context,).colorScheme.primary
+                                  color: isCurrent
+                                      ? (isAmoledTheme
+                                          ? Colors.white
+                                          : Theme.of(context).colorScheme.primary)
                                       : Theme.of(context).colorScheme.onSurface,
                                 ),
                               ),
                               subtitle: Text(
                                 (song.artist?.trim().isEmpty ?? true)
-                                    ? 'Desconocido'
+                                    ? LocaleProvider.tr('unknown_artist')
                                     : song.artist!,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
@@ -740,9 +716,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                 },
                               ),
                               selected: isCurrent,
-                              selectedTileColor: Theme.of(
-                                context,
-                              ).colorScheme.primaryContainer,
+                              selectedTileColor: isAmoledTheme
+                                  ? Colors.white.withValues(alpha: 0.1)
+                                  : Theme.of(context).colorScheme.primaryContainer,
                               onTap: () => _playSong(song, songsToShow),
                               onLongPress: () {
                                 showModalBottomSheet(
@@ -763,10 +739,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                     ? Icons.delete_outline
                                                     : Icons.favorite_border,
                                               ),
-                                              title: Text(
+                                              title: TranslatedText(
                                                 isFav
-                                                    ? 'Eliminar de me gusta'
-                                                    : 'Añadir a me gusta',
+                                                    ? 'remove_from_favorites'
+                                                    : 'add_to_favorites',
                                               ),
                                               onTap: () async {
                                                 Navigator.of(context).pop();
@@ -788,9 +764,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                 leading: const Icon(
                                                   Icons.playlist_remove,
                                                 ),
-                                                title: const Text(
-                                                  'Eliminar de la playlist',
-                                                ),
+                                                title: TranslatedText('remove_from_playlist'),
                                                 onTap: () async {
                                                   Navigator.of(context).pop();
                                                   await PlaylistsDB()
@@ -830,9 +804,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                   borderRadius: BorderRadius.circular(12),
                                   child: ListTile(
                                     leading: Icon(Icons.system_update, color: Theme.of(context).colorScheme.onSurface),
-                                    title: Text(
-                                      '¡Nueva versión  $_updateVersion disponible!',
-                                      style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontWeight: FontWeight.bold),
+                                    title: ValueListenableBuilder<String>(
+                                      valueListenable: languageNotifier,
+                                      builder: (context, lang, child) {
+                                        return Text(
+                                          '${LocaleProvider.tr('new_version_available')} $_updateVersion ${LocaleProvider.tr('available')}',
+                                          style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontWeight: FontWeight.bold),
+                                        );
+                                      },
                                     ),
                                     trailing: TextButton(
                                       style: TextButton.styleFrom(
@@ -840,7 +819,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                         backgroundColor: Theme.of(context).colorScheme.primaryContainer,
                                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                       ),
-                                      child: Text('Actualizar', style: TextStyle(color: Theme.of(context).colorScheme.onSurface),),
+                                      child: Text(LocaleProvider.tr('update'), style: TextStyle(color: Theme.of(context).colorScheme.onSurface),),
                                       onPressed: () {
                                         Navigator.push(
                                           context,
@@ -853,11 +832,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                               ),
                             ],
                           const SizedBox(height: 16),
-                          const Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 20),
-                            child: Text(
-                              'Acceso directos',
-                              style: TextStyle(
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 20),
+                            child: TranslatedText(
+                              'quick_access',
+                              style: const TextStyle(
                                 fontSize: 24,
                                 fontWeight: FontWeight.w600,
                               ),
@@ -1022,25 +1001,22 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           ),
                           const SizedBox(height: 32),
 
-                          const Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 20),
-                            child: Text(
-                              'Selección rápida',
-                              style: TextStyle(
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 20),
+                            child: TranslatedText(
+                              'quick_pick',
+                              style: const TextStyle(
                                 fontSize: 20,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
                           ),
-                          const SizedBox(height: 12),
+                          if (_quickPickPages.isEmpty)
+                            const SizedBox(height: 30),
+                          if (_quickPickPages.isNotEmpty)
+                            const SizedBox(height: 12),
                           (_quickPickPages.isEmpty)
-                              ? const Padding(
-                                  padding: EdgeInsets.symmetric(
-                                    horizontal: 20,
-                                    vertical: 8,
-                                  ),
-                                  child: Text('No hay canciones para mostrar.'),
-                                )
+                              ? Center(child: TranslatedText('no_songs_to_show', style: TextStyle(fontSize: 14)))
                               : Column(
                                   children: [
                                     SizedBox(
@@ -1116,11 +1092,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                                   ?.trim()
                                                                   .isEmpty ??
                                                               true)
-                                                          ? 'Desconocido'
+                                                          ? LocaleProvider.tr('unknown_artist')
                                                           : song.artist!,
                                                       maxLines: 1,
-                                                      overflow:
-                                                          TextOverflow.ellipsis,
+                                                      overflow: TextOverflow.ellipsis,
                                                     ),
                                                     trailing: const Opacity(
                                                       opacity: 0,
@@ -1167,9 +1142,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                const Text(
-                                  'Playlists',
-                                  style: TextStyle(
+                                TranslatedText(
+                                  'playlists',
+                                  style: const TextStyle(
                                     fontSize: 20,
                                     fontWeight: FontWeight.w600,
                                   ),
@@ -1177,26 +1152,26 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
                                 IconButton(
                                   icon: const Icon(Icons.add, size: 28),
-                                  tooltip: 'Crear nueva playlist',
+                                  tooltip: LocaleProvider.tr('create_new_playlist'),
                                   padding: const EdgeInsets.only(left: 8),
                                   onPressed: () async {
                                     final controller = TextEditingController();
                                     final result = await showDialog<String>(
                                       context: context,
                                       builder: (context) => AlertDialog(
-                                        title: const Text('Nueva playlist'),
+                                        title: TranslatedText('new_playlist'),
                                         content: TextField(
                                           controller: controller,
                                           autofocus: true,
-                                          decoration: const InputDecoration(
-                                            labelText: 'Nombre de la playlist',
+                                          decoration: InputDecoration(
+                                            labelText: LocaleProvider.tr('playlist_name'),
                                           ),
                                         ),
                                         actions: [
                                           TextButton(
                                             onPressed: () =>
                                                 Navigator.of(context).pop(),
-                                            child: const Text('Cancelar'),
+                                            child: TranslatedText('cancel'),
                                           ),
                                           TextButton(
                                             onPressed: () {
@@ -1204,7 +1179,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                 context,
                                               ).pop(controller.text.trim());
                                             },
-                                            child: const Text('Crear'),
+                                            child: TranslatedText('create'),
                                           ),
                                         ],
                                       ),
@@ -1222,13 +1197,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           ),
                           // Aquí mostramos las playlists
                           if (_playlists.isEmpty)
-                            const Padding(
-                              padding: EdgeInsets.symmetric(
-                                horizontal: 20,
-                                vertical: 10,
-                              ),
-                              child: Center(child: Text('No hay playlists.')),
-                            )
+                            Center(child: TranslatedText('no_playlists'))
                           else
                             ListView.builder(
                               shrinkWrap: true,
@@ -1321,9 +1290,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                   leading: const Icon(
                                                     Icons.edit,
                                                   ),
-                                                  title: const Text(
-                                                    'Renombrar playlist',
-                                                  ),
+                                                  title: TranslatedText('rename_playlist'),
                                                   onTap: () async {
                                                     Navigator.of(context).pop();
                                                     final controller =
@@ -1334,17 +1301,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                     final result = await showDialog<String>(
                                                       context: context,
                                                       builder: (context) => AlertDialog(
-                                                        title: const Text(
-                                                          'Renombrar playlist',
-                                                        ),
+                                                        title: TranslatedText('rename_playlist'),
                                                         content: TextField(
                                                           controller:
                                                               controller,
                                                           autofocus: true,
                                                           decoration:
-                                                              const InputDecoration(
-                                                                labelText:
-                                                                    'Nuevo nombre',
+                                                              InputDecoration(
+                                                                labelText: LocaleProvider.tr('new_name'),
                                                               ),
                                                         ),
                                                         actions: [
@@ -1353,8 +1317,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                                 Navigator.of(
                                                                   context,
                                                                 ).pop(),
-                                                            child: const Text(
-                                                              'Cancelar',
+                                                            child: TranslatedText(
+                                                              'cancel',
                                                             ),
                                                           ),
                                                           TextButton(
@@ -1366,8 +1330,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                                     .trim(),
                                                               );
                                                             },
-                                                            child: const Text(
-                                                              'Guardar',
+                                                            child: TranslatedText(
+                                                              'save',
                                                             ),
                                                           ),
                                                         ],
@@ -1390,28 +1354,22 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                   leading: const Icon(
                                                     Icons.delete_outline,
                                                   ),
-                                                  title: const Text(
-                                                    'Eliminar playlist',
-                                                  ),
+                                                  title: TranslatedText('delete_playlist'),
                                                   onTap: () async {
                                                     Navigator.of(context).pop();
                                                     final confirm = await showDialog<bool>(
                                                       context: context,
                                                       builder: (context) => AlertDialog(
-                                                        title: const Text(
-                                                          'Eliminar playlist',
-                                                        ),
-                                                        content: const Text(
-                                                          '¿Seguro que deseas eliminar esta playlist?',
-                                                        ),
+                                                        title: TranslatedText('delete_playlist'),
+                                                        content: TranslatedText('delete_playlist_confirm'),
                                                         actions: [
                                                           TextButton(
                                                             onPressed: () =>
                                                                 Navigator.of(
                                                                   context,
                                                                 ).pop(false),
-                                                            child: const Text(
-                                                              'Cancelar',
+                                                            child: TranslatedText(
+                                                              'cancel',
                                                             ),
                                                           ),
                                                           TextButton(
@@ -1419,8 +1377,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                                 Navigator.of(
                                                                   context,
                                                                 ).pop(true),
-                                                            child: const Text(
-                                                              'Eliminar',
+                                                            child: TranslatedText(
+                                                              'delete',
                                                             ),
                                                           ),
                                                         ],

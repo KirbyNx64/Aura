@@ -22,6 +22,7 @@ import 'package:audiotags/audiotags.dart';
 import 'package:path/path.dart' as p;
 import 'package:music/main.dart';
 import 'package:image/image.dart' as img;
+import 'package:music/l10n/locale_provider.dart';
 
 class DownloadScreen extends StatefulWidget {
   const DownloadScreen({super.key});
@@ -37,8 +38,8 @@ class _DownloadScreenState extends State<DownloadScreen>
   bool _isDownloading = false;
   bool _isProcessing = false;
 
-  bool _usarExplode = false;
-  bool _usarFFmpeg = false;
+  bool _usarExplode = false; // true: Explode, false: Directo
+  bool _usarFFmpeg = false; // true: FFmpeg, false: AudioTags
 
   double _progress = 0.0;
   String? _directoryPath;
@@ -66,6 +67,12 @@ class _DownloadScreenState extends State<DownloadScreen>
     
     // Escuchar cambios en el controlador de URL
     _urlController.addListener(_onUrlChanged);
+    // Escuchar cambios en la ruta de descargas
+    downloadDirectoryNotifier.addListener(_onDownloadDirectoryChanged);
+    downloadTypeNotifier.addListener(_onDownloadTypeChanged);
+    audioProcessorNotifier.addListener(_onAudioProcessorChanged);
+    // Inicializar valores desde notifiers
+    _loadDownloadPrefs();
   }
 
   void _onUrlChanged() {
@@ -89,7 +96,26 @@ class _DownloadScreenState extends State<DownloadScreen>
     _urlController.dispose();
     _focusNode.dispose();
     WidgetsBinding.instance.removeObserver(this);
+    downloadDirectoryNotifier.removeListener(_onDownloadDirectoryChanged);
+    downloadTypeNotifier.removeListener(_onDownloadTypeChanged);
+    audioProcessorNotifier.removeListener(_onAudioProcessorChanged);
     super.dispose();
+  }
+
+  void _onDownloadDirectoryChanged() {
+    setState(() {
+      _directoryPath = downloadDirectoryNotifier.value;
+    });
+  }
+  void _onDownloadTypeChanged() {
+    setState(() {
+      _usarExplode = downloadTypeNotifier.value;
+    });
+  }
+  void _onAudioProcessorChanged() {
+    setState(() {
+      _usarFFmpeg = audioProcessorNotifier.value;
+    });
   }
 
   @override
@@ -118,7 +144,19 @@ class _DownloadScreenState extends State<DownloadScreen>
       setState(() {
         _directoryPath = savedPath;
       });
+      downloadDirectoryNotifier.value = savedPath;
     }
+  }
+
+  Future<void> _loadDownloadPrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    final explode = prefs.getBool('download_type_explode') ?? false;
+    final ffmpeg = prefs.getBool('audio_processor_ffmpeg') ?? false;
+    _usarExplode = explode;
+    _usarFFmpeg = ffmpeg;
+    downloadTypeNotifier.value = explode;
+    audioProcessorNotifier.value = ffmpeg;
+    setState(() {});
   }
 
   // Nuevo método para detectar si es playlist
@@ -172,7 +210,7 @@ class _DownloadScreenState extends State<DownloadScreen>
       });
       _mostrarAlerta(
         titulo: 'Error al obtener playlist',
-        mensaje: 'No se pudo obtener la información de la playlist: ${e.toString()}',
+        mensaje: '${LocaleProvider.tr('playlist_error_desc')}: ${e.toString()}',
       );
     } finally {
       yt.close();
@@ -235,19 +273,23 @@ class _DownloadScreenState extends State<DownloadScreen>
       await Future.delayed(const Duration(seconds: 2));
       foldersShouldReload.value = !foldersShouldReload.value;
 
+      // Guardar valores antes de resetear
+      final downloadedCount = _downloadedVideos;
+      final totalCount = _totalVideos;
+
       if (mounted) {
         _urlController.clear();
         _focusNode.unfocus();
         _mostrarAlerta(
-          titulo: 'Playlist completada',
-          mensaje: 'Se descargaron $_downloadedVideos de $_totalVideos videos de la playlist.',
+          titulo: LocaleProvider.tr('playlist_completed'),
+          mensaje: '${LocaleProvider.tr('playlist_completed_desc')} $downloadedCount ${LocaleProvider.tr('of')} $totalCount ${LocaleProvider.tr('videos_found')}.',
         );
       }
 
     } catch (e) {
       _mostrarAlerta(
-        titulo: 'Error en playlist',
-        mensaje: 'Error al descargar la playlist: ${e.toString()}',
+        titulo: LocaleProvider.tr('playlist_error_download'),
+        mensaje: '${LocaleProvider.tr('playlist_error_download_desc')}: ${e.toString()}',
       );
     } finally {
       setState(() {
@@ -273,7 +315,7 @@ class _DownloadScreenState extends State<DownloadScreen>
       final audioStreamInfo = audioList.isNotEmpty ? audioList.first : null;
 
       if (audioStreamInfo == null) {
-        throw Exception('No se encontró un stream AAC/mp4a válido.');
+        throw Exception(LocaleProvider.tr('no_valid_stream'));
       }
 
       final safeTitle = video.title
@@ -408,7 +450,7 @@ class _DownloadScreenState extends State<DownloadScreen>
       final streamProvider = StreamProvider.fromManifest(manifest);
 
       if (!streamProvider.playable || streamProvider.audioFormats == null) {
-        throw Exception('No se pudo obtener el stream de audio.');
+        throw Exception(LocaleProvider.tr('no_audio_available_desc'));
       }
 
       // Elegir mejor stream de audio
@@ -537,10 +579,8 @@ class _DownloadScreenState extends State<DownloadScreen>
       await _saveDirectory(path);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'En Android 9 o inferior se usará la carpeta Música por defecto.',
-          ),
+        SnackBar(
+          content: Text(LocaleProvider.tr('android_9_or_lower')),
         ),
       );
       return;
@@ -737,14 +777,12 @@ class _DownloadScreenState extends State<DownloadScreen>
         showDialog(
           context: context,
           builder: (context) => AlertDialog(
-            title: const Text('Carpeta no seleccionada'),
-            content: const Text(
-              'Debes seleccionar una carpeta antes de descargar el audio.',
-            ),
+            title: Text(LocaleProvider.tr('folder_not_selected')),
+            content: Text(LocaleProvider.tr('folder_not_selected_desc')),
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Aceptar'),
+                child: Text(LocaleProvider.tr('download_accept')),
               ),
             ],
           ),
@@ -773,7 +811,7 @@ class _DownloadScreenState extends State<DownloadScreen>
       final audioStreamInfo = audioList.isNotEmpty ? audioList.first : null;
 
       if (audioStreamInfo == null) {
-        throw Exception('No se encontró un stream AAC/mp4a válido.');
+        throw Exception(LocaleProvider.tr('no_valid_stream'));
       }
       final safeTitle = video.title
           .replaceAll(RegExp(r'[\\/:*?"<>|]'), '')
@@ -873,11 +911,8 @@ class _DownloadScreenState extends State<DownloadScreen>
         showDialog(
           context: context,
           builder: (context) => AlertDialog(
-            title: const Text('Video no disponible'),
-            content: const Text(
-              'El video no está disponible. Puede haber sido eliminado, '
-              'es privado o está restringido por YouTube.',
-            ),
+            title: Text(LocaleProvider.tr('video_unavailable')),
+            content: Text(LocaleProvider.tr('video_unavailable_desc')),
             actions: [
               TextButton(
                 onPressed: () {
@@ -885,7 +920,7 @@ class _DownloadScreenState extends State<DownloadScreen>
                   _urlController.clear();
                   _focusNode.unfocus();
                 },
-                child: const Text('OK'),
+                child: Text(LocaleProvider.tr('ok')),
               ),
             ],
           ),
@@ -896,15 +931,15 @@ class _DownloadScreenState extends State<DownloadScreen>
         showDialog(
           context: context,
           builder: (context) => AlertDialog(
-            title: const Text('Descarga fallida'),
+            title: Text(LocaleProvider.tr('download_failed_title')),
             content: Text(
-              'Ocurrió un error, intentalo de nuevo.\n\n'
+              '${LocaleProvider.tr('download_failed_desc')}\n\n'
               'Detalles: ${e.toString()}',
             ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(context).pop(),
-                child: const Text('OK'),
+                child: Text(LocaleProvider.tr('ok')),
               ),
             ],
           ),
@@ -1188,9 +1223,8 @@ class _DownloadScreenState extends State<DownloadScreen>
       final sdkInt = androidInfo.version.sdkInt;
       if (sdkInt < 30) {
         _mostrarAlerta(
-          titulo: 'No necesario',
-          mensaje:
-              'No necesitas otorgar este permiso en tu versión de Android.',
+          titulo: LocaleProvider.tr('not_necessary'),
+          mensaje: LocaleProvider.tr('not_necessary_desc'),
         );
         return;
       }
@@ -1207,16 +1241,12 @@ class _DownloadScreenState extends State<DownloadScreen>
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('¿Otorgar permisos de archivos?'),
-        content: const Text(
-          'Esta función NO es necesaria para la mayoría de usuarios.\n\n'
-          'Úsala solo si tienes problemas al procesar el audio o guardar archivos.\n\n'
-          '¿Quieres continuar y otorgar permisos de acceso a todos los archivos?',
-        ),
+        title: Text(LocaleProvider.tr('grant_file_permissions')),
+        content: Text(LocaleProvider.tr('grant_file_permissions_desc')),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancelar'),
+            child: Text(LocaleProvider.tr('cancel')),
           ),
           TextButton(
             onPressed: () async {
@@ -1224,26 +1254,25 @@ class _DownloadScreenState extends State<DownloadScreen>
               // Ahora sí solicita el permiso
               if (await Permission.manageExternalStorage.isGranted) {
                 _mostrarAlerta(
-                  titulo: 'Permiso concedido',
-                  mensaje: 'Ya tienes acceso a todos los archivos.',
+                  titulo: LocaleProvider.tr('permission_granted_already'),
+                  mensaje: LocaleProvider.tr('permission_granted_already_desc'),
                 );
               } else {
                 final status = await Permission.manageExternalStorage.request();
                 if (status.isGranted) {
                   _mostrarAlerta(
-                    titulo: 'Permiso concedido',
-                    mensaje: 'Ahora tienes acceso a todos los archivos.',
+                    titulo: LocaleProvider.tr('permission_granted'),
+                    mensaje: LocaleProvider.tr('permission_granted_desc'),
                   );
                 } else {
                   _mostrarAlerta(
-                    titulo: 'Permiso denegado',
-                    mensaje:
-                        'No se concedió el permiso. Ve a ajustes para otorgarlo manualmente.',
+                    titulo: LocaleProvider.tr('permission_denied'),
+                    mensaje: LocaleProvider.tr('permission_denied_desc'),
                   );
                 }
               }
             },
-            child: const Text('Otorgar permisos'),
+            child: Text(LocaleProvider.tr('grant_permissions')),
           ),
         ],
       ),
@@ -1281,7 +1310,7 @@ class _DownloadScreenState extends State<DownloadScreen>
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text('OK'),
+            child: Text(LocaleProvider.tr('ok')),
           ),
         ],
       ),
@@ -1421,14 +1450,12 @@ class _DownloadScreenState extends State<DownloadScreen>
           showDialog(
             context: context,
             builder: (context) => AlertDialog(
-              title: const Text('Archivo en reproducción'),
-              content: const Text(
-                'No se puede sobrescribir el archivo porque está en reproducción. Por favor, detén la reproducción antes de descargar de nuevo.',
-              ),
+              title: Text(LocaleProvider.tr('file_in_use')),
+              content: Text(LocaleProvider.tr('file_in_use_desc')),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('OK'),
+                  child: Text(LocaleProvider.tr('ok')),
                 ),
               ],
             ),
@@ -1467,12 +1494,12 @@ class _DownloadScreenState extends State<DownloadScreen>
         showDialog(
           context: context,
           builder: (context) => AlertDialog(
-            title: const Text('Error al procesar audio'),
+            title: Text(LocaleProvider.tr('audio_processing_error')),
             content: Text(e.toString()),
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(context).pop(),
-                child: const Text('OK'),
+                child: Text(LocaleProvider.tr('ok')),
               ),
             ],
           ),
@@ -1552,12 +1579,12 @@ class _DownloadScreenState extends State<DownloadScreen>
         showDialog(
           context: context,
           builder: (context) => AlertDialog(
-            title: const Text('Error al procesar audio'),
+            title: Text(LocaleProvider.tr('audio_processing_error')),
             content: Text(e.toString()),
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(context).pop(),
-                child: const Text('OK'),
+                child: Text(LocaleProvider.tr('ok')),
               ),
             ],
           ),
@@ -1608,25 +1635,23 @@ class _DownloadScreenState extends State<DownloadScreen>
           children: [
             Icon(Icons.download_outlined, size: 28),
             const SizedBox(width: 8),
-            const Text('Descargar'),
+            TranslatedText('download'),
           ],
         ),
         actions: [
           IconButton(
             icon: const Icon(Icons.downloading, size: 28),
-            tooltip: 'Recomendar Seal',
+            tooltip: LocaleProvider.tr('recommend_seal'),
             onPressed: () {
               showDialog(
                 context: context,
                 builder: (context) => AlertDialog(
-                  title: const Text('¿Quieres más opciones?'),
-                  content: const Text(
-                    'Te recomendamos la app gratuita Seal para descargar música y videos de muchas fuentes.\n\n¿Quieres el repositorio de GitHub de Seal?',
-                  ),
+                  title: Text(LocaleProvider.tr('want_more_options')),
+                  content: Text(LocaleProvider.tr('seal_recommendation')),
                   actions: [
                     TextButton(
                       onPressed: () => Navigator.of(context).pop(),
-                      child: const Text('Cancelar'),
+                      child: Text(LocaleProvider.tr('cancel')),
                     ),
                     TextButton(
                       onPressed: () async {
@@ -1642,13 +1667,13 @@ class _DownloadScreenState extends State<DownloadScreen>
                         } catch (e) {
                           if (!context.mounted) return;
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('No se pudo abrir el navegador'),
+                            SnackBar(
+                              content: Text(LocaleProvider.tr('browser_open_error')),
                             ),
                           );
                         }
                       },
-                      child: const Text('Abrir'),
+                      child: Text(LocaleProvider.tr('open')),
                     ),
                   ],
                 ),
@@ -1657,37 +1682,30 @@ class _DownloadScreenState extends State<DownloadScreen>
           ),
           IconButton(
             icon: const Icon(Icons.help_outline, size: 28),
-            tooltip: '¿Qué significa cada opción?',
+            tooltip: LocaleProvider.tr('what_means_each_option'),
             onPressed: () {
               showDialog(
                 context: context,
                 builder: (context) => AlertDialog(
-                  title: const Text('¿Qué significa cada opción?'),
+                  title: Text(LocaleProvider.tr('what_means_each_option')),
                   content: SizedBox(
                     width: double.maxFinite,
                     // Limita el alto para que el scroll funcione
                     child: SingleChildScrollView(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
-                        children: const [
+                        children: [
                           Text(
-                            'Método de descarga:',
-                            style: TextStyle(fontWeight: FontWeight.bold),
+                            LocaleProvider.tr('download_method_title'),
+                            style: const TextStyle(fontWeight: FontWeight.bold),
                           ),
+                          Text(LocaleProvider.tr('download_method_desc')),
+                          const SizedBox(height: 16),
                           Text(
-                            '• Explode: Usa la librería youtube_explode_dart para obtener streams y descargar el audio de YouTube.\n'
-                            '• Directo: Descarga el audio directamente desde el streams proporcionado por youtube_explode_dart.\n\n'
-                            'Ambos métodos funcionan para videos individuales y playlists.',
+                            LocaleProvider.tr('audio_processing_title'),
+                            style: const TextStyle(fontWeight: FontWeight.bold),
                           ),
-                          SizedBox(height: 16),
-                          Text(
-                            'Procesar audio:',
-                            style: TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                          Text(
-                            '• FFmpeg: Convierte y agrega metadatos usando FFmpeg. Permite mayor compatibilidad y calidad, pero requiere más recursos.\n'
-                            '• AudioTags: Solo agrega metadatos usando la librería audiotags. Más rápido, pero menos flexible.',
-                          ),
+                          Text(LocaleProvider.tr('audio_processing_desc')),
                         ],
                       ),
                     ),
@@ -1695,7 +1713,7 @@ class _DownloadScreenState extends State<DownloadScreen>
                   actions: [
                     TextButton(
                       onPressed: () => Navigator.of(context).pop(),
-                      child: const Text('Entendido'),
+                      child: Text(LocaleProvider.tr('download_understood_2')),
                     ),
                   ],
                 ),
@@ -1705,24 +1723,22 @@ class _DownloadScreenState extends State<DownloadScreen>
 
           IconButton(
             icon: const Icon(Icons.info_outline, size: 28),
-            tooltip: 'Información',
+            tooltip: LocaleProvider.tr('download_info_title'),
             onPressed: () {
               showDialog(
                 context: context,
                 builder: (context) => AlertDialog(
-                  title: const Text('Información'),
-                  content: const Text(
-                    'Esta función descarga el audio de videos individuales y playlists completas de YouTube o YouTube Music.\n\n'
-                    'Funciona con:\n'
-                    '• Videos individuales\n'
-                    '• Playlists públicas\n\n'
-                    'No funciona con videos privados ni contenido protegido por derechos de autor.\n\n'
-                    'La descarga puede fallar por bloqueos de YouTube.',
+                  title: Text(LocaleProvider.tr('download_info_title')),
+                  content: Text(
+                    '${LocaleProvider.tr('download_info_desc')}\n\n'
+                    '${LocaleProvider.tr('download_works_with')}\n\n'
+                    '${LocaleProvider.tr('download_not_works_with')}\n\n'
+                    '${LocaleProvider.tr('download_may_fail')}',
                   ),
                   actions: [
                     TextButton(
                       onPressed: () => Navigator.of(context).pop(),
-                      child: const Text('Entendido'),
+                      child: Text(LocaleProvider.tr('download_understood_2')),
                     ),
                   ],
                 ),
@@ -1742,9 +1758,9 @@ class _DownloadScreenState extends State<DownloadScreen>
                     child: TextField(
                       controller: _urlController,
                       focusNode: _focusNode,
-                      decoration: const InputDecoration(
-                        labelText: 'Enlace de YouTube',
-                        border: OutlineInputBorder(),
+                      decoration: InputDecoration(
+                        labelText: LocaleProvider.tr('youtube_link'),
+                        border: const OutlineInputBorder(),
                       ),
                     ),
                   ),
@@ -1770,7 +1786,7 @@ class _DownloadScreenState extends State<DownloadScreen>
                                 }
                               },
                         child: Tooltip(
-                          message: 'Pegar enlace',
+                          message: LocaleProvider.tr('paste_link'),
                           child: Icon(
                             Icons.paste,
                             color: Theme.of(
@@ -1805,8 +1821,8 @@ class _DownloadScreenState extends State<DownloadScreen>
                                   if (Platform.isAndroid && _directoryPath == null ||
                                       _directoryPath!.isEmpty) {
                                     _mostrarAlerta(
-                                      titulo: 'Carpeta no seleccionada',
-                                      mensaje: 'Debes seleccionar una carpeta antes de descargar el audio.',
+                                      titulo: LocaleProvider.tr('folder_not_selected'),
+                                      mensaje: LocaleProvider.tr('folder_not_selected_desc'),
                                     );
                                     return;
                                   }
@@ -1824,22 +1840,26 @@ class _DownloadScreenState extends State<DownloadScreen>
                                   }
                                 },
                                                   child: Center(
-                          child: Text(
-                            (_isDownloading || _isPlaylistDownloading)
-                                ? (_isProcessing
-                                      ? 'Procesando audio...'
-                                      : (_isPlaylist 
-                                          ? 'Descargando playlist...'
-                                          : 'Descargando... ${((_progress / 0.6).clamp(0, 1) * 100).toStringAsFixed(0)}%'))
-                                : 'Descargar Audio',
-                              style: TextStyle(
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.onPrimaryContainer,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
-                              ),
+                          child: DefaultTextStyle(
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.onPrimaryContainer,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
                             ),
+                            child: (_isDownloading || _isPlaylistDownloading)
+                                ? (_isProcessing
+                                      ? TranslatedText('processing_audio')
+                                      : (_isPlaylist 
+                                          ? TranslatedText('downloading_playlist')
+                                          : Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                TranslatedText('downloading'),
+                                                Text(' ${((_progress / 0.6).clamp(0, 1) * 100).toStringAsFixed(0)}%'),
+                                              ],
+                                            )))
+                                : TranslatedText('download_audio'),
+                          ),
                           ),
                         ),
                       ),
@@ -1860,8 +1880,8 @@ class _DownloadScreenState extends State<DownloadScreen>
                         onTap: (_isDownloading || _isPlaylistDownloading) ? null : _pickDirectory,
                         child: Tooltip(
                           message: _directoryPath == null
-                              ? 'Elegir carpeta'
-                              : 'Carpeta lista',
+                              ? LocaleProvider.tr('choose_folder')
+                              : LocaleProvider.tr('folder_ready'),
                           child: Icon(
                             Icons.folder_open,
                             color: Theme.of(
@@ -1885,7 +1905,7 @@ class _DownloadScreenState extends State<DownloadScreen>
                         borderRadius: BorderRadius.circular(8),
                         onTap: (_isDownloading || _isPlaylistDownloading) ? null : _verificarPermisoArchivos,
                         child: Tooltip(
-                          message: 'Permisos de archivos',
+                          message: LocaleProvider.tr('file_permissions'),
                           child: Icon(
                             Icons.security,
                             color: Theme.of(
@@ -1955,9 +1975,9 @@ class _DownloadScreenState extends State<DownloadScreen>
                                   overflow: TextOverflow.ellipsis,
                                 ),
                               ] else ...[
-                                const Text(
-                                  'Obteniendo información...',
-                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                                TranslatedText(
+                                  'getting_info',
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                                 ),
                               ],
                             ],
@@ -1999,24 +2019,43 @@ class _DownloadScreenState extends State<DownloadScreen>
                         ),
                         const SizedBox(width: 8),
                         Expanded(
-                          child: Text(
-                            _playlistTitle ?? 'Playlist detectada',
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
+                          child: _playlistTitle != null
+                              ? Text(
+                                  _playlistTitle!,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                )
+                              : TranslatedText(
+                                  'playlist_detected',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                  ),
+                                ),
                         ),
                       ],
                     ),
                     const SizedBox(height: 8),
-                    Text(
-                      '$_totalVideos videos encontrados',
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        fontSize: 14,
-                      ),
+                    Row(
+                      children: [
+                        Text(
+                          '$_totalVideos ',
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            fontSize: 14,
+                          ),
+                        ),
+                        TranslatedText(
+                          'videos_found',
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 12),
                     SizedBox(
@@ -2024,7 +2063,7 @@ class _DownloadScreenState extends State<DownloadScreen>
                       child: ElevatedButton.icon(
                         onPressed: _downloadPlaylist,
                         icon: const Icon(Icons.download),
-                        label: const Text('Descargar Playlist Completa'),
+                        label: TranslatedText('download_complete_playlist'),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Theme.of(context).colorScheme.primary,
                           foregroundColor: Theme.of(context).colorScheme.onPrimary,
@@ -2063,29 +2102,70 @@ class _DownloadScreenState extends State<DownloadScreen>
                         ),
                         const SizedBox(width: 8),
                         Expanded(
-                          child: Text(
-                            _playlistTitle ?? 'Playlist',
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                            overflow: TextOverflow.ellipsis,
-                          ),
+                          child: _playlistTitle != null
+                              ? Text(
+                                  _playlistTitle!,
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                                  overflow: TextOverflow.ellipsis,
+                                )
+                              : TranslatedText(
+                                  'playlist_detected',
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                                ),
                         ),
                       ],
                     ),
                     const SizedBox(height: 8),
-                    Text(
-                      'Video $_currentVideoIndex de $_totalVideos',
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        fontSize: 14,
-                      ),
+                    Row(
+                      children: [
+                        TranslatedText(
+                          'video_of',
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            fontSize: 14,
+                          ),
+                        ),
+                        Text(
+                          ' $_currentVideoIndex ',
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            fontSize: 14,
+                          ),
+                        ),
+                        TranslatedText(
+                          'of',
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            fontSize: 14,
+                          ),
+                        ),
+                        Text(
+                          ' $_totalVideos',
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 4),
-                    Text(
-                      'Descargados: $_downloadedVideos',
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        fontSize: 14,
-                      ),
+                    Row(
+                      children: [
+                        TranslatedText(
+                          'downloaded',
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            fontSize: 14,
+                          ),
+                        ),
+                        Text(
+                          ': $_downloadedVideos',
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 12),
                     if (_currentTitle != null) ...[
@@ -2114,17 +2194,27 @@ class _DownloadScreenState extends State<DownloadScreen>
                   ),
                   const SizedBox(width: 8),
                   Expanded(
-                    child: Text(
-                      _directoryPath != null
-                          ? _directoryPath!.replaceFirst('/storage/emulated/0', '')
-                          : (Platform.isAndroid
-                              ? 'No seleccionada'
-                              : 'Documentos de la app'),
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
+                    child: _directoryPath != null
+                        ? Text(
+                            _directoryPath!.replaceFirst('/storage/emulated/0', ''),
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          )
+                        : (Platform.isAndroid
+                            ? TranslatedText(
+                                'not_selected_folder',
+                                style: TextStyle(
+                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                ),
+                              )
+                            : TranslatedText(
+                                'app_documents',
+                                style: TextStyle(
+                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                ),
+                              )),
                   ),
                 ],
               ),
@@ -2139,24 +2229,30 @@ class _DownloadScreenState extends State<DownloadScreen>
                     color: Theme.of(context).colorScheme.primary,
                   ),
                   const SizedBox(width: 8),
-                  const Text('Descarga:'),
+                  TranslatedText('download_method'),
                   const SizedBox(width: 8),
                   DropdownButton<bool>(
                     value: _usarExplode,
-                    items: const [
+                    items: [
                       DropdownMenuItem(
                         value: true,
-                        child: Text('Explode'),
+                        child: TranslatedText('explode'),
                       ),
                       DropdownMenuItem(
                         value: false,
-                        child: Text('Directo'),
+                        child: TranslatedText('direct'),
                       ),
                     ],
                     onChanged: (_isDownloading || _isPlaylistDownloading) 
                         ? null 
-                        : (v) {
-                            if (v != null) setState(() => _usarExplode = v);
+                        : (v) async {
+                            if (v != null) {
+                              setState(() => _usarExplode = v);
+                              // Guardar en preferencias y actualizar notifier
+                              final prefs = await SharedPreferences.getInstance();
+                              await prefs.setBool('download_type_explode', v);
+                              downloadTypeNotifier.value = v;
+                            }
                           },
                   ),
                 ],
@@ -2170,24 +2266,30 @@ class _DownloadScreenState extends State<DownloadScreen>
                     color: Theme.of(context).colorScheme.primary,
                   ),
                   const SizedBox(width: 8),
-                  const Text('Procesar audio:'),
+                  TranslatedText('audio_processing'),
                   const SizedBox(width: 8),
                   DropdownButton<bool>(
                     value: _usarFFmpeg,
-                    items: const [
+                    items: [
                       DropdownMenuItem(
                         value: true,
-                        child: Text('FFmpeg'),
+                        child: TranslatedText('ffmpeg'),
                       ),
                       DropdownMenuItem(
                         value: false,
-                        child: Text('AudioTags'),
+                        child: TranslatedText('audiotags'),
                       ),
                     ],
                     onChanged: (_isDownloading || _isPlaylistDownloading) 
                         ? null 
-                        : (v) {
-                            if (v != null) setState(() => _usarFFmpeg = v);
+                        : (v) async {
+                            if (v != null) {
+                              setState(() => _usarFFmpeg = v);
+                              // Guardar en preferencias y actualizar notifier
+                              final prefs = await SharedPreferences.getInstance();
+                              await prefs.setBool('audio_processor_ffmpeg', v);
+                              audioProcessorNotifier.value = v;
+                            }
                           },
                   ),
                 ],
