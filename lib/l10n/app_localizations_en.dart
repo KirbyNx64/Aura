@@ -123,6 +123,7 @@ const Map<String, String> appLocalizationsEn = {
 
   // Folders screen
   'folders_title': 'Folders',
+  'reload': 'Reload',
   'no_folders': 'No folders',
   'no_songs_in_folder': 'No songs in this folder',
   'play_all': 'Play all',
@@ -144,7 +145,7 @@ const Map<String, String> appLocalizationsEn = {
   'download_audio': 'Download Audio',
   'processing_audio': 'Processing audio...',
   'downloading': 'Downloading...',
-  'downloading_audio': 'Downloading audio',
+  'downloading_audio': 'Downloading audio...',
   'downloading_playlist': 'Downloading playlist...',
   'choose_folder': 'Choose folder',
   'folder_ready': 'Folder ready',
@@ -217,6 +218,7 @@ const Map<String, String> appLocalizationsEn = {
   'want_more_options': 'Want more options?',
   'seal_recommendation': 'We recommend the free Seal app for downloading music and videos from many sources.\n\nWant Seal\'s GitHub repository?',
   'browser_open_error': 'Could not open browser',
+  'no_internet_connection': 'No internet connection. Please check your connection and try again.',
   
   // Home screen
   'recent': 'Recent',
@@ -290,4 +292,5 @@ const Map<String, String> appLocalizationsEn = {
   'no_suggestions': 'No suggestions available',
   'clear_history': 'Clear history',
   'no_recent_searches': 'No recent searches',
+  'no_folders_with_songs': 'No folders with songs found.',
 }; 

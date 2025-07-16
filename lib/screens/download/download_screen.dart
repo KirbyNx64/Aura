@@ -23,6 +23,7 @@ import 'package:path/path.dart' as p;
 import 'package:music/main.dart';
 import 'package:image/image.dart' as img;
 import 'package:music/l10n/locale_provider.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 
 class DownloadScreen extends StatefulWidget {
   const DownloadScreen({super.key});
@@ -578,9 +579,17 @@ class _DownloadScreenState extends State<DownloadScreen>
       setState(() => _directoryPath = path);
       await _saveDirectory(path);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: TranslatedText('info'),
           content: Text(LocaleProvider.tr('android_9_or_lower')),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: TranslatedText('ok'),
+            ),
+          ],
         ),
       );
       return;
@@ -1815,30 +1824,50 @@ class _DownloadScreenState extends State<DownloadScreen>
                                                   onTap: (_isDownloading || _isPlaylistDownloading)
                             ? null
                             : () async {
-                                  final url = _urlController.text.trim();
-                                  if (url.isEmpty) return;
-
-                                  if (Platform.isAndroid && _directoryPath == null ||
-                                      _directoryPath!.isEmpty) {
-                                    _mostrarAlerta(
-                                      titulo: LocaleProvider.tr('folder_not_selected'),
-                                      mensaje: LocaleProvider.tr('folder_not_selected_desc'),
+                                // Verificar conexión a internet antes de descargar
+                                final List<ConnectivityResult> connectivityResult = await Connectivity().checkConnectivity();
+                                if (connectivityResult.contains(ConnectivityResult.none)) {
+                                  if (context.mounted) {
+                                    showDialog(
+                                      context: context,
+                                      builder: (context) => AlertDialog(
+                                        title: Text(LocaleProvider.tr('error')),
+                                        content: Text(LocaleProvider.tr('no_internet_connection')),
+                                        actions: [
+                                          TextButton(
+                                            onPressed: () => Navigator.of(context).pop(),
+                                            child: Text(LocaleProvider.tr('ok')),
+                                          ),
+                                        ],
+                                      ),
                                     );
-                                    return;
                                   }
+                                  return;
+                                }
+                                final url = _urlController.text.trim();
+                                if (url.isEmpty) return;
 
-                                  // Detectar si es playlist
-                                  if (_isPlaylistUrl(url)) {
-                                    await _fetchPlaylistInfo(url);
+                                if (Platform.isAndroid && _directoryPath == null ||
+                                    _directoryPath!.isEmpty) {
+                                  _mostrarAlerta(
+                                    titulo: LocaleProvider.tr('folder_not_selected'),
+                                    mensaje: LocaleProvider.tr('folder_not_selected_desc'),
+                                  );
+                                  return;
+                                }
+
+                                // Detectar si es playlist
+                                if (_isPlaylistUrl(url)) {
+                                  await _fetchPlaylistInfo(url);
+                                } else {
+                                  // Descarga de video individual
+                                  if (_usarExplode) {
+                                    _downloadAudioOnlyExplode();
                                   } else {
-                                    // Descarga de video individual
-                                    if (_usarExplode) {
-                                      _downloadAudioOnlyExplode();
-                                    } else {
-                                      _downloadAudioOnly();
-                                    }
+                                    _downloadAudioOnly();
                                   }
-                                },
+                                }
+                              },
                                                   child: Center(
                           child: DefaultTextStyle(
                             style: TextStyle(

@@ -15,9 +15,22 @@ import 'package:music/l10n/locale_provider.dart';
 import 'package:music/utils/notifiers.dart';
 
 late final AudioHandler audioHandler;
+bool _audioHandlerInitialized = false;
+
+class LifecycleHandler extends WidgetsBindingObserver {
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) async {
+    if (state == AppLifecycleState.detached) {
+      try {
+        await audioHandler.customAction("saveSession");
+      } catch (_) {}
+    }
+  }
+}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  WidgetsBinding.instance.addObserver(LifecycleHandler());
   await LocaleProvider.loadLocale();
   final permisosOk = await pedirPermisosMedia();
   await SystemChrome.setPreferredOrientations([
@@ -38,8 +51,31 @@ void main() async {
     );
     return;
   }
-  audioHandler = await initAudioService();
-  runApp(MyRootApp());
+
+  Future<void> startApp() async {
+    try {
+      if (!_audioHandlerInitialized) {
+        audioHandler = await initAudioService().timeout(
+          const Duration(seconds: 5),
+          onTimeout: () => throw Exception('Timeout al inicializar el audio'),
+        );
+        _audioHandlerInitialized = true;
+      }
+      runApp(MyRootApp());
+    } catch (e) {
+      runApp(MaterialApp(
+        debugShowCheckedModeBanner: false,
+        home: ErrorInitScreen(onRetry: startApp),
+        theme: ThemeData(
+          useMaterial3: true,
+          colorSchemeSeed: Colors.deepPurple,
+          brightness: Brightness.dark,
+        ),
+      ));
+    }
+  }
+
+  await startApp();
 }
 
 class PermisosScreen extends StatefulWidget {
@@ -71,7 +107,13 @@ class _PermisosScreenState extends State<PermisosScreen>
       final ok = await pedirPermisosMedia();
       if (ok) {
         if (!mounted) return;
-        audioHandler = await initAudioService();
+        
+        // Solo inicializar audioHandler si no se ha inicializado antes
+        if (!_audioHandlerInitialized) {
+          audioHandler = await initAudioService();
+          _audioHandlerInitialized = true;
+        }
+        
         if (!mounted) return;
         // Usa pushAndRemoveUntil para limpiar el stack y evitar problemas de contexto
         Navigator.of(context).pushAndRemoveUntil(
@@ -308,6 +350,49 @@ class MyRootApp extends StatelessWidget {
         // print('DEBUG: MyRootApp rebuilding with language: $lang');
         return MainApp(currentLanguage: lang);
       },
+    );
+  }
+}
+
+class ErrorInitScreen extends StatelessWidget {
+  final VoidCallback onRetry;
+  const ErrorInitScreen({super.key, required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.error_outline, size: 80, color: Colors.redAccent),
+              const SizedBox(height: 34),
+              const Text(
+                'No se pudo inicializar el audio.\nCierra la app completamente y vuelve a intentarlo.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 18),
+              ),
+              const SizedBox(height: 42),
+              ElevatedButton.icon(
+                icon: const Icon(Icons.refresh),
+                label: const Text('Intentar de nuevo'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.deepPurple,
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(180, 48),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  elevation: 0,
+                ),
+                onPressed: onRetry,
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

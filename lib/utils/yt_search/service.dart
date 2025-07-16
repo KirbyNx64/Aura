@@ -18,7 +18,7 @@ final Map<String, String> headers = {
   'cookie': 'CONSENT=YES+1',
 };
 
-final Map<String, dynamic> context = {
+final Map<String, dynamic> ytServiceContext = {
   'context': {
     'client': {"clientName": "WEB_REMIX", "clientVersion": "1.20230213.01.00"},
     'user': {},
@@ -204,7 +204,7 @@ void parseSongs(List items, List<YtMusicResult> results) {
 // Función para buscar solo canciones con paginación
 Future<List<YtMusicResult>> searchSongsOnly(String query, {String? continuationToken}) async {
   final data = {
-    ...context,
+    ...ytServiceContext,
     'query': query,
     'params': getSearchParams('songs', null, false),
   };
@@ -276,7 +276,7 @@ Future<List<YtMusicResult>> searchSongsOnly(String query, {String? continuationT
 // Función para buscar con más resultados por página
 Future<List<YtMusicResult>> searchSongsWithMoreResults(String query) async {
   final data = {
-    ...context,
+    ...ytServiceContext,
     'query': query,
     'params': getSearchParams('songs', null, false),
   };
@@ -358,7 +358,7 @@ Future<List<YtMusicResult>> searchSongsWithPagination(String query, {int maxPage
     // Obtener el token de continuación para la siguiente página
     if (currentPage == 0) {
       final response = (await sendRequest("search", {
-        ...context,
+        ...ytServiceContext,
         'query': query,
         'params': getSearchParams('songs', null, false),
       })).data;
@@ -367,7 +367,7 @@ Future<List<YtMusicResult>> searchSongsWithPagination(String query, {int maxPage
     } else {
       // Para páginas subsiguientes, necesitamos hacer otra petición para obtener el siguiente token
       final response = (await sendRequest("search", {
-        ...context,
+        ...ytServiceContext,
         'continuation': continuationToken,
       })).data;
       
@@ -408,7 +408,7 @@ Future<List<YtMusicResult>> searchSongsWithPagination(String query, {int maxPage
 // Función para obtener sugerencias de búsqueda de YouTube Music
 Future<List<String>> getSearchSuggestion(String queryStr) async {
   try {
-    final data = Map<String, dynamic>.from(context);
+    final data = Map<String, dynamic>.from(ytServiceContext);
     data['input'] = queryStr;
     
     final response = await sendRequest("music/get_search_suggestions", data);

@@ -189,6 +189,20 @@ class _FavoritesScreenState extends State<FavoritesScreen>
           ],
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.shuffle, size: 28),
+            tooltip: 'Aleatorio',
+            onPressed: () {
+              final List<SongModel> songsToShow =
+                  _searchController.text.isNotEmpty
+                      ? _filteredFavorites
+                      : _favorites;
+              if (songsToShow.isNotEmpty) {
+                final random = (songsToShow.toList()..shuffle()).first;
+                _playSong(random);
+              }
+            },
+          ),
           PopupMenuButton<OrdenFavoritos>(
             icon: const Icon(Icons.sort, size: 28),
             onSelected: (orden) {
@@ -253,7 +267,20 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                       ? _filteredFavorites
                       : _favorites;
                   if (songsToShow.isEmpty) {
-                    return Center(child: TranslatedText('no_songs'));
+                    return Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.favorite_border,
+                            size: 48,
+                            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                          ),
+                          const SizedBox(height: 16),
+                          TranslatedText('no_songs', style: TextStyle(fontSize: 14, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6))),
+                        ],
+                      ),
+                    );
                   }
                   return StreamBuilder<MediaItem?>(
                     stream: audioHandler.mediaItem,

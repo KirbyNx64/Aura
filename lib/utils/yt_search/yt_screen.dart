@@ -7,6 +7,11 @@ import 'package:music/l10n/locale_provider.dart';
 import 'package:music/utils/simple_yt_download.dart';
 import 'package:music/utils/yt_search/search_history.dart';
 import 'package:music/utils/yt_search/suggestions_widget.dart';
+import 'package:file_selector/file_selector.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:device_info_plus/device_info_plus.dart';
+import 'package:music/utils/notifiers.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 
 class YtSearchTestScreen extends StatefulWidget {
   final String? initialQuery;
@@ -38,6 +43,26 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
 
   Future<void> _search() async {
     if (_controller.text.trim().isEmpty) {
+      return;
+    }
+    // Verificar conexión a internet antes de buscar
+    final List<ConnectivityResult> connectivityResult = await Connectivity().checkConnectivity();
+    if (connectivityResult.contains(ConnectivityResult.none)) {
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: TranslatedText('error'),
+            content: TranslatedText('no_internet_connection'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: TranslatedText('ok'),
+              ),
+            ],
+          ),
+        );
+      }
       return;
     }
     _focusNode.unfocus(); // Quita el focus del TextField
@@ -250,6 +275,40 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
     queueLengthNotifier.value = downloadQueue.queueLength;
   }
 
+  Future<void> _pickDirectory() async {
+    final androidInfo = await DeviceInfoPlugin().androidInfo;
+    final sdkInt = androidInfo.version.sdkInt;
+
+    // Android 9 or lower: use default Music folder
+    if (sdkInt <= 28) {
+      final path = '/storage/emulated/0/Music';
+      downloadDirectoryNotifier.value = path;
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('download_directory', path);
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: TranslatedText('info'),
+          content: Text(LocaleProvider.tr('android_9_or_lower')),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: TranslatedText('ok'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    final String? path = await getDirectoryPath();
+    if (path != null && path.isNotEmpty) {
+      downloadDirectoryNotifier.value = path;
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('download_directory', path);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -263,6 +322,18 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
           ],
         ),
         actions: [
+          ValueListenableBuilder<String?>(
+            valueListenable: downloadDirectoryNotifier,
+            builder: (context, dir, child) {
+              return IconButton(
+                icon: const Icon(Icons.folder_open, size: 28),
+                tooltip: dir == null || dir.isEmpty
+                    ? LocaleProvider.tr('choose_folder')
+                    : LocaleProvider.tr('folder_ready'),
+                onPressed: _pickDirectory,
+              );
+            },
+          ),
           ValueListenableBuilder<String>(
             valueListenable: languageNotifier,
             builder: (context, lang, child) {
@@ -270,22 +341,22 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                 icon: const Icon(Icons.info_outline, size: 28),
                 tooltip: LocaleProvider.tr('info'),
                 onPressed: () {
-              showDialog(
-                context: context,
-                builder: (context) => AlertDialog(
-                  title: TranslatedText('info'),
-                  content: TranslatedText('search_music_in_ytm'),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      child: TranslatedText('ok'),
+                  showDialog(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      title: TranslatedText('info'),
+                      content: TranslatedText('search_music_in_ytm'),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          child: TranslatedText('ok'),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
+                  );
+                },
               );
-              },
-            );
-          },
+            },
           ),
         ],
       ),

@@ -12,8 +12,7 @@ import 'package:on_audio_query/on_audio_query.dart';
 import 'package:music/utils/notifiers.dart';
 import 'package:music/utils/db/playlists_db.dart';
 import 'package:music/utils/audio/synced_lyrics_service.dart';
-import 'package:palette_generator/palette_generator.dart';
-import 'dart:typed_data';
+
 import 'dart:async';
 import 'package:scroll_to_index/scroll_to_index.dart';
 import 'package:music/l10n/locale_provider.dart';
@@ -63,83 +62,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
   int _currentLyricIndex = 0;
   final ScrollController _lyricsScrollController = ScrollController();
   String? _lastMediaItemId;
-  Color? _dominantColor;
-  bool _loadingDominantColor = false;
   Timer? _seekDebounceTimer;
-
-  Future<void> _updateDominantColor(MediaItem mediaItem) async {
-    try {
-      final songId = mediaItem.extras?['songId'] as int?;
-      Uint8List? artworkBytes;
-
-      if (songId != null) {
-        artworkBytes = await _audioQuery.queryArtwork(
-          songId,
-          ArtworkType.AUDIO,
-          format: ArtworkFormat.PNG,
-          size: 512, // Usa alta calidad para el análisis de color
-        );
-      }
-
-      if (!mounted) return;
-
-      ImageProvider imageProvider;
-      if (artworkBytes != null && artworkBytes.isNotEmpty) {
-        imageProvider = MemoryImage(artworkBytes);
-      } else {
-        imageProvider = const AssetImage('assets/icon.png');
-      }
-
-      final palette = await PaletteGenerator.fromImageProvider(
-        imageProvider,
-        size: const Size(200, 200),
-        maximumColorCount: 8,
-      );
-
-      if (!mounted) return;
-
-      final predefinedColors = <Color>[
-        Colors.blue.shade200,
-        Colors.red.shade200,
-        Colors.green.shade200,
-        Colors.orange.shade200,
-        Colors.purple.shade200,
-        Colors.teal.shade200,
-        Colors.pink.shade200,
-        Colors.amber.shade200,
-        Colors.cyan.shade200,
-        Colors.indigo.shade200,
-      ];
-
-      Color findNearestColor(Color target, List<Color> candidates) {
-        double distance(Color a, Color b) {
-          final dr =
-              ((a.r * 255).round() & 0xff) - ((b.r * 255).round() & 0xff);
-          final dg =
-              ((a.g * 255).round() & 0xff) - ((b.g * 255).round() & 0xff);
-          final db =
-              ((a.b * 255).round() & 0xff) - ((b.b * 255).round() & 0xff);
-          return (dr * dr + dg * dg + db * db).toDouble();
-        }
-
-        candidates.sort(
-          (a, b) => distance(target, a).compareTo(distance(target, b)),
-        );
-        return candidates.first;
-      }
-
-      final detected = palette.dominantColor?.color ?? Colors.white;
-      final nearest = findNearestColor(detected, predefinedColors);
-
-      if (!mounted) return;
-
-      setState(() {
-        _dominantColor = nearest;
-      });
-    } catch (e) {
-      if (!mounted) return;
-    }
-  }
 
   String _formatDuration(Duration duration) {
     final hours = duration.inHours;
@@ -342,12 +265,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                 Navigator.of(context).pop();
                 if (!_showLyrics) {
                   setState(() {
-                    _loadingDominantColor = true;
                     _showLyrics = true;
-                  });
-                  await _updateDominantColor(mediaItem);
-                  setState(() {
-                    _loadingDominantColor = false;
                   });
                   await _loadLyrics(mediaItem);
                 } else {
@@ -410,10 +328,10 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('${LocaleProvider.tr('title')}: ${mediaItem.title}'),
-                        Text('${LocaleProvider.tr('artist')}: ${mediaItem.artist ?? LocaleProvider.tr('unknown_artist')}'),
-                        Text('${LocaleProvider.tr('album')}: ${mediaItem.album ?? LocaleProvider.tr('unknown_artist')}'),
-                        Text('${LocaleProvider.tr('location')}: ${mediaItem.extras?['data'] ?? ""}'),
+                        Text('${LocaleProvider.tr('title')}: ${mediaItem.title}\n'),
+                        Text('${LocaleProvider.tr('artist')}: ${mediaItem.artist ?? LocaleProvider.tr('unknown_artist')}\n'),
+                        Text('${LocaleProvider.tr('album')}: ${mediaItem.album ?? LocaleProvider.tr('unknown_artist')}\n'),
+                        Text('${LocaleProvider.tr('location')}: ${mediaItem.extras?['data'] ?? ""}\n'),
                         Text(
                           '${LocaleProvider.tr('duration')}: ${mediaItem.duration != null ? Duration(milliseconds: mediaItem.duration!.inMilliseconds).toString().split('.').first : "?"}',
                         ),
@@ -757,15 +675,11 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                 ),
                                 alignment: Alignment.center,
                                 padding: const EdgeInsets.all(18),
-                                child: _loadingDominantColor
+                                child: _loadingLyrics
                                     ? const Center(
                                         child: CircularProgressIndicator(
                                           color: Colors.white,
                                         ),
-                                      )
-                                    : _loadingLyrics
-                                    ? const CircularProgressIndicator(
-                                        color: Colors.white,
                                       )
                                     : _lyricLines.isEmpty
                                     ? Text(
@@ -814,7 +728,6 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                           return VerticalMarqueeLyrics(
                                             lyricLines: _lyricLines,
                                             currentLyricIndex: _currentLyricIndex,
-                                            dominantColor: _dominantColor,
                                             context: context,
                                             artworkSize: artworkSize,
                                           );
@@ -832,7 +745,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                             : height * 0.03,
                       ),
                       SizedBox(
-                        width: isSmallScreen ? 300 : artworkSize,
+                        width: is16by9 ? 310 : isSmallScreen ? 300 : artworkSize,
                         child: Row(
                           children: [
                             Expanded(
@@ -844,6 +757,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                     ?.copyWith(
                                       color: Theme.of(context).colorScheme.onSurface,
                                       fontSize: buttonFontSize + 0.75,
+                                      fontWeight: FontWeight.bold,
                                     ),
                               ),
                             ),
@@ -908,7 +822,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                       ),
                       SizedBox(height: height * 0.01),
                       SizedBox(
-                        width: isSmallScreen ? 300 : artworkSize,
+                        width: is16by9 ? 310 : isSmallScreen ? 300 : artworkSize,
                         child: Text(
                           (mediaItem.artist == null ||
                                   mediaItem.artist!.trim().isEmpty)
@@ -1274,12 +1188,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                         onTap: () async {
                                           if (!_showLyrics) {
                                             setState(() {
-                                              _loadingDominantColor = true;
                                               _showLyrics = true;
-                                            });
-                                            await _updateDominantColor(mediaItem);
-                                            setState(() {
-                                              _loadingDominantColor = false;
                                             });
                                             await _loadLyrics(mediaItem);
                                           } else {
@@ -1578,7 +1487,6 @@ class SleepTimerOptionsSheet extends StatelessWidget {
 class VerticalMarqueeLyrics extends StatefulWidget {
   final List<LyricLine> lyricLines;
   final int currentLyricIndex;
-  final Color? dominantColor;
   final BuildContext context;
   final double artworkSize;
 
@@ -1586,7 +1494,6 @@ class VerticalMarqueeLyrics extends StatefulWidget {
     super.key,
     required this.lyricLines,
     required this.currentLyricIndex,
-    required this.dominantColor,
     required this.context,
     required this.artworkSize,
   });
@@ -1666,7 +1573,7 @@ class _VerticalMarqueeLyricsState extends State<VerticalMarqueeLyrics>
               final isCurrent = index == idx;
               final textStyle = TextStyle(
                 color: isCurrent
-                    ? (widget.dominantColor ?? Theme.of(context).colorScheme.primary)
+                    ? Theme.of(context).colorScheme.primary
                     : Colors.white70,
                 fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
                 fontSize: isCurrent ? 18 : 15,

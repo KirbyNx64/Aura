@@ -123,6 +123,7 @@ const Map<String, String> appLocalizationsEs = {
 
   // Folders screen
   'folders_title': 'Carpetas',
+  'reload': 'Recargar',
   'no_folders': 'No hay carpetas',
   'no_songs_in_folder': 'No hay canciones en esta carpeta',
   'play_all': 'Reproducir todo',
@@ -144,7 +145,7 @@ const Map<String, String> appLocalizationsEs = {
   'download_audio': 'Descargar Audio',
   'processing_audio': 'Procesando audio...',
   'downloading': 'Descargando...',
-  'downloading_audio': 'Descargando audio',
+  'downloading_audio': 'Descargando audio...',
   'downloading_playlist': 'Descargando playlist...',
   'choose_folder': 'Elegir carpeta',
   'folder_ready': 'Carpeta lista',
@@ -290,4 +291,6 @@ const Map<String, String> appLocalizationsEs = {
   'no_suggestions': 'No hay sugerencias disponibles',
   'clear_history': 'Limpiar historial',
   'no_recent_searches': 'No hay búsquedas recientes',
+  'no_folders_with_songs': 'No se encontraron carpetas con canciones.',
+  'no_internet_connection': 'Sin conexión a internet. Por favor, verifica tu conexión e inténtalo de nuevo.',
 }; 

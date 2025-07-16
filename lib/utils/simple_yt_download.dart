@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:music/utils/download_manager.dart';
 import 'package:music/utils/yt_search/service.dart';
 import 'package:music/l10n/locale_provider.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 
 // Clase para manejar la cola de descargas
 class DownloadQueue {
@@ -254,6 +255,26 @@ class SimpleDownloadButton extends StatelessWidget {
                   Navigator.pop(context);
                   // Usar un pequeño delay para asegurar que el modal se cierre antes de iniciar la descarga
                   await Future.delayed(const Duration(milliseconds: 100));
+                  // Verificar conexión a internet antes de descargar
+                  final List<ConnectivityResult> connectivityResult = await Connectivity().checkConnectivity();
+                  if (connectivityResult.contains(ConnectivityResult.none)) {
+                    if (context.mounted) {
+                      showDialog(
+                        context: context,
+                        builder: (context) => AlertDialog(
+                          title: TranslatedText('error'),
+                          content: TranslatedText('no_internet_connection'),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.of(context).pop(),
+                              child: TranslatedText('ok'),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+                    return;
+                  }
                   if (context.mounted) {
                     SimpleYtDownload.downloadVideoWithArtist(
                       context,

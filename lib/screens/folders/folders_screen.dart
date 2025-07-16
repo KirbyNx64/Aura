@@ -37,6 +37,8 @@ class _FoldersScreenState extends State<FoldersScreen>
   List<SongModel> _originalSongs = []; // Lista original para restaurar orden
 
   double _lastBottomInset = 0.0;
+  
+  bool _isLoading = true; // <-- Nuevo estado de carga
 
   @override
   void initState() {
@@ -57,10 +59,18 @@ class _FoldersScreenState extends State<FoldersScreen>
   }
 
   Future<void> cargarCanciones() async {
+    setState(() {
+      _isLoading = true;
+    });
     final permiso = await _audioQuery.permissionsStatus();
     if (!permiso) {
       final solicitado = await _audioQuery.permissionsRequest();
-      if (!solicitado) return;
+      if (!solicitado) {
+        setState(() {
+          _isLoading = false;
+        });
+        return;
+      }
     }
 
     final lista = await _audioQuery.querySongs();
@@ -89,6 +99,7 @@ class _FoldersScreenState extends State<FoldersScreen>
       songsByFolder = agrupado;
       folderDisplayNames = displayNames;
       carpetaSeleccionada = null;
+      _isLoading = false;
     });
   }
 
@@ -270,8 +281,27 @@ class _FoldersScreenState extends State<FoldersScreen>
 
   @override
   Widget build(BuildContext context) {
-    if (songsByFolder.isEmpty) {
+    if (_isLoading) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    if (songsByFolder.isEmpty) {
+      return Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.folder_off, 
+              size: 48, 
+              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6)),
+              const SizedBox(height: 16),
+              TranslatedText(
+                'no_folders_with_songs',
+                style: TextStyle(fontSize: 14, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6)),
+              ),
+            ],
+          ),
+        ),
+      );
     }
 
     if (carpetaSeleccionada == null) {
@@ -288,6 +318,13 @@ class _FoldersScreenState extends State<FoldersScreen>
                 TranslatedText('folders_title'),
               ],
             ),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.refresh, size: 28),
+                tooltip: LocaleProvider.tr('reload'),
+                onPressed: cargarCanciones,
+              ),
+            ],
           ),
           body: StreamBuilder<MediaItem?>(
             stream: audioHandler.mediaItem,
@@ -364,6 +401,16 @@ class _FoldersScreenState extends State<FoldersScreen>
             ),
             title: Text(folderDisplayNames[carpetaSeleccionada] ?? LocaleProvider.tr('folders')),
             actions: [
+              IconButton(
+                icon: const Icon(Icons.shuffle, size: 28),
+                tooltip: LocaleProvider.tr('shuffle'),
+                onPressed: () {
+                  if (_filteredSongs.isNotEmpty) {
+                    final random = (_filteredSongs.toList()..shuffle()).first;
+                    _playSong(random);
+                  }
+                },
+              ),
               PopupMenuButton<OrdenCarpetas>(
                 icon: const Icon(Icons.sort, size: 28),
                 onSelected: (orden) {

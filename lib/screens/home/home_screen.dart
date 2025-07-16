@@ -430,6 +430,20 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 ]
               : _showingPlaylistSongs
                   ? [
+                      IconButton(
+                        icon: const Icon(Icons.shuffle, size: 28),
+                        tooltip: LocaleProvider.tr('shuffle'),
+                        onPressed: () {
+                          final List<SongModel> songsToShow =
+                              _searchPlaylistController.text.isNotEmpty
+                                  ? _filteredPlaylistSongs
+                                  : _playlistSongs;
+                          if (songsToShow.isNotEmpty) {
+                            final random = (songsToShow.toList()..shuffle()).first;
+                            _playSong(random, songsToShow);
+                          }
+                        },
+                      ),
                       PopupMenuButton<OrdenCancionesPlaylist>(
                         icon: const Icon(Icons.sort, size: 28),
                         onSelected: (orden) {
@@ -819,7 +833,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                         backgroundColor: Theme.of(context).colorScheme.primaryContainer,
                                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                       ),
-                                      child: Text(LocaleProvider.tr('update'), style: TextStyle(color: Theme.of(context).colorScheme.onSurface),),
+                                      child: Text(LocaleProvider.tr('update'), style: TextStyle(color: colorSchemeNotifier.value == AppColorScheme.amoled ? Theme.of(context).colorScheme.onPrimary : Theme.of(context).colorScheme.onSurface),),
                                       onPressed: () {
                                         Navigator.push(
                                           context,
