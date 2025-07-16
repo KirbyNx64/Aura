@@ -104,6 +104,8 @@ const Map<String, String> appLocalizationsEs = {
 
   // Favorites screen
   'favorites': 'Me gusta',
+  'add': 'Añadir',
+  'add_from_recents': 'Añadir de recientes',
   'search_by_title_or_artist': 'Buscar por título o artista',
   'no_songs': 'No hay canciones',
   'remove_from_favorites': 'Eliminar de me gusta',
@@ -113,6 +115,9 @@ const Map<String, String> appLocalizationsEs = {
   'alphabetical_az': 'Alfabético (A-Z)',
   'alphabetical_za': 'Alfabético (Z-A)',
   'default': 'Por defecto',
+  'select_songs': 'Seleccionar canciones',
+  'confirm_remove_favorites': '¿Estás seguro de que deseas eliminar estas canciones de tus favoritos?',
+  'confirm_remove_favorite': '¿Estás seguro de que deseas eliminar esta canción de tus favoritos?',
 
   // Bottom Navigation
   'home': 'Inicio',
@@ -124,7 +129,12 @@ const Map<String, String> appLocalizationsEs = {
   // Folders screen
   'folders_title': 'Carpetas',
   'reload': 'Recargar',
+  'select': 'Seleccionar',
   'no_folders': 'No hay carpetas',
+  'select_playlist': 'Seleccionar playlist',
+  'create_playlist': 'Crear playlist',
+  'new_playlist_name': 'Nombre de la nueva playlist',
+  'cancel_selection': 'Cancelar selección',
   'no_songs_in_folder': 'No hay canciones en esta carpeta',
   'play_all': 'Reproducir todo',
   'add_to_favorites': 'Añadir a me gusta',
@@ -221,6 +231,9 @@ const Map<String, String> appLocalizationsEs = {
   
   // Home screen
   'recent': 'Recientes',
+  'recent_playlists': 'Playlists recientes',
+  'no_recent_playlists': 'No hay playlists recientes.',
+  'confirm_remove_from_playlist': '¿Estás seguro de que deseas eliminar esta canción de la playlist?',
   'recent_songs': 'Canciones recientes',
   'no_recent_songs': 'No hay canciones recientes.',
   'new_version_available': '¡Nueva versión',
@@ -293,4 +306,9 @@ const Map<String, String> appLocalizationsEs = {
   'no_recent_searches': 'No hay búsquedas recientes',
   'no_folders_with_songs': 'No se encontraron carpetas con canciones.',
   'no_internet_connection': 'Sin conexión a internet. Por favor, verifica tu conexión e inténtalo de nuevo.',
+  'no_internet_retry': 'No hay conexión a internet, por favor, verifica tu conexión y vuelve a intentarlo.',
+  'pause_preview': 'Pausar preview',
+  'play_preview': 'Escuchar preview',
+  'download_selected': 'Descargar seleccionados',
+  'selected': 'seleccionados',
 }; 

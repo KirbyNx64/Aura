@@ -104,6 +104,8 @@ const Map<String, String> appLocalizationsEn = {
 
   // Favorites screen
   'favorites': 'Favorites',
+  'add': 'Add',
+  'add_from_recents': 'Add from recents',
   'search_by_title_or_artist': 'Search by title or artist',
   'no_songs': 'No songs',
   'remove_from_favorites': 'Remove from favorites',
@@ -113,6 +115,9 @@ const Map<String, String> appLocalizationsEn = {
   'alphabetical_az': 'Alphabetical (A-Z)',
   'alphabetical_za': 'Alphabetical (Z-A)',
   'default': 'Default',
+  'select_songs': 'Select songs',
+  'confirm_remove_favorites': 'Are you sure you want to remove these songs from favorites?',
+  'confirm_remove_favorite': 'Are you sure you want to remove this song from favorites?',
 
   // Bottom Navigation
   'home': 'Home',
@@ -125,6 +130,11 @@ const Map<String, String> appLocalizationsEn = {
   'folders_title': 'Folders',
   'reload': 'Reload',
   'no_folders': 'No folders',
+  'select': 'Select',
+  'select_playlist': 'Select playlist',
+  'create_playlist': 'Create playlist',
+  'new_playlist_name': 'New playlist name',
+  'cancel_selection': 'Cancel selection',
   'no_songs_in_folder': 'No songs in this folder',
   'play_all': 'Play all',
   'add_to_favorites': 'Add to favorites',
@@ -219,9 +229,13 @@ const Map<String, String> appLocalizationsEn = {
   'seal_recommendation': 'We recommend the free Seal app for downloading music and videos from many sources.\n\nWant Seal\'s GitHub repository?',
   'browser_open_error': 'Could not open browser',
   'no_internet_connection': 'No internet connection. Please check your connection and try again.',
+  'no_internet_retry': 'No internet connection, please check your connection and try again.',
   
   // Home screen
   'recent': 'Recent',
+  'recent_playlists': 'Recent playlists',
+  'no_recent_playlists': 'No recent playlists.',
+  'confirm_remove_from_playlist': 'Are you sure you want to remove this song from the playlist?',
   'recent_songs': 'Recent songs',
   'no_recent_songs': 'No recent songs.',
   'new_version_available': 'New version',
@@ -273,6 +287,8 @@ const Map<String, String> appLocalizationsEn = {
   'song_not_found': 'Original song not found',
   'save_to_playlist': 'Save to playlist',
   'no_playlists_yet': 'You don\'t have playlists yet.\nCreate a new one below.',
+  'pause_preview': 'Pause preview',
+  'play_preview': 'Play preview',
   
   // OTA Update screen
   'checking_update': 'Checking for updates...',
@@ -293,4 +309,6 @@ const Map<String, String> appLocalizationsEn = {
   'clear_history': 'Clear history',
   'no_recent_searches': 'No recent searches',
   'no_folders_with_songs': 'No folders with songs found.',
+  'download_selected': 'Download selected',
+  'selected': 'selected',
 }; 

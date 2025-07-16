@@ -9,6 +9,7 @@ import 'package:music/utils/db/favorites_db.dart';
 import 'package:music/utils/notifiers.dart';
 import 'package:music/l10n/locale_provider.dart';
 import 'package:music/utils/theme_preferences.dart';
+import 'package:music/utils/db/playlists_db.dart';
 
 enum OrdenCarpetas { normal, alfabetico, invertido, ultimoAgregado }
 
@@ -39,6 +40,10 @@ class _FoldersScreenState extends State<FoldersScreen>
   double _lastBottomInset = 0.0;
   
   bool _isLoading = true; // <-- Nuevo estado de carga
+
+  // --- NUEVO: Estado para selección múltiple ---
+  bool _isSelecting = false;
+  final Set<int> _selectedSongIds = {};
 
   @override
   void initState() {
@@ -164,6 +169,27 @@ class _FoldersScreenState extends State<FoldersScreen>
                 }
               },
             ),
+            // --- NUEVO: Añadir a playlist ---
+            ListTile(
+              leading: const Icon(Icons.playlist_add),
+              title: TranslatedText('add_to_playlist'),
+              onTap: () async {
+                Navigator.of(context).pop();
+                await _handleAddToPlaylistSingle(context, song);
+              },
+            ),
+            // --- NUEVO: Opción de seleccionar ---
+            ListTile(
+              leading: const Icon(Icons.check_box_outlined),
+              title: TranslatedText('select'),
+              onTap: () {
+                Navigator.of(context).pop();
+                setState(() {
+                  _isSelecting = true;
+                  _selectedSongIds.add(song.id);
+                });
+              },
+            ),
           ],
         ),
       ),
@@ -205,6 +231,19 @@ class _FoldersScreenState extends State<FoldersScreen>
   }
 
   void _onSongSelected(SongModel song) {
+    if (_isSelecting) {
+      setState(() {
+        if (_selectedSongIds.contains(song.id)) {
+          _selectedSongIds.remove(song.id);
+          if (_selectedSongIds.isEmpty) {
+            _isSelecting = false;
+          }
+        } else {
+          _selectedSongIds.add(song.id);
+        }
+      });
+      return;
+    }
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 300), () async {
       if (!mounted) return;
@@ -357,6 +396,9 @@ class _FoldersScreenState extends State<FoldersScreen>
                           _originalSongs = List.from(canciones);
                           _filteredSongs = List.from(canciones);
                           _ordenarCanciones();
+                          // Al entrar a la carpeta, limpiar selección múltiple
+                          _isSelecting = false;
+                          _selectedSongIds.clear();
                         });
                       },
                     );
@@ -379,6 +421,9 @@ class _FoldersScreenState extends State<FoldersScreen>
             carpetaSeleccionada = null;
             _searchController.clear();
             _filteredSongs.clear();
+            // Al salir, limpiar selección múltiple
+            _isSelecting = false;
+            _selectedSongIds.clear();
           });
         }
       },
@@ -396,48 +441,87 @@ class _FoldersScreenState extends State<FoldersScreen>
                   carpetaSeleccionada = null;
                   _searchController.clear();
                   _filteredSongs.clear();
+                  // Al salir, limpiar selección múltiple
+                  _isSelecting = false;
+                  _selectedSongIds.clear();
                 });
               },
             ),
             title: Text(folderDisplayNames[carpetaSeleccionada] ?? LocaleProvider.tr('folders')),
             actions: [
-              IconButton(
-                icon: const Icon(Icons.shuffle, size: 28),
-                tooltip: LocaleProvider.tr('shuffle'),
-                onPressed: () {
-                  if (_filteredSongs.isNotEmpty) {
-                    final random = (_filteredSongs.toList()..shuffle()).first;
-                    _playSong(random);
-                  }
-                },
-              ),
-              PopupMenuButton<OrdenCarpetas>(
-                icon: const Icon(Icons.sort, size: 28),
-                onSelected: (orden) {
-                  setState(() {
-                    _orden = orden;
-                    _ordenarCanciones();
-                  });
-                },
-                itemBuilder: (context) => [
-                  PopupMenuItem(
-                    value: OrdenCarpetas.normal,
-                    child: TranslatedText('default'),
-                  ),
-                  PopupMenuItem(
-                    value: OrdenCarpetas.ultimoAgregado,
-                    child: TranslatedText('invert_order'),
-                  ),
-                  PopupMenuItem(
-                    value: OrdenCarpetas.alfabetico,
-                    child: TranslatedText('alphabetical_az'),
-                  ),
-                  PopupMenuItem(
-                    value: OrdenCarpetas.invertido,
-                    child: TranslatedText('alphabetical_za'),
-                  ),
-                ],
-              ),
+              if (_isSelecting) ...[
+                IconButton(
+                  icon: const Icon(Icons.favorite_outline),
+                  tooltip: LocaleProvider.tr('add_to_favorites'),
+                  onPressed: _selectedSongIds.isEmpty ? null : () async {
+                    // Acción masiva: añadir a favoritos
+                    final selectedSongs = _filteredSongs.where((s) => _selectedSongIds.contains(s.id));
+                    for (final song in selectedSongs) {
+                      await _addToFavorites(song);
+                    }
+                    favoritesShouldReload.value = !favoritesShouldReload.value;
+                    setState(() {
+                      _isSelecting = false;
+                      _selectedSongIds.clear();
+                    });
+                  },
+                ),
+                IconButton(
+                  icon: const Icon(Icons.playlist_add),
+                  tooltip: LocaleProvider.tr('add_to_playlist'),
+                  onPressed: _selectedSongIds.isEmpty ? null : () async {
+                    await _handleAddToPlaylistMassive(context);
+                  },
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  tooltip: LocaleProvider.tr('cancel_selection'),
+                  onPressed: () {
+                    setState(() {
+                      _isSelecting = false;
+                      _selectedSongIds.clear();
+                    });
+                  },
+                ),
+              ] else ...[
+                IconButton(
+                  icon: const Icon(Icons.shuffle, size: 28),
+                  tooltip: LocaleProvider.tr('shuffle'),
+                  onPressed: () {
+                    if (_filteredSongs.isNotEmpty) {
+                      final random = (_filteredSongs.toList()..shuffle()).first;
+                      _playSong(random);
+                    }
+                  },
+                ),
+                PopupMenuButton<OrdenCarpetas>(
+                  icon: const Icon(Icons.sort, size: 28),
+                  onSelected: (orden) {
+                    setState(() {
+                      _orden = orden;
+                      _ordenarCanciones();
+                    });
+                  },
+                  itemBuilder: (context) => [
+                    PopupMenuItem(
+                      value: OrdenCarpetas.normal,
+                      child: TranslatedText('default'),
+                    ),
+                    PopupMenuItem(
+                      value: OrdenCarpetas.ultimoAgregado,
+                      child: TranslatedText('invert_order'),
+                    ),
+                    PopupMenuItem(
+                      value: OrdenCarpetas.alfabetico,
+                      child: TranslatedText('alphabetical_az'),
+                    ),
+                    PopupMenuItem(
+                      value: OrdenCarpetas.invertido,
+                      child: TranslatedText('alphabetical_za'),
+                    ),
+                  ],
+                ),
+              ],
             ],
             bottom: PreferredSize(
               preferredSize: const Size.fromHeight(56),
@@ -501,33 +585,68 @@ class _FoldersScreenState extends State<FoldersScreen>
                               // Compara con el path, que es lo que normalmente usas como id en MediaItem
                               final isCurrent = current?.id == song.data;
                               final isPlaying = isCurrent && playing;
+                              final isSelected = _selectedSongIds.contains(song.id);
 
                               return ListTile(
                                 onTap: () => _onSongSelected(song),
                                 onLongPress: () {
-                                  _handleLongPress(context, song);
+                                  if (_isSelecting) {
+                                    setState(() {
+                                      if (_selectedSongIds.contains(song.id)) {
+                                        _selectedSongIds.remove(song.id);
+                                        if (_selectedSongIds.isEmpty) {
+                                          _isSelecting = false;
+                                        }
+                                      } else {
+                                        _selectedSongIds.add(song.id);
+                                      }
+                                    });
+                                  } else {
+                                    _handleLongPress(context, song);
+                                  }
                                 },
-                                leading: ClipRRect(
-                                  borderRadius: BorderRadius.circular(8),
-                                  child: QueryArtworkWidget(
-                                    id: song.id,
-                                    type: ArtworkType.AUDIO,
-                                    artworkBorder: BorderRadius.circular(8),
-                                    artworkHeight: 50,
-                                    artworkWidth: 50,
-                                    keepOldArtwork: true,
-                                    nullArtworkWidget: Container(
-                                      color: Theme.of(
-                                        context,
-                                      ).colorScheme.surfaceContainer,
-                                      width: 50,
-                                      height: 50,
-                                      child: Icon(
-                                        Icons.music_note,
-                                        color: Theme.of(context).colorScheme.onSurface,
+                                leading: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    if (_isSelecting)
+                                      Checkbox(
+                                        value: isSelected,
+                                        onChanged: (checked) {
+                                          setState(() {
+                                            if (checked == true) {
+                                              _selectedSongIds.add(song.id);
+                                            } else {
+                                              _selectedSongIds.remove(song.id);
+                                              if (_selectedSongIds.isEmpty) {
+                                                _isSelecting = false;
+                                              }
+                                            }
+                                          });
+                                        },
+                                      ),
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(8),
+                                      child: QueryArtworkWidget(
+                                        id: song.id,
+                                        type: ArtworkType.AUDIO,
+                                        artworkBorder: BorderRadius.circular(8),
+                                        artworkHeight: 50,
+                                        artworkWidth: 50,
+                                        keepOldArtwork: true,
+                                        nullArtworkWidget: Container(
+                                          color: Theme.of(
+                                            context,
+                                          ).colorScheme.surfaceContainer,
+                                          width: 50,
+                                          height: 50,
+                                          child: Icon(
+                                            Icons.music_note,
+                                            color: Theme.of(context).colorScheme.onSurface,
+                                          ),
+                                        ),
                                       ),
                                     ),
-                                  ),
+                                  ],
                                 ),
                                 title: Text(
                                   song.title,
@@ -547,31 +666,36 @@ class _FoldersScreenState extends State<FoldersScreen>
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                 ),
-                                trailing: IconButton(
-                                  icon: Icon(
-                                    isCurrent
-                                        ? (isPlaying
-                                              ? Icons.pause
-                                              : Icons.play_arrow)
-                                        : Icons.play_arrow,
-                                    color: isCurrent
-                                        ? Theme.of(context).colorScheme.primary
-                                        : null,
-                                  ),
-                                  onPressed: () {
-                                    if (isCurrent) {
-                                      isPlaying
-                                          ? audioHandler.pause()
-                                          : audioHandler.play();
-                                    } else {
-                                      _playSong(song);
-                                    }
-                                  },
-                                ),
+                                trailing: !_isSelecting
+                                    ? IconButton(
+                                        icon: Icon(
+                                          isCurrent
+                                              ? (isPlaying
+                                                    ? Icons.pause
+                                                    : Icons.play_arrow)
+                                              : Icons.play_arrow,
+                                          color: isCurrent
+                                              ? Theme.of(context).colorScheme.primary
+                                              : null,
+                                        ),
+                                        onPressed: () {
+                                          if (isCurrent) {
+                                            isPlaying
+                                                ? audioHandler.pause()
+                                                : audioHandler.play();
+                                          } else {
+                                            _playSong(song);
+                                          }
+                                        },
+                                      )
+                                    : null,
                                 selected: isCurrent,
                                 selectedTileColor: isAmoledTheme
                                    ? Colors.white.withValues(alpha: 0.1) // Blanco muy transparente para AMOLED
                                    : Theme.of(context).colorScheme.primaryContainer,
+                                tileColor: isSelected
+                                    ? Theme.of(context).colorScheme.secondaryContainer.withValues(alpha: 0.4)
+                                    : null,
                               );
                             },
                           ),
@@ -583,5 +707,159 @@ class _FoldersScreenState extends State<FoldersScreen>
         ),
       ),
     );
+  }
+
+  Future<void> _handleAddToPlaylistMassive(BuildContext context) async {
+    final playlists = List<Map<String, dynamic>>.from(await PlaylistsDB().getAllPlaylists());
+    if (!context.mounted) return;
+    if (playlists.isEmpty) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: TranslatedText('add_to_playlist'),
+          content: TranslatedText('no_playlists_found'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: TranslatedText('ok'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+    if (!context.mounted) return;
+    final selectedPlaylistId = await showDialog<int>(
+      context: context,
+      builder: (context) {
+        final TextEditingController playlistNameController = TextEditingController();
+        return StatefulBuilder(
+          builder: (context, setStateDialog) => SimpleDialog(
+            title: TranslatedText('select_playlist'),
+            children: [
+              for (final playlist in playlists)
+                SimpleDialogOption(
+                  onPressed: () {
+                    Navigator.of(context).pop(playlist['id'] as int);
+                  },
+                  child: Text(playlist['name'] as String),
+                ),
+              const Divider(),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                child: TextField(
+                  controller: playlistNameController,
+                  decoration: InputDecoration(
+                    hintText: LocaleProvider.tr('new_playlist_name'),
+                  ),
+                ),
+              ),
+              TextButton.icon(
+                icon: const Icon(Icons.add),
+                label: TranslatedText('create_playlist'),
+                onPressed: () async {
+                  final name = playlistNameController.text.trim();
+                  if (name.isEmpty) return;
+                  final id = await PlaylistsDB().createPlaylist(name);
+                  // Notificar a la app que se creó una nueva playlist
+                  playlistsShouldReload.value = !playlistsShouldReload.value;
+                  setStateDialog(() {
+                    playlists.insert(0, {'id': id, 'name': name});
+                  });
+                  playlistNameController.clear();
+                  if (context.mounted) {
+                    Navigator.of(context).pop(id);
+                  }
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+    if (selectedPlaylistId != null) {
+      final selectedSongs = _filteredSongs.where((s) => _selectedSongIds.contains(s.id));
+      for (final song in selectedSongs) {
+        await PlaylistsDB().addSongToPlaylist(selectedPlaylistId, song);
+      }
+      // Confirmación eliminada: no mostrar SnackBar
+      setState(() {
+        _isSelecting = false;
+        _selectedSongIds.clear();
+      });
+    }
+  }
+
+  Future<void> _handleAddToPlaylistSingle(BuildContext context, SongModel song) async {
+    final playlists = List<Map<String, dynamic>>.from(await PlaylistsDB().getAllPlaylists());
+    if (!context.mounted) return;
+    if (playlists.isEmpty) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: TranslatedText('add_to_playlist'),
+          content: TranslatedText('no_playlists_found'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: TranslatedText('ok'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+    if (!context.mounted) return;
+    final selectedPlaylistId = await showDialog<int>(
+      context: context,
+      builder: (context) {
+        final TextEditingController playlistNameController = TextEditingController();
+        return StatefulBuilder(
+          builder: (context, setStateDialog) => SimpleDialog(
+            title: TranslatedText('select_playlist'),
+            children: [
+              for (final playlist in playlists)
+                SimpleDialogOption(
+                  onPressed: () {
+                    Navigator.of(context).pop(playlist['id'] as int);
+                  },
+                  child: Text(playlist['name'] as String),
+                ),
+              const Divider(),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                child: TextField(
+                  controller: playlistNameController,
+                  decoration: InputDecoration(
+                    hintText: LocaleProvider.tr('new_playlist_name'),
+                  ),
+                ),
+              ),
+              TextButton.icon(
+                icon: const Icon(Icons.add),
+                label: TranslatedText('create_playlist'),
+                onPressed: () async {
+                  final name = playlistNameController.text.trim();
+                  if (name.isEmpty) return;
+                  final id = await PlaylistsDB().createPlaylist(name);
+                  playlistsShouldReload.value = !playlistsShouldReload.value;
+                  setStateDialog(() {
+                    playlists.insert(0, {'id': id, 'name': name});
+                  });
+                  playlistNameController.clear();
+                  if (context.mounted) {
+                    Navigator.of(context).pop(id);
+                  }
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+    if (selectedPlaylistId != null) {
+      await PlaylistsDB().addSongToPlaylist(selectedPlaylistId, song);
+      // Confirmación eliminada: no mostrar SnackBar
+    }
   }
 }

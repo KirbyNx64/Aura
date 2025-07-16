@@ -11,7 +11,13 @@ import 'package:file_selector/file_selector.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:music/utils/notifiers.dart';
+import 'package:music/utils/theme_preferences.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:just_audio/just_audio.dart';
+import 'package:youtube_explode_dart/youtube_explode_dart.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
+import 'dart:async';
 
 class YtSearchTestScreen extends StatefulWidget {
   final String? initialQuery;
@@ -40,11 +46,20 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
   final ValueNotifier<bool> isProcessingNotifier = ValueNotifier(false);
   final ValueNotifier<int> queueLengthNotifier = ValueNotifier(0);
 
+  // Estado para selección múltiple
+  final Set<int> _selectedIndexes = {};
+  bool _isSelectionMode = false;
+
 
   Future<void> _search() async {
     if (_controller.text.trim().isEmpty) {
       return;
     }
+    // Limpiar selección al buscar
+    setState(() {
+      _selectedIndexes.clear();
+      _isSelectionMode = false;
+    });
     // Verificar conexión a internet antes de buscar
     final List<ConnectivityResult> connectivityResult = await Connectivity().checkConnectivity();
     if (connectivityResult.contains(ConnectivityResult.none)) {
@@ -172,6 +187,9 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
       _loading = false;
       _loadingMore = false;
       _showSuggestions = true;
+      // Limpiar selección al limpiar resultados
+      _selectedIndexes.clear();
+      _isSelectionMode = false;
     });
     // print('DEBUG: After _clearResults(), _hasSearched: $_hasSearched');
   }
@@ -310,55 +328,106 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
     }
   }
 
+  void _toggleSelection(int index) {
+    setState(() {
+      if (_selectedIndexes.contains(index)) {
+        _selectedIndexes.remove(index);
+        if (_selectedIndexes.isEmpty) _isSelectionMode = false;
+      } else {
+        _selectedIndexes.add(index);
+        _isSelectionMode = true;
+      }
+    });
+  }
+
+  void _clearSelection() {
+    setState(() {
+      _selectedIndexes.clear();
+      _isSelectionMode = false;
+    });
+  }
+
+  Future<void> _downloadSelected() async {
+    final items = _selectedIndexes.map((i) => _results[i]).toList();
+    for (final item in items) {
+      if (item.videoId != null) {
+        await SimpleYtDownload.downloadVideoWithArtist(
+          context,
+          item.videoId!,
+          item.title ?? '',
+          item.artist ?? '',
+        );
+      }
+    }
+    _clearSelection();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Row(
-          children: [
-            Icon(Icons.search, size: 28),
-            const SizedBox(width: 8),
-            TranslatedText('search'),
-          ],
-        ),
-        actions: [
-          ValueListenableBuilder<String?>(
-            valueListenable: downloadDirectoryNotifier,
-            builder: (context, dir, child) {
-              return IconButton(
-                icon: const Icon(Icons.folder_open, size: 28),
-                tooltip: dir == null || dir.isEmpty
-                    ? LocaleProvider.tr('choose_folder')
-                    : LocaleProvider.tr('folder_ready'),
-                onPressed: _pickDirectory,
-              );
-            },
-          ),
-          ValueListenableBuilder<String>(
-            valueListenable: languageNotifier,
-            builder: (context, lang, child) {
-              return IconButton(
-                icon: const Icon(Icons.info_outline, size: 28),
-                tooltip: LocaleProvider.tr('info'),
-                onPressed: () {
-                  showDialog(
-                    context: context,
-                    builder: (context) => AlertDialog(
-                      title: TranslatedText('info'),
-                      content: TranslatedText('search_music_in_ytm'),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.of(context).pop(),
-                          child: TranslatedText('ok'),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              );
-            },
-          ),
-        ],
+        title: _isSelectionMode
+            ? Text('${_selectedIndexes.length} ${LocaleProvider.tr('selected')}')
+            : Row(
+                children: [
+                  Icon(Icons.search, size: 28),
+                  const SizedBox(width: 8),
+                  TranslatedText('search'),
+                ],
+              ),
+        leading: _isSelectionMode
+            ? IconButton(
+                icon: const Icon(Icons.close),
+                onPressed: _clearSelection,
+              )
+            : null,
+        actions: _isSelectionMode
+            ? [
+                if (_selectedIndexes.isNotEmpty)
+                  IconButton(
+                    icon: const Icon(Icons.download),
+                    tooltip: LocaleProvider.tr('download_selected'),
+                    onPressed: _downloadSelected,
+                  ),
+              ]
+            : [
+                ValueListenableBuilder<String?>(
+                  valueListenable: downloadDirectoryNotifier,
+                  builder: (context, dir, child) {
+                    return IconButton(
+                      icon: const Icon(Icons.folder_open, size: 28),
+                      tooltip: dir == null || dir.isEmpty
+                          ? LocaleProvider.tr('choose_folder')
+                          : LocaleProvider.tr('folder_ready'),
+                      onPressed: _pickDirectory,
+                    );
+                  },
+                ),
+                ValueListenableBuilder<String>(
+                  valueListenable: languageNotifier,
+                  builder: (context, lang, child) {
+                    return IconButton(
+                      icon: const Icon(Icons.info_outline, size: 28),
+                      tooltip: LocaleProvider.tr('info'),
+                      onPressed: () {
+                        showDialog(
+                          context: context,
+                          builder: (context) => AlertDialog(
+                            title: TranslatedText('info'),
+                            content: TranslatedText('search_music_in_ytm'),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.of(context).pop(),
+                                child: TranslatedText('ok'),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    );
+                  },
+                ),
+              ],
       ),
       body: Column(
         children: [
@@ -650,48 +719,16 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                             );
                           }
                           final item = _results[index];
-                          return Container(
-                            width: double.infinity,
-                            margin: const EdgeInsets.symmetric(),
-                            child: ListTile(
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 0,
-                                vertical: 4,
-                              ),
-                              leading: item.thumbUrl != null
-                                  ? ClipRRect(
-                                      borderRadius: BorderRadius.circular(8),
-                                      child: Image.network(
-                                        item.thumbUrl!,
-                                        width: 56,
-                                        height: 56,
-                                        fit: BoxFit.cover,
-                                      ),
-                                    )
-                                  : Container(
-                                      width: 56,
-                                      height: 56,
-                                      decoration: BoxDecoration(
-                                        color: Colors.grey[300],
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      child: const Icon(
-                                        Icons.music_note,
-                                        size: 32,
-                                        color: Colors.grey,
-                                      ),
-                                    ),
-                              title: Text(
-                                item.title ?? LocaleProvider.tr('title_unknown'),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              subtitle: Text(
-                                item.artist ?? LocaleProvider.tr('artist_unknown'),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              onTap: () {
+                          final isSelected = _selectedIndexes.contains(index);
+                          return GestureDetector(
+                            onLongPress: () {
+                              HapticFeedback.selectionClick();
+                              _toggleSelection(index);
+                            },
+                            onTap: () {
+                              if (_isSelectionMode) {
+                                _toggleSelection(index);
+                              } else {
                                 showModalBottomSheet(
                                   context: context,
                                   shape: const RoundedRectangleBorder(
@@ -700,89 +737,89 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                     ),
                                   ),
                                   builder: (context) {
-                                    // final url = item.videoId != null
-                                    //     ? 'https://music.youtube.com/watch?v=${item.videoId}'
-                                    //     : null;
                                     return SafeArea(
                                       child: Padding(
                                         padding: const EdgeInsets.all(24),
-                                        child: Column(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Row(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.center,
-                                              children: [
-                                                ClipRRect(
-                                                  borderRadius:
-                                                      BorderRadius.circular(
-                                                    12,
-                                                  ),
-                                                  child: item.thumbUrl != null
-                                                      ? Image.network(
-                                                          item.thumbUrl!,
-                                                          width: 64,
-                                                          height: 64,
-                                                          fit: BoxFit.cover,
-                                                        )
-                                                      : Container(
-                                                          width: 64,
-                                                          height: 64,
-                                                          color: Colors.grey[300],
-                                                          child: const Icon(
-                                                            Icons.music_note,
-                                                            size: 32,
-                                                            color: Colors.grey,
-                                                          ),
-                                                        ),
-                                                ),
-                                                const SizedBox(width: 16),
-                                                Expanded(
-                                                  child: Column(
-                                                    crossAxisAlignment:
-                                                        CrossAxisAlignment.start,
-                                                    mainAxisAlignment:
-                                                        MainAxisAlignment.center,
-                                                    children: [
-                                                      Text(
-                                                        item.title ?? LocaleProvider.tr('title_unknown'),
-                                                        style: const TextStyle(
-                                                          fontWeight:
-                                                              FontWeight.bold,
-                                                          fontSize: 18,
-                                                        ),
-                                                        maxLines: 1,
-                                                        overflow:
-                                                            TextOverflow.ellipsis,
-                                                      ),
-                                                      const SizedBox(height: 4),
-                                                      Text(
-                                                        item.artist ?? LocaleProvider.tr('artist_unknown'),
-                                                        style: TextStyle(
-                                                          fontSize: 15,
-                                                        ),
-                                                        maxLines: 1,
-                                                        overflow:
-                                                            TextOverflow.ellipsis,
-                                                      ),
-                                                    ],
-                                                  ),
-                                                ),
-                                                const SizedBox(width: 8),
-                                                // Botón de descargar
-                                                SimpleDownloadButton(
-                                                  item: item,
-                                                ),
-                                              ],
-                                            ),
-
-                                          ],
+                                        child: _YtPreviewPlayer(
+                                          results: _results,
+                                          currentIndex: index,
                                         ),
                                       ),
                                     );
                                   },
                                 );
-                              },
+                              }
+                            },
+                            child: Container(
+                              width: double.infinity,
+                              margin: const EdgeInsets.symmetric(),
+                              decoration: isSelected
+                                  ? BoxDecoration(
+                                      color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.15),
+                                    )
+                                  : null,
+                              child: ListTile(
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 0,
+                                  vertical: 4,
+                                ),
+                                leading: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    if (_isSelectionMode)
+                                      Checkbox(
+                                        value: isSelected,
+                                        onChanged: (checked) {
+                                          setState(() {
+                                            if (checked == true) {
+                                              _selectedIndexes.add(index);
+                                            } else {
+                                              _selectedIndexes.remove(index);
+                                              if (_selectedIndexes.isEmpty) _isSelectionMode = false;
+                                            }
+                                          });
+                                        },
+                                      ),
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(8),
+                                      child: item.thumbUrl != null
+                                          ? Image.network(
+                                              item.thumbUrl!,
+                                              width: 56,
+                                              height: 56,
+                                              fit: BoxFit.cover,
+                                            )
+                                          : Container(
+                                              width: 56,
+                                              height: 56,
+                                              decoration: BoxDecoration(
+                                                color: Colors.grey[300],
+                                                borderRadius: BorderRadius.circular(12),
+                                              ),
+                                              child: const Icon(
+                                                Icons.music_note,
+                                                size: 32,
+                                                color: Colors.grey,
+                                              ),
+                                            ),
+                                    ),
+                                  ],
+                                ),
+                                title: Text(
+                                  item.title ?? LocaleProvider.tr('title_unknown'),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                subtitle: Text(
+                                  item.artist ?? LocaleProvider.tr('artist_unknown'),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                onTap: null, // Controlado por GestureDetector
+                                tileColor: isSelected
+                                    ? Theme.of(context).colorScheme.secondaryContainer.withValues(alpha: 0.4)
+                                    : null,
+                              ),
                             ),
                           );
                         },
@@ -800,6 +837,443 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
           ),
         ],
       ),
+      floatingActionButton: null,
     );
   }
+}
+
+class _YtPreviewPlayer extends StatefulWidget {
+  final List<YtMusicResult> results;
+  final int currentIndex;
+  const _YtPreviewPlayer({required this.results, required this.currentIndex});
+
+  @override
+  State<_YtPreviewPlayer> createState() => _YtPreviewPlayerState();
+}
+
+class _YtPreviewPlayerState extends State<_YtPreviewPlayer> {
+  final AudioPlayer _player = AudioPlayer();
+  bool _loading = false;
+  bool _playing = false;
+  Duration? _duration;
+  String? _audioUrl;
+  late int _currentIndex;
+  late YtMusicResult _currentItem;
+  int _loadToken = 0; // Token para cancelar cargas previas
+  StreamSubscription<PlayerState>? _playerStateSubscription;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentIndex = widget.currentIndex;
+    _currentItem = widget.results[_currentIndex];
+    _playerStateSubscription = _player.playerStateStream.listen((state) {
+      if (!mounted) return;
+      if (state.playing && _loading) {
+        setState(() { _loading = false; });
+      }
+      if (state.processingState == ProcessingState.completed) {
+        setState(() { _playing = false; });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _playerStateSubscription?.cancel();
+    _player.dispose();
+    super.dispose();
+  }
+
+  void _playPrevious() {
+    if (_currentIndex > 0) {
+      setState(() {
+        _currentIndex--;
+        _currentItem = widget.results[_currentIndex];
+        _audioUrl = null;
+        _duration = null;
+        _player.stop();
+        _playing = false;
+        _loading = false;
+      });
+      // No cargar nada hasta que el usuario presione play
+    }
+  }
+
+  void _playNext() {
+    if (_currentIndex < widget.results.length - 1) {
+      setState(() {
+        _currentIndex++;
+        _currentItem = widget.results[_currentIndex];
+        _audioUrl = null;
+        _duration = null;
+        _player.stop();
+        _playing = false;
+        _loading = false;
+      });
+      // No cargar nada hasta que el usuario presione play
+    }
+  }
+
+  Future<void> _loadAndPlay() async {
+    _loadToken++;
+    final int thisLoad = _loadToken;
+    setState(() { _loading = true; });
+    await Future.delayed(const Duration(milliseconds: 200));
+    if (thisLoad != _loadToken) {
+      await _player.stop();
+      _audioUrl = null;
+      _duration = null;
+      if (!mounted) return;
+      setState(() {
+        _playing = false;
+        _loading = false;
+      });
+      return; // Cancelado
+    }
+    // Verificar conexión a internet antes de reproducir
+    final List<ConnectivityResult> connectivityResult = await Connectivity().checkConnectivity();
+    if (connectivityResult.contains(ConnectivityResult.none)) {
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text('Error'),
+          content: Text(LocaleProvider.tr('no_internet_retry')),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+      setState(() { _loading = false; });
+      return;
+    }
+    // Si ya tenemos la URL y duración, solo reproducir
+    if (_audioUrl != null && _duration != null) {
+      setState(() { _playing = true; _loading = false; });
+      await _player.play();
+      return;
+    }
+    try {
+      if (audioHandler.playbackState.value.playing) {
+        await audioHandler.pause();
+      }
+      final yt = YoutubeExplode();
+      final manifest = await yt.videos.streamsClient.getManifest(_currentItem.videoId!);
+      if (thisLoad != _loadToken) {
+        await _player.stop();
+        _audioUrl = null;
+        _duration = null;
+        if (!mounted) return;
+        setState(() {
+          _playing = false;
+          _loading = false;
+        });
+        return; // Cancelado
+      }
+      final audio = manifest.audioOnly
+        .where((s) => s.codec.mimeType == 'audio/mp4' || s.codec.toString().contains('mp4a'))
+        .toList()
+        ..sort((a, b) => b.bitrate.compareTo(a.bitrate));
+      final audioStreamInfo = audio.isNotEmpty ? audio.first : null;
+      if (audioStreamInfo == null) throw Exception('No se encontró stream de audio válido.');
+      _audioUrl = audioStreamInfo.url.toString();
+      if (thisLoad != _loadToken) {
+        await _player.stop();
+        _audioUrl = null;
+        _duration = null;
+        if (!mounted) return;
+        setState(() {
+          _playing = false;
+          _loading = false;
+        });
+        return; // Cancelado
+      }
+      await _player.setUrl(_audioUrl!);
+      _duration = _player.duration;
+      if (thisLoad != _loadToken) {
+        await _player.stop();
+        _audioUrl = null;
+        _duration = null;
+        if (!mounted) return;
+        setState(() {
+          _playing = false;
+          _loading = false;
+        });
+        return; // Cancelado justo antes de reproducir
+      }
+      if (!mounted) return;
+      setState(() { _playing = true; _loading = false; });
+      await _player.play();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() { _playing = false; _loading = false; });
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text('Error'),
+          content: Text('Error al reproducir el preview de la canción'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+    }
+  }
+
+  Future<void> _pause() async {
+    await _player.pause();
+    if (!mounted) return;
+    setState(() { _playing = false; });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      color: Theme.of(context).colorScheme.surfaceContainer,
+      margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 0),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Info de la canción
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Primer Row: carátula y botones
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: _currentItem.thumbUrl != null
+                          ? Image.network(
+                              _currentItem.thumbUrl!,
+                              width: 64,
+                              height: 64,
+                              fit: BoxFit.cover,
+                            )
+                          : Container(
+                              width: 64,
+                              height: 64,
+                              color: Colors.grey[300],
+                              child: const Icon(
+                                Icons.music_note,
+                                size: 32,
+                                color: Colors.grey,
+                              ),
+                            ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Align(
+                        alignment: Alignment.topRight,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            SimpleDownloadButton(item: _currentItem),
+                            const SizedBox(width: 12),
+                            SizedBox(
+                              height: 50,
+                              width: 50,
+                              child: Material(
+                                color: _isAmoled(context)
+                                    ? Theme.of(context).colorScheme.primaryContainer
+                                    : Theme.of(context).colorScheme.secondaryContainer,
+                                borderRadius: BorderRadius.circular(8),
+                                child: InkWell(
+                                  borderRadius: BorderRadius.circular(8),
+                                  onTap: _currentItem.videoId != null
+                                      ? () {
+                                          Clipboard.setData(ClipboardData(
+                                              text:
+                                                  'https://music.youtube.com/watch?v=${_currentItem.videoId}'));
+                                          // Navigator.pop(context); // Ya no cerramos el modal al copiar el link
+                                        }
+                                      : null,
+                                  child: Tooltip(
+                                    message: LocaleProvider.tr('copy_link'),
+                                    child: Icon(
+                                      Icons.link,
+                                      color: _isAmoled(context)
+                                          ? Theme.of(context).colorScheme.onPrimaryContainer
+                                          : Theme.of(context).colorScheme.onSecondaryContainer,
+                                      size: 20,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                // Segundo Row: título y artista
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _currentItem.title ?? LocaleProvider.tr('title_unknown'),
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 18,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          Text(
+                            _currentItem.artist ?? LocaleProvider.tr('artist_unknown'),
+                            style: const TextStyle(
+                              fontSize: 15,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            // Controles
+            Row(
+              children: [
+                // Play/Pause
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.primaryContainer,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: _loading
+                      ? Center(
+                          child: SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                _isAmoled(context)
+                                    ? Colors.black
+                                    : Theme.of(context).colorScheme.onPrimaryContainer,
+                              ),
+                            ),
+                          ),
+                        )
+                      : IconButton(
+                          icon: Icon(_playing ? Icons.pause : Icons.play_arrow),
+                          color: Theme.of(context).colorScheme.onPrimaryContainer,
+                          tooltip: _playing ? LocaleProvider.tr('pause_preview') : LocaleProvider.tr('play_preview'),
+                          splashColor: Colors.transparent,
+                          onPressed: _loading
+                              ? null
+                              : () async {
+                                  if (_playing) {
+                                    _pause();
+                                  } else {
+                                    if (_audioUrl == null) {
+                                      _loadAndPlay();
+                                    } else {
+                                      // Si la posición está al final, reinicia
+                                      final pos = _player.position;
+                                      if (_duration != null && pos >= _duration!) {
+                                        await _player.seek(Duration.zero);
+                                      }
+                                      await _player.play();
+                                      setState(() { _playing = true; });
+                                    }
+                                  }
+                                },
+                        ),
+                ),
+                const SizedBox(width: 8),
+                // Duración
+                Expanded(
+                  child: StreamBuilder<Duration>(
+                    stream: _player.positionStream,
+                    builder: (context, snapshot) {
+                      final pos = snapshot.data ?? Duration.zero;
+                      final total = _duration ?? Duration.zero;
+                      return Text(
+                        '${_formatDuration(pos)} / ${_formatDuration(total)}',
+                        style: TextStyle(fontWeight: FontWeight.w500),
+                      );
+                    },
+                  ),
+                ),
+                // Botón anterior
+                IconButton(
+                  icon: const Icon(Icons.skip_previous),
+                  onPressed: (!_loading && _currentIndex > 0) ? _playPrevious : null,
+                ),
+                // Botón siguiente
+                IconButton(
+                  icon: const Icon(Icons.skip_next),
+                  onPressed: (!_loading && _currentIndex < widget.results.length - 1) ? _playNext : null,
+                ),
+              ],
+            ),
+            // Barra de progreso SIEMPRE visible
+            const SizedBox(height: 8),
+            StreamBuilder<Duration>(
+              stream: _player.positionStream,
+              builder: (context, snapshot) {
+                if (_duration == null) {
+                  return LinearProgressIndicator(
+                    value: 0.0,
+                    minHeight: 6,
+                    backgroundColor: Theme.of(context).colorScheme.outline.withValues(alpha: 0.15),
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      Theme.of(context).colorScheme.primary,
+                    ),
+                  );
+                }
+                final pos = snapshot.data ?? Duration.zero;
+                final progress = _duration!.inMilliseconds > 0
+                    ? pos.inMilliseconds / _duration!.inMilliseconds
+                    : 0.0;
+                return LinearProgressIndicator(
+                  borderRadius: BorderRadius.circular(8),
+                  value: progress.clamp(0.0, 1.0),
+                  minHeight: 6,
+                  backgroundColor: Theme.of(context).colorScheme.outline.withValues(alpha: 0.15),
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    Theme.of(context).colorScheme.primary,
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _formatDuration(Duration d) {
+    final minutes = d.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final seconds = d.inSeconds.remainder(60).toString().padLeft(2, '0');
+    return '$minutes:$seconds';
+  }
+}
+
+// Helper para detectar tema AMOLED
+bool _isAmoled(BuildContext context) {
+  return colorSchemeNotifier.value == AppColorScheme.amoled;
 }

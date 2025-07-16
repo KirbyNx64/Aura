@@ -141,19 +141,24 @@ class DownloadQueue {
   void _showDialogSafely(BuildContext context, String title, String message) {
     // Verificar si el contexto sigue montado antes de mostrar el diálogo
     if (context.mounted) {
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: Text(title),
-          content: Text(message),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: Text(LocaleProvider.tr('ok')),
-            ),
-          ],
-        ),
-      );
+      // No mostrar nada si es mensaje de descarga completada
+      if (message == LocaleProvider.tr('download_completed_desc')) {
+        return;
+      } else {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text(title),
+            content: Text(message),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: Text(LocaleProvider.tr('ok')),
+              ),
+            ],
+          ),
+        );
+      }
     } else {
       // Si el contexto no está disponible, mostrar en consola
       //print('$title: $message');
@@ -252,7 +257,7 @@ class SimpleDownloadButton extends StatelessWidget {
           borderRadius: BorderRadius.circular(8),
           onTap: item.videoId != null
               ? () async {
-                  Navigator.pop(context);
+                  // Navigator.pop(context); // Ya no cerramos el modal al descargar
                   // Usar un pequeño delay para asegurar que el modal se cierre antes de iniciar la descarga
                   await Future.delayed(const Duration(milliseconds: 100));
                   // Verificar conexión a internet antes de descargar

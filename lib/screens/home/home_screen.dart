@@ -62,6 +62,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   final List<List<SongModel>> _quickPickPages = [];
   List<SongModel> allSongs = [];
 
+  // --- Selección múltiple para canciones de playlist ---
+  bool _isSelectingPlaylistSongs = false;
+  final Set<int> _selectedPlaylistSongIds = {};
+
   @override
   void initState() {
     super.initState();
@@ -334,6 +338,226 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
+  Future<void> _removeFromPlaylistMassive() async {
+    final selectedSongs = (_searchPlaylistController.text.isNotEmpty ? _filteredPlaylistSongs : _playlistSongs)
+        .where((s) => _selectedPlaylistSongIds.contains(s.id));
+    final count = _selectedPlaylistSongIds.length;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: TranslatedText('remove_from_playlist'),
+        content: Text(count == 1
+            ? LocaleProvider.tr('confirm_remove_from_playlist')
+            : "${LocaleProvider.tr('confirm_remove_from_playlist')} ($count)"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: TranslatedText('cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: TranslatedText('remove'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    for (final song in selectedSongs) {
+      await PlaylistsDB().removeSongFromPlaylist(_selectedPlaylist!['id'], song.data);
+    }
+    await _loadPlaylistSongs(_selectedPlaylist!);
+    setState(() {
+      _isSelectingPlaylistSongs = false;
+      _selectedPlaylistSongIds.clear();
+    });
+  }
+
+  Future<void> _addToFavoritesMassive() async {
+    final selectedSongs = (_searchPlaylistController.text.isNotEmpty ? _filteredPlaylistSongs : _playlistSongs)
+        .where((s) => _selectedPlaylistSongIds.contains(s.id));
+    for (final song in selectedSongs) {
+      await FavoritesDB().addFavorite(song);
+    }
+    favoritesShouldReload.value = !favoritesShouldReload.value;
+    setState(() {
+      _isSelectingPlaylistSongs = false;
+      _selectedPlaylistSongIds.clear();
+    });
+  }
+
+  void _onPlaylistSongSelected(SongModel song) {
+    if (_isSelectingPlaylistSongs) {
+      setState(() {
+        if (_selectedPlaylistSongIds.contains(song.id)) {
+          _selectedPlaylistSongIds.remove(song.id);
+          if (_selectedPlaylistSongIds.isEmpty) {
+            _isSelectingPlaylistSongs = false;
+          }
+        } else {
+          _selectedPlaylistSongIds.add(song.id);
+        }
+      });
+      return;
+    }
+    _playSong(song, _searchPlaylistController.text.isNotEmpty ? _filteredPlaylistSongs : _playlistSongs);
+  }
+
+  void _handlePlaylistSongLongPress(BuildContext context, SongModel song) async {
+    showModalBottomSheet(
+      context: context,
+      builder: (context) => SafeArea(
+        child: FutureBuilder<bool>(
+          future: FavoritesDB().isFavorite(song.data),
+          builder: (context, snapshot) {
+            final isFav = snapshot.data ?? false;
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  leading: Icon(isFav ? Icons.delete_outline : Icons.favorite_border),
+                  title: TranslatedText(isFav ? 'remove_from_favorites' : 'add_to_favorites'),
+                  onTap: () async {
+                    Navigator.of(context).pop();
+                    if (isFav) {
+                      await FavoritesDB().removeFavorite(song.data);
+                      favoritesShouldReload.value = !favoritesShouldReload.value;
+                    } else {
+                      await FavoritesDB().addFavorite(song);
+                      favoritesShouldReload.value = !favoritesShouldReload.value;
+                    }
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.playlist_remove),
+                  title: TranslatedText('remove_from_playlist'),
+                  onTap: () async {
+                    Navigator.of(context).pop();
+                    await PlaylistsDB().removeSongFromPlaylist(_selectedPlaylist!['id'], song.data);
+                    await _loadPlaylistSongs(_selectedPlaylist!);
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.check_box_outlined),
+                  title: TranslatedText('select'),
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    setState(() {
+                      _isSelectingPlaylistSongs = true;
+                      _selectedPlaylistSongIds.add(song.id);
+                    });
+                  },
+                ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  // --- NUEVO: Diálogo para agregar canciones recientes a la playlist actual ---
+  Future<void> _showAddFromRecentsToCurrentPlaylistDialog() async {
+    final recents = await RecentsDB().getRecents();
+    if (!mounted) return;
+    final Set<int> selectedIds = {};
+    await showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            return AlertDialog(
+              title: TranslatedText('add_from_recents'),
+              content: SizedBox(
+                width: double.maxFinite,
+                height: 400,
+                child: recents.isEmpty
+                    ? Center(child: TranslatedText('no_songs'))
+                    : ListView.builder(
+                        itemCount: recents.length,
+                        itemBuilder: (context, index) {
+                          final song = recents[index];
+                          final isSelected = selectedIds.contains(song.id);
+                          return ListTile(
+                            onTap: () {
+                              setStateDialog(() {
+                                if (isSelected) {
+                                  selectedIds.remove(song.id);
+                                } else {
+                                  selectedIds.add(song.id);
+                                }
+                              });
+                            },
+                            leading: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Checkbox(
+                                  value: isSelected,
+                                  onChanged: (checked) {
+                                    setStateDialog(() {
+                                      if (checked == true) {
+                                        selectedIds.add(song.id);
+                                      } else {
+                                        selectedIds.remove(song.id);
+                                      }
+                                    });
+                                  },
+                                ),
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: QueryArtworkWidget(
+                                    id: song.id,
+                                    type: ArtworkType.AUDIO,
+                                    artworkBorder: BorderRadius.circular(8),
+                                    artworkHeight: 40,
+                                    artworkWidth: 40,
+                                    keepOldArtwork: true,
+                                    nullArtworkWidget: Container(
+                                      color: Theme.of(context).colorScheme.surfaceContainer,
+                                      width: 40,
+                                      height: 40,
+                                      child: Icon(
+                                        Icons.music_note,
+                                        color: Theme.of(context).colorScheme.onSurface,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            title: Text(song.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+                            subtitle: Text(song.artist ?? LocaleProvider.tr('unknown_artist'), maxLines: 1, overflow: TextOverflow.ellipsis),
+                          );
+                        },
+                      ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: TranslatedText('cancel'),
+                ),
+                TextButton(
+                  onPressed: selectedIds.isEmpty
+                      ? null
+                      : () async {
+                          final toAdd = recents.where((s) => selectedIds.contains(s.id));
+                          for (final song in toAdd) {
+                            await PlaylistsDB().addSongToPlaylist(_selectedPlaylist!['id'], song);
+                          }
+                          if (context.mounted) {
+                            Navigator.of(context).pop();
+                            await _loadPlaylistSongs(_selectedPlaylist!);
+                          }
+                        },
+                  child: TranslatedText('add'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     // Divide las canciones en páginas de 6
@@ -430,47 +654,76 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 ]
               : _showingPlaylistSongs
                   ? [
-                      IconButton(
-                        icon: const Icon(Icons.shuffle, size: 28),
-                        tooltip: LocaleProvider.tr('shuffle'),
-                        onPressed: () {
-                          final List<SongModel> songsToShow =
-                              _searchPlaylistController.text.isNotEmpty
-                                  ? _filteredPlaylistSongs
-                                  : _playlistSongs;
-                          if (songsToShow.isNotEmpty) {
-                            final random = (songsToShow.toList()..shuffle()).first;
-                            _playSong(random, songsToShow);
-                          }
-                        },
-                      ),
-                      PopupMenuButton<OrdenCancionesPlaylist>(
-                        icon: const Icon(Icons.sort, size: 28),
-                        onSelected: (orden) {
-                          setState(() {
-                            _ordenCancionesPlaylist = orden;
-                            _ordenarCancionesPlaylist();
-                          });
-                        },
-                        itemBuilder: (context) => [
-                          PopupMenuItem(
-                            value: OrdenCancionesPlaylist.normal,
-                            child: TranslatedText('last_added'),
-                          ),
-                          PopupMenuItem(
-                            value: OrdenCancionesPlaylist.ultimoAgregado,
-                            child: TranslatedText('invert_order'),
-                          ),
-                          PopupMenuItem(
-                            value: OrdenCancionesPlaylist.alfabetico,
-                            child: TranslatedText('alphabetical_az'),
-                          ),
-                          PopupMenuItem(
-                            value: OrdenCancionesPlaylist.invertido,
-                            child: TranslatedText('alphabetical_za'),
-                          ),
-                        ],
-                      ),
+                      if (_isSelectingPlaylistSongs) ...[
+                        IconButton(
+                          icon: const Icon(Icons.delete_outline),
+                          tooltip: LocaleProvider.tr('remove_from_playlist'),
+                          onPressed: _selectedPlaylistSongIds.isEmpty ? null : _removeFromPlaylistMassive,
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.favorite_border),
+                          tooltip: LocaleProvider.tr('add_to_favorites'),
+                          onPressed: _selectedPlaylistSongIds.isEmpty ? null : _addToFavoritesMassive,
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close),
+                          tooltip: LocaleProvider.tr('cancel_selection'),
+                          onPressed: () {
+                            setState(() {
+                              _isSelectingPlaylistSongs = false;
+                              _selectedPlaylistSongIds.clear();
+                            });
+                          },
+                        ),
+                      ]
+                      else ...[
+                        IconButton(
+                          icon: const Icon(Icons.shuffle, size: 28),
+                          tooltip: LocaleProvider.tr('shuffle'),
+                          onPressed: () {
+                            final List<SongModel> songsToShow =
+                                _searchPlaylistController.text.isNotEmpty
+                                    ? _filteredPlaylistSongs
+                                    : _playlistSongs;
+                            if (songsToShow.isNotEmpty) {
+                              final random = (songsToShow.toList()..shuffle()).first;
+                              _playSong(random, songsToShow);
+                            }
+                          },
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.add, size: 28),
+                          tooltip: LocaleProvider.tr('add_from_recents'),
+                          onPressed: _showAddFromRecentsToCurrentPlaylistDialog,
+                        ),
+                        PopupMenuButton<OrdenCancionesPlaylist>(
+                          icon: const Icon(Icons.sort, size: 28),
+                          onSelected: (orden) {
+                            setState(() {
+                              _ordenCancionesPlaylist = orden;
+                              _ordenarCancionesPlaylist();
+                            });
+                          },
+                          itemBuilder: (context) => [
+                            PopupMenuItem(
+                              value: OrdenCancionesPlaylist.normal,
+                              child: TranslatedText('last_added'),
+                            ),
+                            PopupMenuItem(
+                              value: OrdenCancionesPlaylist.ultimoAgregado,
+                              child: TranslatedText('invert_order'),
+                            ),
+                            PopupMenuItem(
+                              value: OrdenCancionesPlaylist.alfabetico,
+                              child: TranslatedText('alphabetical_az'),
+                            ),
+                            PopupMenuItem(
+                              value: OrdenCancionesPlaylist.invertido,
+                              child: TranslatedText('alphabetical_za'),
+                            ),
+                          ],
+                        ),
+                      ],
                     ]
                   : null,
           bottom: (_showingRecents || _showingPlaylistSongs)
@@ -671,27 +924,63 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                 audioHandler.playbackState.value.playing;
                             final isAmoledTheme = colorSchemeNotifier.value == AppColorScheme.amoled;
                             return ListTile(
-                              leading: ClipRRect(
-                                borderRadius: BorderRadius.circular(8),
-                                child: QueryArtworkWidget(
-                                  id: song.id,
-                                  type: ArtworkType.AUDIO,
-                                  artworkBorder: BorderRadius.circular(8),
-                                  artworkHeight: 50,
-                                  artworkWidth: 50,
-                                  keepOldArtwork: true,
-                                  nullArtworkWidget: Container(
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.surfaceContainer,
-                                    width: 50,
-                                    height: 50,
-                                    child: Icon(
-                                      Icons.music_note,
-                                      color: Theme.of(context).colorScheme.onSurface,
+                              onTap: () => _onPlaylistSongSelected(song),
+                              onLongPress: () {
+                                if (_isSelectingPlaylistSongs) {
+                                  setState(() {
+                                    if (_selectedPlaylistSongIds.contains(song.id)) {
+                                      _selectedPlaylistSongIds.remove(song.id);
+                                      if (_selectedPlaylistSongIds.isEmpty) {
+                                        _isSelectingPlaylistSongs = false;
+                                      }
+                                    } else {
+                                      _selectedPlaylistSongIds.add(song.id);
+                                    }
+                                  });
+                                } else {
+                                  _handlePlaylistSongLongPress(context, song);
+                                }
+                              },
+                              leading: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (_isSelectingPlaylistSongs)
+                                    Checkbox(
+                                      value: _selectedPlaylistSongIds.contains(song.id),
+                                      onChanged: (checked) {
+                                        setState(() {
+                                          if (checked == true) {
+                                            _selectedPlaylistSongIds.add(song.id);
+                                          } else {
+                                            _selectedPlaylistSongIds.remove(song.id);
+                                            if (_selectedPlaylistSongIds.isEmpty) {
+                                              _isSelectingPlaylistSongs = false;
+                                            }
+                                          }
+                                        });
+                                      },
+                                    ),
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: QueryArtworkWidget(
+                                      id: song.id,
+                                      type: ArtworkType.AUDIO,
+                                      artworkBorder: BorderRadius.circular(8),
+                                      artworkHeight: 50,
+                                      artworkWidth: 50,
+                                      keepOldArtwork: true,
+                                      nullArtworkWidget: Container(
+                                        color: Theme.of(context).colorScheme.surfaceContainer,
+                                        width: 50,
+                                        height: 50,
+                                        child: Icon(
+                                          Icons.music_note,
+                                          color: Theme.of(context).colorScheme.onSurface,
+                                        ),
+                                      ),
                                     ),
                                   ),
-                                ),
+                                ],
                               ),
                               title: Text(
                                 song.title,
@@ -733,71 +1022,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                               selectedTileColor: isAmoledTheme
                                   ? Colors.white.withValues(alpha: 0.1)
                                   : Theme.of(context).colorScheme.primaryContainer,
-                              onTap: () => _playSong(song, songsToShow),
-                              onLongPress: () {
-                                showModalBottomSheet(
-                                  context: context,
-                                  builder: (context) => SafeArea(
-                                    child: FutureBuilder<bool>(
-                                      future: FavoritesDB().isFavorite(
-                                        song.data,
-                                      ),
-                                      builder: (context, snapshot) {
-                                        final isFav = snapshot.data ?? false;
-                                        return Column(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            ListTile(
-                                              leading: Icon(
-                                                isFav
-                                                    ? Icons.delete_outline
-                                                    : Icons.favorite_border,
-                                              ),
-                                              title: TranslatedText(
-                                                isFav
-                                                    ? 'remove_from_favorites'
-                                                    : 'add_to_favorites',
-                                              ),
-                                              onTap: () async {
-                                                Navigator.of(context).pop();
-                                                if (isFav) {
-                                                  await FavoritesDB()
-                                                      .removeFavorite(
-                                                        song.data,
-                                                      );
-                                                  favoritesShouldReload.value =
-                                                      !favoritesShouldReload
-                                                          .value;
-                                                } else {
-                                                  await _addToFavorites(song);
-                                                }
-                                              },
-                                            ),
-                                            if (_selectedPlaylist != null)
-                                              ListTile(
-                                                leading: const Icon(
-                                                  Icons.playlist_remove,
-                                                ),
-                                                title: TranslatedText('remove_from_playlist'),
-                                                onTap: () async {
-                                                  Navigator.of(context).pop();
-                                                  await PlaylistsDB()
-                                                      .removeSongFromPlaylist(
-                                                        _selectedPlaylist!['id'],
-                                                        song.data,
-                                                      );
-                                                  await _loadPlaylistSongs(
-                                                    _selectedPlaylist!,
-                                                  );
-                                                },
-                                              ),
-                                          ],
-                                        );
-                                      },
-                                    ),
-                                  ),
-                                );
-                              },
+                              
                             );
                           },
                         );
@@ -1164,47 +1389,56 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                   ),
                                 ),
 
-                                IconButton(
-                                  icon: const Icon(Icons.add, size: 28),
-                                  tooltip: LocaleProvider.tr('create_new_playlist'),
-                                  padding: const EdgeInsets.only(left: 8),
-                                  onPressed: () async {
-                                    final controller = TextEditingController();
-                                    final result = await showDialog<String>(
-                                      context: context,
-                                      builder: (context) => AlertDialog(
-                                        title: TranslatedText('new_playlist'),
-                                        content: TextField(
-                                          controller: controller,
-                                          autofocus: true,
-                                          decoration: InputDecoration(
-                                            labelText: LocaleProvider.tr('playlist_name'),
+                                Row(
+                                  children: [
+                                    IconButton(
+                                      icon: const Icon(Icons.refresh, size: 28),
+                                      tooltip: LocaleProvider.tr('reload'),
+                                      onPressed: _loadPlaylists,
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.add, size: 28),
+                                      tooltip: LocaleProvider.tr('create_new_playlist'),
+                                      padding: const EdgeInsets.only(left: 8),
+                                      onPressed: () async {
+                                        final controller = TextEditingController();
+                                        final result = await showDialog<String>(
+                                          context: context,
+                                          builder: (context) => AlertDialog(
+                                            title: TranslatedText('new_playlist'),
+                                            content: TextField(
+                                              controller: controller,
+                                              autofocus: true,
+                                              decoration: InputDecoration(
+                                                labelText: LocaleProvider.tr('playlist_name'),
+                                              ),
+                                            ),
+                                            actions: [
+                                              TextButton(
+                                                onPressed: () =>
+                                                    Navigator.of(context).pop(),
+                                                child: TranslatedText('cancel'),
+                                              ),
+                                              TextButton(
+                                                onPressed: () {
+                                                  Navigator.of(
+                                                    context,
+                                                  ).pop(controller.text.trim());
+                                                },
+                                                child: TranslatedText('create'),
+                                              ),
+                                            ],
                                           ),
-                                        ),
-                                        actions: [
-                                          TextButton(
-                                            onPressed: () =>
-                                                Navigator.of(context).pop(),
-                                            child: TranslatedText('cancel'),
-                                          ),
-                                          TextButton(
-                                            onPressed: () {
-                                              Navigator.of(
-                                                context,
-                                              ).pop(controller.text.trim());
-                                            },
-                                            child: TranslatedText('create'),
-                                          ),
-                                        ],
-                                      ),
-                                    );
-                                    if (result != null && result.isNotEmpty) {
-                                      await PlaylistsDB().createPlaylist(
-                                        result,
-                                      );
-                                      await _loadPlaylists();
-                                    }
-                                  },
+                                        );
+                                        if (result != null && result.isNotEmpty) {
+                                          await PlaylistsDB().createPlaylist(
+                                            result,
+                                          );
+                                          await _loadPlaylists();
+                                        }
+                                      },
+                                    ),
+                                  ],
                                 ),
                               ],
                             ),
