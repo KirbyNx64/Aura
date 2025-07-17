@@ -9,7 +9,7 @@
 ## ✨ Características
 
 - 🎶 **Reproductor completo** con notificación, lockscreen y soporte para controles de auriculares.
-- 📥 **Descarga desde YouTube**: convierte videos a MP3 usando `youtube_explode_dart` + `FFmpeg`.
+- 📥 **Descarga desde YouTube**: convierte videos a MP3 usando `youtube_explode_dart` + `FFmpeg` / `AudioTags`.
 - 🖼️ **Carátulas automáticas**: descarga y embebe la portada en el archivo MP3.
 - 📂 **Exploración por carpetas**: detecta solo directorios que contienen música.
 - 🔔 **Control multimedia total**: desde la app o el sistema.
@@ -22,6 +22,7 @@
 - [`audio_service`](https://pub.dev/packages/audio_service)
 - [`youtube_explode_dart`](https://pub.dev/packages/youtube_explode_dart)
 - [`ffmpeg_kit_flutter`](https://pub.dev/packages/ffmpeg_kit_flutter)
+- [`audiotags`](https://pub.dev/packages/audiotags)
 - [`path_provider`](https://pub.dev/packages/path_provider)
 - [`permission_handler`](https://pub.dev/packages/permission_handler)
 - [`sqflite`](https://pub.dev/packages/sqflite)
