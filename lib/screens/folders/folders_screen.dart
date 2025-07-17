@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:on_audio_query/on_audio_query.dart';
-import 'package:path/path.dart' as p;
 import 'package:music/main.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:music/utils/audio/background_audio_handler.dart';
@@ -10,9 +9,10 @@ import 'package:music/utils/notifiers.dart';
 import 'package:music/l10n/locale_provider.dart';
 import 'package:music/utils/theme_preferences.dart';
 import 'package:music/utils/db/playlists_db.dart';
+import 'package:music/utils/db/songs_index_db.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 enum OrdenCarpetas { normal, alfabetico, invertido, ultimoAgregado }
-
 OrdenCarpetas _orden = OrdenCarpetas.normal;
 
 class FoldersScreen extends StatefulWidget {
@@ -26,117 +26,105 @@ class _FoldersScreenState extends State<FoldersScreen>
     with WidgetsBindingObserver {
   final OnAudioQuery _audioQuery = OnAudioQuery();
 
-  Map<String, List<SongModel>> songsByFolder = {};
-  Map<String, String> folderDisplayNames = {}; // Mapa para nombres de visualización
+  // Cambia la selección múltiple a rutas
+  bool _isSelecting = false;
+  final Set<String> _selectedSongPaths = {};
+
+  // Cambia la estructura de canciones por carpeta a solo rutas
+  Map<String, List<String>> songPathsByFolder = {};
+  Map<String, String> folderDisplayNames = {};
   String? carpetaSeleccionada;
+  List<SongModel> _filteredSongs = [];
+  List<SongModel> _displaySongs = []; // Canciones que se muestran en la UI (filtradas por búsqueda)
+  List<SongModel> _originalSongs = []; // Lista original para restaurar orden
 
   Timer? _debounce;
 
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
-  List<SongModel> _filteredSongs = [];
-  List<SongModel> _originalSongs = []; // Lista original para restaurar orden
 
   double _lastBottomInset = 0.0;
   
-  bool _isLoading = true; // <-- Nuevo estado de carga
+  bool _isLoading = true;
 
-  // --- NUEVO: Estado para selección múltiple ---
-  bool _isSelecting = false;
-  final Set<int> _selectedSongIds = {};
+  static const String _orderPrefsKey = 'folders_screen_order_filter';
+
+  void _onFoldersShouldReload() {
+    cargarCanciones(forceIndex: false);
+  }
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    cargarCanciones();
+    _loadOrderFilter().then((_) => cargarCanciones());
     foldersShouldReload.addListener(_onFoldersShouldReload);
   }
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _lastBottomInset = View.of(context).viewInsets.bottom;
+  Future<void> _loadOrderFilter() async {
+    final prefs = await SharedPreferences.getInstance();
+    final int? savedIndex = prefs.getInt(_orderPrefsKey);
+    if (savedIndex != null && savedIndex >= 0 && savedIndex < OrdenCarpetas.values.length) {
+      setState(() {
+        _orden = OrdenCarpetas.values[savedIndex];
+      });
+    }
   }
 
-  void _onFoldersShouldReload() {
-    cargarCanciones();
+  Future<void> _saveOrderFilter() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_orderPrefsKey, _orden.index);
   }
 
-  Future<void> cargarCanciones() async {
+  // Al cargar canciones:
+  Future<void> cargarCanciones({bool forceIndex = false}) async {
     setState(() {
       _isLoading = true;
     });
-    final permiso = await _audioQuery.permissionsStatus();
-    if (!permiso) {
-      final solicitado = await _audioQuery.permissionsRequest();
-      if (!solicitado) {
-        setState(() {
-          _isLoading = false;
-        });
-        return;
+    final prefs = await SharedPreferences.getInstance();
+    final shouldIndex = forceIndex || (prefs.getBool('index_songs_on_startup') ?? true);
+    if (shouldIndex) {
+      await SongsIndexDB().indexAllSongs();
+    }
+    final folders = await SongsIndexDB().getFolders();
+    final Map<String, List<String>> agrupado = {};
+    final Map<String, String> displayNames = {};
+    for (final folder in folders) {
+      final paths = await SongsIndexDB().getSongsFromFolder(folder);
+      if (paths.isNotEmpty) {
+        agrupado[folder] = paths;
+        // Obtener el nombre original de la carpeta sin normalizar
+        final originalFolderName = _getOriginalFolderName(folder);
+        displayNames[folder] = originalFolderName;
       }
     }
-
-    final lista = await _audioQuery.querySongs();
-
-    final agrupado = <String, List<SongModel>>{};
-    final displayNames = <String, String>{};
-    
-    for (var song in lista) {
-      // Obtener la ruta original para el nombre de visualización
-      var originalPath = p.dirname(song.data);
-      var originalDisplayName = p.basename(originalPath);
-      
-      // Normalizar la ruta para evitar duplicados
-      var carpetaNormalizada = _normalizeFolderPath(song.data);
-      
-      // Agrupar canciones por ruta normalizada
-      agrupado.putIfAbsent(carpetaNormalizada, () => []).add(song);
-      
-      // Guardar el nombre de visualización original (mantener la primera que encontremos)
-      if (!displayNames.containsKey(carpetaNormalizada)) {
-        displayNames[carpetaNormalizada] = originalDisplayName;
-      }
-    }
-
     setState(() {
-      songsByFolder = agrupado;
+      songPathsByFolder = agrupado;
       folderDisplayNames = displayNames;
       carpetaSeleccionada = null;
       _isLoading = false;
     });
+    // Aplicar filtro si no es el normal
+    if (_orden != OrdenCarpetas.normal && _originalSongs.isNotEmpty) {
+      _ordenarCanciones();
+    }
   }
 
-  /// Normaliza la ruta de la carpeta de manera más robusta para evitar duplicados
-  String _normalizeFolderPath(String filePath) {
-    // Primero normalizar la ruta completa
-    var normalizedPath = p.normalize(filePath);
+  /// Obtiene el nombre original de la carpeta sin normalizar
+  String _getOriginalFolderName(String normalizedFolderPath) {
+    // Revertir la normalización para obtener el nombre original
+    var originalPath = normalizedFolderPath;
     
-    // Obtener el directorio padre
-    var dirPath = p.dirname(normalizedPath);
+    // Convertir de vuelta a la ruta original (sin minúsculas)
+    final segments = originalPath.split(RegExp(r'[\\/]'));
+    final folderName = segments.last;
     
-    // Normalizar el directorio padre también
-    dirPath = p.normalize(dirPath);
-    
-    // En Windows, convertir todas las barras a barras invertidas para consistencia
-    if (dirPath.contains('/')) {
-      dirPath = dirPath.replaceAll('/', '\\');
+    // Capitalizar la primera letra para que se vea mejor
+    if (folderName.isNotEmpty) {
+      return folderName[0].toUpperCase() + folderName.substring(1);
     }
     
-    // Remover cualquier espacio en blanco al final
-    dirPath = dirPath.trim();
-    
-    // Si la ruta termina con una barra invertida, removerla (excepto para rutas de unidad como C:\)
-    if (dirPath.endsWith('\\') && dirPath.length > 3) {
-      dirPath = dirPath.substring(0, dirPath.length - 1);
-    }
-    
-    // Normalizar mayúsculas/minúsculas para evitar duplicados
-    // En Android, convertir todo a minúsculas para consistencia
-    dirPath = dirPath.toLowerCase();
-    
-    return dirPath;
+    return folderName;
   }
 
   void _handleLongPress(BuildContext context, SongModel song) async {
@@ -169,7 +157,6 @@ class _FoldersScreenState extends State<FoldersScreen>
                 }
               },
             ),
-            // --- NUEVO: Añadir a playlist ---
             ListTile(
               leading: const Icon(Icons.playlist_add),
               title: TranslatedText('add_to_playlist'),
@@ -186,7 +173,7 @@ class _FoldersScreenState extends State<FoldersScreen>
                 Navigator.of(context).pop();
                 setState(() {
                   _isSelecting = true;
-                  _selectedSongIds.add(song.id);
+                  _selectedSongPaths.add(song.data);
                 });
               },
             ),
@@ -207,16 +194,15 @@ class _FoldersScreenState extends State<FoldersScreen>
     );
   }
 
-  Future<void> _playSong(SongModel song) async {
-    final playlist = _filteredSongs; // Usa la lista filtrada/ordenada
-    final index = playlist.indexWhere((s) => s.id == song.id);
-
+  // Para reproducir:
+  Future<void> _playSong(String path) async {
+    final index = _filteredSongs.indexWhere((s) => s.data == path);
     if (index != -1) {
       await (audioHandler as MyAudioHandler).setQueueFromSongs(
-        playlist,
+        _filteredSongs,
         initialIndex: index,
       );
-      await audioHandler.play();
+      await (audioHandler as MyAudioHandler).play();
     }
   }
 
@@ -233,13 +219,13 @@ class _FoldersScreenState extends State<FoldersScreen>
   void _onSongSelected(SongModel song) {
     if (_isSelecting) {
       setState(() {
-        if (_selectedSongIds.contains(song.id)) {
-          _selectedSongIds.remove(song.id);
-          if (_selectedSongIds.isEmpty) {
+        if (_selectedSongPaths.contains(song.data)) {
+          _selectedSongPaths.remove(song.data);
+          if (_selectedSongPaths.isEmpty) {
             _isSelecting = false;
           }
         } else {
-          _selectedSongIds.add(song.id);
+          _selectedSongPaths.add(song.data);
         }
       });
       return;
@@ -247,7 +233,7 @@ class _FoldersScreenState extends State<FoldersScreen>
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 300), () async {
       if (!mounted) return;
-      await _playSong(song);
+      await _playSong(song.data);
     });
   }
 
@@ -259,7 +245,7 @@ class _FoldersScreenState extends State<FoldersScreen>
     setState(() {
       switch (_orden) {
         case OrdenCarpetas.normal:
-          _filteredSongs = List.from(_originalSongs); // Restaura el orden original
+          _filteredSongs = List.from(_originalSongs);
           break;
         case OrdenCarpetas.alfabetico:
           _filteredSongs.sort((a, b) => a.title.compareTo(b.title));
@@ -272,16 +258,49 @@ class _FoldersScreenState extends State<FoldersScreen>
           break;
       }
     });
+    _saveOrderFilter();
+    // Actualizar también la lista de visualización
+    _onSearchChanged();
   }
 
-  void _onSearchChanged(List<SongModel> canciones) {
+  void _aplicarOrdenamiento(List<SongModel> lista) {
+    switch (_orden) {
+      case OrdenCarpetas.normal:
+        // Mantener el orden original de la carpeta
+        break;
+      case OrdenCarpetas.alfabetico:
+        lista.sort((a, b) => a.title.compareTo(b.title));
+        break;
+      case OrdenCarpetas.invertido:
+        lista.sort((a, b) => b.title.compareTo(a.title));
+        break;
+      case OrdenCarpetas.ultimoAgregado:
+        // Invertir el orden de la lista
+        lista.sort((a, b) {
+          final indexA = _originalSongs.indexOf(a);
+          final indexB = _originalSongs.indexOf(b);
+          return indexB.compareTo(indexA);
+        });
+        break;
+    }
+  }
+
+  void _onSearchChanged() {
     final query = quitarDiacriticos(_searchController.text.toLowerCase());
 
-    List<SongModel> filteredList;
+    // Primero aplicar ordenamiento a todas las canciones
+    final allSongsOrdered = List<SongModel>.from(_originalSongs);
+    _aplicarOrdenamiento(allSongsOrdered);
+    
+    // Guardar todas las canciones ordenadas en _filteredSongs (para reproducción)
+    _filteredSongs = allSongsOrdered;
+
+    // Filtrar solo las que se muestran en la UI
+    List<SongModel> displayList;
     if (query.isEmpty) {
-      filteredList = List.from(canciones);
+      displayList = List<SongModel>.from(allSongsOrdered);
     } else {
-      filteredList = canciones.where((song) {
+      displayList = allSongsOrdered.where((song) {
         final title = quitarDiacriticos(song.title);
         final artist = quitarDiacriticos(song.artist ?? '');
         return title.contains(query) || artist.contains(query);
@@ -289,11 +308,8 @@ class _FoldersScreenState extends State<FoldersScreen>
     }
 
     setState(() {
-      _filteredSongs = filteredList;
+      _displaySongs = displayList;
     });
-    
-    // Aplicar el ordenamiento actual después del filtrado
-    _ordenarCanciones();
   }
 
   @override
@@ -323,7 +339,7 @@ class _FoldersScreenState extends State<FoldersScreen>
     if (_isLoading) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
-    if (songsByFolder.isEmpty) {
+    if (songPathsByFolder.isEmpty) {
       return Scaffold(
         body: Center(
           child: Column(
@@ -361,21 +377,21 @@ class _FoldersScreenState extends State<FoldersScreen>
               IconButton(
                 icon: const Icon(Icons.refresh, size: 28),
                 tooltip: LocaleProvider.tr('reload'),
-                onPressed: cargarCanciones,
+                onPressed: () => cargarCanciones(forceIndex: true),
               ),
             ],
           ),
           body: StreamBuilder<MediaItem?>(
-            stream: audioHandler.mediaItem,
+            stream: audioHandler?.mediaItem,
             builder: (context, currentSnapshot) {
               final current = currentSnapshot.data;
               final space = current != null ? 100.0 : 0.0;
               return Padding(
                 padding: EdgeInsets.only(bottom: space),
                 child: ListView.builder(
-                  itemCount: songsByFolder.length,
+                  itemCount: songPathsByFolder.length,
                   itemBuilder: (context, i) {
-                    final sortedEntries = songsByFolder.entries.toList()
+                    final sortedEntries = songPathsByFolder.entries.toList()
                       ..sort(
                         (a, b) => folderDisplayNames[a.key]!
                             .toLowerCase()
@@ -389,17 +405,22 @@ class _FoldersScreenState extends State<FoldersScreen>
                       leading: const Icon(Icons.folder, size: 38),
                       title: Text(nombre),
                       subtitle: Text('${canciones.length} ${LocaleProvider.tr('songs')}'),
-                      onTap: () {
+                      onTap: () async {
                         setState(() {
                           carpetaSeleccionada = entry.key;
                           _searchController.clear();
-                          _originalSongs = List.from(canciones);
-                          _filteredSongs = List.from(canciones);
-                          _ordenarCanciones();
-                          // Al entrar a la carpeta, limpiar selección múltiple
                           _isSelecting = false;
-                          _selectedSongIds.clear();
+                          _selectedSongPaths.clear();
                         });
+                        
+                        // Cargar los objetos SongModel completos
+                        final allSongs = await _audioQuery.querySongs();
+                        final songsInFolder = allSongs.where((s) => entry.value.contains(s.data)).toList();
+                        
+                        setState(() {
+                          _originalSongs = songsInFolder;
+                        });
+                        _ordenarCanciones();
                       },
                     );
                   },
@@ -411,8 +432,6 @@ class _FoldersScreenState extends State<FoldersScreen>
       );
     }
 
-    final canciones = songsByFolder[carpetaSeleccionada] ?? [];
-
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, result) {
@@ -421,9 +440,10 @@ class _FoldersScreenState extends State<FoldersScreen>
             carpetaSeleccionada = null;
             _searchController.clear();
             _filteredSongs.clear();
+            _displaySongs.clear();
             // Al salir, limpiar selección múltiple
             _isSelecting = false;
-            _selectedSongIds.clear();
+            _selectedSongPaths.clear();
           });
         }
       },
@@ -434,43 +454,66 @@ class _FoldersScreenState extends State<FoldersScreen>
         },
         child: Scaffold(
           appBar: AppBar(
-            leading: IconButton(
-              icon: const Icon(Icons.arrow_back),
-              onPressed: () {
-                setState(() {
-                  carpetaSeleccionada = null;
-                  _searchController.clear();
-                  _filteredSongs.clear();
-                  // Al salir, limpiar selección múltiple
-                  _isSelecting = false;
-                  _selectedSongIds.clear();
-                });
-              },
-            ),
-            title: Text(folderDisplayNames[carpetaSeleccionada] ?? LocaleProvider.tr('folders')),
+            leading: _isSelecting
+                ? null
+                : IconButton(
+                    icon: const Icon(Icons.arrow_back),
+                    onPressed: () {
+                      setState(() {
+                        carpetaSeleccionada = null;
+                        _searchController.clear();
+                        _filteredSongs.clear();
+                        _displaySongs.clear();
+                        // Al salir, limpiar selección múltiple
+                        _isSelecting = false;
+                        _selectedSongPaths.clear();
+                      });
+                    },
+                  ),
+            title: _isSelecting
+                ? Text('${_selectedSongPaths.length} ${LocaleProvider.tr('selected')}')
+                : Text(folderDisplayNames[carpetaSeleccionada] ?? LocaleProvider.tr('folders')),
             actions: [
               if (_isSelecting) ...[
                 IconButton(
                   icon: const Icon(Icons.favorite_outline),
                   tooltip: LocaleProvider.tr('add_to_favorites'),
-                  onPressed: _selectedSongIds.isEmpty ? null : () async {
+                  onPressed: _selectedSongPaths.isEmpty ? null : () async {
                     // Acción masiva: añadir a favoritos
-                    final selectedSongs = _filteredSongs.where((s) => _selectedSongIds.contains(s.id));
+                    final selectedSongs = _displaySongs.where((s) => _selectedSongPaths.contains(s.data));
                     for (final song in selectedSongs) {
                       await _addToFavorites(song);
                     }
                     favoritesShouldReload.value = !favoritesShouldReload.value;
                     setState(() {
                       _isSelecting = false;
-                      _selectedSongIds.clear();
+                      _selectedSongPaths.clear();
                     });
                   },
                 ),
                 IconButton(
                   icon: const Icon(Icons.playlist_add),
                   tooltip: LocaleProvider.tr('add_to_playlist'),
-                  onPressed: _selectedSongIds.isEmpty ? null : () async {
+                  onPressed: _selectedSongPaths.isEmpty ? null : () async {
                     await _handleAddToPlaylistMassive(context);
+                  },
+                ),
+                IconButton(
+                  icon: const Icon(Icons.select_all),
+                  tooltip: LocaleProvider.tr('select_all'),
+                  onPressed: () {
+                    setState(() {
+                      if (_selectedSongPaths.length == _displaySongs.length) {
+                        // Si todos están seleccionados, deseleccionar todos
+                        _selectedSongPaths.clear();
+                        if (_selectedSongPaths.isEmpty) {
+                          _isSelecting = false;
+                        }
+                      } else {
+                        // Seleccionar todos
+                        _selectedSongPaths.addAll(_displaySongs.map((s) => s.data));
+                      }
+                    });
                   },
                 ),
                 IconButton(
@@ -479,7 +522,7 @@ class _FoldersScreenState extends State<FoldersScreen>
                   onPressed: () {
                     setState(() {
                       _isSelecting = false;
-                      _selectedSongIds.clear();
+                      _selectedSongPaths.clear();
                     });
                   },
                 ),
@@ -488,9 +531,9 @@ class _FoldersScreenState extends State<FoldersScreen>
                   icon: const Icon(Icons.shuffle, size: 28),
                   tooltip: LocaleProvider.tr('shuffle'),
                   onPressed: () {
-                    if (_filteredSongs.isNotEmpty) {
-                      final random = (_filteredSongs.toList()..shuffle()).first;
-                      _playSong(random);
+                    if (_displaySongs.isNotEmpty) {
+                      final random = (_displaySongs.toList()..shuffle()).first;
+                      _playSong(random.data);
                     }
                   },
                 ),
@@ -501,6 +544,7 @@ class _FoldersScreenState extends State<FoldersScreen>
                       _orden = orden;
                       _ordenarCanciones();
                     });
+                    _saveOrderFilter();
                   },
                   itemBuilder: (context) => [
                     PopupMenuItem(
@@ -536,7 +580,7 @@ class _FoldersScreenState extends State<FoldersScreen>
                     return TextField(
                       controller: _searchController,
                       focusNode: _searchFocusNode,
-                      onChanged: (_) => _onSearchChanged(canciones),
+                      onChanged: (_) => _onSearchChanged(),
                       onEditingComplete: () {
                         _searchFocusNode.unfocus();
                       },
@@ -555,13 +599,13 @@ class _FoldersScreenState extends State<FoldersScreen>
             ),
           ),
           body: StreamBuilder<MediaItem?>(
-            stream: audioHandler.mediaItem,
+            stream: audioHandler?.mediaItem,
             builder: (context, currentSnapshot) {
               // Detectar si el tema AMOLED está activo
               final isAmoledTheme = colorSchemeNotifier.value == AppColorScheme.amoled;
               final current = currentSnapshot.data;
               return StreamBuilder<bool>(
-                stream: audioHandler.playbackState
+                stream: audioHandler?.playbackState
                     .map((s) => s.playing)
                     .distinct(),
                 initialData: false,
@@ -579,26 +623,27 @@ class _FoldersScreenState extends State<FoldersScreen>
                             ),
                           )
                         : ListView.builder(
-                            itemCount: _filteredSongs.length,
+                            itemCount: _displaySongs.length,
                             itemBuilder: (context, i) {
-                              final song = _filteredSongs[i];
+                              final song = _displaySongs[i];
                               // Compara con el path, que es lo que normalmente usas como id en MediaItem
-                              final isCurrent = current?.id == song.data;
+                              final path = song.data;
+                              final isCurrent = (current?.id != null && path.isNotEmpty && current!.id == path);
                               final isPlaying = isCurrent && playing;
-                              final isSelected = _selectedSongIds.contains(song.id);
+                              final isSelected = _selectedSongPaths.contains(path);
 
                               return ListTile(
                                 onTap: () => _onSongSelected(song),
                                 onLongPress: () {
                                   if (_isSelecting) {
                                     setState(() {
-                                      if (_selectedSongIds.contains(song.id)) {
-                                        _selectedSongIds.remove(song.id);
-                                        if (_selectedSongIds.isEmpty) {
+                                      if (_selectedSongPaths.contains(path)) {
+                                  _selectedSongPaths.remove(path);
+                                        if (_selectedSongPaths.isEmpty) {
                                           _isSelecting = false;
                                         }
                                       } else {
-                                        _selectedSongIds.add(song.id);
+                                        _selectedSongPaths.add(path);
                                       }
                                     });
                                   } else {
@@ -614,10 +659,10 @@ class _FoldersScreenState extends State<FoldersScreen>
                                         onChanged: (checked) {
                                           setState(() {
                                             if (checked == true) {
-                                              _selectedSongIds.add(song.id);
+                                              _selectedSongPaths.add(path);
                                             } else {
-                                              _selectedSongIds.remove(song.id);
-                                              if (_selectedSongIds.isEmpty) {
+                                              _selectedSongPaths.remove(path);
+                                              if (_selectedSongPaths.isEmpty) {
                                                 _isSelecting = false;
                                               }
                                             }
@@ -681,10 +726,10 @@ class _FoldersScreenState extends State<FoldersScreen>
                                         onPressed: () {
                                           if (isCurrent) {
                                             isPlaying
-                                                ? audioHandler.pause()
-                                                : audioHandler.play();
+                                                ? (audioHandler as MyAudioHandler).pause()
+                                                : (audioHandler as MyAudioHandler).play();
                                           } else {
-                                            _playSong(song);
+                                            _playSong(song.data);
                                           }
                                         },
                                       )
@@ -692,10 +737,7 @@ class _FoldersScreenState extends State<FoldersScreen>
                                 selected: isCurrent,
                                 selectedTileColor: isAmoledTheme
                                    ? Colors.white.withValues(alpha: 0.1) // Blanco muy transparente para AMOLED
-                                   : Theme.of(context).colorScheme.primaryContainer,
-                                tileColor: isSelected
-                                    ? Theme.of(context).colorScheme.secondaryContainer.withValues(alpha: 0.4)
-                                    : null,
+                                  : Theme.of(context).colorScheme.primaryContainer,
                               );
                             },
                           ),
@@ -712,39 +754,25 @@ class _FoldersScreenState extends State<FoldersScreen>
   Future<void> _handleAddToPlaylistMassive(BuildContext context) async {
     final playlists = List<Map<String, dynamic>>.from(await PlaylistsDB().getAllPlaylists());
     if (!context.mounted) return;
-    if (playlists.isEmpty) {
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: TranslatedText('add_to_playlist'),
-          content: TranslatedText('no_playlists_found'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: TranslatedText('ok'),
-            ),
-          ],
-        ),
-      );
-      return;
-    }
-    if (!context.mounted) return;
+    final TextEditingController playlistNameController = TextEditingController();
     final selectedPlaylistId = await showDialog<int>(
       context: context,
       builder: (context) {
-        final TextEditingController playlistNameController = TextEditingController();
         return StatefulBuilder(
           builder: (context, setStateDialog) => SimpleDialog(
             title: TranslatedText('select_playlist'),
             children: [
-              for (final playlist in playlists)
-                SimpleDialogOption(
-                  onPressed: () {
-                    Navigator.of(context).pop(playlist['id'] as int);
-                  },
-                  child: Text(playlist['name'] as String),
-                ),
-              const Divider(),
+              if (playlists.isNotEmpty)
+                ...[
+                  for (final playlist in playlists)
+                    SimpleDialogOption(
+                      onPressed: () {
+                        Navigator.of(context).pop(playlist['id'] as int);
+                      },
+                      child: Text(playlist['name'] as String),
+                    ),
+                  const Divider(),
+                ],
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                 child: TextField(
@@ -752,6 +780,7 @@ class _FoldersScreenState extends State<FoldersScreen>
                   decoration: InputDecoration(
                     hintText: LocaleProvider.tr('new_playlist_name'),
                   ),
+                  autofocus: playlists.isEmpty,
                 ),
               ),
               TextButton.icon(
@@ -761,7 +790,6 @@ class _FoldersScreenState extends State<FoldersScreen>
                   final name = playlistNameController.text.trim();
                   if (name.isEmpty) return;
                   final id = await PlaylistsDB().createPlaylist(name);
-                  // Notificar a la app que se creó una nueva playlist
                   playlistsShouldReload.value = !playlistsShouldReload.value;
                   setStateDialog(() {
                     playlists.insert(0, {'id': id, 'name': name});
@@ -778,14 +806,13 @@ class _FoldersScreenState extends State<FoldersScreen>
       },
     );
     if (selectedPlaylistId != null) {
-      final selectedSongs = _filteredSongs.where((s) => _selectedSongIds.contains(s.id));
+      final selectedSongs = _displaySongs.where((s) => _selectedSongPaths.contains(s.data));
       for (final song in selectedSongs) {
         await PlaylistsDB().addSongToPlaylist(selectedPlaylistId, song);
       }
-      // Confirmación eliminada: no mostrar SnackBar
       setState(() {
         _isSelecting = false;
-        _selectedSongIds.clear();
+        _selectedSongPaths.clear();
       });
     }
   }
@@ -793,39 +820,25 @@ class _FoldersScreenState extends State<FoldersScreen>
   Future<void> _handleAddToPlaylistSingle(BuildContext context, SongModel song) async {
     final playlists = List<Map<String, dynamic>>.from(await PlaylistsDB().getAllPlaylists());
     if (!context.mounted) return;
-    if (playlists.isEmpty) {
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: TranslatedText('add_to_playlist'),
-          content: TranslatedText('no_playlists_found'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: TranslatedText('ok'),
-            ),
-          ],
-        ),
-      );
-      return;
-    }
-    if (!context.mounted) return;
+    final TextEditingController playlistNameController = TextEditingController();
     final selectedPlaylistId = await showDialog<int>(
       context: context,
       builder: (context) {
-        final TextEditingController playlistNameController = TextEditingController();
         return StatefulBuilder(
           builder: (context, setStateDialog) => SimpleDialog(
             title: TranslatedText('select_playlist'),
             children: [
-              for (final playlist in playlists)
-                SimpleDialogOption(
-                  onPressed: () {
-                    Navigator.of(context).pop(playlist['id'] as int);
-                  },
-                  child: Text(playlist['name'] as String),
-                ),
-              const Divider(),
+              if (playlists.isNotEmpty)
+                ...[
+                  for (final playlist in playlists)
+                    SimpleDialogOption(
+                      onPressed: () {
+                        Navigator.of(context).pop(playlist['id'] as int);
+                      },
+                      child: Text(playlist['name'] as String),
+                    ),
+                  const Divider(),
+                ],
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                 child: TextField(
@@ -833,6 +846,7 @@ class _FoldersScreenState extends State<FoldersScreen>
                   decoration: InputDecoration(
                     hintText: LocaleProvider.tr('new_playlist_name'),
                   ),
+                  autofocus: playlists.isEmpty,
                 ),
               ),
               TextButton.icon(

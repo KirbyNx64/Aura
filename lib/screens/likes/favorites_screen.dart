@@ -9,6 +9,7 @@ import 'package:music/l10n/locale_provider.dart';
 import 'package:music/utils/theme_preferences.dart';
 import 'package:music/utils/db/playlists_db.dart';
 import 'package:music/utils/db/recent_db.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 enum OrdenFavoritos { normal, alfabetico, invertido, ultimoAgregado }
 
@@ -32,9 +33,10 @@ class _FavoritesScreenState extends State<FavoritesScreen>
   List<SongModel> _filteredFavorites = [];
   double _lastBottomInset = 0.0;
 
-  // --- NUEVO: Estado para selección múltiple ---
   bool _isSelecting = false;
   final Set<int> _selectedSongIds = {};
+
+  static const String _orderPrefsKey = 'favorites_screen_order_filter';
 
   @override
   void initState() {
@@ -44,7 +46,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
       vsync: this,
       duration: const Duration(milliseconds: 800),
     );
-    _loadFavorites(initial: true);
+    _loadOrderFilter().then((_) => _loadFavorites(initial: true));
 
     _searchFocusNode.addListener(() {
       setState(() {});
@@ -88,6 +90,9 @@ class _FavoritesScreenState extends State<FavoritesScreen>
       _refreshController.stop();
       _refreshController.reset();
     });
+    if (_orden != OrdenFavoritos.normal) {
+      _ordenarFavoritos();
+    }
   }
 
   Future<void> _playSong(SongModel song) async {
@@ -106,7 +111,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
         limitedQueue,
         initialIndex: newIndex,
       );
-      await audioHandler.play();
+      await (audioHandler as MyAudioHandler).play();
     }
   }
 
@@ -132,6 +137,21 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     });
   }
 
+  Future<void> _loadOrderFilter() async {
+    final prefs = await SharedPreferences.getInstance();
+    final int? savedIndex = prefs.getInt(_orderPrefsKey);
+    if (savedIndex != null && savedIndex >= 0 && savedIndex < OrdenFavoritos.values.length) {
+      setState(() {
+        _orden = OrdenFavoritos.values[savedIndex];
+      });
+    }
+  }
+
+  Future<void> _saveOrderFilter() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_orderPrefsKey, _orden.index);
+  }
+
   void _ordenarFavoritos() {
     setState(() {
       switch (_orden) {
@@ -151,6 +171,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
           break;
       }
     });
+    _saveOrderFilter();
   }
 
   @override
@@ -242,39 +263,25 @@ class _FavoritesScreenState extends State<FavoritesScreen>
   Future<void> _handleAddToPlaylistSingle(BuildContext context, SongModel song) async {
     final playlists = List<Map<String, dynamic>>.from(await PlaylistsDB().getAllPlaylists());
     if (!context.mounted) return;
-    if (playlists.isEmpty) {
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: TranslatedText('add_to_playlist'),
-          content: TranslatedText('no_playlists_found'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: TranslatedText('ok'),
-            ),
-          ],
-        ),
-      );
-      return;
-    }
-    if (!context.mounted) return;
+    final TextEditingController playlistNameController = TextEditingController();
     final selectedPlaylistId = await showDialog<int>(
       context: context,
       builder: (context) {
-        final TextEditingController playlistNameController = TextEditingController();
         return StatefulBuilder(
           builder: (context, setStateDialog) => SimpleDialog(
             title: TranslatedText('select_playlist'),
             children: [
-              for (final playlist in playlists)
-                SimpleDialogOption(
-                  onPressed: () {
-                    Navigator.of(context).pop(playlist['id'] as int);
-                  },
-                  child: Text(playlist['name'] as String),
-                ),
-              const Divider(),
+              if (playlists.isNotEmpty)
+                ...[
+                  for (final playlist in playlists)
+                    SimpleDialogOption(
+                      onPressed: () {
+                        Navigator.of(context).pop(playlist['id'] as int);
+                      },
+                      child: Text(playlist['name'] as String),
+                    ),
+                  const Divider(),
+                ],
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                 child: TextField(
@@ -282,6 +289,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                   decoration: InputDecoration(
                     hintText: LocaleProvider.tr('new_playlist_name'),
                   ),
+                  autofocus: playlists.isEmpty,
                 ),
               ),
               TextButton.icon(
@@ -314,39 +322,25 @@ class _FavoritesScreenState extends State<FavoritesScreen>
   Future<void> _handleAddToPlaylistMassive(BuildContext context) async {
     final playlists = List<Map<String, dynamic>>.from(await PlaylistsDB().getAllPlaylists());
     if (!context.mounted) return;
-    if (playlists.isEmpty) {
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: TranslatedText('add_to_playlist'),
-          content: TranslatedText('no_playlists_found'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: TranslatedText('ok'),
-            ),
-          ],
-        ),
-      );
-      return;
-    }
-    if (!context.mounted) return;
+    final TextEditingController playlistNameController = TextEditingController();
     final selectedPlaylistId = await showDialog<int>(
       context: context,
       builder: (context) {
-        final TextEditingController playlistNameController = TextEditingController();
         return StatefulBuilder(
           builder: (context, setStateDialog) => SimpleDialog(
             title: TranslatedText('select_playlist'),
             children: [
-              for (final playlist in playlists)
-                SimpleDialogOption(
-                  onPressed: () {
-                    Navigator.of(context).pop(playlist['id'] as int);
-                  },
-                  child: Text(playlist['name'] as String),
-                ),
-              const Divider(),
+              if (playlists.isNotEmpty)
+                ...[
+                  for (final playlist in playlists)
+                    SimpleDialogOption(
+                      onPressed: () {
+                        Navigator.of(context).pop(playlist['id'] as int);
+                      },
+                      child: Text(playlist['name'] as String),
+                    ),
+                  const Divider(),
+                ],
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                 child: TextField(
@@ -354,6 +348,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                   decoration: InputDecoration(
                     hintText: LocaleProvider.tr('new_playlist_name'),
                   ),
+                  autofocus: playlists.isEmpty,
                 ),
               ),
               TextButton.icon(
@@ -425,7 +420,6 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     });
   }
 
-  // --- NUEVO: Diálogo para agregar desde MostPlayedDB ---
   Future<void> _showAddFromRecentsDialog() async {
     final recents = await RecentsDB().getRecents();
     if (!mounted) return;
@@ -534,13 +528,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
       resizeToAvoidBottomInset: true,
       appBar: AppBar(
         title: _isSelecting
-            ? Row(
-                children: [
-                  Icon(Icons.check_box, size: 28),
-                  const SizedBox(width: 8),
-                  Text('${_selectedSongIds.length}'),
-                ],
-              )
+            ? Text('${_selectedSongIds.length} ${LocaleProvider.tr('selected')}')
             : Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -562,6 +550,27 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                   onPressed: _selectedSongIds.isEmpty
                       ? null
                       : () => _handleAddToPlaylistMassive(context),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.select_all),
+                  tooltip: LocaleProvider.tr('select_all'),
+                  onPressed: () {
+                    final songsToShow = _searchController.text.isNotEmpty
+                        ? _filteredFavorites
+                        : _favorites;
+                    setState(() {
+                      if (_selectedSongIds.length == songsToShow.length) {
+                        // Si todos están seleccionados, deseleccionar todos
+                        _selectedSongIds.clear();
+                        if (_selectedSongIds.isEmpty) {
+                          _isSelecting = false;
+                        }
+                      } else {
+                        // Seleccionar todos
+                        _selectedSongIds.addAll(songsToShow.map((s) => s.id));
+                      }
+                    });
+                  },
                 ),
                 IconButton(
                   icon: const Icon(Icons.close),
@@ -601,6 +610,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                         _orden = orden;
                         _ordenarFavoritos();
                       });
+                      _saveOrderFilter();
                     },
                     itemBuilder: (context) => [
                       PopupMenuItem(
@@ -674,11 +684,11 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                     );
                   }
                   return StreamBuilder<MediaItem?>(
-                    stream: audioHandler.mediaItem,
+                    stream: audioHandler?.mediaItem,
                     builder: (context, currentSnapshot) {
                       final current = currentSnapshot.data;
                       return StreamBuilder<bool>(
-                        stream: audioHandler.playbackState
+                        stream: audioHandler?.playbackState
                             .map((s) => s.playing)
                             .distinct(),
                         initialData: false,
@@ -784,8 +794,8 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                                     onPressed: () {
                                       if (isCurrent) {
                                         playing
-                                            ? audioHandler.pause()
-                                            : audioHandler.play();
+                                            ? (audioHandler as MyAudioHandler).pause()
+                                            : (audioHandler as MyAudioHandler).play();
                                       } else {
                                         _playSong(song);
                                       }

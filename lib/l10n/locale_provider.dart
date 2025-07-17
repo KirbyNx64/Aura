@@ -12,7 +12,7 @@ class LocaleProvider {
     final prefs = await SharedPreferences.getInstance();
     final lang = prefs.getString('app_language') ?? 'es';
     _currentMap = lang == 'en' ? appLocalizationsEn : appLocalizationsEs;
-    languageNotifier.value = lang; // Notifica a toda la app
+    languageNotifier.value = lang;
   }
 
   static void setLanguage(String lang) {

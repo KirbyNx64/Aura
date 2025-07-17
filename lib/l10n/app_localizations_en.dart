@@ -44,6 +44,8 @@ const Map<String, String> appLocalizationsEn = {
 
   // Music and playback
   'music_and_playback': 'Music and playback',
+  'index_songs_on_startup': 'Index song files',
+  'index_songs_on_startup_desc': 'Automatically sync the database with device files',
   'delete_lyrics': 'Delete song lyrics',
   'delete_lyrics_desc': 'Delete all cached synced lyrics',
   'delete_lyrics_confirm': 'Are you sure you want to delete all stored lyrics? This action cannot be undone.',
@@ -104,6 +106,7 @@ const Map<String, String> appLocalizationsEn = {
 
   // Favorites screen
   'favorites': 'Favorites',
+  'select_all': 'Select all',
   'add': 'Add',
   'add_from_recents': 'Add from recents',
   'search_by_title_or_artist': 'Search by title or artist',
@@ -242,7 +245,7 @@ const Map<String, String> appLocalizationsEn = {
   'available': 'available!',
   'update': 'Update',
   'quick_access': 'Quick access',
-  'no_songs_to_show': 'No songs to show.',
+  'no_songs_to_show': 'No songs to show yet.',
   'quick_pick': 'Quick pick',
   'create_new_playlist': 'Create new playlist',
   'new_playlist': 'New playlist',

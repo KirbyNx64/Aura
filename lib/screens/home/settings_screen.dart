@@ -17,7 +17,7 @@ import 'package:music/utils/notifiers.dart';
 import 'package:music/utils/audio/synced_lyrics_service.dart';
 import 'package:music/l10n/locale_provider.dart';
 import 'package:device_info_plus/device_info_plus.dart';
-import 'dart:convert'; // Added for JsonEncoder and jsonDecode
+import 'dart:convert';
 import 'package:flutter/services.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -123,11 +123,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (!status.isGranted) {
         final intent = AndroidIntent(
           action: 'android.settings.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS',
-          data: 'package:com.kirby.aura', // Cambia por tu package real si es diferente
+          data: 'package:com.kirby.aura',
           flags: <int>[Flag.FLAG_ACTIVITY_NEW_TASK],
         );
         await intent.launch();
-        // Espera y vuelve a checar el estado
         await Future.delayed(const Duration(seconds: 2));
         _checkBatteryOptimization();
       } else {
@@ -275,7 +274,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
           );
         }
       } else {
-        // For non-Android platforms, show error
         if (mounted) {
           showDialog(
             context: context,
@@ -553,6 +551,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Card(
             child: Column(
               children: [
+                FutureBuilder<SharedPreferences>(
+                  future: SharedPreferences.getInstance(),
+                  builder: (context, snapshot) {
+                    if (!snapshot.hasData) return SizedBox.shrink();
+                    final prefs = snapshot.data!;
+                    final value = prefs.getBool('index_songs_on_startup') ?? true;
+                    return SwitchListTile(
+                      value: value,
+                      onChanged: (v) async {
+                        await prefs.setBool('index_songs_on_startup', v);
+                        setState(() {});
+                      },
+                      title: Text(LocaleProvider.tr('index_songs_on_startup')),
+                      subtitle: Text(LocaleProvider.tr('index_songs_on_startup_desc'), style: const TextStyle(fontSize: 12)),
+                      secondary: const Icon(Icons.library_music),
+                    );
+                  },
+                ),
+                const Divider(height: 1),
                 ListTile(
                   leading: const Icon(Icons.lyrics),
                   title: Text(LocaleProvider.tr('delete_lyrics')),
@@ -781,7 +798,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       // Obtener datos de las bases de datos
       final favorites = await FavoritesDB().getFavorites();
       final recents = await RecentsDB().getRecents();
-      final mostPlayed = await MostPlayedDB().getMostPlayed(limit: 10000); // Limite alto para obtener todos
+      final mostPlayed = await MostPlayedDB().getMostPlayed(limit: 10000);
       final playlistsRaw = await PlaylistsDB().getAllPlaylists();
       final playlists = <Map<String, dynamic>>[];
       for (final pl in playlistsRaw) {

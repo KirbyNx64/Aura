@@ -11,5 +11,4 @@ final downloadDirectoryNotifier = ValueNotifier<String?>(null);
 final downloadTypeNotifier = ValueNotifier<bool>(false); // true: Explode, false: Directo
 final audioProcessorNotifier = ValueNotifier<bool>(false); // true: FFmpeg, false: AudioTags
 
-// Notifier para el esquema de color
 final colorSchemeNotifier = ValueNotifier<AppColorScheme>(AppColorScheme.deepPurple);

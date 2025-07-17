@@ -20,7 +20,7 @@ class FavoritesDB {
     final path = join(dbPath, 'favorites.db');
     return await openDatabase(
       path,
-      version: 2, // ⚠️ Aumenta la versión si ya tenías una DB anterior
+      version: 2,
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE favorites(

@@ -128,7 +128,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
   }
 
   Future<void> _loadLyrics(MediaItem mediaItem) async {
-    if (!mounted) return; // por si acaso
+    if (!mounted) return;
     setState(() {
       _loadingLyrics = true;
       _lyricLines = [];
@@ -136,7 +136,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     });
 
     final lyricsData = await SyncedLyricsService.getSyncedLyrics(mediaItem);
-    if (!mounted) return; // chequeo antes de seguir
+    if (!mounted) return; 
 
     final synced = lyricsData?['synced'];
     if (synced != null) {
@@ -160,7 +160,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
           );
         }
       }
-      if (!mounted) return; // chequeo antes de actualizar
+      if (!mounted) return;
       setState(() {
         _lyricLines = parsed;
         _loadingLyrics = false;
@@ -189,7 +189,6 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
       mediaItem.extras?['data'] ?? '',
     );
 
-    // Usamos `if (!context.mounted)` si estás dentro de un StatefulWidget con `BuildContext context`
     if (!context.mounted) return;
 
     showModalBottomSheet(
@@ -545,21 +544,21 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
             backgroundColor: Theme.of(context).scaffoldBackgroundColor,
             isScrollControlled: true,
             builder: (context) {
-              final queue = audioHandler.queue.value;
+              final queue = audioHandler?.queue.value;
               final maxHeight = MediaQuery.of(context).size.height * 0.6;
               return SafeArea(
                 child: Container(
                   constraints: BoxConstraints(maxHeight: maxHeight),
                   child: StreamBuilder<MediaItem?>(
-                    stream: audioHandler.mediaItem,
+                    stream: audioHandler?.mediaItem,
                     builder: (context, snapshot) {
                       final currentMediaItem =
-                          snapshot.data ?? audioHandler.mediaItem.valueOrNull;
+                          snapshot.data ?? audioHandler?.mediaItem.valueOrNull;
                       
                       // Encontrar el índice de la canción actual
                       int currentIndex = -1;
                       if (currentMediaItem != null) {
-                        for (int i = 0; i < queue.length; i++) {
+                        for (int i = 0; i < queue!.length; i++) {
                           if (queue[i].id == currentMediaItem.id) {
                             currentIndex = i;
                             break;
@@ -568,7 +567,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                       }
                       
                       return _PlaylistListView(
-                        queue: queue,
+                        queue: queue ?? [],
                         currentMediaItem: currentMediaItem,
                         currentIndex: currentIndex,
                         maxHeight: maxHeight,
@@ -582,7 +581,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
         }
       },
       child: StreamBuilder<MediaItem?>(
-        stream: audioHandler.mediaItem,
+        stream: audioHandler?.mediaItem,
         initialData: widget.initialMediaItem,
         builder: (context, snapshot) {
           final mediaItem = snapshot.data;
@@ -604,13 +603,13 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
             );
           }
 
-          final queue = audioHandler.queue.value;
+          final queue = audioHandler?.queue.value;
           final currentSongId = mediaItem.extras?['songId'] ?? 0;
           final songIdList = queue
-              .map((item) => item.extras?['songId'] ?? 0)
+              ?.map((item) => item.extras?['songId'] ?? 0)
               .toList()
               .cast<int>();
-          final currentIndex = songIdList.indexOf(currentSongId);
+          final currentIndex = songIdList?.indexOf(currentSongId) ?? 0;
           return Scaffold(
             appBar: AppBar(
               leading: IconButton(
@@ -847,7 +846,6 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                         builder: (context, posSnapshot) {
                           final position = posSnapshot.data ?? Duration.zero;
 
-                          // NUEVO: Usar durationStream como fallback si mediaItem.duration es nula o cero
                           return StreamBuilder<Duration?>(
                             stream: (audioHandler as MyAudioHandler)
                                 .player
@@ -894,7 +892,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                         _seekDebounceTimer?.cancel();
                                         
                                         // Ejecuta el seek inmediatamente al soltar
-                                        audioHandler.seek(
+                                        audioHandler?.seek(
                                           Duration(seconds: value.toInt()),
                                         );
                                         setState(() {
@@ -947,7 +945,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                       ),
                       // Controles de reproducción
                       StreamBuilder<PlaybackState>(
-                        stream: audioHandler.playbackState,
+                        stream: audioHandler?.playbackState,
                         builder: (context, snapshot) {
                           final state = snapshot.data;
                           final isPlaying = state?.playing ?? false;
@@ -1018,7 +1016,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                               : Theme.of(context).colorScheme.onSurface,
                                         iconSize: iconSize,
                                         onPressed: () {
-                                          audioHandler.setShuffleMode(
+                                          audioHandler?.setShuffleMode(
                                             isShuffle
                                                 ? AudioServiceShuffleMode.none
                                                 : AudioServiceShuffleMode.all,
@@ -1033,7 +1031,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                               : Theme.of(context).colorScheme.onSurface,
                                         iconSize: sideIconSize,
                                         onPressed: () =>
-                                            audioHandler.skipToPrevious(),
+                                            audioHandler?.skipToPrevious(),
                                       ),
                                       Padding(
                                         padding: EdgeInsets.symmetric(
@@ -1054,8 +1052,8 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                             highlightColor: Colors.transparent,
                                             onTap: () {
                                               isPlaying
-                                                  ? audioHandler.pause()
-                                                  : audioHandler.play();
+                                                  ? audioHandler?.pause()
+                                                  : audioHandler?.play();
                                             },
                                             child: SizedBox(
                                               width: mainIconSize,
@@ -1082,7 +1080,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                               : Theme.of(context).colorScheme.onSurface,
                                         iconSize: sideIconSize,
                                         onPressed: () =>
-                                            audioHandler.skipToNext(),
+                                            audioHandler?.skipToNext(),  
                                       ),
                                       IconButton(
                                         icon: Icon(repeatIcon),
@@ -1102,7 +1100,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                             newMode =
                                                 AudioServiceRepeatMode.none;
                                           }
-                                          audioHandler.setRepeatMode(newMode);
+                                          audioHandler?.setRepeatMode(newMode);
                                         },
                                         tooltip: LocaleProvider.tr('repeat'),
                                       ),
@@ -1435,8 +1433,8 @@ class SleepTimerOptionsSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final mediaItem = audioHandler.mediaItem.valueOrNull;
-    final playbackState = audioHandler.playbackState.valueOrNull;
+    final mediaItem = audioHandler?.mediaItem.valueOrNull;
+    final playbackState = audioHandler?.playbackState.valueOrNull;
     final position = playbackState?.position ?? Duration.zero;
     final duration = mediaItem?.duration ?? Duration.zero;
     final remaining = duration > position ? duration - position : Duration.zero;
@@ -1707,7 +1705,7 @@ class _PlaylistListViewState extends State<_PlaylistListView> {
               ? Colors.white.withValues(alpha: 0.1)
               : Theme.of(context).colorScheme.primaryContainer,
           onTap: () {
-            audioHandler.skipToQueueItem(index - 1);
+            audioHandler?.skipToQueueItem(index - 1);
             // No cerramos el modal, así se mantiene abierto
           },
         );

@@ -363,7 +363,7 @@ class DownloadManager {
 
       onProgressUpdate?.call(0.9);
 
-      final currentMediaItem = audioHandler.mediaItem.value;
+      final currentMediaItem = audioHandler?.mediaItem.value;
       final isPlayingCurrent =
           currentMediaItem != null && currentMediaItem.id == mp3Path;
 

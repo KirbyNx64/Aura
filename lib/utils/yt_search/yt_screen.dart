@@ -534,7 +534,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
             child: Padding(
               padding: const EdgeInsets.all(16),
                               child: StreamBuilder<MediaItem?>(
-                stream: audioHandler.mediaItem,
+                stream: audioHandler?.mediaItem,
                 builder: (context, snapshot) {
                   // print('DEBUG: StreamBuilder rebuild, mediaItem: ${snapshot.data != null}');
                   final mediaItem = snapshot.data;
@@ -753,11 +753,6 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                             child: Container(
                               width: double.infinity,
                               margin: const EdgeInsets.symmetric(),
-                              decoration: isSelected
-                                  ? BoxDecoration(
-                                      color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.15),
-                                    )
-                                  : null,
                               child: ListTile(
                                 contentPadding: const EdgeInsets.symmetric(
                                   horizontal: 0,
@@ -815,10 +810,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                 ),
-                                onTap: null, // Controlado por GestureDetector
-                                tileColor: isSelected
-                                    ? Theme.of(context).colorScheme.secondaryContainer.withValues(alpha: 0.4)
-                                    : null,
+                                onTap: null,
                               ),
                             ),
                           );
@@ -958,8 +950,8 @@ class _YtPreviewPlayerState extends State<_YtPreviewPlayer> {
       return;
     }
     try {
-      if (audioHandler.playbackState.value.playing) {
-        await audioHandler.pause();
+      if (audioHandler?.playbackState.value.playing ?? false) {
+        await audioHandler?.pause();
       }
       final yt = YoutubeExplode();
       final manifest = await yt.videos.streamsClient.getManifest(_currentItem.videoId!);
@@ -1267,9 +1259,16 @@ class _YtPreviewPlayerState extends State<_YtPreviewPlayer> {
   }
 
   String _formatDuration(Duration d) {
-    final minutes = d.inMinutes.remainder(60).toString().padLeft(2, '0');
-    final seconds = d.inSeconds.remainder(60).toString().padLeft(2, '0');
-    return '$minutes:$seconds';
+    if (d.inHours > 0) {
+      final hours = d.inHours.toString().padLeft(2, '0');
+      final minutes = d.inMinutes.remainder(60).toString().padLeft(2, '0');
+      final seconds = d.inSeconds.remainder(60).toString().padLeft(2, '0');
+      return '$hours:$minutes:$seconds';
+    } else {
+      final minutes = d.inMinutes.remainder(60).toString().padLeft(2, '0');
+      final seconds = d.inSeconds.remainder(60).toString().padLeft(2, '0');
+      return '$minutes:$seconds';
+    }
   }
 }
 

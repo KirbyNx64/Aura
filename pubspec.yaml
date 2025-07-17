@@ -13,7 +13,7 @@ dependencies:
     path: ./on_audio_query
   just_audio: ^0.10.4
   audio_session: ^0.2.2
-  audio_service: ^0.18.18
+  audio_service: ^0.18.17
   path: ^1.9.1
   sqflite: ^2.4.2
   shared_preferences: ^2.5.3

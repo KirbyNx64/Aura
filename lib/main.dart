@@ -14,24 +14,109 @@ import 'package:music/utils/yt_search/yt_screen.dart';
 import 'package:music/l10n/locale_provider.dart';
 import 'package:music/utils/notifiers.dart';
 
-late final AudioHandler audioHandler;
+// Cambiar de late final a nullable para mejor manejo de errores
+AudioHandler? audioHandler;
 bool _audioHandlerInitialized = false;
+bool _audioHandlerInitializing = false;
+
+/// Notifier para indicar cuando el AudioService está listo
+final ValueNotifier<bool> audioServiceReady = ValueNotifier<bool>(false);
+
+/// Verifica si el AudioService está inicializando
+bool get isAudioServiceInitializing => _audioHandlerInitializing;
+
+/// Obtiene el AudioService de forma segura, esperando si es necesario
+Future<AudioHandler?> getAudioServiceSafely() async {
+  // Si ya está listo, retornarlo inmediatamente
+  if (audioHandler != null && _audioHandlerInitialized) {
+    return audioHandler;
+  }
+  
+  // Si está inicializando, esperar
+  if (_audioHandlerInitializing) {
+    // ('⏳ Esperando a que AudioService termine de inicializar...');
+    while (_audioHandlerInitializing) {
+      await Future.delayed(const Duration(milliseconds: 100));
+    }
+    return audioHandler;
+  }
+  
+  // Si no está inicializado, intentar inicializarlo
+  // print('🔄 AudioService no inicializado, inicializando...');
+  return await initializeAudioServiceSafely();
+}
+
+/// Inicializa el AudioService de forma segura cuando se necesita
+Future<AudioHandler?> initializeAudioServiceSafely() async {
+  if (_audioHandlerInitialized && audioHandler != null) {
+    return audioHandler;
+  }
+  
+  if (_audioHandlerInitializing) {
+    // Esperar si ya se está inicializando
+    while (_audioHandlerInitializing) {
+      await Future.delayed(const Duration(milliseconds: 100));
+    }
+    return audioHandler;
+  }
+  
+  try {
+    _audioHandlerInitializing = true;
+    // print('🎵 Inicializando AudioService de forma segura...');
+    
+    // Limpieza preventiva
+    try {
+      await cleanupAudioHandler();
+      await Future.delayed(const Duration(milliseconds: 200));
+    } catch (_) {}
+    
+    audioHandler = await initAudioService().timeout(
+      const Duration(seconds: 10),
+      onTimeout: () {
+        // print('⏰ Timeout en inicialización segura');
+        throw Exception('Timeout al inicializar el audio service');
+      },
+    );
+    
+    _audioHandlerInitialized = true;
+    audioServiceReady.value = true; // Notificar que está listo
+    // print('✅ AudioService inicializado de forma segura');
+    return audioHandler;
+  } catch (e) {
+    // print('❌ Error al inicializar AudioService de forma segura: $e');
+    _audioHandlerInitialized = false;
+    audioHandler = null;
+    audioServiceReady.value = false; // Resetear el estado
+    return null;
+  } finally {
+    _audioHandlerInitializing = false;
+  }
+}
 
 class LifecycleHandler extends WidgetsBindingObserver {
+  LifecycleHandler() {
+    // print('🔧 LifecycleHandler constructor ejecutado');
+  }
+  
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) async {
     if (state == AppLifecycleState.detached) {
       try {
-        await audioHandler.customAction("saveSession");
+        await audioHandler?.customAction("saveSession");
       } catch (_) {}
     }
   }
 }
 
 void main() async {
+  // print('🚀 main() iniciado');
   WidgetsFlutterBinding.ensureInitialized();
-  WidgetsBinding.instance.addObserver(LifecycleHandler());
-  await LocaleProvider.loadLocale();
+  // print('✅ WidgetsFlutterBinding inicializado');
+  // WidgetsBinding.instance.addObserver(LifecycleHandler()); // Comentado temporalmente
+  // print('✅ LifecycleHandler agregado');
+  // print('🔍 Iniciando aplicación...');
+  await LocaleProvider.loadLocale(); // Comentado temporalmente
+  // print('🌍 Locale cargado (comentado)');
   final permisosOk = await pedirPermisosMedia();
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
@@ -52,30 +137,18 @@ void main() async {
     return;
   }
 
-  Future<void> startApp() async {
+  // Ir directo a MainApp y inicializar AudioService en segundo plano
+  runApp(MyRootApp());
+  
+  // Inicializar AudioService en segundo plano después de que la UI esté lista
+  WidgetsBinding.instance.addPostFrameCallback((_) async {
+    // print('🔄 Inicializando AudioService en segundo plano...');
     try {
-      if (!_audioHandlerInitialized) {
-        audioHandler = await initAudioService().timeout(
-          const Duration(seconds: 5),
-          onTimeout: () => throw Exception('Timeout al inicializar el audio'),
-        );
-        _audioHandlerInitialized = true;
-      }
-      runApp(MyRootApp());
+      await initializeAudioServiceSafely();
     } catch (e) {
-      runApp(MaterialApp(
-        debugShowCheckedModeBanner: false,
-        home: ErrorInitScreen(onRetry: startApp),
-        theme: ThemeData(
-          useMaterial3: true,
-          colorSchemeSeed: Colors.deepPurple,
-          brightness: Brightness.dark,
-        ),
-      ));
+      // print('⚠️ Error al inicializar AudioService en segundo plano: $e');
     }
-  }
-
-  await startApp();
+  });
 }
 
 class PermisosScreen extends StatefulWidget {

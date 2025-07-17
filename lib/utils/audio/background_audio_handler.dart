@@ -18,23 +18,126 @@ import 'package:flutter/foundation.dart';
 AudioHandler? _audioHandler;
 
 Future<AudioHandler> initAudioService() async {
-  if (_audioHandler != null) return _audioHandler!;
-  _audioHandler = await AudioService.init(
-    builder: () => MyAudioHandler(),
-    config: const AudioServiceConfig(
-      androidNotificationChannelId: 'com.aura.music.channel',
-      androidNotificationChannelName: 'Aura Music',
-      androidNotificationOngoing: true,
-      // androidNotificationIcon: 'mipmap/ic_stat_music_note',
-    ),
-  );
-  return _audioHandler!;
+  // print('🎵 Iniciando AudioService...');
+  if (_audioHandler != null) {
+    // print('✅ AudioHandler ya existe, retornando...');
+    return _audioHandler!;
+  }
+  
+  try {
+    // print('🧹 Limpieza inicial...');
+    // Limpieza robusta antes de inicializar
+    await _forceCleanupAudioService();
+    await Future.delayed(const Duration(milliseconds: 25));
+    
+    // print('🔍 Verificando servicios obsoletos...');
+    // Verificar si hay un servicio de audio activo que pueda causar conflictos
+    await _checkAndCleanStaleAudioService();
+    
+    // print('🚀 Inicializando AudioService...');
+    _audioHandler = await AudioService.init(
+      builder: () => MyAudioHandler(),
+      config: const AudioServiceConfig(
+        androidNotificationChannelId: 'com.aura.music.channel',
+        androidNotificationChannelName: 'Aura Music',
+        androidNotificationOngoing: true,
+        // androidNotificationIcon: 'mipmap/ic_stat_music_note',
+      ),
+    ).timeout(
+      const Duration(seconds: 10),
+      onTimeout: () {
+        // print('⏰ Timeout en inicialización de AudioService');
+        throw Exception('Timeout al inicializar AudioService');
+      },
+    );
+    
+    // Verificar que la inicialización fue exitosa
+    if (_audioHandler == null) {
+      throw Exception('AudioHandler no se inicializó correctamente');
+    }
+    
+    // print('✅ AudioService inicializado correctamente');
+    return _audioHandler!;
+  } catch (e) {
+    // print('❌ Error al inicializar AudioService: $e');
+    // Limpiar en caso de error
+    _audioHandler = null;
+    throw Exception('Error al inicializar AudioService: $e');
+  }
 }
 
-/// Limpia la instancia actual del AudioHandler
-//  void clearAudioHandlerInstance() {
-//    _currentInstance = null;
-//  }
+/// Verifica y limpia servicios de audio obsoletos que puedan causar conflictos
+Future<void> _checkAndCleanStaleAudioService() async {
+  // print('🧹 Verificando servicios de audio obsoletos...');
+  try {
+    // Intentar múltiples limpiezas para asegurar que no hay servicios residuales
+    for (int i = 0; i < 5; i++) {
+      try {
+        await AudioService.stop();
+        // print('🧹 Limpieza $i completada');
+      } catch (_) {}
+      await Future.delayed(const Duration(milliseconds: 25));
+    }
+    
+    // Limpieza adicional más agresiva para casos de cierre forzado
+    //print('🔥 Limpieza agresiva adicional...');
+    for (int i = 0; i < 3; i++) {
+      try {
+        // Intentar detener cualquier servicio de audio que pueda estar activo
+        await AudioService.stop();
+        // También limpiar la sesión de audio
+        final session = await AudioSession.instance;
+        await session.setActive(false);
+        // print('🔥 Limpieza agresiva $i completada');
+      } catch (_) {}
+      await Future.delayed(const Duration(milliseconds: 25));
+    }
+    
+    // print('✅ Verificación de servicios completada');
+  } catch (_) {}
+}
+
+/// Limpia de forma forzada cualquier instancia previa del AudioService
+Future<void> _forceCleanupAudioService() async {
+  // print('🧹 Limpieza forzada iniciada...');
+  try {
+    // Primero intentar detener el handler si existe
+    if (_audioHandler != null) {
+      try {
+        // print('🛑 Deteniendo AudioHandler...');
+        await _audioHandler!.stop();
+        // print('✅ AudioHandler detenido');
+      } catch (_) {}
+    }
+    
+    // Luego intentar detener el servicio global como fallback
+    try {
+      // print('🛑 Deteniendo AudioService global...');
+      await AudioService.stop();
+      // print('✅ AudioService global detenido');
+    } catch (_) {}
+    
+    // Limpiar la AudioSession explícitamente
+    try {
+      // print('🧹 Limpiando AudioSession...');
+      final session = await AudioSession.instance;
+      await session.setActive(false);
+      // print('✅ AudioSession limpiada');
+    } catch (_) {}
+  } catch (_) {}
+  
+  _audioHandler = null;
+  // print('🧹 Variable global limpiada');
+  
+  // Esperar más tiempo para asegurar limpieza completa
+  await Future.delayed(const Duration(milliseconds: 25));
+  // print('✅ Limpieza forzada completada');
+}
+
+/// Función pública para limpiar el AudioHandler (útil para debugging)
+Future<void> cleanupAudioHandler() async {
+  await _forceCleanupAudioService();
+}
 
 // Cache global para carátulas en memoria
 final Map<String, Uri?> _artworkCache = {};
@@ -96,7 +199,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   Duration? _sleepStartPosition;
   bool _isSeekingOrLoading = false;
   Timer? _debounceTimer;
-  static const Duration _debounceDelay = Duration(milliseconds: 100);
+  static const Duration _debounceDelay = Duration(milliseconds: 50); // Reducido de 100ms
 
   MyAudioHandler() {
     _init();
@@ -225,18 +328,15 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     final int start = (initialIndex - 5).clamp(0, totalSongs - 1);
     final int end = (initialIndex + 5).clamp(0, totalSongs - 1);
 
-    // 1. Precarga carátulas en paralelo solo para la ventana inicial
-    final artworkPromises = <Future<void>>[];
-    for (int i = start; i <= end; i++) {
-      artworkPromises.add(getOrCacheArtwork(songs[i].id, songs[i].data));
-    }
-    await Future.wait(artworkPromises);
+    // 1. Precarga carátulas en paralelo solo para la ventana inicial (en segundo plano)
+    unawaited(_preloadArtworkForWindow(songs, start, end));
 
-    // 2. Prepara las fuentes de audio correctamente con verificación de archivos
+    // 2. Prepara las fuentes de audio correctamente con verificación de archivos (optimizada)
     final sources = <AudioSource>[];
     final validSongs = <SongModel>[];
     final validIndices = <int>[];
     
+    // Verificación rápida de archivos en lotes pequeños para no bloquear la UI
     for (int i = 0; i < songs.length; i++) {
       final song = songs[i];
       try {
@@ -253,6 +353,11 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       } catch (e) {
         // Error al verificar archivo, omitir esta canción
         // print('⚠️ Error al verificar archivo ${song.data}: $e');
+      }
+      
+      // Permitir que la UI se actualice cada 10 archivos verificados
+      if (i % 10 == 0 && i > 0) {
+        await Future.delayed(Duration.zero);
       }
     }
 
@@ -353,7 +458,13 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         }
       }
 
-      Uri? artUri = await getOrCacheArtwork(song.id, song.data);
+      // Cargar carátula de forma asíncrona para no bloquear
+      Uri? artUri;
+      if (i == adjustedInitialIndex) {
+        // Solo cargar carátula inmediatamente para la canción actual
+        artUri = await getOrCacheArtwork(song.id, song.data);
+      }
+      
       items.add(
         MediaItem(
           id: song.data,
@@ -383,9 +494,9 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
           ? Duration(milliseconds: song.duration!)
           : null;
       
-      // Solo carga carátulas para la ventana inicial
+      // Solo carga carátulas para la canción actual inicialmente
       Uri? artUri;
-      if (i >= adjustedStart && i <= adjustedEnd) {
+      if (i == adjustedInitialIndex) {
         artUri = await getOrCacheArtwork(song.id, song.data);
       }
       
@@ -405,6 +516,11 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
           },
         ),
       );
+      
+      // Permitir que la UI se actualice cada 20 MediaItems creados
+      if (i % 20 == 0 && i > 0) {
+        await Future.delayed(Duration.zero);
+      }
     }
     
     _mediaQueue.addAll(initialMediaItems);
@@ -419,7 +535,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         // print('🔄 Reproductor necesita reinicialización antes de cargar fuentes...');
         await _reinitializePlayer();
         _needsReinitialization = false;
-        await Future.delayed(const Duration(milliseconds: 100));
+        await Future.delayed(const Duration(milliseconds: 50)); // Reducido de 100ms
       }
       
       await _player.setAudioSources(
@@ -431,8 +547,8 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       
       // Espera optimizada para que el reproductor esté listo
       int attempts = 0;
-      while (_player.processingState != ProcessingState.ready && attempts < 30) {
-        await Future.delayed(const Duration(milliseconds: 30));
+      while (_player.processingState != ProcessingState.ready && attempts < 20) { // Reducido de 30
+        await Future.delayed(const Duration(milliseconds: 20)); // Reducido de 30ms
         attempts++;
       }
       
@@ -476,8 +592,8 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     // Siempre carga las carátulas restantes, independientemente del tamaño de la lista
     _loadRemainingMediaItemsInBackground(validSongs, adjustedStart, adjustedEnd, currentVersion);
     
-    // Verificación final de sincronización
-    await Future.delayed(const Duration(milliseconds: 100));
+    // Verificación final de sincronización (optimizada)
+    await Future.delayed(const Duration(milliseconds: 50)); // Reducido de 100ms
     final finalIndex = _player.currentIndex;
     if (finalIndex != adjustedInitialIndex) {
       // print('⚠️ Verificación final: índice incorrecto $finalIndex, esperado $adjustedInitialIndex');
@@ -522,7 +638,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         await _reinitializePlayer();
         _needsReinitialization = false;
         // Esperar un poco para que se estabilice
-        await Future.delayed(const Duration(milliseconds: 100));
+        await Future.delayed(const Duration(milliseconds: 50)); // Reducido de 100ms
       } catch (e) {
         // print('⚠️ Error al reinicializar reproductor: $e');
         return;
@@ -552,7 +668,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         // print('⚠️ Índice incorrecto al reproducir: $currentIndex, esperado: $expectedIndex');
         try {
           await _player.seek(Duration.zero, index: expectedIndex);
-          await Future.delayed(const Duration(milliseconds: 50));
+          await Future.delayed(const Duration(milliseconds: 25)); // Reducido de 50ms
         } catch (e) {
           // print('⚠️ Error al corregir índice al reproducir: $e');
         }
@@ -649,8 +765,8 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       
       // Espera optimizada
       int attempts = 0;
-      while (_player.processingState != ProcessingState.ready && attempts < 15) {
-        await Future.delayed(const Duration(milliseconds: 10));
+      while (_player.processingState != ProcessingState.ready && attempts < 10) { // Reducido de 15
+        await Future.delayed(const Duration(milliseconds: 5)); // Reducido de 10ms
         attempts++;
       }
       
@@ -691,8 +807,8 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       
       // Espera optimizada
       int attempts = 0;
-      while (_player.processingState != ProcessingState.ready && attempts < 15) {
-        await Future.delayed(const Duration(milliseconds: 10));
+      while (_player.processingState != ProcessingState.ready && attempts < 10) { // Reducido de 15
+        await Future.delayed(const Duration(milliseconds: 5)); // Reducido de 10ms
         attempts++;
       }
       
@@ -836,8 +952,8 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       
       // Espera optimizada
       int attempts = 0;
-      while (_player.processingState != ProcessingState.ready && attempts < 15) {
-        await Future.delayed(const Duration(milliseconds: 10));
+      while (_player.processingState != ProcessingState.ready && attempts < 10) { // Reducido de 15
+        await Future.delayed(const Duration(milliseconds: 5)); // Reducido de 10ms
         attempts++;
       }
       
@@ -990,7 +1106,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       await _loadBatchMediaItems(songs, batchStart, batchEnd, loadVersion, initialStart, initialEnd);
       
       // Pequeña pausa entre lotes para no sobrecargar el sistema
-      await Future.delayed(const Duration(milliseconds: 50));
+      await Future.delayed(const Duration(milliseconds: 25)); // Reducido de 50ms
     }
   }
 
@@ -1280,12 +1396,6 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     return super.customAction(name, extras);
   }
 
-  @override
-  Future<void> onTaskRemoved() async {
-    await stop();
-    return super.onTaskRemoved();
-  }
-
   /// Limpia archivos faltantes de las bases de datos
   static Future<void> cleanMissingFilesFromDatabases() async {
     try {
@@ -1442,6 +1552,21 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     
     if (cleanedCount > 0) {
       // print('🧹 Limpiados $cleanedCount archivos faltantes de artwork');
+    }
+  }
+
+  /// Precarga carátulas para una ventana específica en segundo plano
+  Future<void> _preloadArtworkForWindow(List<SongModel> songs, int start, int end) async {
+    try {
+      final artworkPromises = <Future<void>>[];
+      for (int i = start; i <= end; i++) {
+        if (i >= 0 && i < songs.length) {
+          artworkPromises.add(getOrCacheArtwork(songs[i].id, songs[i].data));
+        }
+      }
+      await Future.wait(artworkPromises);
+    } catch (e) {
+      // Silenciar errores de precarga de carátulas
     }
   }
 }

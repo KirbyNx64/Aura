@@ -4,7 +4,7 @@ import 'package:music/utils/db/recent_db.dart';
 import 'package:music/utils/db/mostplayer_db.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
 import 'package:music/utils/audio/background_audio_handler.dart';
-import 'package:music/main.dart';
+import 'package:music/main.dart' show audioHandler, getAudioServiceSafely;
 import 'package:music/utils/db/favorites_db.dart';
 import 'package:music/utils/notifiers.dart';
 import 'package:flutter/services.dart';
@@ -15,6 +15,7 @@ import 'package:music/screens/home/settings_screen.dart';
 import 'package:music/utils/ota_update_helper.dart';
 import 'package:music/utils/theme_preferences.dart';
 import 'package:music/l10n/locale_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 enum OrdenCancionesPlaylist { normal, alfabetico, invertido, ultimoAgregado }
 
@@ -39,7 +40,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   String? _updateApkUrl;
   bool _updateChecked = false;
 
-  // NUEVO: canciones más escuchadas
   List<SongModel> _mostPlayed = [];
   final PageController _pageController = PageController(viewportFraction: 0.95);
   final PageController _quickPickPageController = PageController(
@@ -52,39 +52,62 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   final FocusNode _searchRecentsFocus = FocusNode();
   List<SongModel> _filteredRecents = [];
   OrdenCancionesPlaylist _ordenCancionesPlaylist = OrdenCancionesPlaylist.normal;
+  static const String _orderPrefsKey = 'home_screen_playlist_order_filter';
 
   // Controladores y estados para búsqueda en playlist
   final TextEditingController _searchPlaylistController =
       TextEditingController();
   final FocusNode _searchPlaylistFocus = FocusNode();
   List<SongModel> _filteredPlaylistSongs = [];
-  List<SongModel> _originalPlaylistSongs = []; // Lista original para restaurar orden
+  List<SongModel> _originalPlaylistSongs = [];
   final List<List<SongModel>> _quickPickPages = [];
   List<SongModel> allSongs = [];
 
-  // --- Selección múltiple para canciones de playlist ---
   bool _isSelectingPlaylistSongs = false;
   final Set<int> _selectedPlaylistSongIds = {};
+
+  /// Helper para obtener el AudioHandler de forma segura
+  Future<MyAudioHandler?> _getAudioHandler() async {
+    final handler = await getAudioServiceSafely();
+    return handler as MyAudioHandler?;
+  }
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _loadAllSongs();
-    _loadMostPlayed().then((_) {
-      _initQuickPickPages();
-      setState(() {});
+    _loadOrderFilter().then((_) {
+      _loadAllSongs();
+      _loadMostPlayed().then((_) {
+        _initQuickPickPages();
+        setState(() {});
+      });
+      _loadPlaylists();
     });
-    _loadPlaylists();
     playlistsShouldReload.addListener(_onPlaylistsShouldReload);
     _buscarActualizacion();
+  }
+
+  Future<void> _loadOrderFilter() async {
+    final prefs = await SharedPreferences.getInstance();
+    final int? savedIndex = prefs.getInt(_orderPrefsKey);
+    if (savedIndex != null && savedIndex >= 0 && savedIndex < OrdenCancionesPlaylist.values.length) {
+      setState(() {
+        _ordenCancionesPlaylist = OrdenCancionesPlaylist.values[savedIndex];
+      });
+    }
+  }
+
+  Future<void> _saveOrderFilter() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_orderPrefsKey, _ordenCancionesPlaylist.index);
   }
 
   void _ordenarCancionesPlaylist() {
     setState(() {
       switch (_ordenCancionesPlaylist) {
         case OrdenCancionesPlaylist.normal:
-          _playlistSongs = List.from(_originalPlaylistSongs); // Restaura el orden original
+          _playlistSongs = List.from(_originalPlaylistSongs);
           break;
         case OrdenCancionesPlaylist.alfabetico:
           _playlistSongs.sort((a, b) => a.title.compareTo(b.title));
@@ -97,6 +120,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           break;
       }
     });
+    _saveOrderFilter();
   }
 
   void _initQuickPickPages() {
@@ -157,7 +181,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final songs = await PlaylistsDB().getSongsFromPlaylist(playlist['id']);
     setState(() {
       _originalPlaylistSongs = List.from(songs);
-      _playlistSongs = songs;
       _selectedPlaylist = playlist;
       _showingPlaylistSongs = true;
       _showingRecents = false;
@@ -169,7 +192,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final songs = await MostPlayedDB().getMostPlayed(limit: 40);
     setState(() {
       _mostPlayed = songs;
-      // Elimina el shuffle y asignación aquí
     });
   }
 
@@ -282,6 +304,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final index = queue.indexWhere((s) => s.data == song.data);
 
     if (index != -1) {
+      // Obtener AudioService de forma segura
+      final handler = await _getAudioHandler();
+      if (handler == null) {
+        // print('❌ No se pudo obtener el AudioService');
+        return;
+      }
+      
       int before = (maxQueueSongs / 2).floor();
       int after = maxQueueSongs - before;
       int start = (index - before).clamp(0, queue.length);
@@ -289,11 +318,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       List<SongModel> limitedQueue = queue.sublist(start, end);
       int newIndex = index - start;
 
-      await (audioHandler as MyAudioHandler).setQueueFromSongs(
+      await (handler).setQueueFromSongs(
         limitedQueue,
         initialIndex: newIndex,
       );
-      await audioHandler.play();
+      await (handler).play();
     }
   }
 
@@ -399,7 +428,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       });
       return;
     }
-    _playSong(song, _searchPlaylistController.text.isNotEmpty ? _filteredPlaylistSongs : _playlistSongs);
+    _playSong(song, _playlistSongs);
   }
 
   void _handlePlaylistSongLongPress(BuildContext context, SongModel song) async {
@@ -455,7 +484,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
-  // --- NUEVO: Diálogo para agregar canciones recientes a la playlist actual ---
   Future<void> _showAddFromRecentsToCurrentPlaylistDialog() async {
     final recents = await RecentsDB().getRecents();
     if (!mounted) return;
@@ -589,15 +617,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       child: Scaffold(
         appBar: AppBar(
           leading: (_showingRecents || _showingPlaylistSongs)
-              ? IconButton(
-                  icon: const Icon(Icons.arrow_back),
-                  onPressed: () {
-                    setState(() {
-                      _showingRecents = false;
-                      _showingPlaylistSongs = false;
-                    });
-                  },
-                )
+              ? (_isSelectingPlaylistSongs
+                  ? null
+                  : IconButton(
+                      icon: const Icon(Icons.arrow_back),
+                      onPressed: () {
+                        setState(() {
+                          _showingRecents = false;
+                          _showingPlaylistSongs = false;
+                        });
+                      },
+                    ))
               : null,
           title: Row(
             children: [
@@ -609,15 +639,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 child: _showingRecents
                     ? TranslatedText('recent', maxLines: 1, overflow: TextOverflow.ellipsis)
                     : _showingPlaylistSongs
-                        ? ((_selectedPlaylist?['name'] ?? '').isNotEmpty
-                            ? Text(
-                                (_selectedPlaylist?['name'] ?? '').length > 15
-                                    ? (_selectedPlaylist?['name'] ?? '').substring(0, 15) + '...'
-                                    : (_selectedPlaylist?['name'] ?? ''),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              )
-                            : TranslatedText('playlists', maxLines: 1, overflow: TextOverflow.ellipsis))
+                        ? (_isSelectingPlaylistSongs
+                            ? Text('${_selectedPlaylistSongIds.length} ${LocaleProvider.tr('selected')}')
+                            : ((_selectedPlaylist?['name'] ?? '').isNotEmpty
+                                ? Text(
+                                    (_selectedPlaylist?['name'] ?? '').length > 15
+                                        ? (_selectedPlaylist?['name'] ?? '').substring(0, 15) + '...'
+                                        : (_selectedPlaylist?['name'] ?? ''),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  )
+                                : TranslatedText('playlists', maxLines: 1, overflow: TextOverflow.ellipsis)))
                         : TranslatedText('home', maxLines: 1, overflow: TextOverflow.ellipsis),
               ),
             ],
@@ -664,6 +696,27 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           icon: const Icon(Icons.favorite_border),
                           tooltip: LocaleProvider.tr('add_to_favorites'),
                           onPressed: _selectedPlaylistSongIds.isEmpty ? null : _addToFavoritesMassive,
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.select_all),
+                          tooltip: LocaleProvider.tr('select_all'),
+                          onPressed: () {
+                            final songsToShow = _searchPlaylistController.text.isNotEmpty
+                                ? _filteredPlaylistSongs
+                                : _playlistSongs;
+                            setState(() {
+                              if (_selectedPlaylistSongIds.length == songsToShow.length) {
+                                // Si todos están seleccionados, deseleccionar todos
+                                _selectedPlaylistSongIds.clear();
+                                if (_selectedPlaylistSongIds.isEmpty) {
+                                  _isSelectingPlaylistSongs = false;
+                                }
+                              } else {
+                                // Seleccionar todos
+                                _selectedPlaylistSongIds.addAll(songsToShow.map((s) => s.id));
+                              }
+                            });
+                          },
                         ),
                         IconButton(
                           icon: const Icon(Icons.close),
@@ -755,7 +808,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               : null,
         ),
         body: StreamBuilder<MediaItem?>(
-          stream: audioHandler.mediaItem,
+          stream: audioHandler?.mediaItem,
           builder: (context, currentSnapshot) {
             final current = currentSnapshot.data;
             final space = current != null ? 100.0 : 0.0;
@@ -779,10 +832,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           itemBuilder: (context, index) {
                             final song = songsToShow[index];
                             final isCurrent =
-                                audioHandler.mediaItem.value?.extras?['data'] ==
+                                audioHandler?.mediaItem.value?.extras?['data'] ==
                                 song.data;
                             final isPlaying =
-                                audioHandler.playbackState.value.playing;
+                                audioHandler?.playbackState.value.playing ?? false;
                             final isAmoledTheme = colorSchemeNotifier.value == AppColorScheme.amoled;
                             return ListTile(
                               leading: ClipRRect(
@@ -836,8 +889,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                 onPressed: () {
                                   if (isCurrent) {
                                     isPlaying
-                                        ? audioHandler.pause()
-                                        : audioHandler.play();
+                                        ? (audioHandler as MyAudioHandler).pause()
+                                        : (audioHandler as MyAudioHandler).play();
                                   } else {
                                     _playSong(song, songsToShow);
                                   }
@@ -909,8 +962,19 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                             ? _filteredPlaylistSongs
                             : _playlistSongs;
                         if (songsToShow.isEmpty) {
-                          return const Center(
-                            child: TranslatedText('no_songs_in_playlist', style: TextStyle(fontSize: 16)),
+                          return Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.playlist_remove_outlined,
+                                  size: 48,
+                                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                                ),
+                                const SizedBox(height: 16),
+                                TranslatedText('no_songs_in_playlist', style: TextStyle(fontSize: 16, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6))),
+                              ],
+                            ),
                           );
                         }
                         return ListView.builder(
@@ -918,10 +982,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           itemBuilder: (context, index) {
                             final song = songsToShow[index];
                             final isCurrent =
-                                audioHandler.mediaItem.value?.extras?['data'] ==
+                                audioHandler?.mediaItem.value?.extras?['data'] ==
                                 song.data;
                             final isPlaying =
-                                audioHandler.playbackState.value.playing;
+                                audioHandler?.playbackState.value.playing ?? false;
                             final isAmoledTheme = colorSchemeNotifier.value == AppColorScheme.amoled;
                             return ListTile(
                               onTap: () => _onPlaylistSongSelected(song),
@@ -1011,8 +1075,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                 onPressed: () {
                                   if (isCurrent) {
                                     isPlaying
-                                        ? audioHandler.pause()
-                                        : audioHandler.play();
+                                        ? (audioHandler as MyAudioHandler).pause()
+                                        : (audioHandler as MyAudioHandler).play();
                                   } else {
                                     _playSong(song, songsToShow);
                                   }
@@ -1119,7 +1183,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                         if (index < items.length) {
                                           final song = items[index];
                                           audioHandler
-                                                  .mediaItem
+                                                  ?.mediaItem
                                                   .value
                                                   ?.extras?['data'] ==
                                               song.data;
@@ -1213,7 +1277,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                             ),
                                             child: Icon(
                                               Icons.music_note,
-                                              color: Theme.of(context).colorScheme.onSurface,
+                                              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
                                               size: 36,
                                             ),
                                           );
@@ -1251,11 +1315,23 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                             ),
                           ),
                           if (_quickPickPages.isEmpty)
-                            const SizedBox(height: 30),
+                            const SizedBox(height: 40),
                           if (_quickPickPages.isNotEmpty)
                             const SizedBox(height: 12),
                           (_quickPickPages.isEmpty)
-                              ? Center(child: TranslatedText('no_songs_to_show', style: TextStyle(fontSize: 14)))
+                              ? Center(
+                                child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.music_off,
+                                    size: 48,
+                                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                                  ),
+                                  const SizedBox(height: 16),
+                                  TranslatedText('no_songs_to_show', style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6))),
+                                ],
+                              ))
                               : Column(
                                   children: [
                                     SizedBox(
@@ -1445,7 +1521,24 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           ),
                           // Aquí mostramos las playlists
                           if (_playlists.isEmpty)
-                            Center(child: TranslatedText('no_playlists'))
+                            
+                            Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 22),
+                              child: Center(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.playlist_remove,
+                                      size: 48,
+                                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                                    ),
+                                    const SizedBox(height: 16),
+                                    TranslatedText('no_playlists', style: TextStyle(fontSize: 14, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6))),
+                                  ],
+                                ),
+                              ),
+                            )
                           else
                             ListView.builder(
                               shrinkWrap: true,

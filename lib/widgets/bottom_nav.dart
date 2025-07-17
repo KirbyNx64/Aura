@@ -79,45 +79,63 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: StreamBuilder<MediaItem?>(
-        stream: audioHandler.mediaItem,
-        builder: (context, snapshot) {
-          final overlayActive = snapshot.data != null;
-          return Stack(
-            children: [
-              SafeArea(
-                top: false,
-                child: IndexedStack(
-                  index: _selectedIndex,
-                  children: List.generate(
-                    _pages.length,
-                    (i) => _pages[i] ?? const SizedBox.shrink(),
-                  ),
+      body: ValueListenableBuilder<bool>(
+        valueListenable: audioServiceReady,
+        builder: (context, ready, _) {
+          if (!ready || audioHandler == null) {
+            // Muestra solo la pantalla principal sin overlay
+            return SafeArea(
+              top: false,
+              child: IndexedStack(
+                index: _selectedIndex,
+                children: List.generate(
+                  _pages.length,
+                  (i) => _pages[i] ?? const SizedBox.shrink(),
                 ),
               ),
-              if (overlayActive)
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: MediaQuery.of(context).padding.bottom,
-                  child: Container(
-                    height: 100, // Ajusta al alto real del overlay
-                    color: Theme.of(context).colorScheme.surface,
-                  ),
-                ),
-              if (overlayActive)
-                Positioned(
-                  bottom: MediaQuery.of(context).padding.bottom + 10,
-                  left: 0,
-                  right: 0,
-                  child: Center(
-                    child: SizedBox(
-                      width: MediaQuery.of(context).size.width,
-                      child: const NowPlayingOverlay(showBar: true),
+            );
+          }
+          return StreamBuilder<MediaItem?>(
+            stream: audioHandler?.mediaItem,
+            builder: (context, snapshot) {
+              final overlayActive = snapshot.data != null;
+              return Stack(
+                children: [
+                  SafeArea(
+                    top: false,
+                    child: IndexedStack(
+                      index: _selectedIndex,
+                      children: List.generate(
+                        _pages.length,
+                        (i) => _pages[i] ?? const SizedBox.shrink(),
+                      ),
                     ),
                   ),
-                ),
-            ],
+                  if (overlayActive)
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: MediaQuery.of(context).padding.bottom,
+                      child: Container(
+                        height: 100,
+                        color: Theme.of(context).colorScheme.surface,
+                      ),
+                    ),
+                  if (overlayActive)
+                    Positioned(
+                      bottom: MediaQuery.of(context).padding.bottom + 10,
+                      left: 0,
+                      right: 0,
+                      child: Center(
+                        child: SizedBox(
+                          width: MediaQuery.of(context).size.width,
+                          child: const NowPlayingOverlay(showBar: true),
+                        ),
+                      ),
+                    ),
+                ],
+              );
+            },
           );
         },
       ),

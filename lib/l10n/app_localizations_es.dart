@@ -44,6 +44,8 @@ const Map<String, String> appLocalizationsEs = {
 
   // Music and playback
   'music_and_playback': 'Música y reproducción',
+  'index_songs_on_startup': 'Indexar archivos de canciones',
+  'index_songs_on_startup_desc': 'Sincroniza automáticamente la base de datos con los archivos del dispositivo',
   'delete_lyrics': 'Eliminar letra de canciones',
   'delete_lyrics_desc': 'Elimina todas las letras sincronizadas almacenadas en caché',
   'delete_lyrics_confirm': '¿Estás seguro de que deseas eliminar todas las letras almacenadas? Esta acción no se puede deshacer.',
@@ -104,6 +106,7 @@ const Map<String, String> appLocalizationsEs = {
 
   // Favorites screen
   'favorites': 'Me gusta',
+  'select_all': 'Seleccionar todos',
   'add': 'Añadir',
   'add_from_recents': 'Añadir de recientes',
   'search_by_title_or_artist': 'Buscar por título o artista',
@@ -240,7 +243,7 @@ const Map<String, String> appLocalizationsEs = {
   'available': 'disponible!',
   'update': 'Actualizar',
   'quick_access': 'Acceso directos',
-  'no_songs_to_show': 'No hay canciones para mostrar.',
+  'no_songs_to_show': 'No hay canciones para mostrar aún.',
   'quick_pick': 'Selección rápida',
   'create_new_playlist': 'Crear nueva playlist',
   'new_playlist': 'Nueva playlist',

@@ -107,7 +107,7 @@ class _UpdateScreenState extends State<UpdateScreen> {
       appBar: AppBar(
         title: Text(LocaleProvider.tr('update')),
         leading: _isDownloading
-            ? Container() // Sin botón back mientras descarga
+            ? Container()
             : null,
       ),
       body: Padding(
@@ -224,7 +224,7 @@ class _UpdateScreenState extends State<UpdateScreen> {
                           ),
                           const SizedBox(height: 8),
                           SizedBox(
-                            height: is16by9 ? 240 : 360, // Ajusta este valor según prefieras
+                            height: is16by9 ? 240 : 360,
                             child: Container(
                               padding: const EdgeInsets.all(12),
                               margin: const EdgeInsets.only(bottom: 16),

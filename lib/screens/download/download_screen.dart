@@ -1447,7 +1447,7 @@ class _DownloadScreenState extends State<DownloadScreen>
       setState(() => _progress = 0.9);
 
       final currentMediaItem =
-          audioHandler.mediaItem.value; // O usa handler.mediaItem.value
+          audioHandler?.mediaItem.value; // O usa handler.mediaItem.value
       final isPlayingCurrent =
           currentMediaItem != null && currentMediaItem.id == mp3Path;
 
