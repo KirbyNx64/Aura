@@ -18,6 +18,7 @@ import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'dart:async';
+import 'package:dio/dio.dart';
 
 class YtSearchTestScreen extends StatefulWidget {
   final String? initialQuery;
@@ -39,6 +40,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
   bool _hasSearched = false;
   bool _isSearchCancelled = false;
   bool _showSuggestions = false;
+  bool _noInternet = false; // Nuevo estado para internet
 
   // ValueNotifiers para el progreso de descarga
   final ValueNotifier<double> downloadProgressNotifier = ValueNotifier(0.0);
@@ -59,24 +61,18 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
     setState(() {
       _selectedIndexes.clear();
       _isSelectionMode = false;
+      _noInternet = false; // Resetear estado de internet
     });
     // Verificar conexión a internet antes de buscar
     final List<ConnectivityResult> connectivityResult = await Connectivity().checkConnectivity();
     if (connectivityResult.contains(ConnectivityResult.none)) {
       if (mounted) {
-        showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: TranslatedText('error'),
-            content: TranslatedText('no_internet_connection'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: TranslatedText('ok'),
-              ),
-            ],
-          ),
-        );
+        setState(() {
+          _noInternet = true;
+          _loading = false;
+          _results = [];
+          _hasSearched = false;
+        });
       }
       return;
     }
@@ -129,10 +125,23 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
         }
       }
     } catch (e) {
-      setState(() {
-        _error = 'Error: $e';
-        _loading = false;
-      });
+      // Verifica si es un DioException (DioError está deprecado)
+      if (e is DioException) {
+        if (mounted) {
+          setState(() {
+            _noInternet = true;
+            _loading = false;
+            _results = [];
+            _hasSearched = false;
+            _error = null;
+          });
+        }
+      } else {
+        setState(() {
+          _error = 'Error: $e';
+          _loading = false;
+        });
+      }
     }
   }
 
@@ -593,6 +602,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                             onChanged: (value) {
                               setState(() {
                                 _showSuggestions = true;
+                                _noInternet = false;
                               });
                               if (value.isEmpty) {
                                 _checkHistory().then((_) {
@@ -642,11 +652,36 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                   ],
                 ),
                 const SizedBox(height: 14),
+                // SOLO UNO de estos bloques se muestra a la vez
                 if (_error != null)
-                  Text(_error!, style: const TextStyle(color: Colors.red)),
-                if (_loading)
-                  const Expanded(child: Center(child: CircularProgressIndicator())),
-                if (_showSuggestions && !_loading && !_hasSearched && _controller.text.isEmpty)
+                  Text(_error!, style: const TextStyle(color: Colors.red))
+                else if (_loading)
+                  const Expanded(child: Center(child: CircularProgressIndicator()))
+                else if (_noInternet)
+                  Expanded(
+                    child: Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.wifi_off,
+                            size: 48,
+                            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            LocaleProvider.tr('no_internet_connection'),
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                              fontSize: 14,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                else if (_showSuggestions && !_loading && !_hasSearched && _controller.text.isEmpty)
                   Expanded(
                     child: FutureBuilder<List<String>>(
                       future: SearchHistory.getHistory(),
@@ -682,16 +717,16 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                         }
                       },
                     ),
-                  ),
-                if (_showSuggestions && !_loading && !_hasSearched && _controller.text.isNotEmpty)
+                  )
+                else if (_showSuggestions && !_loading && !_hasSearched && _controller.text.isNotEmpty)
                   Expanded(
                     child: SearchSuggestionsWidget(
                       query: _controller.text,
                       onSuggestionSelected: _onSuggestionSelected,
                       onClearHistory: _onClearHistory,
                     ),
-                  ),
-                if (!_loading && _results.isNotEmpty && _hasSearched)
+                  )
+                else if (!_loading && _results.isNotEmpty && _hasSearched)
                   Expanded(
                     child: Padding(
                       padding: EdgeInsets.only(bottom: bottomSpace),

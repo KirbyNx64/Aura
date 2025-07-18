@@ -111,28 +111,36 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
                       ),
                     ),
                   ),
-                  if (overlayActive)
-                    Positioned(
-                      left: 0,
-                      right: 0,
-                      bottom: MediaQuery.of(context).padding.bottom,
+                  // Fondo del overlay, siempre construido pero visible solo si hay música
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: MediaQuery.of(context).padding.bottom,
+                    child: Visibility(
+                      visible: overlayActive,
+                      maintainState: true,
                       child: Container(
                         height: 100,
                         color: Theme.of(context).colorScheme.surface,
                       ),
                     ),
-                  if (overlayActive)
-                    Positioned(
-                      bottom: MediaQuery.of(context).padding.bottom + 10,
-                      left: 0,
-                      right: 0,
-                      child: Center(
-                        child: SizedBox(
-                          width: MediaQuery.of(context).size.width,
+                  ),
+                  // Overlay, siempre construido pero visible solo si hay música
+                  Positioned(
+                    bottom: MediaQuery.of(context).padding.bottom + 10,
+                    left: 0,
+                    right: 0,
+                    child: Center(
+                      child: SizedBox(
+                        width: MediaQuery.of(context).size.width,
+                        child: Visibility(
+                          visible: overlayActive,
+                          maintainState: true,
                           child: const NowPlayingOverlay(showBar: true),
                         ),
                       ),
                     ),
+                  ),
                 ],
               );
             },

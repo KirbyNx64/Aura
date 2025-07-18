@@ -114,7 +114,6 @@ class _ArtworkHeroCachedState extends State<ArtworkHeroCached> {
       int preloadSize = 256; // Calidad baja por defecto
       
       if (widget.forceHighQuality) {
-        // Si se fuerza alta calidad, usar calidad media para precarga (más rápido)
         final distance = (i - current).abs();
         if (distance <= 5) {
           preloadSize = 384; // Calidad media para las próximas 5 canciones
