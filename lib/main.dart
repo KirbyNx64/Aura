@@ -108,14 +108,69 @@ class LifecycleHandler extends WidgetsBindingObserver {
   }
 }
 
+// Declara el ValueNotifier global en main.dart
+final selectedTabIndex = ValueNotifier<int>(0);
+
+// Declara el key global arriba en main.dart
+final GlobalKey<HomeScreenState> homeScreenKey = GlobalKey<HomeScreenState>();
+
+class MainNavRoot extends StatefulWidget {
+  final void Function(AppThemeMode) setThemeMode;
+  final void Function(AppColorScheme) setColorScheme;
+  const MainNavRoot({super.key, required this.setThemeMode, required this.setColorScheme});
+  @override
+  State<MainNavRoot> createState() => _MainNavRootState();
+}
+
+class _MainNavRootState extends State<MainNavRoot> {
+  final ValueNotifier<int> selectedTabIndex = ValueNotifier<int>(0);
+  final GlobalKey ytScreenKey = GlobalKey();
+  final GlobalKey foldersScreenKey = GlobalKey();
+
+  Future<bool> onWillPop() async {
+    final tab = selectedTabIndex.value;
+    if (tab == 1) { // YT
+      final state = ytScreenKey.currentState as dynamic;
+      if (state?.canPopInternally() == true) {
+        state.handleInternalPop();
+        return false;
+      }
+    } else if (tab == 3) { // Folders
+      final state = foldersScreenKey.currentState as dynamic;
+      if (state?.canPopInternally() == true) {
+        state.handleInternalPop();
+        return false;
+      }
+    }
+    return true;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return WillPopScope(
+      onWillPop: onWillPop,
+      child: Material3BottomNav(
+        pageBuilders: [
+          (context, onTabChange) => HomeScreen(onTabChange: onTabChange, setThemeMode: widget.setThemeMode, setColorScheme: widget.setColorScheme),
+          (context, onTabChange) => YtSearchTestScreen(key: ytScreenKey),
+          (context, onTabChange) => FavoritesScreen(),
+          (context, onTabChange) => FoldersScreen(key: foldersScreenKey),
+          (context, onTabChange) => DownloadScreen(),
+        ],
+        selectedTabIndex: selectedTabIndex,
+      ),
+    );
+  }
+}
+
 void main() async {
   // print('🚀 main() iniciado');
   WidgetsFlutterBinding.ensureInitialized();
   // print('✅ WidgetsFlutterBinding inicializado');
-  // WidgetsBinding.instance.addObserver(LifecycleHandler()); // Comentado temporalmente
+  // WidgetsBinding.instance.addObserver(LifecycleHandler());
   // print('✅ LifecycleHandler agregado');
   // print('🔍 Iniciando aplicación...');
-  await LocaleProvider.loadLocale(); // Comentado temporalmente
+  await LocaleProvider.loadLocale();
   // print('🌍 Locale cargado (comentado)');
   final permisosOk = await pedirPermisosMedia();
   await SystemChrome.setPreferredOrientations([
@@ -137,16 +192,25 @@ void main() async {
     return;
   }
 
-  // Ir directo a MainApp y inicializar AudioService en segundo plano
+  // Inicializar AudioService ANTES de runApp para que esté listo desde el inicio
+  try {
+    await initializeAudioServiceSafely();
+  } catch (e) {
+    // print('⚠️ Error al inicializar AudioService antes de runApp: $e');
+    // La app seguirá, pero el audio podría no estar disponible hasta que se intente de nuevo
+  }
+
+  // Ir directo a MainApp y dejar la inicialización en segundo plano como respaldo
   runApp(MyRootApp());
   
-  // Inicializar AudioService en segundo plano después de que la UI esté lista
+  // (Opcional) Inicializar AudioService en segundo plano después de que la UI esté lista
   WidgetsBinding.instance.addPostFrameCallback((_) async {
-    // print('🔄 Inicializando AudioService en segundo plano...');
-    try {
-      await initializeAudioServiceSafely();
-    } catch (e) {
-      // print('⚠️ Error al inicializar AudioService en segundo plano: $e');
+    if (!_audioHandlerInitialized) {
+      try {
+        await initializeAudioServiceSafely();
+      } catch (e) {
+        // print('⚠️ Error al inicializar AudioService en segundo plano: $e');
+      }
     }
   });
 }
@@ -397,14 +461,9 @@ class _MainAppState extends State<MainApp> {
                      _themeMode == AppThemeMode.dark ? ThemeMode.dark : ThemeMode.light,
           theme: _buildTheme(Brightness.light),
           darkTheme: _buildTheme(Brightness.dark),
-          home: Material3BottomNav(
-            pageBuilders: [
-              (context, onTabChange) => HomeScreen(onTabChange: onTabChange, setThemeMode: _setThemeMode, setColorScheme: _setColorScheme),
-              (context, onTabChange) => YtSearchTestScreen(),
-              (context, onTabChange) => FavoritesScreen(),
-              (context, onTabChange) => FoldersScreen(),
-              (context, onTabChange) => DownloadScreen(),
-            ],
+          home: MainNavRoot(
+            setThemeMode: _setThemeMode,
+            setColorScheme: _setColorScheme,
           ),
         );
       },

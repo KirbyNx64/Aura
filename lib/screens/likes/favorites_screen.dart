@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:music/utils/db/favorites_db.dart';
 import 'package:on_audio_query/on_audio_query.dart';
@@ -10,6 +11,8 @@ import 'package:music/utils/theme_preferences.dart';
 import 'package:music/utils/db/playlists_db.dart';
 import 'package:music/utils/db/recent_db.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:music/utils/db/shortcuts_db.dart';
+import 'package:mini_music_visualizer/mini_music_visualizer.dart';
 
 enum OrdenFavoritos { normal, alfabetico, invertido, ultimoAgregado }
 
@@ -38,6 +41,8 @@ class _FavoritesScreenState extends State<FavoritesScreen>
 
   static const String _orderPrefsKey = 'favorites_screen_order_filter';
 
+  Timer? _debounce;
+
   @override
   void initState() {
     super.initState();
@@ -65,6 +70,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     favoritesShouldReload.removeListener(() {
       _loadFavorites();
     });
+    _debounce?.cancel();
     super.dispose();
   }
 
@@ -93,6 +99,23 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     if (_orden != OrdenFavoritos.normal) {
       _ordenarFavoritos();
     }
+    
+    // Precargar carátulas de favoritos
+    unawaited(_preloadArtworksForSongs(favs));
+  }
+
+  Future<void> _preloadArtworksForSongs(List<SongModel> songs) async {
+    try {
+      for (final song in songs.take(20)) {
+        unawaited(OnAudioQuery().queryArtwork(
+          song.id,
+          ArtworkType.AUDIO,
+          size: 256,
+        ));
+      }
+    } catch (e) {
+      // Ignorar errores de precarga
+    }
   }
 
   Future<void> _playSong(SongModel song) async {
@@ -100,6 +123,21 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     final index = _favorites.indexWhere((s) => s.data == song.data);
 
     if (index != -1) {
+      final handler = audioHandler as MyAudioHandler;
+      // Guardar el origen en SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('last_queue_source', LocaleProvider.tr('favorites_title'));
+      // Comprobar si la cola actual es igual a la nueva (por ids y orden)
+      final currentQueue = handler.queue.value;
+      final isSameQueue = currentQueue.length == _favorites.length &&
+        List.generate(_favorites.length, (i) => currentQueue[i].id == _favorites[i].data).every((x) => x);
+
+      if (isSameQueue) {
+        await handler.skipToQueueItem(index);
+        await handler.play();
+        return;
+      }
+
       int before = (maxQueueSongs / 2).floor();
       int after = maxQueueSongs - before;
       int start = (index - before).clamp(0, _favorites.length);
@@ -107,11 +145,11 @@ class _FavoritesScreenState extends State<FavoritesScreen>
       List<SongModel> limitedQueue = _favorites.sublist(start, end);
       int newIndex = index - start;
 
-      await (audioHandler as MyAudioHandler).setQueueFromSongs(
+      await handler.setQueueFromSongs(
         limitedQueue,
         initialIndex: newIndex,
       );
-      await (audioHandler as MyAudioHandler).play();
+      await handler.play();
     }
   }
 
@@ -203,6 +241,9 @@ class _FavoritesScreenState extends State<FavoritesScreen>
   }
 
   void _onSongSelected(SongModel song) {
+    try {
+      (audioHandler as MyAudioHandler).isShuffleNotifier.value = false;
+    } catch (_) {}
     if (_isSelecting) {
       setState(() {
         if (_selectedSongIds.contains(song.id)) {
@@ -216,10 +257,16 @@ class _FavoritesScreenState extends State<FavoritesScreen>
       });
       return;
     }
-    _playSong(song);
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 300), () async {
+      if (!mounted) return;
+      await _playSong(song);
+    });
   }
 
   void _handleLongPress(BuildContext context, SongModel song) async {
+    final isPinned = await ShortcutsDB().isShortcut(song.data);
+    if (!context.mounted) return;
     showModalBottomSheet(
       context: context,
       builder: (context) => SafeArea(
@@ -241,6 +288,19 @@ class _FavoritesScreenState extends State<FavoritesScreen>
               onTap: () async {
                 Navigator.of(context).pop();
                 await _handleAddToPlaylistSingle(context, song);
+              },
+            ),
+            ListTile(
+              leading: Icon(isPinned ? Icons.push_pin : Icons.push_pin_outlined),
+              title: TranslatedText(isPinned ? 'unpin_shortcut' : 'pin_shortcut'),
+              onTap: () async {
+                Navigator.of(context).pop();
+                if (isPinned) {
+                  await ShortcutsDB().removeShortcut(song.data);
+                } else {
+                  await ShortcutsDB().addShortcut(song.data);
+                }
+                shortcutsShouldReload.value = !shortcutsShouldReload.value;
               },
             ),
             ListTile(
@@ -646,6 +706,16 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                   decoration: InputDecoration(
                     hintText: LocaleProvider.tr('search_by_title_or_artist'),
                     prefixIcon: const Icon(Icons.search),
+                    suffixIcon: _searchController.text.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.close),
+                            onPressed: () {
+                              _searchController.clear();
+                              _onSearchChanged();
+                              setState(() {});
+                            },
+                          )
+                        : null,
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(24),
                     ),
@@ -764,18 +834,35 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                                       ),
                                     ],
                                   ),
-                                  title: Text(
-                                    song.title,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: isCurrent
-                                        ? TextStyle(
-                                            color: isAmoledTheme
-                                                ? Colors.white
-                                                : Theme.of(context).colorScheme.primary,
-                                            fontWeight: FontWeight.bold,
-                                          )
-                                        : null,
+                                  title: Row(
+                                    children: [
+                                      if (isCurrent)
+                                        Padding(
+                                          padding: const EdgeInsets.only(right: 8.0),
+                                          child: MiniMusicVisualizer(
+                                            color: Theme.of(context).colorScheme.primary,
+                                            width: 4,
+                                            height: 15,
+                                            radius: 4,
+                                            animate: playing ? true : false,
+                                          ),
+                                        ),
+                                      Expanded(
+                                        child: Text(
+                                          song.title,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: isCurrent
+                                              ? TextStyle(
+                                                  color: isAmoledTheme
+                                                      ? Colors.white
+                                                      : Theme.of(context).colorScheme.primary,
+                                                  fontWeight: FontWeight.bold,
+                                                )
+                                              : null,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                   subtitle: Text(
                                     (song.artist == null ||

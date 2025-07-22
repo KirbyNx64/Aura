@@ -16,6 +16,9 @@ import 'package:music/utils/ota_update_helper.dart';
 import 'package:music/utils/theme_preferences.dart';
 import 'package:music/l10n/locale_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:music/utils/db/shortcuts_db.dart';
+import 'package:mini_music_visualizer/mini_music_visualizer.dart';
+import 'dart:async';
 
 enum OrdenCancionesPlaylist { normal, alfabetico, invertido, ultimoAgregado }
 
@@ -26,10 +29,10 @@ class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key, this.onTabChange, this.setThemeMode, this.setColorScheme});
 
   @override
-  State<HomeScreen> createState() => _HomeScreenState();
+  State<HomeScreen> createState() => HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
+class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   List<SongModel> _recentSongs = [];
   bool _showingRecents = false;
   bool _showingPlaylistSongs = false;
@@ -66,10 +69,25 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   bool _isSelectingPlaylistSongs = false;
   final Set<int> _selectedPlaylistSongIds = {};
 
+  List<SongModel> _shortcutSongs = [];
+  List<SongModel> _shuffledQuickPick = [];
+
+  Timer? _debounce;
+
   /// Helper para obtener el AudioHandler de forma segura
   Future<MyAudioHandler?> _getAudioHandler() async {
     final handler = await getAudioServiceSafely();
     return handler as MyAudioHandler?;
+  }
+
+  // Devuelve la lista de accesos directos para mostrar en quick_access
+  List<SongModel> get _accessDirectSongs {
+    final shortcutPaths = _shortcutSongs.map((s) => s.data).toList();
+    final List<SongModel> combined = [
+      ..._shortcutSongs,
+      ..._mostPlayed.where((s) => !shortcutPaths.contains(s.data)),
+    ];
+    return combined.take(18).toList();
   }
 
   @override
@@ -78,14 +96,20 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     _loadOrderFilter().then((_) {
       _loadAllSongs();
-      _loadMostPlayed().then((_) {
+      _loadMostPlayed().then((_) async {
+        await _loadShortcuts();
         _initQuickPickPages();
         setState(() {});
       });
       _loadPlaylists();
     });
     playlistsShouldReload.addListener(_onPlaylistsShouldReload);
+    shortcutsShouldReload.addListener(_onShortcutsShouldReload);
     _buscarActualizacion();
+  }
+
+  void _onShortcutsShouldReload() {
+    refreshShortcuts();
   }
 
   Future<void> _loadOrderFilter() async {
@@ -123,18 +147,78 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _saveOrderFilter();
   }
 
+  Future<void> _loadPinnedSongs() async {
+    final prefs = await SharedPreferences.getInstance();
+    final pinnedPaths = prefs.getStringList('pinned_songs') ?? [];
+    List<SongModel> pinned = [];
+    for (final path in pinnedPaths) {
+      SongModel? song;
+      try {
+        song = allSongs.firstWhere((s) => s.data == path);
+      } catch (_) {
+        try {
+          song = _mostPlayed.firstWhere((s) => s.data == path);
+        } catch (_) {
+          song = null;
+        }
+      }
+      if (song != null) pinned.add(song);
+    }
+  }
+
+  // Modificar _initQuickPickPages para usar _pinnedSongs y _mostPlayed
   void _initQuickPickPages() {
     _quickPickPages.clear();
-    final songs = List<SongModel>.from(_mostPlayed);
-    songs.shuffle();
-    // Divide la lista en páginas de 4, sin repetir
-    for (int i = 0; i < 5; i++) {
-      final start = i * 4;
-      final end = (start + 4).clamp(0, songs.length);
-      if (start < songs.length) {
-        _quickPickPages.add(songs.sublist(start, end));
+    // Primero los accesos directos, luego las más escuchadas sin repetir
+    final shortcutPaths = _shortcutSongs.map((s) => s.data).toList();
+    final List<SongModel> shortcutOrdered = [];
+    for (final path in shortcutPaths) {
+      try {
+        final song = _shortcutSongs.firstWhere((s) => s.data == path);
+        shortcutOrdered.add(song);
+      } catch (_) {}
+    }
+    final List<SongModel> combined = [
+      ...shortcutOrdered,
+      ..._mostPlayed.where((s) => !shortcutPaths.contains(s.data)),
+    ];
+    final limited = combined.take(18).toList();
+    // Divide la lista en páginas de 6
+    for (int i = 0; i < 3; i++) {
+      final start = i * 6;
+      final end = (start + 6).clamp(0, limited.length);
+      if (start < limited.length) {
+        _quickPickPages.add(limited.sublist(start, end));
       }
     }
+  }
+
+  // Cuando se fije o desfije una canción, recargar accesos directos
+  Future<void> refreshPinnedSongs() async {
+    await _loadPinnedSongs();
+    _initQuickPickPages();
+    setState(() {});
+  }
+
+  Future<void> _loadShortcuts() async {
+    final shortcutPaths = await ShortcutsDB().getShortcuts();
+    List<SongModel> shortcutSongs = [];
+    for (final path in shortcutPaths) {
+      try {
+        final song = allSongs.firstWhere((s) => s.data == path);
+        shortcutSongs.add(song);
+      } catch (_) {}
+    }
+    setState(() {
+      _shortcutSongs = shortcutSongs;
+    });
+    _shuffleQuickPick();
+  }
+
+  Future<void> refreshShortcuts() async {
+    await _loadShortcuts();
+    _initQuickPickPages();
+    setState(() {});
   }
 
   Future<void> _buscarActualizacion() async {
@@ -186,6 +270,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       _showingRecents = false;
     });
     _ordenarCancionesPlaylist();
+    
+    // Precargar carátulas de la playlist
+    unawaited(_preloadArtworksForSongs(songs));
   }
 
   Future<void> _loadMostPlayed() async {
@@ -193,6 +280,24 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     setState(() {
       _mostPlayed = songs;
     });
+    _shuffleQuickPick();
+    
+    // Precargar carátulas de canciones más reproducidas
+    unawaited(_preloadArtworksForSongs(songs));
+  }
+
+  Future<void> _preloadArtworksForSongs(List<SongModel> songs) async {
+    try {
+      for (final song in songs.take(20)) {
+        unawaited(OnAudioQuery().queryArtwork(
+          song.id,
+          ArtworkType.AUDIO,
+          size: 256,
+        ));
+      }
+    } catch (e) {
+      // Ignorar errores de precarga
+    }
   }
 
   Future<void> _loadRecents() async {
@@ -202,6 +307,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         _recentSongs = recents;
         _showingRecents = true;
       });
+      
+      // Precargar carátulas de canciones recientes
+      unawaited(_preloadArtworksForSongs(recents));
     } catch (e) {
       setState(() {
         _recentSongs = [];
@@ -255,7 +363,22 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     return texto.toLowerCase();
   }
 
-  Future<bool> _onWillPop() async {
+  // Agrega la key global arriba en HomeScreenState
+  final GlobalKey ytScreenKey = GlobalKey();
+
+  // Agrega un ValueNotifier para el índice de tab si no existe
+  final ValueNotifier<int> _selectedTabIndex = ValueNotifier<int>(0);
+
+  Future<bool> onWillPop() async {
+    // print('WillPopScope: tab= [32m${_selectedTabIndex.value} [0m');
+    final state = ytScreenKey.currentState as dynamic;
+    // print('YT state: $state');
+    if (_selectedTabIndex.value == 1 && state?.canPopInternally() == true) {
+      // print('Delegando pop a YT');
+      state.handleInternalPop();
+      return false;
+    }
+    // print('Pop manejado por home');
     if (_showingRecents || _showingPlaylistSongs) {
       setState(() {
         _showingRecents = false;
@@ -270,11 +393,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     playlistsShouldReload.removeListener(_onPlaylistsShouldReload);
+    shortcutsShouldReload.removeListener(_onShortcutsShouldReload);
     _pageController.dispose();
     _searchRecentsController.dispose();
     _searchRecentsFocus.dispose();
     _searchPlaylistController.dispose();
     _searchPlaylistFocus.dispose();
+    _debounce?.cancel();
     super.dispose();
   }
 
@@ -299,7 +424,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _lastBottomInset = View.of(context).viewInsets.bottom;
   }
 
-  Future<void> _playSong(SongModel song, List<SongModel> queue) async {
+  Future<void> _playSong(SongModel song, List<SongModel> queue, {String? queueSource}) async {
+    // Desactiva visualmente el shuffle
+    try {
+      final handler = await _getAudioHandler();
+      if (handler != null) {
+        handler.isShuffleNotifier.value = false;
+      }
+    } catch (_) {}
     const int maxQueueSongs = 200;
     final index = queue.indexWhere((s) => s.data == song.data);
 
@@ -307,10 +439,21 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       // Obtener AudioService de forma segura
       final handler = await _getAudioHandler();
       if (handler == null) {
-        // print('❌ No se pudo obtener el AudioService');
         return;
       }
-      
+
+      // Comprobar si la cola actual es igual a la nueva (por ids y orden)
+      final currentQueue = handler.queue.value;
+      final isSameQueue = currentQueue.length == queue.length &&
+        List.generate(queue.length, (i) => currentQueue[i].id == queue[i].data).every((x) => x);
+
+      if (isSameQueue) {
+        // Solo cambiar de canción
+        await handler.skipToQueueItem(index);
+        await handler.play();
+        return;
+      }
+
       int before = (maxQueueSongs / 2).floor();
       int after = maxQueueSongs - before;
       int start = (index - before).clamp(0, queue.length);
@@ -318,6 +461,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       List<SongModel> limitedQueue = queue.sublist(start, end);
       int newIndex = index - start;
 
+      // Guardar el origen en SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      String origen = queueSource ??
+        (_showingPlaylistSongs && _selectedPlaylist != null
+          ? "${_selectedPlaylist?['name'] ?? ''}"
+          : _showingRecents
+            ? LocaleProvider.tr('recent_songs_title')
+            : "Home");
+      await prefs.setString('last_queue_source', origen);
       await (handler).setQueueFromSongs(
         limitedQueue,
         initialIndex: newIndex,
@@ -428,60 +580,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       });
       return;
     }
-    _playSong(song, _playlistSongs);
-  }
-
-  void _handlePlaylistSongLongPress(BuildContext context, SongModel song) async {
-    showModalBottomSheet(
-      context: context,
-      builder: (context) => SafeArea(
-        child: FutureBuilder<bool>(
-          future: FavoritesDB().isFavorite(song.data),
-          builder: (context, snapshot) {
-            final isFav = snapshot.data ?? false;
-            return Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                ListTile(
-                  leading: Icon(isFav ? Icons.delete_outline : Icons.favorite_border),
-                  title: TranslatedText(isFav ? 'remove_from_favorites' : 'add_to_favorites'),
-                  onTap: () async {
-                    Navigator.of(context).pop();
-                    if (isFav) {
-                      await FavoritesDB().removeFavorite(song.data);
-                      favoritesShouldReload.value = !favoritesShouldReload.value;
-                    } else {
-                      await FavoritesDB().addFavorite(song);
-                      favoritesShouldReload.value = !favoritesShouldReload.value;
-                    }
-                  },
-                ),
-                ListTile(
-                  leading: const Icon(Icons.playlist_remove),
-                  title: TranslatedText('remove_from_playlist'),
-                  onTap: () async {
-                    Navigator.of(context).pop();
-                    await PlaylistsDB().removeSongFromPlaylist(_selectedPlaylist!['id'], song.data);
-                    await _loadPlaylistSongs(_selectedPlaylist!);
-                  },
-                ),
-                ListTile(
-                  leading: const Icon(Icons.check_box_outlined),
-                  title: TranslatedText('select'),
-                  onTap: () {
-                    Navigator.of(context).pop();
-                    setState(() {
-                      _isSelectingPlaylistSongs = true;
-                      _selectedPlaylistSongIds.add(song.id);
-                    });
-                  },
-                ),
-              ],
-            );
-          },
-        ),
-      ),
-    );
+    // La reproducción debe hacerse por debounce desde el onTap del ListTile
   }
 
   Future<void> _showAddFromRecentsToCurrentPlaylistDialog() async {
@@ -586,17 +685,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
+  void _shuffleQuickPick() {
+    final shortcutPaths = _shortcutSongs.map((s) => s.data).toSet();
+    _shuffledQuickPick = _mostPlayed.where((s) => !shortcutPaths.contains(s.data)).toList();
+    _shuffledQuickPick.shuffle();
+  }
+
   @override
   Widget build(BuildContext context) {
-    // Divide las canciones en páginas de 6
-    List<List<SongModel>> pages = List.generate(3, (i) {
-      final start = i * 6;
-      final end = (start + 6).clamp(0, _mostPlayed.length);
-      return _mostPlayed.length > start
-          ? _mostPlayed.sublist(start, end)
-          : <SongModel>[];
-    });
-
     final screenHeight = MediaQuery.of(context).size.height;
     final isSmallScreen = screenHeight < 650;
 
@@ -613,7 +709,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     // final is195by9 = (aspectRatio >= 2.10);
 
     return WillPopScope(
-      onWillPop: _onWillPop,
+      onWillPop: onWillPop,
       child: Scaffold(
         appBar: AppBar(
           leading: (_showingRecents || _showingPlaylistSongs)
@@ -797,6 +893,24 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       decoration: InputDecoration(
                         hintText: LocaleProvider.tr('search_by_title_or_artist'),
                         prefixIcon: const Icon(Icons.search),
+                        suffixIcon: (_showingRecents
+                                ? _searchRecentsController.text.isNotEmpty
+                                : _searchPlaylistController.text.isNotEmpty)
+                            ? IconButton(
+                                icon: const Icon(Icons.close),
+                                onPressed: () {
+                                  if (_showingRecents) {
+                                    _searchRecentsController.clear();
+                                    _onSearchRecentsChanged();
+                                    setState(() {});
+                                  } else {
+                                    _searchPlaylistController.clear();
+                                    _onSearchPlaylistChanged();
+                                    setState(() {});
+                                  }
+                                },
+                              )
+                            : null,
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(24),
                         ),
@@ -860,18 +974,35 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                   ),
                                 ),
                               ),
-                              title: Text(
-                                song.title,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                  fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
-                                  color: isCurrent
-                                      ? (isAmoledTheme
-                                          ? Colors.white
-                                          : Theme.of(context).colorScheme.primary)
-                                      : Theme.of(context).colorScheme.onSurface,
-                                ),
+                              title: Row(
+                                children: [
+                                  if (isCurrent)
+                                    Padding(
+                                      padding: const EdgeInsets.only(right: 8.0),
+                                      child: MiniMusicVisualizer(
+                                        color: Theme.of(context).colorScheme.primary,
+                                        width: 4,
+                                        height: 15,
+                                        radius: 4,
+                                        animate: isPlaying ? true : false,
+                                      ),
+                                    ),
+                                  Expanded(
+                                    child: Text(
+                                      song.title,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                        fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
+                                        color: isCurrent
+                                            ? (isAmoledTheme
+                                                ? Colors.white
+                                                : Theme.of(context).colorScheme.primary)
+                                            : Theme.of(context).colorScheme.onSurface,
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                               subtitle: Text(
                                 (song.artist?.trim().isEmpty ?? true)
@@ -901,7 +1032,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                   ? Colors.white.withValues(alpha: 0.1)
                                   : Theme.of(context).colorScheme.primaryContainer,
                               onTap: () async {
-                                await _playSong(song, songsToShow);
+                                _debounce?.cancel();
+                                _debounce = Timer(const Duration(milliseconds: 300), () async {
+                                  if (!mounted) return;
+                                  await _playSong(song, songsToShow);
+                                });
                               },
                               onLongPress: () {
                                 showModalBottomSheet(
@@ -940,6 +1075,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                 } else {
                                                   await _addToFavorites(song);
                                                 }
+                                              },
+                                            ),
+                                            ListTile(
+                                              leading: const Icon(Icons.delete_outline),
+                                              title: TranslatedText('remove_from_recents'),
+                                              onTap: () async {
+                                                Navigator.of(context).pop();
+                                                await RecentsDB().removeRecent(song.data);
+                                                await _loadRecents();
                                               },
                                             ),
                                           ],
@@ -988,8 +1132,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                 audioHandler?.playbackState.value.playing ?? false;
                             final isAmoledTheme = colorSchemeNotifier.value == AppColorScheme.amoled;
                             return ListTile(
-                              onTap: () => _onPlaylistSongSelected(song),
-                              onLongPress: () {
+                              onTap: () {
+                                if (_isSelectingPlaylistSongs) {
+                                  _onPlaylistSongSelected(song);
+                                } else {
+                                  _debounce?.cancel();
+                                  _debounce = Timer(const Duration(milliseconds: 300), () async {
+                                    if (!mounted) return;
+                                    await _playSong(song, songsToShow);
+                                  });
+                                }
+                              },
+                              onLongPress: () async {
                                 if (_isSelectingPlaylistSongs) {
                                   setState(() {
                                     if (_selectedPlaylistSongIds.contains(song.id)) {
@@ -1002,7 +1156,73 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                     }
                                   });
                                 } else {
-                                  _handlePlaylistSongLongPress(context, song);
+                                  final isPinned = await ShortcutsDB().isShortcut(song.data);
+                                  final isFav = await FavoritesDB().isFavorite(song.data);
+                                  if (!context.mounted) return;
+                                  showModalBottomSheet(
+                                    context: context,
+                                    builder: (context) => SafeArea(
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          ListTile(
+                                            leading: Icon(
+                                              isFav ? Icons.delete_outline : Icons.favorite_border,
+                                            ),
+                                            title: TranslatedText(
+                                              isFav ? 'remove_from_favorites' : 'add_to_favorites',
+                                            ),
+                                            onTap: () async {
+                                              if (!context.mounted) return;
+                                              Navigator.of(context).pop();
+                                              if (isFav) {
+                                                await FavoritesDB().removeFavorite(song.data);
+                                                favoritesShouldReload.value = !favoritesShouldReload.value;
+                                              } else {
+                                                await FavoritesDB().addFavorite(song);
+                                                favoritesShouldReload.value = !favoritesShouldReload.value;
+                                              }
+                                            },
+                                          ),
+                                          ListTile(
+                                            leading: const Icon(Icons.playlist_remove),
+                                            title: TranslatedText('remove_from_playlist'),
+                                            onTap: () async {
+                                              if (!context.mounted) return;
+                                              Navigator.of(context).pop();
+                                              await PlaylistsDB().removeSongFromPlaylist(_selectedPlaylist!['id'], song.data);
+                                              await _loadPlaylistSongs(_selectedPlaylist!);
+                                            },
+                                          ),
+                                          ListTile(
+                                            leading: Icon(isPinned ? Icons.push_pin : Icons.push_pin_outlined),
+                                            title: TranslatedText(isPinned ? 'unpin_shortcut' : 'pin_shortcut'),
+                                            onTap: () async {
+                                              if (!context.mounted) return;
+                                              Navigator.of(context).pop();
+                                              if (isPinned) {
+                                                await ShortcutsDB().removeShortcut(song.data);
+                                              } else {
+                                                await ShortcutsDB().addShortcut(song.data);
+                                              }
+                                              shortcutsShouldReload.value = !shortcutsShouldReload.value;
+                                            },
+                                          ),
+                                          ListTile(
+                                            leading: const Icon(Icons.check_box_outlined),
+                                            title: TranslatedText('select'),
+                                            onTap: () {
+                                              Navigator.of(context).pop();
+                                              setState(() {
+                                                _isSelectingPlaylistSongs = true;
+                                                _selectedPlaylistSongIds.add(song.id);
+                                              });
+                                            },
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  );
                                 }
                               },
                               leading: Row(
@@ -1046,18 +1266,35 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                   ),
                                 ],
                               ),
-                              title: Text(
-                                song.title,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                  fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
-                                  color: isCurrent
-                                      ? (isAmoledTheme
-                                          ? Colors.white
-                                          : Theme.of(context).colorScheme.primary)
-                                      : Theme.of(context).colorScheme.onSurface,
-                                ),
+                              title: Row(
+                                children: [
+                                  if (isCurrent)
+                                    Padding(
+                                      padding: const EdgeInsets.only(right: 8.0),
+                                      child: MiniMusicVisualizer(
+                                        color: Theme.of(context).colorScheme.primary,
+                                        width: 4,
+                                        height: 15,
+                                        radius: 4,
+                                        animate: isPlaying ? true : false,
+                                      ),
+                                    ),
+                                  Expanded(
+                                    child: Text(
+                                      song.title,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                        fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
+                                        color: isCurrent
+                                            ? (isAmoledTheme
+                                                ? Colors.white
+                                                : Theme.of(context).colorScheme.primary)
+                                            : Theme.of(context).colorScheme.onSurface,
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                               subtitle: Text(
                                 (song.artist?.trim().isEmpty ?? true)
@@ -1158,7 +1395,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                 controller: _pageController,
                                 onPageChanged: (_) {},
                                 children: List.generate(3, (pageIndex) {
-                                  final items = pages[pageIndex];
+                                  final items = _accessDirectSongs.skip(pageIndex * 6).take(6).toList();
                                   return Padding(
                                     padding: const EdgeInsets.symmetric(
                                       horizontal: 8,
@@ -1182,6 +1419,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                       itemBuilder: (context, index) {
                                         if (index < items.length) {
                                           final song = items[index];
+                                          final isPlaying = audioHandler?.playbackState.value.playing ?? false;
                                           audioHandler
                                                   ?.mediaItem
                                                   .value
@@ -1189,27 +1427,72 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                               song.data;
                                           return AnimatedTapButton(
                                             onTap: () {
-                                              _playSong(song, _mostPlayed);
+                                              _debounce?.cancel();
+                                              _debounce = Timer(const Duration(milliseconds: 300), () async {
+                                                if (!mounted) return;
+                                                await _playSong(song, _accessDirectSongs, queueSource: LocaleProvider.tr('quick_access_songs'));
+                                              });
                                             },
-                                            onLongPress: () {
-                                              _handleLongPress(context, song);
+                                            onLongPress: () async {
+                                              HapticFeedback.mediumImpact();
+                                              if (!context.mounted) return;
+                                              final isPinned = _shortcutSongs.any((s) => s.data == song.data);
+                                              final isFavorite = await FavoritesDB().isFavorite(song.data);
+                                              if (!context.mounted) return;
+                                              showModalBottomSheet(
+                                                context: context,
+                                                builder: (context) => SafeArea(
+                                                  child: Column(
+                                                    mainAxisSize: MainAxisSize.min,
+                                                    children: [
+                                                      ListTile(
+                                                        leading: Icon(
+                                                          isFavorite ? Icons.delete_outline : Icons.favorite_border,
+                                                        ),
+                                                        title: TranslatedText(
+                                                          isFavorite ? 'remove_from_favorites' : 'add_to_favorites',
+                                                        ),
+                                                        onTap: () async {
+                                                          if (!context.mounted) return;
+                                                          Navigator.of(context).pop();
+                                                          if (isFavorite) {
+                                                            await FavoritesDB().removeFavorite(song.data);
+                                                            favoritesShouldReload.value = !favoritesShouldReload.value;
+                                                          } else {
+                                                            await FavoritesDB().addFavorite(song);
+                                                            favoritesShouldReload.value = !favoritesShouldReload.value;
+                                                          }
+                                                        },
+                                                      ),
+                                                      if (isPinned)
+                                                        ListTile(
+                                                          leading: const Icon(Icons.push_pin),
+                                                          title: TranslatedText('unpin_shortcut'),
+                                                          onTap: () async {
+                                                            if (!context.mounted) return;
+                                                            Navigator.of(context).pop();
+                                                            await ShortcutsDB().removeShortcut(song.data);
+                                                            shortcutsShouldReload.value = !shortcutsShouldReload.value;
+                                                          },
+                                                        ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              );
                                             },
                                             child: ClipRRect(
-                                              borderRadius:
-                                                  BorderRadius.circular(12),
+                                              borderRadius: BorderRadius.circular(12),
                                               child: Stack(
                                                 children: [
                                                   QueryArtworkWidget(
                                                     id: song.id,
                                                     type: ArtworkType.AUDIO,
                                                     artworkFit: BoxFit.cover,
-                                                    artworkBorder:
-                                                        BorderRadius.circular(12),
+                                                    artworkBorder: BorderRadius.circular(12),
                                                     keepOldArtwork: true,
                                                     artworkHeight: 120,
                                                     artworkWidth: 120,
-                                                    artworkQuality:
-                                                        FilterQuality.high,
+                                                    artworkQuality: FilterQuality.high,
                                                     size: 400,
                                                     nullArtworkWidget: Container(
                                                       width: 120,
@@ -1227,6 +1510,42 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                       ),
                                                     ),
                                                   ),
+                                                  // Animación visualizer en la esquina superior izquierda si es la canción actual
+                                                  if (audioHandler?.mediaItem.value?.extras?['data'] == song.data)
+                                                    Positioned(
+                                                      top: 6,
+                                                      left: 6,
+                                                      child: MiniMusicVisualizer(
+                                                        color: Colors.white,
+                                                        width: 5,
+                                                        height: 22,
+                                                        radius: 4,
+                                                        animate: isPlaying ? true : false,
+                                                      ),
+                                                    ),
+                                                  if (_shortcutSongs.any((s) => s.data == song.data))
+                                                    Positioned(
+                                                      top: 6,
+                                                      right: 6,
+                                                      child: Container(
+                                                        decoration: BoxDecoration(
+                                                          color: Colors.black.withValues(alpha: 0.4),
+                                                          shape: BoxShape.circle,
+                                                        ),
+                                                        padding: const EdgeInsets.all(4),
+                                                        child: const Icon(
+                                                          Icons.push_pin,
+                                                          color: Colors.white,
+                                                          size: 20,
+                                                          shadows: [
+                                                            Shadow(
+                                                              blurRadius: 4,
+                                                              color: Colors.black,
+                                                            ),
+                                                          ],
+                                                        ),
+                                                      ),
+                                                    ),
                                                   Positioned(
                                                     left: 0,
                                                     right: 0,
@@ -1338,10 +1657,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                       height: 320,
                                       child: PageView.builder(
                                         controller: _quickPickPageController,
-                                        itemCount: _quickPickPages.length,
+                                        itemCount: 3,
                                         itemBuilder: (context, pageIndex) {
-                                          final songs =
-                                              _quickPickPages[pageIndex];
+                                          final songs = _shuffledQuickPick.skip(pageIndex * 6).take(6).toList();
                                           return Padding(
                                             padding: const EdgeInsets.symmetric(
                                               horizontal: 0,
@@ -1353,6 +1671,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                               itemCount: songs.length,
                                               itemBuilder: (context, index) {
                                                 final song = songs[index];
+                                                final isCurrent = audioHandler?.mediaItem.value?.extras?['data'] == song.data;
+                                                final isPlaying = audioHandler?.playbackState.value.playing ?? false;
                                                 return Padding(
                                                   padding: EdgeInsets.only(
                                                     bottom:
@@ -1396,11 +1716,36 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                         ),
                                                       ),
                                                     ),
-                                                    title: Text(
-                                                      song.title,
-                                                      maxLines: 1,
-                                                      overflow:
-                                                          TextOverflow.ellipsis,
+                                                    title: Row(
+                                                      children: [
+                                                        if (isCurrent)
+                                                          Padding(
+                                                            padding: const EdgeInsets.only(right: 8.0),
+                                                            child: MiniMusicVisualizer(
+                                                              color: Theme.of(context).colorScheme.primary,
+                                                              width: 4,
+                                                              height: 15,
+                                                              radius: 4,
+                                                              animate: isPlaying ? true : false,
+                                                            ),
+                                                          ),
+                                                        Expanded(
+                                                          child: Text(
+                                                            song.title,
+                                                            maxLines: 1,
+                                                            overflow:
+                                                                TextOverflow.ellipsis,
+                                                            style: TextStyle(
+                                                              fontWeight: isCurrent
+                                                                  ? FontWeight.bold
+                                                                  : FontWeight.normal,
+                                                              color: isCurrent 
+                                                                  ? Theme.of(context).colorScheme.primary
+                                                                  : null,
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      ],
                                                     ),
                                                     subtitle: Text(
                                                       (song.artist
@@ -1411,6 +1756,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                           : song.artist!,
                                                       maxLines: 1,
                                                       overflow: TextOverflow.ellipsis,
+                                                      style: TextStyle(
+                                                        color: isCurrent
+                                                            ? Theme.of(context).colorScheme.primary
+                                                            : null,
+                                                      ),
                                                     ),
                                                     trailing: const Opacity(
                                                       opacity: 0,
@@ -1418,10 +1768,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                         Icons.more_vert,
                                                       ),
                                                     ),
-                                                    onTap: () => _playSong(
-                                                      song,
-                                                      _mostPlayed,
-                                                    ),
+                                                    onTap: () {
+                                                      _debounce?.cancel();
+                                                      _debounce = Timer(const Duration(milliseconds: 300), () async {
+                                                        if (!mounted) return;
+                                                        await _playSong(song, _mostPlayed, queueSource: LocaleProvider.tr('quick_pick_songs'));
+                                                      });
+                                                    },
                                                     onLongPress: () =>
                                                         _handleLongPress(
                                                           context,

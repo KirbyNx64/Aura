@@ -17,6 +17,8 @@ import 'dart:async';
 import 'package:scroll_to_index/scroll_to_index.dart';
 import 'package:music/l10n/locale_provider.dart';
 import 'package:music/utils/theme_preferences.dart';
+import 'dart:io';
+import 'package:shared_preferences/shared_preferences.dart';
 
 final OnAudioQuery _audioQuery = OnAudioQuery();
 
@@ -45,15 +47,16 @@ class LyricLine {
 
 class FullPlayerScreen extends StatefulWidget {
   final MediaItem? initialMediaItem;
+  final Uri? initialArtworkUri;
 
-  const FullPlayerScreen({super.key, this.initialMediaItem});
+  const FullPlayerScreen({super.key, this.initialMediaItem, this.initialArtworkUri});
 
   @override
   State<FullPlayerScreen> createState() => _FullPlayerScreenState();
 }
 
 class _FullPlayerScreenState extends State<FullPlayerScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   double? _dragValueSeconds;
   bool _showLyrics = false;
   String? _syncedLyrics;
@@ -63,6 +66,18 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
   final ScrollController _lyricsScrollController = ScrollController();
   String? _lastMediaItemId;
   Timer? _seekDebounceTimer;
+  int? _lastSeekMs;
+  DateTime _lastSeekTime = DateTime.fromMillisecondsSinceEpoch(0);
+  final int _seekThrottleMs = 300;
+  Duration? _lastKnownPosition;
+
+  late AnimationController _favController;
+  late Animation<double> _favAnimation;
+  bool _lastIsFav = false;
+  late AnimationController _playPauseController;
+
+  // Flag para usar initialArtworkUri solo en el primer build
+  // bool _usedInitialArtwork = false;
 
   String _formatDuration(Duration duration) {
     final hours = duration.inHours;
@@ -108,6 +123,9 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                   alignment: Alignment.center,
                   child: const CircularProgressIndicator(),
                 ),
+          // Optimización: Cache de imagen
+          cacheWidth: (size * MediaQuery.of(context).devicePixelRatio).round(),
+          cacheHeight: (size * MediaQuery.of(context).devicePixelRatio).round(),
         ),
       );
     } else {
@@ -174,10 +192,74 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     }
   }
 
+  Future<void> _loadLyricsWithoutSetState(MediaItem mediaItem) async {
+    if (!mounted) return;
+    
+    // Solo cargar datos sin setState
+    final lyricsData = await SyncedLyricsService.getSyncedLyrics(mediaItem);
+    if (!mounted) return; 
+
+    final synced = lyricsData?['synced'];
+    if (synced != null) {
+      final lines = synced.split('\n');
+      final parsed = <LyricLine>[];
+      final reg = RegExp(r'\[(\d{2}):(\d{2})(?:\.(\d{2,3}))?\](.*)');
+      for (final line in lines) {
+        final match = reg.firstMatch(line);
+        if (match != null) {
+          final min = int.parse(match.group(1)!);
+          final sec = int.parse(match.group(2)!);
+          final ms = match.group(3) != null
+              ? int.parse(match.group(3)!.padRight(3, '0'))
+              : 0;
+          final text = match.group(4)!.trim();
+          parsed.add(
+            LyricLine(
+              Duration(minutes: min, seconds: sec, milliseconds: ms),
+              text,
+            ),
+          );
+        }
+      }
+      // Solo actualizar variables sin setState
+      if (mounted) {
+        _lyricLines = parsed;
+        _loadingLyrics = false;
+      }
+    } else {
+      if (mounted) {
+        _lyricLines = [];
+        _loadingLyrics = false;
+      }
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _favController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 400),
+    );
+    _favAnimation = Tween<double>(begin: 1.0, end: 1.25).animate(
+      CurvedAnimation(parent: _favController, curve: Curves.elasticOut),
+    );
+    _playPauseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 350),
+      value: 1.0, // Empieza en pausa (o 0.0 si quieres que empiece en play)
+    );
+    // Eliminado: _loadQueueSource();
+    // Eliminado: (audioHandler as MyAudioHandler).queueSourceNotifier.addListener(_onQueueSourceChanged);
+  }
+
   @override
   void dispose() {
     _seekDebounceTimer?.cancel();
     _lyricsScrollController.dispose();
+    _favController.dispose();
+    _playPauseController.dispose();
+    // Eliminado: (audioHandler as MyAudioHandler).queueSourceNotifier.removeListener(_onQueueSourceChanged);
     super.dispose();
   }
 
@@ -585,31 +667,28 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
         initialData: widget.initialMediaItem,
         builder: (context, snapshot) {
           final mediaItem = snapshot.data;
-          if (_showLyrics &&
-              mediaItem != null &&
-              (mediaItem.id != _lastMediaItemId)) {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (mounted) {
-                setState(() {
-                  _showLyrics = false;
-                });
-              }
-            });
+          
+          // Optimización: Solo procesar si es una canción nueva
+          if (mediaItem != null && mediaItem.id != _lastMediaItemId) {
+            _lastMediaItemId = mediaItem.id;
+            
+            // Ocultar letras si estaban mostradas
+            if (_showLyrics) {
+              _showLyrics = false;
+            }
+            
+            // Precargar letras en segundo plano sin setState
+            unawaited(_loadLyricsWithoutSetState(mediaItem));
           }
-          _lastMediaItemId = mediaItem?.id;
+          
+
+          
           if (mediaItem == null) {
             return Scaffold(
               body: Center(child: Text(LocaleProvider.tr('no_song_playing'))),
             );
           }
 
-          final queue = audioHandler?.queue.value;
-          final currentSongId = mediaItem.extras?['songId'] ?? 0;
-          final songIdList = queue
-              ?.map((item) => item.extras?['songId'] ?? 0)
-              .toList()
-              .cast<int>();
-          final currentIndex = songIdList?.indexOf(currentSongId) ?? 0;
           return Scaffold(
             appBar: AppBar(
               leading: IconButton(
@@ -617,7 +696,42 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                 icon: const Icon(Icons.keyboard_arrow_down),
                 onPressed: () => Navigator.of(context).pop(),
               ),
-              title: const Text(''),
+              title: FutureBuilder<SharedPreferences>(
+                future: SharedPreferences.getInstance(),
+                builder: (context, snapshot) {
+                  final prefs = snapshot.data;
+                  final queueSource = prefs?.getString('last_queue_source');
+                  if (queueSource != null && queueSource.isNotEmpty) {
+                    return Center(
+                      child: RichText(
+                        textAlign: TextAlign.center,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        text: TextSpan(
+                          children: [
+                            TextSpan(
+                              text: LocaleProvider.tr('playing_from'),
+                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                color: Theme.of(context).textTheme.titleMedium?.color?.withValues(alpha: 0.5),
+                                fontWeight: FontWeight.normal,
+                              ),
+                            ),
+                            TextSpan(
+                              text: queueSource,
+                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: Theme.of(context).textTheme.titleMedium?.color?.withValues(alpha: 0.7),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  } else {
+                    return const SizedBox.shrink();
+                  }
+                },
+              ),
               backgroundColor: Theme.of(context).colorScheme.surface,
               actions: [
                 IconButton(
@@ -644,17 +758,21 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                       Stack(
                         alignment: Alignment.center,
                         children: [
-                          ArtworkHeroCached(
-                            songId: mediaItem.extras?['songId'] ?? 0,
-                            size: artworkSize,
-                            borderRadius: BorderRadius.circular(
-                              artworkSize * 0.06,
-                            ),
-                            heroTag:
-                                'now_playing_artwork_${mediaItem.extras?['songId'] ?? mediaItem.id}',
-                            currentIndex: currentIndex,
-                            songIdList: songIdList,
-                            forceHighQuality: true, // Forzar alta calidad en el player
+                          Builder(
+                            builder: (context) {
+                              // Usar initialArtworkUri solo en el primer build
+                              // Uri? initialUri;
+                              // if (!_usedInitialArtwork && widget.initialArtworkUri != null) {
+                              //   initialUri = widget.initialArtworkUri;
+                              //   _usedInitialArtwork = true;
+                              // }
+                              return ArtworkHeroCached(
+                                artUri: mediaItem.artUri,
+                                size: artworkSize,
+                                borderRadius: BorderRadius.circular(artworkSize * 0.06),
+                                heroTag: 'now_playing_artwork_${(mediaItem.extras?['songId'] ?? mediaItem.id).toString()}',
+                              );
+                            },
                           ),
                           if (_showLyrics)
                             ClipRRect(
@@ -711,19 +829,10 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                               break;
                                             }
                                           }
-                                          // Solo actualiza si cambia el índice
-                                          WidgetsBinding.instance.addPostFrameCallback((
-                                            _,
-                                          ) {
-                                            if (mounted) {
-                                              if (_currentLyricIndex != idx) {
-                                                setState(
-                                                  () => _currentLyricIndex =
-                                                      idx,
-                                                );
-                                              }
-                                            }
-                                          });
+                                          // Actualizar índice directamente sin setState
+                                          if (_currentLyricIndex != idx) {
+                                            _currentLyricIndex = idx;
+                                          }
                                           return VerticalMarqueeLyrics(
                                             lyricLines: _lyricLines,
                                             currentLyricIndex: _currentLyricIndex,
@@ -767,6 +876,11 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                               ),
                               builder: (context, favSnapshot) {
                                 final isFav = favSnapshot.data ?? false;
+                                // Trigger heartbeat animation only when state changes
+                                if (_lastIsFav != isFav) {
+                                  _favController.forward(from: 0.0);
+                                  _lastIsFav = isFav;
+                                }
                                 return AnimatedTapButton(
                                   onTap: () async {
                                     final path =
@@ -777,8 +891,8 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                       await FavoritesDB().removeFavorite(path);
                                       favoritesShouldReload.value =
                                           !favoritesShouldReload.value;
-                                      if (mounted) setState(() {});
                                       if (!context.mounted) return;
+                                      setState(() {}); // <-- fuerza actualización visual
                                     } else {
                                       final allSongs = await _audioQuery
                                           .querySongs();
@@ -791,27 +905,28 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                         ScaffoldMessenger.of(
                                           context,
                                         ).showSnackBar(
-                                                                  SnackBar(
-                          content: Text(
-                            LocaleProvider.tr('song_not_found'),
-                          ),
-                        ),
+                                          SnackBar(
+                                            content: Text(
+                                              LocaleProvider.tr('song_not_found'),
+                                            ),
+                                          ),
                                         );
                                         return;
                                       }
 
                                       final song = songList.first;
                                       await _addToFavorites(song);
-                                      if (mounted) setState(() {});
                                       if (!context.mounted) return;
+                                      setState(() {}); // <-- fuerza actualización visual
                                     }
                                   },
-                                  child: Icon(
-                                    isFav
-                                        ? Icons.favorite
-                                        : Icons.favorite_border,
-                                    size: 38,
-                                    color: Theme.of(context).colorScheme.onSurface,
+                                  child: ScaleTransition(
+                                    scale: _favAnimation,
+                                    child: Icon(
+                                      isFav ? Icons.favorite : Icons.favorite_border,
+                                      size: 34,
+                                      color: Theme.of(context).colorScheme.onSurface,
+                                    ),
                                   ),
                                 );
                               },
@@ -840,96 +955,82 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                       ),
                       SizedBox(height: height * 0.015),
                       // Barra de progreso + tiempos
-                      StreamBuilder<Duration>(
-                        stream: (audioHandler as MyAudioHandler).positionStream,
-                        initialData: Duration.zero,
-                        builder: (context, posSnapshot) {
-                          final position = posSnapshot.data ?? Duration.zero;
-
-                          return StreamBuilder<Duration?>(
-                            stream: (audioHandler as MyAudioHandler)
-                                .player
-                                .durationStream,
-                            builder: (context, durationSnapshot) {
-                              final fallbackDuration = durationSnapshot.data;
-                              final mediaDuration = mediaItem.duration;
-                              final hasDuration =
-                                  mediaDuration != null &&
-                                  mediaDuration.inMilliseconds > 0;
-                              final duration = hasDuration
-                                  ? mediaDuration
-                                  : (fallbackDuration ?? Duration.zero);
-
-                              final durationSeconds = duration.inSeconds > 0
-                                  ? duration.inSeconds
-                                  : 1;
-
-                              final sliderValueSeconds =
-                                  (_dragValueSeconds != null)
-                                  ? _dragValueSeconds!.clamp(
-                                      0,
-                                      durationSeconds.toDouble(),
-                                    )
-                                  : position.inSeconds
-                                        .clamp(0, durationSeconds)
-                                        .toDouble();
-
-                              return Column(
-                                children: [
-                                  SizedBox(
-                                    width: progressBarWidth,
-                                    child: Slider(
-                                      min: 0,
-                                      max: durationSeconds.toDouble(),
-                                      value: sliderValueSeconds.toDouble(),
-                                      onChanged: (value) {
-                                        setState(() {
-                                          _dragValueSeconds = value;
-                                        });
-                                      },
-                                      onChangeEnd: (value) {
-                                        // Cancela el timer anterior si existe
-                                        _seekDebounceTimer?.cancel();
-                                        
-                                        // Ejecuta el seek inmediatamente al soltar
-                                        audioHandler?.seek(
-                                          Duration(seconds: value.toInt()),
-                                        );
-                                        setState(() {
-                                          _dragValueSeconds = null;
-                                        });
-                                      },
-                                    ),
-                                  ),
-                                  Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 24,
-                                    ),
-                                    child: Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        Text(
-                                          _formatDuration(
-                                            Duration(
-                                              seconds: sliderValueSeconds
-                                                  .toInt(),
+                      ValueListenableBuilder<bool>(
+                        valueListenable: (audioHandler as MyAudioHandler).isQueueTransitioning,
+                        builder: (context, isTransitioning, _) {
+                          return StreamBuilder<Duration>(
+                            stream: (audioHandler as MyAudioHandler).positionStream,
+                            initialData: Duration.zero,
+                            builder: (context, posSnapshot) {
+                              Duration position = posSnapshot.data ?? Duration.zero;
+                              if (!isTransitioning) {
+                                _lastKnownPosition = position;
+                              } else if (_lastKnownPosition != null) {
+                                position = _lastKnownPosition!;
+                              }
+                              return StreamBuilder<Duration?>(
+                                stream: (audioHandler as MyAudioHandler).player.durationStream,
+                                builder: (context, durationSnapshot) {
+                                  final fallbackDuration = durationSnapshot.data;
+                                  final mediaDuration = mediaItem.duration;
+                                  final hasDuration = mediaDuration != null && mediaDuration.inMilliseconds > 0;
+                                  final duration = hasDuration ? mediaDuration : (fallbackDuration ?? Duration.zero);
+                                  final durationMs = duration.inMilliseconds > 0 ? duration.inMilliseconds : 1;
+                                  final sliderValueMs = (_dragValueSeconds != null)
+                                      ? (_dragValueSeconds! * 1000).clamp(0, durationMs.toDouble())
+                                      : position.inMilliseconds.clamp(0, durationMs).toDouble();
+                                  return Column(
+                                    children: [
+                                      SizedBox(
+                                        width: progressBarWidth,
+                                        child: Slider(
+                                          min: 0.0,
+                                          max: durationMs.toDouble(),
+                                          value: sliderValueMs.toDouble(),
+                                          onChanged: (value) {
+                                            _dragValueSeconds = value / 1000.0;
+                                            setState(() {});
+                                          },
+                                          onChangeEnd: (value) {
+                                            final now = DateTime.now();
+                                            final ms = value.toInt();
+                                            if (now.difference(_lastSeekTime).inMilliseconds > _seekThrottleMs) {
+                                              audioHandler?.seek(Duration(milliseconds: ms));
+                                              _lastSeekTime = now;
+                                            } else {
+                                              _lastSeekMs = ms;
+                                              Future.delayed(Duration(milliseconds: _seekThrottleMs), () {
+                                                if (_lastSeekMs != null && DateTime.now().difference(_lastSeekTime).inMilliseconds >= _seekThrottleMs) {
+                                                  audioHandler?.seek(Duration(milliseconds: _lastSeekMs!));
+                                                  _lastSeekTime = DateTime.now();
+                                                  _lastSeekMs = null;
+                                                }
+                                              });
+                                            }
+                                            _dragValueSeconds = null;
+                                            setState(() {});
+                                          },
+                                        ),
+                                      ),
+                                      Padding(
+                                        padding: const EdgeInsets.symmetric(horizontal: 24),
+                                        child: Row(
+                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            Text(
+                                              _formatDuration(Duration(milliseconds: sliderValueMs.toInt())),
+                                              style: TextStyle(fontSize: is16by9 ? 18 : 15),
                                             ),
-                                          ),
-                                          style: TextStyle(
-                                            fontSize: is16by9 ? 18 : 15,
-                                          ),
+                                            Text(
+                                              _formatDuration(duration),
+                                              style: TextStyle(fontSize: is16by9 ? 18 : 15),
+                                            ),
+                                          ],
                                         ),
-                                        Text(
-                                          _formatDuration(duration),
-                                          style: TextStyle(
-                                            fontSize: is16by9 ? 18 : 15,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
+                                      ),
+                                    ],
+                                  );
+                                },
                               );
                             },
                           );
@@ -949,11 +1050,6 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                         builder: (context, snapshot) {
                           final state = snapshot.data;
                           final isPlaying = state?.playing ?? false;
-                          final shuffleMode =
-                              state?.shuffleMode ??
-                              AudioServiceShuffleMode.none;
-                          final isShuffle =
-                              shuffleMode == AudioServiceShuffleMode.all;
                           final repeatMode =
                               state?.repeatMode ?? AudioServiceRepeatMode.none;
 
@@ -977,6 +1073,13 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                               repeatColor = Theme.of(context).brightness == Brightness.light
                                               ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.9)
                                               : Theme.of(context).colorScheme.onSurface;
+                          }
+
+                          // Controla la animación según el estado
+                          if (isPlaying) {
+                            _playPauseController.forward();
+                          } else {
+                            _playPauseController.reverse();
                           }
 
                           return LayoutBuilder(
@@ -1005,24 +1108,23 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     mainAxisSize: MainAxisSize.max,
                                     children: [
-                                      IconButton(
-                                        icon: const Icon(Icons.shuffle),
-                                        color: isShuffle
-                                            ? Theme.of(
-                                                context,
-                                              ).colorScheme.primary
-                                            : Theme.of(context).brightness == Brightness.light
-                                              ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.9)
-                                              : Theme.of(context).colorScheme.onSurface,
-                                        iconSize: iconSize,
-                                        onPressed: () {
-                                          audioHandler?.setShuffleMode(
-                                            isShuffle
-                                                ? AudioServiceShuffleMode.none
-                                                : AudioServiceShuffleMode.all,
+                                      ValueListenableBuilder<bool>(
+                                        valueListenable: (audioHandler as MyAudioHandler).isShuffleNotifier,
+                                        builder: (context, isShuffle, _) {
+                                          return IconButton(
+                                            icon: const Icon(Icons.shuffle),
+                                            color: isShuffle
+                                                ? Theme.of(context).colorScheme.primary
+                                                : Theme.of(context).brightness == Brightness.light
+                                                    ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.9)
+                                                    : Theme.of(context).colorScheme.onSurface,
+                                            iconSize: iconSize,
+                                            onPressed: () async {
+                                              await (audioHandler as MyAudioHandler).toggleShuffle(!isShuffle);
+                                            },
+                                            tooltip: LocaleProvider.tr('shuffle'),
                                           );
                                         },
-                                        tooltip: LocaleProvider.tr('shuffle'),
                                       ),
                                       IconButton(
                                         icon: const Icon(Icons.skip_previous),
@@ -1059,14 +1161,13 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                               width: mainIconSize,
                                               height: mainIconSize,
                                               child: Center(
-                                                child: Icon(
-                                                  isPlaying
-                                                      ? Icons.pause
-                                                      : Icons.play_arrow,
+                                                child: AnimatedIcon(
+                                                  icon: AnimatedIcons.play_pause,
+                                                  progress: _playPauseController,
+                                                  size: playIconSize,
                                                   color: Theme.of(context).brightness == Brightness.light
                                                       ? Theme.of(context).colorScheme.surface.withValues(alpha: 0.9)
                                                       : Theme.of(context).colorScheme.surface,
-                                                  size: playIconSize,
                                                 ),
                                               ),
                                             ),
@@ -1674,13 +1775,14 @@ class _PlaylistListViewState extends State<_PlaylistListView> {
         final item = widget.queue[index - 1];
         final isCurrent = item.id == widget.currentMediaItem?.id;
         final isAmoledTheme = colorSchemeNotifier.value == AppColorScheme.amoled;
+        final songId = item.extras?['songId'] ?? 0;
+        final songPath = item.extras?['data'] ?? '';
         return ListTile(
-          leading: ArtworkHeroCached(
-            songId: item.extras?['songId'] ?? 0,
+          leading: ArtworkListTile(
+            songId: songId,
+            songPath: songPath,
             size: 48,
             borderRadius: BorderRadius.circular(8),
-            heroTag:
-                'queue_artwork_${item.extras?['songId'] ?? item.id}_$index',
           ),
           title: Text(
             item.title,
@@ -1711,5 +1813,63 @@ class _PlaylistListViewState extends State<_PlaylistListView> {
         );
       },
     );
+  }
+}
+
+class ArtworkListTile extends StatefulWidget {
+  final int songId;
+  final String songPath;
+  final double size;
+  final BorderRadius borderRadius;
+
+  const ArtworkListTile({
+    super.key,
+    required this.songId,
+    required this.songPath,
+    required this.size,
+    required this.borderRadius,
+  });
+
+  @override
+  State<ArtworkListTile> createState() => _ArtworkListTileState();
+}
+
+class _ArtworkListTileState extends State<ArtworkListTile> {
+  Uri? _artUri;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadArtwork();
+  }
+
+  Future<void> _loadArtwork() async {
+    final uri = await getOrCacheArtwork(widget.songId, widget.songPath);
+    if (mounted) setState(() => _artUri = uri);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_artUri != null) {
+      return ClipRRect(
+        borderRadius: widget.borderRadius,
+        child: Image.file(
+          File(_artUri!.toFilePath()),
+          width: widget.size,
+          height: widget.size,
+          fit: BoxFit.cover,
+        ),
+      );
+    } else {
+      return Container(
+        width: widget.size,
+        height: widget.size,
+        decoration: BoxDecoration(
+          color: Colors.grey[900],
+          borderRadius: widget.borderRadius,
+        ),
+        child: Icon(Icons.music_note, size: widget.size * 0.5),
+      );
+    }
   }
 }

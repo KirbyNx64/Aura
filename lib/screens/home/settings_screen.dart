@@ -5,7 +5,7 @@ import 'package:music/utils/theme_preferences.dart';
 import 'package:android_intent_plus/android_intent.dart';
 import 'package:android_intent_plus/flag.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:music/utils/db/artwork_db.dart';
+//import 'package:music/utils/db/artwork_db.dart';
 import 'package:music/utils/db/favorites_db.dart';
 import 'package:music/utils/db/playlists_db.dart';
 import 'package:music/utils/db/recent_db.dart';
@@ -38,6 +38,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _downloadTypeExplode = false; // true: Explode, false: Directo
   bool _audioProcessorFFmpeg = false; // true: FFmpeg, false: AudioTags
   AppColorScheme _currentColorScheme = AppColorScheme.deepPurple;
+  int _artworkQuality = 410; // 80% por defecto
 
   @override
   void initState() {
@@ -47,6 +48,61 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _loadDownloadDirectory();
     _loadDownloadTypeAndProcessor();
     _loadColorScheme();
+    _loadArtworkQuality();
+  }
+
+  Future<void> _loadArtworkQuality() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _artworkQuality = prefs.getInt('artwork_quality') ?? 410; // 80% por defecto
+    });
+  }
+
+  Future<void> _setArtworkQuality(int quality) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('artwork_quality', quality);
+    setState(() {
+      _artworkQuality = quality;
+    });
+  }
+
+  void _showArtworkQualityDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(LocaleProvider.tr('artwork_quality')),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _artworkQualityOption(1024, LocaleProvider.tr('100_percent_maximum')),
+            _artworkQualityOption(410, LocaleProvider.tr('80_percent_recommended')),
+            _artworkQualityOption(307, LocaleProvider.tr('60_percent_performance')),
+            _artworkQualityOption(205, LocaleProvider.tr('40_percent_low')),
+            _artworkQualityOption(102, LocaleProvider.tr('20_percent_minimum')),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(LocaleProvider.tr('cancel')),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _artworkQualityOption(int value, String label) {
+    return RadioListTile<int>(
+      value: value,
+      groupValue: _artworkQuality,
+      title: Text(label),
+      onChanged: (v) {
+        if (v != null) {
+          _setArtworkQuality(v);
+          Navigator.of(context).pop();
+        }
+      },
+    );
   }
 
   Future<void> _loadLanguage() async {
@@ -541,7 +597,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           // Música y reproducción
           Text(
-            '${LocaleProvider.tr('music_and_playback')}:',
+            LocaleProvider.tr('music_and_playback'),
             style: const TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
@@ -551,6 +607,34 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Card(
             child: Column(
               children: [
+                ListTile(
+                  leading: const Icon(Icons.image),
+                  title: Text(LocaleProvider.tr('artwork_quality')),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _artworkQuality == 1024
+                            ? LocaleProvider.tr('100_percent_maximum')
+                            : _artworkQuality == 410
+                                ? LocaleProvider.tr('80_percent_recommended')
+                                : _artworkQuality == 307
+                                    ? LocaleProvider.tr('60_percent_performance')
+                                    : _artworkQuality == 205
+                                        ? LocaleProvider.tr('40_percent_low')
+                                        : LocaleProvider.tr('20_percent_minimum'),
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        LocaleProvider.tr('artwork_quality_description'), // Agrega esta key en tus traducciones
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                    ],
+                  ),
+                  onTap: () => _showArtworkQualityDialog(context),
+                ),
+                const Divider(height: 1),
                 FutureBuilder<SharedPreferences>(
                   future: SharedPreferences.getInstance(),
                   builder: (context, snapshot) {
@@ -606,43 +690,43 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     }
                   },
                 ),
-                const Divider(height: 1),
-                ListTile(
-                  leading: const Icon(Icons.cleaning_services),
-                  title: Text(LocaleProvider.tr('clear_artwork_cache')),
-                  subtitle: Text(LocaleProvider.tr('clear_artwork_cache_desc'), style: const TextStyle(fontSize: 12)),
-                  onTap: () async {
-                    final confirmed = await showDialog<bool>(
-                      context: context,
-                      builder: (context) => AlertDialog(
-                        title: Text(LocaleProvider.tr('clear_artwork_cache')),
-                        content: Text(LocaleProvider.tr('clear_artwork_cache_confirm')),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.of(context).pop(false),
-                            child: Text(LocaleProvider.tr('cancel')),
-                          ),
-                          TextButton(
-                            onPressed: () => Navigator.of(context).pop(true),
-                            child: Text(LocaleProvider.tr('delete')),
-                          ),
-                        ],
-                      ),
-                    );
-                    if (confirmed == true) {
-                      await ArtworkDB.clearCache();
-                      if (context.mounted) {
-                        showDialog(
-                          context: context,
-                          builder: (context) => AlertDialog(
-                            title: Text(LocaleProvider.tr('artwork_cache_cleared')),
-                            content: Text(LocaleProvider.tr('artwork_cache_cleared_desc')),
-                          ),
-                        );
-                      }
-                    }
-                  },
-                ),
+                //const Divider(height: 1),
+                //ListTile(
+                //  leading: const Icon(Icons.cleaning_services),
+                //  title: Text(LocaleProvider.tr('clear_artwork_cache')),
+                //  subtitle: Text(LocaleProvider.tr('clear_artwork_cache_desc'), style: const TextStyle(fontSize: 12)),
+                //  onTap: () async {
+                //    final confirmed = await showDialog<bool>(
+                //      context: context,
+                //      builder: (context) => AlertDialog(
+                //        title: Text(LocaleProvider.tr('clear_artwork_cache')),
+                //        content: Text(LocaleProvider.tr('clear_artwork_cache_confirm')),
+                //        actions: [
+                //          TextButton(
+                //            onPressed: () => Navigator.of(context).pop(false),
+                //            child: Text(LocaleProvider.tr('cancel')),
+                //          ),
+                //          TextButton(
+                //            onPressed: () => Navigator.of(context).pop(true),
+                //            child: Text(LocaleProvider.tr('delete')),
+                //          ),
+                //        ],
+                //      ),
+                //    );
+                //    if (confirmed == true) {
+                //      await ArtworkDB.clearCache();
+                //      if (context.mounted) {
+                //        showDialog(
+                //          context: context,
+                //          builder: (context) => AlertDialog(
+                //            title: Text(LocaleProvider.tr('artwork_cache_cleared')),
+                //            content: Text(LocaleProvider.tr('artwork_cache_cleared_desc')),
+                //          ),
+                //        );
+                //      }
+                //    }
+                //  },
+                //),
                 const Divider(height: 1),
                 ListTile(
                   leading: const Icon(Icons.battery_alert),
@@ -674,7 +758,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           
           // Apartado de Respaldo
           Text(
-            '${LocaleProvider.tr('backup')}:',
+            LocaleProvider.tr('backup'),
             style: const TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
@@ -704,7 +788,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           // Ajustes de la app
           Text(
-            '${LocaleProvider.tr('app_settings')}:',
+            LocaleProvider.tr('app_settings'),
             style: const TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
@@ -762,7 +846,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              '${LocaleProvider.tr('version')}: v1.3.2',
+                              '${LocaleProvider.tr('version')}: v1.3.3',
                               style: const TextStyle(
                                 fontSize: 15,
                               ),

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
 import 'package:music/main.dart' show audioHandler, audioServiceReady;
@@ -9,11 +10,50 @@ import 'package:marquee/marquee.dart';
 import 'package:music/utils/db/mostplayer_db.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 
-class NowPlayingOverlay extends StatelessWidget {
+// Función optimizada para actualizar más reproducidas
+Future<void> _updateMostPlayedAsync(String path) async {
+  try {
+    final query = OnAudioQuery();
+    final allSongs = await query.querySongs();
+    final match = allSongs.where((s) => s.data == path);
+    if (match.isNotEmpty) {
+      await MostPlayedDB().incrementPlayCount(match.first);
+    }
+  } catch (e) {
+    // Ignorar errores de actualización
+  }
+}
+
+class NowPlayingOverlay extends StatefulWidget {
   final bool showBar;
 
   const NowPlayingOverlay({super.key, required this.showBar});
 
+  @override
+  State<NowPlayingOverlay> createState() => _NowPlayingOverlayState();
+}
+
+class _NowPlayingOverlayState extends State<NowPlayingOverlay> with TickerProviderStateMixin {
+  String? _lastProcessedSongId;
+  MediaItem? _lastKnownMediaItem;
+  late AnimationController _playPauseController;
+
+  @override
+  void initState() {
+    super.initState();
+    _playPauseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 350),
+      value: 1.0,
+    );
+  }
+
+  @override
+  void dispose() {
+    _playPauseController.dispose();
+    super.dispose();
+  }
+  
   @override
   Widget build(BuildContext context) {
     return ValueListenableBuilder<bool>(
@@ -26,76 +66,89 @@ class NowPlayingOverlay extends StatelessWidget {
           stream: audioHandler?.mediaItem,
           builder: (context, snapshot) {
             final song = snapshot.data;
-            final duration = song?.duration;
+            
+            // Mantener el último MediaItem conocido
+            if (song != null && song.id.isNotEmpty) {
+              _lastKnownMediaItem = song;
+            }
+            
+            // Mantener el último MediaItem conocido
+            if (song != null && song.id.isNotEmpty) {
+              _lastKnownMediaItem = song;
+            }
+            
+            // Usar la canción actual o la última conocida
+            final currentSong = song ?? _lastKnownMediaItem;
+            final duration = currentSong?.duration;
 
-            if (!showBar || song == null || song.id.isEmpty) {
+            if (!widget.showBar || currentSong == null || currentSong.id.isEmpty) {
               return const SizedBox.shrink();
             }
 
-            if (song.id.isNotEmpty) {
-              final path = song.extras?['data'];
+            // Optimización: Solo actualizar DB si es una canción nueva
+            if (currentSong.id.isNotEmpty && currentSong.id != _lastProcessedSongId) {
+              _lastProcessedSongId = currentSong.id;
+              final path = currentSong.extras?['data'];
               if (path != null) {
-                RecentsDB().addRecentPath(path);
+                // Actualizar recientes de forma asíncrona
+                unawaited(RecentsDB().addRecentPath(path));
 
-                // Nuevo: sumar 1 a la base de datos de más escuchadas
-                final query = OnAudioQuery();
-                query.querySongs().then((allSongs) {
-                  final match = allSongs.where((s) => s.data == path);
-                  if (match.isNotEmpty) {
-                    MostPlayedDB().incrementPlayCount(match.first);
-                  }
-                });
+                // Actualizar más reproducidas de forma asíncrona
+                unawaited(_updateMostPlayedAsync(path));
               }
             }
 
-            final queue = audioHandler?.queue.value; // Lista de MediaItem
-            final currentSongId = song.extras?['songId'] ?? 0;
-            final songIdList = queue
-                ?.map((item) => item.extras?['songId'] ?? 0)
-                .toList()
-                .cast<int>();
-            final currentIndex = songIdList?.indexOf(currentSongId) ?? 0;
+            
             final isLoading = (audioHandler as MyAudioHandler).initializingNotifier.value;
 
             return GestureDetector(
               behavior: HitTestBehavior.translucent,
-              onTap: () {
+              onTap: () async {
                 if (isLoading) return;
-                final currentSong = song;
+                final songId = currentSong.extras?['songId'] ?? 0;
+                final songPath = currentSong.extras?['data'] ?? '';
+                final artUri = await getOrCacheArtwork(songId, songPath);
+                if (!context.mounted) return;
                 Navigator.of(context).push(
                   PageRouteBuilder(
                     pageBuilder: (context, animation, secondaryAnimation) =>
-                        FullPlayerScreen(initialMediaItem: currentSong),
-                    transitionsBuilder:
-                        (context, animation, secondaryAnimation, child) {
-                          final offsetAnimation =
-                              Tween<Offset>(
-                                begin: const Offset(0, 1), // Empieza abajo
-                                end: Offset.zero, // Termina en su lugar
-                              ).animate(
-                                CurvedAnimation(
-                                  parent: animation,
-                                  curve: Curves.easeOutCubic,
-                                ),
-                              );
-                          return SlideTransition(
-                            position: offsetAnimation,
-                            child: child,
-                          );
-                        },
+                      FullPlayerScreen(
+                        initialMediaItem: currentSong,
+                        initialArtworkUri: artUri,
+                      ),
+                    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                      // El Hero se anima solo, solo animamos el resto del contenido
+                      return SlideTransition(
+                        position: Tween<Offset>(
+                          begin: const Offset(0, 1),
+                          end: Offset.zero,
+                        ).animate(CurvedAnimation(
+                          parent: animation,
+                          curve: Curves.easeOutCubic,
+                        )),
+                        child: child,
+                      );
+                    },
                     transitionDuration: const Duration(milliseconds: 350),
                   ),
                 );
               },
-              onVerticalDragEnd: (details) {
+              onVerticalDragEnd: (details) async {
                 if (isLoading) return;
                 if (details.primaryVelocity != null &&
                     details.primaryVelocity! < 0) {
                   final currentSong = song;
+                  final songId = currentSong?.extras?['songId'] ?? 0;
+                  final songPath = currentSong?.extras?['data'] ?? '';
+                  final artUri = await getOrCacheArtwork(songId, songPath);
+                  if (!context.mounted) return;
                   Navigator.of(context).push(
                     PageRouteBuilder(
                       pageBuilder: (context, animation, secondaryAnimation) =>
-                          FullPlayerScreen(initialMediaItem: currentSong),
+                          FullPlayerScreen(
+                            initialMediaItem: currentSong,
+                            initialArtworkUri: artUri,
+                          ),
                       transitionsBuilder:
                           (context, animation, secondaryAnimation, child) {
                             final offsetAnimation =
@@ -150,13 +203,12 @@ class NowPlayingOverlay extends StatelessWidget {
                                 ),
                               );
                             }
+                            // Obtener la lista de canciones y el índice actual
                             return ArtworkHeroCached(
-                              songId: song.extras?['songId'] ?? 0,
+                              artUri: currentSong.artUri,
                               size: 50,
                               borderRadius: BorderRadius.circular(12),
-                              heroTag: 'now_playing_artwork_${song.extras?['songId'] ?? song.id}',
-                              currentIndex: currentIndex,
-                              songIdList: songIdList,
+                              heroTag: 'now_playing_artwork_${(currentSong.extras?['songId'] ?? currentSong.id).toString()}',
                             );
                           },
                         ),
@@ -167,16 +219,16 @@ class NowPlayingOverlay extends StatelessWidget {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               TitleMarquee(
-                                text: song.title,
+                                text: currentSong.title,
                                 maxWidth:
                                     MediaQuery.of(context).size.width -
                                     170, // Ajusta según tu layout
                                 style: Theme.of(context).textTheme.titleMedium,
                               ),
                               Text(
-                                (song.artist == null || song.artist!.trim().isEmpty)
+                                (currentSong.artist == null || currentSong.artist!.trim().isEmpty)
                                     ? 'Desconocido'
-                                    : song.artist!,
+                                    : currentSong.artist!,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: Theme.of(context).textTheme.bodyMedium,
@@ -186,71 +238,83 @@ class NowPlayingOverlay extends StatelessWidget {
                         ),
                         const SizedBox(width: 8),
 
-                        StreamBuilder<bool>(
-                          stream: audioHandler?.playbackState
-                              .map((s) => s.playing)
-                              .distinct(),
-                          initialData: false,
-                          builder: (context, isPlayingSnapshot) {
-                            final isPlaying = isPlayingSnapshot.data ?? false;
-                            return IconButton(
-                              iconSize: 36,
-                              icon: Icon(
-                                isPlaying ? Icons.pause : Icons.play_arrow,
-                              ),
-                              onPressed: () {
-                                if (isPlaying) {
-                                  audioHandler?.pause();
-                                } else {
-                                  audioHandler?.play();
-                                }
-                              },
-                            );
-                          },
+                        RepaintBoundary(
+                          child: StreamBuilder<bool>(
+                            stream: audioHandler?.playbackState
+                                .map((s) => s.playing)
+                                .distinct(),
+                            initialData: false,
+                            builder: (context, isPlayingSnapshot) {
+                              final isPlaying = isPlayingSnapshot.data ?? false;
+                              // Sincroniza la animación
+                              if (isPlaying) {
+                                _playPauseController.forward();
+                              } else {
+                                _playPauseController.reverse();
+                              }
+                              return IconButton(
+                                iconSize: 36,
+                                icon: AnimatedIcon(
+                                  icon: AnimatedIcons.play_pause,
+                                  progress: _playPauseController,
+                                  size: 36,
+                                ),
+                                onPressed: () {
+                                  if (isPlaying) {
+                                    audioHandler?.pause();
+                                  } else {
+                                    audioHandler?.play();
+                                  }
+                                },
+                              );
+                            },
+                          ),
                         ),
                       ],
                     ),
                     const SizedBox(height: 6),
 
-                    StreamBuilder<Duration>(
-                      stream: (audioHandler as MyAudioHandler).positionStream,
-                      initialData: Duration.zero,
-                      builder: (context, posSnapshot) {
-                        final position = posSnapshot.data ?? Duration.zero;
-                        final hasDuration =
-                            duration != null && duration.inMilliseconds > 0;
+                    RepaintBoundary(
+                      child: StreamBuilder<Duration>(
+                        stream: (audioHandler as MyAudioHandler).positionStream,
+                        initialData: Duration.zero,
+                        builder: (context, posSnapshot) {
+                          final position = posSnapshot.data ?? Duration.zero;
+                          final hasDuration =
+                              duration != null && duration.inMilliseconds > 0;
 
-                        return StreamBuilder<Duration?>(
-                          stream: (audioHandler as MyAudioHandler)
-                              .player
-                              .durationStream,
-                          builder: (context, durationSnapshot) {
-                            final fallbackDuration = durationSnapshot.data;
-                            final total = hasDuration
-                                ? duration.inMilliseconds
-                                : (fallbackDuration?.inMilliseconds ?? 1);
-                            final current = position.inMilliseconds.clamp(0, total);
+                          return StreamBuilder<Duration?>(
+                            stream: (audioHandler as MyAudioHandler)
+                                .player
+                                .durationStream,
+                            builder: (context, durationSnapshot) {
+                              final fallbackDuration = durationSnapshot.data;
+                              final total = hasDuration
+                                  ? duration.inMilliseconds
+                                  : (fallbackDuration?.inMilliseconds ?? 1);
+                              final current = position.inMilliseconds.clamp(0, total);
 
-                            return Column(
-                              children: [
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(8),
-                                  child: LinearProgressIndicator(
-                                    key: ValueKey(total),
-                                    value: total > 0 ? current / total : 0,
-                                    minHeight: 4,
+                              return Column(
+                                children: [
+                                  ClipRRect(
                                     borderRadius: BorderRadius.circular(8),
-                                    backgroundColor: Theme.of(
-                                      context,
-                                    ).colorScheme.onSurface.withAlpha(60),
-                                    color: Theme.of(context).colorScheme.primary,
+                                    child: LinearProgressIndicator(
+                                      key: ValueKey(total),
+                                      value: total > 0 ? current / total : 0,
+                                      minHeight: 4,
+                                      borderRadius: BorderRadius.circular(8),
+                                      backgroundColor: Theme.of(
+                                        context,
+                                      ).colorScheme.onSurface.withAlpha(60),
+                                      color: Theme.of(context).colorScheme.primary,
+                                    ),
                                   ),
-                                ),
-                              ],
-                            );
-                          },
-                        );
-                      },
+                                ],
+                              );
+                            },
+                          );
+                        },
+                      ),
                     ),
                   ],
                 ),

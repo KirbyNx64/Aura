@@ -10,10 +10,12 @@ typedef PageBuilderWithTabChange =
 class Material3BottomNav extends StatefulWidget {
   final List<PageBuilderWithTabChange> pageBuilders;
   final int initialIndex;
+  final ValueNotifier<int> selectedTabIndex;
 
   const Material3BottomNav({
     super.key,
     required this.pageBuilders,
+    required this.selectedTabIndex,
     this.initialIndex = 0,
   });
 
@@ -24,6 +26,7 @@ class Material3BottomNav extends StatefulWidget {
 class _Material3BottomNavState extends State<Material3BottomNav> {
   late int _selectedIndex;
   late final List<Widget?> _pages;
+  final ValueNotifier<bool> _overlayVisible = ValueNotifier<bool>(false);
 
   @override
   void initState() {
@@ -34,18 +37,26 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
       context,
       _onTabChange,
     );
+    widget.selectedTabIndex.value = _selectedIndex;
   }
 
   void _onItemTapped(int index) {
     setState(() {
       _selectedIndex = index;
       _pages[index] ??= widget.pageBuilders[index](context, _onTabChange);
+      widget.selectedTabIndex.value = index;
     });
   }
 
   // Nuevo: función para cambiar de pestaña desde hijos
   void _onTabChange(int index) {
     _onItemTapped(index);
+  }
+
+  @override
+  void dispose() {
+    _overlayVisible.dispose();
+    super.dispose();
   }
 
   List<NavigationDestination> get _navBarItems => [
@@ -98,50 +109,48 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
           return StreamBuilder<MediaItem?>(
             stream: audioHandler?.mediaItem,
             builder: (context, snapshot) {
-              final overlayActive = snapshot.data != null;
-              return Stack(
-                children: [
-                  SafeArea(
-                    top: false,
-                    child: IndexedStack(
-                      index: _selectedIndex,
-                      children: List.generate(
-                        _pages.length,
-                        (i) => _pages[i] ?? const SizedBox.shrink(),
-                      ),
-                    ),
-                  ),
-                  // Fondo del overlay, siempre construido pero visible solo si hay música
-                  Positioned(
-                    left: 0,
-                    right: 0,
-                    bottom: MediaQuery.of(context).padding.bottom,
-                    child: Visibility(
-                      visible: overlayActive,
-                      maintainState: true,
-                      child: Container(
-                        height: 100,
-                        color: Theme.of(context).colorScheme.surface,
-                      ),
-                    ),
-                  ),
-                  // Overlay, siempre construido pero visible solo si hay música
-                  Positioned(
-                    bottom: MediaQuery.of(context).padding.bottom + 10,
-                    left: 0,
-                    right: 0,
-                    child: Center(
-                      child: SizedBox(
-                        width: MediaQuery.of(context).size.width,
-                        child: Visibility(
-                          visible: overlayActive,
-                          maintainState: true,
-                          child: const NowPlayingOverlay(showBar: true),
+              // El overlay permanece visible una vez que aparece
+              if (snapshot.data != null && !_overlayVisible.value) {
+                _overlayVisible.value = true;
+              }
+                            return ValueListenableBuilder<bool>(
+                valueListenable: _overlayVisible,
+                builder: (context, overlayActive, child) {
+                  return Stack(
+                    children: [
+                      SafeArea(
+                        top: false,
+                        child: IndexedStack(
+                          index: _selectedIndex,
+                          children: List.generate(
+                            _pages.length,
+                            (i) => _pages[i] ?? const SizedBox.shrink(),
+                          ),
                         ),
                       ),
-                    ),
-                  ),
-                ],
+                      // Overlay optimizado - solo se construye cuando es necesario
+                      if (overlayActive)
+                        Positioned(
+                          left: 0,
+                          right: 0,
+                          bottom: MediaQuery.of(context).padding.bottom,
+                          child: Container(
+                            height: 100,
+                            color: Theme.of(context).colorScheme.surface,
+                          ),
+                        ),
+                      if (overlayActive)
+                        Positioned(
+                          bottom: MediaQuery.of(context).padding.bottom + 10,
+                          left: 0,
+                          right: 0,
+                          child: const Center(
+                            child: NowPlayingOverlay(showBar: true),
+                          ),
+                        ),
+                    ],
+                  );
+                },
               );
             },
           );

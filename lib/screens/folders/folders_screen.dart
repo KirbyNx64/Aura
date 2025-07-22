@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 import 'package:music/main.dart';
@@ -11,8 +12,17 @@ import 'package:music/utils/theme_preferences.dart';
 import 'package:music/utils/db/playlists_db.dart';
 import 'package:music/utils/db/songs_index_db.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:music/utils/db/shortcuts_db.dart';
+import 'package:mini_music_visualizer/mini_music_visualizer.dart';
 
-enum OrdenCarpetas { normal, alfabetico, invertido, ultimoAgregado }
+enum OrdenCarpetas {
+  normal,
+  alfabetico,
+  invertido,
+  ultimoAgregado,
+  fechaEdicionAsc, // Más antiguas primero
+  fechaEdicionDesc // Más recientes primero
+}
 OrdenCarpetas _orden = OrdenCarpetas.normal;
 
 class FoldersScreen extends StatefulWidget {
@@ -48,6 +58,36 @@ class _FoldersScreenState extends State<FoldersScreen>
   bool _isLoading = true;
 
   static const String _orderPrefsKey = 'folders_screen_order_filter';
+  static const String _pinnedSongsKey = 'pinned_songs';
+
+  // Utilidades para gestionar canciones fijadas
+  Future<List<String>> getPinnedSongs() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getStringList(_pinnedSongsKey) ?? [];
+  }
+
+  Future<void> pinSong(String songPath) async {
+    final prefs = await SharedPreferences.getInstance();
+    final current = prefs.getStringList(_pinnedSongsKey) ?? [];
+    if (!current.contains(songPath)) {
+      current.insert(0, songPath); // Fijar al inicio
+      if (current.length > 18) current.length = 18; // Limitar a 18
+      await prefs.setStringList(_pinnedSongsKey, current);
+    }
+  }
+
+  Future<void> unpinSong(String songPath) async {
+    final prefs = await SharedPreferences.getInstance();
+    final current = prefs.getStringList(_pinnedSongsKey) ?? [];
+    current.remove(songPath);
+    await prefs.setStringList(_pinnedSongsKey, current);
+  }
+
+  Future<bool> isSongPinned(String songPath) async {
+    final prefs = await SharedPreferences.getInstance();
+    final current = prefs.getStringList(_pinnedSongsKey) ?? [];
+    return current.contains(songPath);
+  }
 
   void _onFoldersShouldReload() {
     cargarCanciones(forceIndex: false);
@@ -129,6 +169,7 @@ class _FoldersScreenState extends State<FoldersScreen>
 
   void _handleLongPress(BuildContext context, SongModel song) async {
     final isFavorite = await FavoritesDB().isFavorite(song.data);
+    final isPinned = await ShortcutsDB().isShortcut(song.data);
 
     if (!context.mounted) return;
 
@@ -165,7 +206,43 @@ class _FoldersScreenState extends State<FoldersScreen>
                 await _handleAddToPlaylistSingle(context, song);
               },
             ),
-            // --- NUEVO: Opción de seleccionar ---
+            ListTile(
+              leading: Icon(isPinned ? Icons.push_pin : Icons.push_pin_outlined),
+              title: TranslatedText(isPinned ? 'unpin_shortcut' : 'pin_shortcut'),
+              onTap: () async {
+                Navigator.of(context).pop();
+                if (isPinned) {
+                  await ShortcutsDB().removeShortcut(song.data);
+                } else {
+                  await ShortcutsDB().addShortcut(song.data);
+                }
+                if (mounted) setState(() {});
+                shortcutsShouldReload.value = !shortcutsShouldReload.value;
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete_outline),
+              title: TranslatedText('delete_from_device'),
+              onTap: () async {
+                Navigator.of(context).pop();
+                final success = await _deleteSongFromDevice(song);
+                if (!success && context.mounted) {
+                  showDialog(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      title: TranslatedText('error'),
+                      content: TranslatedText('could_not_delete_song'),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          child: TranslatedText('ok'),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+              },
+            ),
             ListTile(
               leading: const Icon(Icons.check_box_outlined),
               title: TranslatedText('select'),
@@ -198,11 +275,58 @@ class _FoldersScreenState extends State<FoldersScreen>
   Future<void> _playSong(String path) async {
     final index = _filteredSongs.indexWhere((s) => s.data == path);
     if (index != -1) {
-      await (audioHandler as MyAudioHandler).setQueueFromSongs(
+      final handler = audioHandler as MyAudioHandler;
+      // Guardar solo el nombre de la carpeta como origen
+      final prefs = await SharedPreferences.getInstance();
+      String origen;
+      if (carpetaSeleccionada != null) {
+        final parts = carpetaSeleccionada!.split(RegExp(r'[\\/]'));
+        origen = parts.isNotEmpty ? parts.last : carpetaSeleccionada!;
+      } else {
+        origen = "Carpeta";
+      }
+      await prefs.setString('last_queue_source', origen);
+      // Comprobar si la cola actual es igual a la nueva (por ids y orden)
+      final currentQueue = handler.queue.value;
+      final isSameQueue = currentQueue.length == _filteredSongs.length &&
+        List.generate(_filteredSongs.length, (i) => currentQueue[i].id == _filteredSongs[i].data).every((x) => x);
+
+      if (isSameQueue) {
+        await handler.skipToQueueItem(index);
+        await handler.play();
+        return;
+      }
+
+      await handler.setQueueFromSongs(
         _filteredSongs,
         initialIndex: index,
       );
-      await (audioHandler as MyAudioHandler).play();
+      await handler.play();
+    }
+  }
+
+  Future<bool> _deleteSongFromDevice(SongModel song) async {
+    try {
+      final file = File(song.data);
+      if (await file.exists()) {
+        await file.delete();
+
+        if (carpetaSeleccionada != null) {
+          setState(() {
+            _originalSongs.removeWhere((s) => s.data == song.data);
+            _filteredSongs.removeWhere((s) => s.data == song.data);
+            _displaySongs.removeWhere((s) => s.data == song.data);
+            // También actualiza el mapa de paths
+            songPathsByFolder[carpetaSeleccionada!]
+                ?.removeWhere((path) => path == song.data);
+          });
+        }
+
+        return true;
+      }
+      return false;
+    } catch (e) {
+      return false;
     }
   }
 
@@ -216,7 +340,24 @@ class _FoldersScreenState extends State<FoldersScreen>
     return texto.toLowerCase();
   }
 
+  Future<void> _preloadArtworksForSongs(List<SongModel> songs) async {
+    try {
+      for (final song in songs.take(20)) {
+        unawaited(_audioQuery.queryArtwork(
+          song.id,
+          ArtworkType.AUDIO,
+          size: 256,
+        ));
+      }
+    } catch (e) {
+      // Ignorar errores de precarga
+    }
+  }
+
   void _onSongSelected(SongModel song) {
+    try {
+      (audioHandler as MyAudioHandler).isShuffleNotifier.value = false;
+    } catch (_) {}
     if (_isSelecting) {
       setState(() {
         if (_selectedSongPaths.contains(song.data)) {
@@ -241,32 +382,27 @@ class _FoldersScreenState extends State<FoldersScreen>
     await FavoritesDB().addFavorite(song);
   }
 
-  void _ordenarCanciones() {
-    setState(() {
-      switch (_orden) {
-        case OrdenCarpetas.normal:
-          _filteredSongs = List.from(_originalSongs);
-          break;
-        case OrdenCarpetas.alfabetico:
-          _filteredSongs.sort((a, b) => a.title.compareTo(b.title));
-          break;
-        case OrdenCarpetas.invertido:
-          _filteredSongs.sort((a, b) => b.title.compareTo(a.title));
-          break;
-        case OrdenCarpetas.ultimoAgregado:
-          _filteredSongs = List.from(_originalSongs.reversed);
-          break;
+  // Añadir función auxiliar para ordenar por fecha de edición
+  Future<void> _sortByFileDate(List<SongModel> lista, {required bool ascending}) async {
+    final dates = <String, DateTime>{};
+    for (final song in lista) {
+      try {
+        dates[song.data] = await File(song.data).lastModified();
+      } catch (_) {
+        dates[song.data] = DateTime.fromMillisecondsSinceEpoch(0);
       }
+    }
+    lista.sort((a, b) {
+      final dateA = dates[a.data]!;
+      final dateB = dates[b.data]!;
+      return ascending ? dateA.compareTo(dateB) : dateB.compareTo(dateA);
     });
-    _saveOrderFilter();
-    // Actualizar también la lista de visualización
-    _onSearchChanged();
   }
 
-  void _aplicarOrdenamiento(List<SongModel> lista) {
+  // Modificar _aplicarOrdenamiento para soportar los nuevos tipos
+  Future<void> _aplicarOrdenamiento(List<SongModel> lista) async {
     switch (_orden) {
       case OrdenCarpetas.normal:
-        // Mantener el orden original de la carpeta
         break;
       case OrdenCarpetas.alfabetico:
         lista.sort((a, b) => a.title.compareTo(b.title));
@@ -275,27 +411,34 @@ class _FoldersScreenState extends State<FoldersScreen>
         lista.sort((a, b) => b.title.compareTo(a.title));
         break;
       case OrdenCarpetas.ultimoAgregado:
-        // Invertir el orden de la lista
         lista.sort((a, b) {
           final indexA = _originalSongs.indexOf(a);
           final indexB = _originalSongs.indexOf(b);
           return indexB.compareTo(indexA);
         });
         break;
+      case OrdenCarpetas.fechaEdicionAsc:
+        await _sortByFileDate(lista, ascending: true);
+        break;
+      case OrdenCarpetas.fechaEdicionDesc:
+        await _sortByFileDate(lista, ascending: false);
+        break;
     }
   }
 
-  void _onSearchChanged() {
-    final query = quitarDiacriticos(_searchController.text.toLowerCase());
+  // Modificar _ordenarCanciones y _onSearchChanged para ser async y esperar el ordenamiento
+  Future<void> _ordenarCanciones() async {
+    await _aplicarOrdenamiento(_filteredSongs);
+    _saveOrderFilter();
+    await _onSearchChanged();
+  }
 
-    // Primero aplicar ordenamiento a todas las canciones
+  Future<void> _onSearchChanged() async {
+    final query = quitarDiacriticos(_searchController.text.toLowerCase());
     final allSongsOrdered = List<SongModel>.from(_originalSongs);
-    _aplicarOrdenamiento(allSongsOrdered);
-    
-    // Guardar todas las canciones ordenadas en _filteredSongs (para reproducción)
+    await _aplicarOrdenamiento(allSongsOrdered);
     _filteredSongs = allSongsOrdered;
 
-    // Filtrar solo las que se muestran en la UI
     List<SongModel> displayList;
     if (query.isEmpty) {
       displayList = List<SongModel>.from(allSongsOrdered);
@@ -406,22 +549,61 @@ class _FoldersScreenState extends State<FoldersScreen>
                       title: Text(nombre),
                       subtitle: Text('${canciones.length} ${LocaleProvider.tr('songs')}'),
                       onTap: () async {
-                        setState(() {
-                          carpetaSeleccionada = entry.key;
-                          _searchController.clear();
-                          _isSelecting = false;
-                          _selectedSongPaths.clear();
-                        });
-                        
-                        // Cargar los objetos SongModel completos
-                        final allSongs = await _audioQuery.querySongs();
-                        final songsInFolder = allSongs.where((s) => entry.value.contains(s.data)).toList();
-                        
-                        setState(() {
-                          _originalSongs = songsInFolder;
-                        });
-                        _ordenarCanciones();
+                        await _loadSongsForFolder(entry);
                       },
+                      trailing: PopupMenuButton<String>(
+                        onSelected: (value) async {
+                          if (value == 'delete') {
+                            final confirmed = await showDialog<bool>(
+                              context: context,
+                              builder: (context) => AlertDialog(
+                                title: TranslatedText('delete_folder'),
+                                content: TranslatedText('delete_folder_confirm'),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () => Navigator.of(context).pop(false),
+                                    child: TranslatedText('cancel'),
+                                  ),
+                                  TextButton(
+                                    onPressed: () => Navigator.of(context).pop(true),
+                                    child: TranslatedText('delete'),
+                                  ),
+                                ],
+                              ),
+                            );
+                            if (confirmed == true) {
+                              final success = await _deleteFolderAndSongs(entry.key);
+                              if (!success && context.mounted) {
+                                showDialog(
+                                  context: context,
+                                  builder: (context) => AlertDialog(
+                                    title: TranslatedText('error'),
+                                    content: TranslatedText('could_not_delete_folder'),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () => Navigator.of(context).pop(),
+                                        child: TranslatedText('ok'),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              }
+                            }
+                          }
+                        },
+                        itemBuilder: (context) => [
+                          PopupMenuItem(
+                            value: 'delete',
+                            child: Row(
+                              children: [
+                                Icon(Icons.delete_outline),
+                                SizedBox(width: 8),
+                                TranslatedText('delete_folder'),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
                     );
                   },
                 ),
@@ -539,11 +721,11 @@ class _FoldersScreenState extends State<FoldersScreen>
                 ),
                 PopupMenuButton<OrdenCarpetas>(
                   icon: const Icon(Icons.sort, size: 28),
-                  onSelected: (orden) {
+                  onSelected: (orden) async {
                     setState(() {
                       _orden = orden;
-                      _ordenarCanciones();
                     });
+                    await _ordenarCanciones();
                     _saveOrderFilter();
                   },
                   itemBuilder: (context) => [
@@ -562,6 +744,14 @@ class _FoldersScreenState extends State<FoldersScreen>
                     PopupMenuItem(
                       value: OrdenCarpetas.invertido,
                       child: TranslatedText('alphabetical_za'),
+                    ),
+                    PopupMenuItem(
+                      value: OrdenCarpetas.fechaEdicionDesc,
+                      child: TranslatedText('edit_date_newest_first'),
+                    ),
+                    PopupMenuItem(
+                      value: OrdenCarpetas.fechaEdicionAsc,
+                      child: TranslatedText('edit_date_oldest_first'),
                     ),
                   ],
                 ),
@@ -587,6 +777,16 @@ class _FoldersScreenState extends State<FoldersScreen>
                       decoration: InputDecoration(
                         hintText: LocaleProvider.tr('search_by_title_or_artist'),
                         prefixIcon: const Icon(Icons.search),
+                        suffixIcon: _searchController.text.isNotEmpty
+                            ? IconButton(
+                                icon: const Icon(Icons.close),
+                                onPressed: () {
+                                  _searchController.clear();
+                                  _onSearchChanged();
+                                  setState(() {});
+                                },
+                              )
+                            : null,
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(24),
                         ),
@@ -617,9 +817,18 @@ class _FoldersScreenState extends State<FoldersScreen>
                     padding: EdgeInsets.only(bottom: space),
                     child: _filteredSongs.isEmpty
                         ? Center(
-                            child: TranslatedText(
-                              'no_songs_in_folder',
-                              style: TextStyle(fontSize: 16),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.folder_off, 
+                                size: 48, 
+                                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6)),
+                                const SizedBox(height: 16),
+                                TranslatedText(
+                                  'no_songs_in_folder',
+                                  style: TextStyle(fontSize: 14, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6)),
+                                ),
+                              ],
                             ),
                           )
                         : ListView.builder(
@@ -693,18 +902,35 @@ class _FoldersScreenState extends State<FoldersScreen>
                                     ),
                                   ],
                                 ),
-                                title: Text(
-                                  song.title,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: isCurrent
-                                      ? TextStyle(
-                                          color: isAmoledTheme
-                                              ? Colors.white
-                                              : Theme.of(context).colorScheme.primary,
-                                          fontWeight: FontWeight.bold,
-                                        )
-                                      : null,
+                                title: Row(
+                                  children: [
+                                    if (isCurrent)
+                                        Padding(
+                                          padding: const EdgeInsets.only(right: 8.0),
+                                          child: MiniMusicVisualizer(
+                                            color: Theme.of(context).colorScheme.primary,
+                                            width: 4,
+                                            height: 15,
+                                            radius: 4,
+                                            animate: playing ? true : false,
+                                          ),
+                                        ),
+                                    Expanded(
+                                      child: Text(
+                                        song.title,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: isCurrent
+                                            ? TextStyle(
+                                                color: isAmoledTheme
+                                                    ? Colors.white
+                                                    : Theme.of(context).colorScheme.primary,
+                                                fontWeight: FontWeight.bold,
+                                              )
+                                            : null,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                                 subtitle: Text(
                                   song.artist ?? LocaleProvider.tr('unknown_artist'),
@@ -875,5 +1101,65 @@ class _FoldersScreenState extends State<FoldersScreen>
       await PlaylistsDB().addSongToPlaylist(selectedPlaylistId, song);
       // Confirmación eliminada: no mostrar SnackBar
     }
+  }
+
+  Future<bool> _deleteFolderAndSongs(String folderKey) async {
+    try {
+      final songPaths = songPathsByFolder[folderKey] ?? [];
+      bool allDeleted = true;
+      for (final path in songPaths) {
+        final file = File(path);
+        if (await file.exists()) {
+          try {
+            await file.delete();
+          } catch (_) {
+            allDeleted = false;
+          }
+        }
+      }
+      setState(() {
+        songPathsByFolder.remove(folderKey);
+        folderDisplayNames.remove(folderKey);
+      });
+      return allDeleted;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // Nueva función para cargar canciones de una carpeta con spinner
+  Future<void> _loadSongsForFolder(MapEntry<String, List<String>> entry) async {
+    setState(() {
+      carpetaSeleccionada = entry.key;
+      _searchController.clear();
+      _isSelecting = false;
+      _selectedSongPaths.clear();
+      _originalSongs = [];
+      _filteredSongs = [];
+      _displaySongs = [];
+      _isLoading = true;
+    });
+    // Cargar los objetos SongModel completos
+    final allSongs = await _audioQuery.querySongs();
+    final songsInFolder = allSongs.where((s) => entry.value.contains(s.data)).toList();
+    setState(() {
+      _originalSongs = songsInFolder;
+    });
+    await _ordenarCanciones();
+    // Precargar carátulas de las canciones en la carpeta
+    unawaited(_preloadArtworksForSongs(songsInFolder));
+    setState(() {
+      _isLoading = false;
+    });
+  }
+
+  // Soporte para pop interno desde el handler global
+  bool canPopInternally() {
+    return carpetaSeleccionada != null;
+  }
+  void handleInternalPop() {
+    setState(() {
+      carpetaSeleccionada = null;
+    });
   }
 }

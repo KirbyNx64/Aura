@@ -195,10 +195,10 @@ class _DownloadScreenState extends State<DownloadScreen>
       final videos = <Video>[];
       await for (final video in yt.playlists.getVideos(playlistId)) {
         videos.add(video);
-        setState(() {
-          _playlistVideos = videos;
-        });
       }
+      setState(() {
+        _playlistVideos = videos;
+      });
 
       if (videos.isEmpty) {
         throw Exception('No se encontraron videos en la playlist');

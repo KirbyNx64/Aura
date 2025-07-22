@@ -12,3 +12,5 @@ final downloadTypeNotifier = ValueNotifier<bool>(false); // true: Explode, false
 final audioProcessorNotifier = ValueNotifier<bool>(false); // true: FFmpeg, false: AudioTags
 
 final colorSchemeNotifier = ValueNotifier<AppColorScheme>(AppColorScheme.deepPurple);
+
+final ValueNotifier<bool> shortcutsShouldReload = ValueNotifier(false);

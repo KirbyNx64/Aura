@@ -437,3 +437,355 @@ Future<List<String>> getSearchSuggestion(String queryStr) async {
   }
 }
 
+Future<List<YtMusicResult>> searchVideosWithPagination(String query, {int maxPages = 3}) async {
+  final allResults = <YtMusicResult>[];
+  String? continuationToken;
+  int currentPage = 0;
+
+  while (currentPage < maxPages) {
+    List<YtMusicResult> results = [];
+    if (continuationToken == null) {
+      // Primera búsqueda
+      final data = {
+        ...ytServiceContext,
+        'query': query,
+        'params': getSearchParams('videos', null, false),
+      };
+      final response = (await sendRequest("search", data)).data;
+      final contents = nav(response, [
+        'contents',
+        'tabbedSearchResultsRenderer',
+        'tabs',
+        0,
+        'tabRenderer',
+        'content',
+        'sectionListRenderer',
+        'contents',
+        0,
+        'musicShelfRenderer',
+        'contents',
+      ]);
+      if (contents is List) {
+        for (var item in contents) {
+          final renderer = item['musicResponsiveListItemRenderer'];
+          if (renderer != null) {
+            final videoType = nav(renderer, [
+              'overlay',
+              'musicItemThumbnailOverlayRenderer',
+              'content',
+              'musicPlayButtonRenderer',
+              'playNavigationEndpoint',
+              'watchEndpoint',
+              'watchEndpointMusicSupportedConfigs',
+              'watchEndpointMusicConfig',
+              'musicVideoType'
+            ]);
+            if (videoType == 'MUSIC_VIDEO_TYPE_MV' ||
+                videoType == 'MUSIC_VIDEO_TYPE_OMV' ||
+                videoType == 'MUSIC_VIDEO_TYPE_UGC') {
+              final title = renderer['flexColumns']?[0]
+                  ?['musicResponsiveListItemFlexColumnRenderer']?['text']?['runs']?[0]?['text'];
+              final subtitleRuns = renderer['flexColumns']?[1]
+                  ?['musicResponsiveListItemFlexColumnRenderer']?['text']?['runs'];
+              String? artist;
+              if (subtitleRuns is List) {
+                for (var run in subtitleRuns) {
+                  if (run['navigationEndpoint']?['browseEndpoint']?['browseEndpointContextSupportedConfigs'] != null ||
+                      run['navigationEndpoint']?['browseEndpoint']?['browseId']?.startsWith('UC') == true) {
+                    artist = run['text'];
+                    break;
+                  }
+                }
+                artist ??= subtitleRuns.firstWhere(
+                  (run) => run['text'] != ' • ',
+                  orElse: () => {'text': null},
+                )['text'];
+              }
+              String? thumbUrl;
+              final thumbnails = renderer['thumbnail']?['musicThumbnailRenderer']?['thumbnail']?['thumbnails'];
+              if (thumbnails is List && thumbnails.isNotEmpty) {
+                thumbUrl = thumbnails.last['url'];
+              }
+              final videoId = renderer['overlay']?['musicItemThumbnailOverlayRenderer']?['content']?['musicPlayButtonRenderer']?['playNavigationEndpoint']?['watchEndpoint']?['videoId'];
+              if (videoId != null && title != null) {
+                results.add(
+                  YtMusicResult(
+                    title: title,
+                    artist: artist,
+                    thumbUrl: thumbUrl,
+                    videoId: videoId,
+                  ),
+                );
+              }
+            }
+          }
+        }
+      }
+      // Obtener el token de continuación para la siguiente página
+      final shelfRenderer = nav(response, [
+        'contents',
+        'tabbedSearchResultsRenderer',
+        'tabs',
+        0,
+        'tabRenderer',
+        'content',
+        'sectionListRenderer',
+        'contents',
+        0,
+        'musicShelfRenderer',
+      ]);
+      if (shelfRenderer != null && shelfRenderer['continuations'] != null) {
+        continuationToken = shelfRenderer['continuations'][0]['nextContinuationData']['continuation'];
+      } else {
+        continuationToken = null;
+      }
+    } else {
+      // Continuaciones
+      final data = {
+        ...ytServiceContext,
+        'continuation': continuationToken,
+      };
+      final response = (await sendRequest("search", data)).data;
+      // Intenta ambas rutas, igual que en canciones
+      var contents = nav(response, [
+        'onResponseReceivedActions',
+        0,
+        'appendContinuationItemsAction',
+        'continuationItems',
+      ]);
+      contents ??= nav(response, [
+        'continuationContents',
+        'musicShelfContinuation',
+        'contents',
+      ]);
+      if (contents is List) {
+        final videoItems = contents.where((item) => item['musicResponsiveListItemRenderer'] != null).toList();
+        for (var item in videoItems) {
+          final renderer = item['musicResponsiveListItemRenderer'];
+          if (renderer != null) {
+            final videoType = nav(renderer, [
+              'overlay',
+              'musicItemThumbnailOverlayRenderer',
+              'content',
+              'musicPlayButtonRenderer',
+              'playNavigationEndpoint',
+              'watchEndpoint',
+              'watchEndpointMusicSupportedConfigs',
+              'watchEndpointMusicConfig',
+              'musicVideoType'
+            ]);
+            if (videoType == 'MUSIC_VIDEO_TYPE_MV' ||
+                videoType == 'MUSIC_VIDEO_TYPE_OMV' ||
+                videoType == 'MUSIC_VIDEO_TYPE_UGC') {
+              final title = renderer['flexColumns']?[0]
+                  ?['musicResponsiveListItemFlexColumnRenderer']?['text']?['runs']?[0]?['text'];
+              final subtitleRuns = renderer['flexColumns']?[1]
+                  ?['musicResponsiveListItemFlexColumnRenderer']?['text']?['runs'];
+              String? artist;
+              if (subtitleRuns is List) {
+                for (var run in subtitleRuns) {
+                  if (run['navigationEndpoint']?['browseEndpoint']?['browseEndpointContextSupportedConfigs'] != null ||
+                      run['navigationEndpoint']?['browseEndpoint']?['browseId']?.startsWith('UC') == true) {
+                    artist = run['text'];
+                    break;
+                  }
+                }
+                artist ??= subtitleRuns.firstWhere(
+                  (run) => run['text'] != ' • ',
+                  orElse: () => {'text': null},
+                )['text'];
+              }
+              String? thumbUrl;
+              final thumbnails = renderer['thumbnail']?['musicThumbnailRenderer']?['thumbnail']?['thumbnails'];
+              if (thumbnails is List && thumbnails.isNotEmpty) {
+                thumbUrl = thumbnails.last['url'];
+              }
+              final videoId = renderer['overlay']?['musicItemThumbnailOverlayRenderer']?['content']?['musicPlayButtonRenderer']?['playNavigationEndpoint']?['watchEndpoint']?['videoId'];
+              if (videoId != null && title != null) {
+                results.add(
+                  YtMusicResult(
+                    title: title,
+                    artist: artist,
+                    thumbUrl: thumbUrl,
+                    videoId: videoId,
+                  ),
+                );
+              }
+            }
+          }
+        }
+      }
+      // Obtener el siguiente token de continuación
+      String? nextToken;
+      try {
+        nextToken = nav(response, [
+          'onResponseReceivedActions',
+          0,
+          'appendContinuationItemsAction',
+          'continuationItems',
+          0,
+          'continuationItemRenderer',
+          'continuationEndpoint',
+          'continuationCommand',
+          'token',
+        ]);
+        // Si no hay, intenta la ruta alternativa
+        nextToken ??= nav(response, [
+          'continuationContents',
+          'musicShelfContinuation',
+          'continuations',
+          0,
+          'nextContinuationData',
+          'continuation'
+        ]);
+        continuationToken = nextToken;
+      } catch (e) {
+        continuationToken = null;
+      }
+    }
+    if (results.isEmpty) break;
+    allResults.addAll(results);
+    if (continuationToken == null) break;
+    currentPage++;
+  }
+  return allResults;
+}
+
+Future<List<Map<String, String>>> searchAlbumsOnly(String query) async {
+  final data = {
+    ...ytServiceContext,
+    'query': query,
+    // Puedes probar con o sin el filtro 'albums'
+    // 'params': getSearchParams('albums', null, false),
+  };
+  final response = (await sendRequest("search", data)).data;
+  final results = <Map<String, String>>[];
+
+  final sections = nav(response, [
+    'contents',
+    'tabbedSearchResultsRenderer',
+    'tabs',
+    0,
+    'tabRenderer',
+    'content',
+    'sectionListRenderer',
+    'contents'
+  ]);
+  if (sections is List) {
+    for (var section in sections) {
+      // Busca cualquier shelf
+      final shelf = section['musicShelfRenderer'];
+      if (shelf != null && shelf['contents'] is List) {
+        for (var item in shelf['contents']) {
+          final renderer = item['musicResponsiveListItemRenderer'];
+          if (renderer != null) {
+            // Extraer browseId de cualquier menú
+            String? browseId;
+            final menuItems = renderer['menu']?['menuRenderer']?['items'];
+            if (menuItems is List) {
+              for (var menuItem in menuItems) {
+                final endpoint = menuItem['menuNavigationItemRenderer']?['navigationEndpoint']?['browseEndpoint'];
+                if (endpoint != null && endpoint['browseId'] != null && endpoint['browseId'].toString().startsWith('MPRE')) {
+                  browseId = endpoint['browseId'];
+                  break;
+                }
+              }
+            }
+            // Si no hay browseId, ignora el item
+            if (browseId == null) continue;
+
+            final title = renderer['flexColumns']?[0]?['musicResponsiveListItemFlexColumnRenderer']?['text']?['runs']?[0]?['text'];
+            final subtitleRuns = renderer['flexColumns']?[1]?['musicResponsiveListItemFlexColumnRenderer']?['text']?['runs'];
+            String? artist;
+            if (subtitleRuns is List) {
+              artist = subtitleRuns.firstWhere(
+                (run) => run['text'] != ' • ',
+                orElse: () => {'text': null},
+              )['text'];
+            }
+            String? thumbUrl;
+            final thumbnails = renderer['thumbnail']?['musicThumbnailRenderer']?['thumbnail']?['thumbnails'];
+            if (thumbnails is List && thumbnails.isNotEmpty) {
+              thumbUrl = thumbnails.last['url'];
+            }
+            results.add({
+              'title': title,
+              'artist': artist ?? '',
+              'thumbUrl': thumbUrl ?? '',
+              'browseId': browseId,
+            });
+          }
+        }
+      }
+    }
+  }
+  return results;
+}
+
+Future<List<YtMusicResult>> getAlbumSongs(String browseId) async {
+  final data = {
+    ...ytServiceContext,
+    'browseId': browseId,
+  };
+  final response = (await sendRequest("browse", data)).data;
+
+  // Intenta ambas rutas posibles
+  var shelf = nav(response, [
+    'contents',
+    'twoColumnBrowseResultsRenderer',
+    'secondaryContents',
+    'sectionListRenderer',
+    'contents',
+    0,
+    'musicShelfRenderer',
+    'contents',
+  ]);
+  shelf ??= nav(response, [
+    'contents',
+    'singleColumnBrowseResultsRenderer',
+    'tabs',
+    0,
+    'tabRenderer',
+    'content',
+    'sectionListRenderer',
+    'contents',
+    0,
+    'musicShelfRenderer',
+    'contents',
+  ]);
+
+  final results = <YtMusicResult>[];
+  if (shelf is List) {
+    for (var item in shelf) {
+      final renderer = item['musicResponsiveListItemRenderer'];
+      if (renderer != null) {
+        final title = renderer['flexColumns']?[0]?['musicResponsiveListItemFlexColumnRenderer']?['text']?['runs']?[0]?['text'];
+        final subtitleRuns = renderer['flexColumns']?[1]?['musicResponsiveListItemFlexColumnRenderer']?['text']?['runs'];
+        String? artist;
+        if (subtitleRuns is List) {
+          artist = subtitleRuns
+              .where((run) => run['text'] != ' • ')
+              .map((run) => run['text'])
+              .join(', ');
+        }
+        String? thumbUrl;
+        final thumbnails = renderer['thumbnail']?['musicThumbnailRenderer']?['thumbnail']?['thumbnails'];
+        if (thumbnails is List && thumbnails.isNotEmpty) {
+          thumbUrl = thumbnails.last['url'];
+        }
+        final videoId = renderer['overlay']?['musicItemThumbnailOverlayRenderer']?['content']?['musicPlayButtonRenderer']?['playNavigationEndpoint']?['watchEndpoint']?['videoId'];
+        if (videoId != null && title != null) {
+          results.add(
+            YtMusicResult(
+              title: title,
+              artist: artist,
+              thumbUrl: thumbUrl,
+              videoId: videoId,
+            ),
+          );
+        }
+      }
+    }
+  }
+  return results;
+}
