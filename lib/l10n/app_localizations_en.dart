@@ -341,4 +341,6 @@ const Map<String, String> appLocalizationsEn = {
   'download_selected': 'Download selected',
   'selected': 'selected',
   'remove_from_recents': 'Remove from recents',
+  'ignore_file': 'Ignore file',
+  'unignore_file': 'Unignore file',
 }; 

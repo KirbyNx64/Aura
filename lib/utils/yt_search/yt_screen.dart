@@ -1083,9 +1083,6 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                       onPressed: () {
                                                         Clipboard.setData(ClipboardData(
                                                             text: 'https://music.youtube.com/watch?v=${item.videoId}'));
-                                                        ScaffoldMessenger.of(context).showSnackBar(
-                                                          SnackBar(content: Text('Link copiado al portapapeles')),
-                                                        );
                                                       },
                                                     ),
                                                   ),
@@ -1238,9 +1235,6 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                       onPressed: () {
                                                         Clipboard.setData(ClipboardData(
                                                             text: 'https://music.youtube.com/watch?v=${item.videoId}'));
-                                                        ScaffoldMessenger.of(context).showSnackBar(
-                                                          SnackBar(content: Text('Link copiado al portapapeles')),
-                                                        );
                                                       },
                                                     ),
                                                   ),
@@ -1429,9 +1423,6 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                       onPressed: () {
                                                         Clipboard.setData(ClipboardData(
                                                             text: 'https://music.youtube.com/watch?v=${item.videoId}'));
-                                                        ScaffoldMessenger.of(context).showSnackBar(
-                                                          SnackBar(content: Text('Link copiado al portapapeles')),
-                                                        );
                                                       },
                                                     ),
                                                   ),
@@ -1575,9 +1566,6 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                             onPressed: () {
                                                               Clipboard.setData(ClipboardData(
                                                                   text: 'https://music.youtube.com/watch?v=${item.videoId}'));
-                                                              ScaffoldMessenger.of(context).showSnackBar(
-                                                                SnackBar(content: Text('Link copiado al portapapeles')),
-                                                              );
                                                             },
                                                           ),
                                                         ),
@@ -1718,9 +1706,6 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                             onPressed: () {
                                                               Clipboard.setData(ClipboardData(
                                                                   text: 'https://music.youtube.com/watch?v=${item.videoId}'));
-                                                              ScaffoldMessenger.of(context).showSnackBar(
-                                                                SnackBar(content: Text('Link copiado al portapapeles')),
-                                                              );
                                                             },
                                                           ),
                                                         ),

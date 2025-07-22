@@ -42,7 +42,7 @@ Future<AudioHandler> initAudioService() async {
         androidNotificationChannelId: 'com.aura.music.channel',
         androidNotificationChannelName: 'Aura Music',
         androidNotificationOngoing: true,
-        // androidStopForegroundOnPause: false, // true en debug
+        androidStopForegroundOnPause: false, // true en debug
         androidResumeOnClick: true,
       ),
     ).timeout(
@@ -1155,6 +1155,4 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       // print('🧹 Limpiados $cleanedCount archivos faltantes de playlists');
     }
   }
-
-
 }

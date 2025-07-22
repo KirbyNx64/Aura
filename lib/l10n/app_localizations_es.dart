@@ -341,4 +341,6 @@ const Map<String, String> appLocalizationsEs = {
   'play_preview': 'Escuchar preview',
   'download_selected': 'Descargar seleccionados',
   'selected': 'seleccionados',
+  'ignore_file': 'Ignorar archivo',
+  'unignore_file': 'Dejar de ignorar archivo',
 }; 

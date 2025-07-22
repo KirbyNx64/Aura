@@ -56,6 +56,18 @@ class SearchHistory {
     }
   }
 
+  // Eliminar una sola sugerencia del historial
+  static Future<void> removeFromHistory(String query) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final currentHistory = await getHistory();
+      currentHistory.remove(query);
+      await prefs.setString(_key, jsonEncode(currentHistory));
+    } catch (e) {
+      // print('Error eliminando sugerencia del historial: $e');
+    }
+  }
+
   // Buscar en el historial
   static Future<List<String>> searchInHistory(String query) async {
     try {

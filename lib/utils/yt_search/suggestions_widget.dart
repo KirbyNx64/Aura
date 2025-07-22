@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:music/l10n/locale_provider.dart';
 import 'package:music/utils/yt_search/service.dart';
 import 'package:music/utils/yt_search/search_history.dart';
+import 'dart:async';
 
 class SearchSuggestionsWidget extends StatefulWidget {
   final String query;
@@ -22,7 +23,7 @@ class SearchSuggestionsWidget extends StatefulWidget {
 class _SearchSuggestionsWidgetState extends State<SearchSuggestionsWidget> {
   List<String> _suggestions = [];
   List<String> _historySuggestions = [];
-  bool _loading = false;
+  // Eliminado el spinner y timer
 
   @override
   void initState() {
@@ -47,9 +48,7 @@ class _SearchSuggestionsWidgetState extends State<SearchSuggestionsWidget> {
       return;
     }
 
-    setState(() {
-      _loading = true;
-    });
+    // Ya no se requiere _loading
 
     try {
       // Solo cargar sugerencias de YouTube Music cuando hay texto
@@ -59,15 +58,10 @@ class _SearchSuggestionsWidgetState extends State<SearchSuggestionsWidget> {
         setState(() {
           _suggestions = ytSuggestions;
           _historySuggestions = []; // No mostrar historial cuando hay sugerencias
-          _loading = false;
         });
       }
     } catch (e) {
-      if (mounted) {
-        setState(() {
-          _loading = false;
-        });
-      }
+      // No es necesario setState para _loading
     }
   }
 
@@ -88,14 +82,7 @@ class _SearchSuggestionsWidgetState extends State<SearchSuggestionsWidget> {
       return _buildHistorySection(context);
     }
 
-    if (_loading) {
-      return Container(
-        padding: const EdgeInsets.all(16),
-        child: const Center(
-          child: CircularProgressIndicator(),
-        ),
-      );
-    }
+    // Ya no hay spinner ni indicador de carga
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -113,24 +100,7 @@ class _SearchSuggestionsWidgetState extends State<SearchSuggestionsWidget> {
             false, // No es del historial
           )),
         ],
-        
-
-        
-        // Mensaje cuando no hay sugerencias
-        if (_suggestions.isEmpty) ...[
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Center(
-              child: Text(
-                LocaleProvider.tr('no_suggestions'),
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
-                  fontSize: 14,
-                ),
-              ),
-            ),
-          ),
-        ],
+        // Si no hay sugerencias, no mostrar nada
       ],
     );
   }
@@ -237,6 +207,22 @@ class _SearchSuggestionsWidgetState extends State<SearchSuggestionsWidget> {
       onTap: () {
         widget.onSuggestionSelected(suggestion);
       },
+      trailing: isFromHistory
+          ? IconButton(
+              icon: const Icon(Icons.close, size: 18),
+              tooltip: LocaleProvider.tr('remove'),
+              onPressed: () async {
+                await SearchHistory.removeFromHistory(suggestion);
+                _loadHistorySuggestions();
+                setState(() {});
+              },
+            )
+          : null,
     );
+  }
+
+  @override
+  void dispose() {
+    super.dispose();
   }
 } 
