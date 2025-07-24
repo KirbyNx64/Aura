@@ -192,7 +192,7 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> with TickerProvid
                                 height: 50,
                                 decoration: BoxDecoration(
                                   color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                                  borderRadius: BorderRadius.circular(12),
+                                  borderRadius: BorderRadius.circular(8),
                                 ),
                                 child: const Center(
                                   child: SizedBox(
@@ -207,7 +207,7 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> with TickerProvid
                             return ArtworkHeroCached(
                               artUri: currentSong.artUri,
                               size: 50,
-                              borderRadius: BorderRadius.circular(12),
+                              borderRadius: BorderRadius.circular(8),
                               heroTag: 'now_playing_artwork_${(currentSong.extras?['songId'] ?? currentSong.id).toString()}',
                             );
                           },

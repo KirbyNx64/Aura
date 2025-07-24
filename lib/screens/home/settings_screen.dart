@@ -49,6 +49,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _loadDownloadTypeAndProcessor();
     _loadColorScheme();
     _loadArtworkQuality();
+    _initHeroAnimationSetting();
+  }
+
+  Future<void> _initHeroAnimationSetting() async {
+    final prefs = await SharedPreferences.getInstance();
+    final useHero = prefs.getBool('use_hero_animation') ?? false;
+    heroAnimationNotifier.value = useHero;
   }
 
   Future<void> _loadArtworkQuality() async {
@@ -846,7 +853,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              '${LocaleProvider.tr('version')}: v1.4.0',
+                              '${LocaleProvider.tr('version')}: v1.4.1',
                               style: const TextStyle(
                                 fontSize: 15,
                               ),

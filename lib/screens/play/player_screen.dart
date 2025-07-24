@@ -871,9 +871,9 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                             ),
                             SizedBox(width: width * 0.04),
                             FutureBuilder<bool>(
-                              future: FavoritesDB().isFavorite(
-                                mediaItem.extras?['data'] ?? '',
-                              ),
+                              future: (mediaItem.extras?['isStreaming'] == true || mediaItem.extras?['data'] == null || (mediaItem.extras?['data'] as String?)?.startsWith('http') == true)
+                                  ? Future.value(false)
+                                  : FavoritesDB().isFavorite(mediaItem.extras?['data'] ?? ''),
                               builder: (context, favSnapshot) {
                                 final isFav = favSnapshot.data ?? false;
                                 // Trigger heartbeat animation only when state changes
@@ -892,7 +892,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                       favoritesShouldReload.value =
                                           !favoritesShouldReload.value;
                                       if (!context.mounted) return;
-                                      setState(() {}); // <-- fuerza actualización visual
+                                      setState(() {});
                                     } else {
                                       final allSongs = await _audioQuery
                                           .querySongs();
@@ -968,13 +968,18 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                               } else if (_lastKnownPosition != null) {
                                 position = _lastKnownPosition!;
                               }
-                              return StreamBuilder<Duration?>(
+                              return StreamBuilder<Duration?>
+                                (
                                 stream: (audioHandler as MyAudioHandler).player.durationStream,
                                 builder: (context, durationSnapshot) {
                                   final fallbackDuration = durationSnapshot.data;
                                   final mediaDuration = mediaItem.duration;
-                                  final hasDuration = mediaDuration != null && mediaDuration.inMilliseconds > 0;
-                                  final duration = hasDuration ? mediaDuration : (fallbackDuration ?? Duration.zero);
+                                  // Si no hay duración, usa 1 segundo como mínimo para el slider
+                                  final duration = (mediaDuration != null && mediaDuration.inMilliseconds > 0)
+                                    ? mediaDuration
+                                    : (fallbackDuration != null && fallbackDuration.inMilliseconds > 0)
+                                      ? fallbackDuration
+                                      : const Duration(seconds: 1);
                                   final durationMs = duration.inMilliseconds > 0 ? duration.inMilliseconds : 1;
                                   final sliderValueMs = (_dragValueSeconds != null)
                                       ? (_dragValueSeconds! * 1000).clamp(0, durationMs.toDouble())
@@ -1022,7 +1027,8 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                               style: TextStyle(fontSize: is16by9 ? 18 : 15),
                                             ),
                                             Text(
-                                              _formatDuration(duration),
+                                              // Si la duración es desconocida, muestra '--:--'
+                                              (mediaDuration == null || mediaDuration.inMilliseconds <= 0) ? '--:--' : _formatDuration(duration),
                                               style: TextStyle(fontSize: is16by9 ? 18 : 15),
                                             ),
                                           ],
@@ -1781,6 +1787,7 @@ class _PlaylistListViewState extends State<_PlaylistListView> {
           leading: ArtworkListTile(
             songId: songId,
             songPath: songPath,
+            artUri: item.artUri,
             size: 48,
             borderRadius: BorderRadius.circular(8),
           ),
@@ -1819,6 +1826,7 @@ class _PlaylistListViewState extends State<_PlaylistListView> {
 class ArtworkListTile extends StatefulWidget {
   final int songId;
   final String songPath;
+  final Uri? artUri;
   final double size;
   final BorderRadius borderRadius;
 
@@ -1828,6 +1836,7 @@ class ArtworkListTile extends StatefulWidget {
     required this.songPath,
     required this.size,
     required this.borderRadius,
+    this.artUri,
   });
 
   @override
@@ -1844,12 +1853,30 @@ class _ArtworkListTileState extends State<ArtworkListTile> {
   }
 
   Future<void> _loadArtwork() async {
+    // Si hay artUri remota, no busques local
+    if (widget.artUri != null && (widget.artUri!.isScheme('http') || widget.artUri!.isScheme('https'))) {
+      setState(() => _artUri = widget.artUri);
+      return;
+    }
     final uri = await getOrCacheArtwork(widget.songId, widget.songPath);
     if (mounted) setState(() => _artUri = uri);
   }
 
   @override
   Widget build(BuildContext context) {
+    if (widget.artUri != null && (widget.artUri!.isScheme('http') || widget.artUri!.isScheme('https'))) {
+      return ClipRRect(
+        borderRadius: widget.borderRadius,
+        child: Image.network(
+          widget.artUri.toString(),
+          width: widget.size,
+          height: widget.size,
+          fit: BoxFit.cover,
+          cacheWidth: 400,
+          cacheHeight: 400,
+        ),
+      );
+    }
     if (_artUri != null) {
       return ClipRRect(
         borderRadius: widget.borderRadius,

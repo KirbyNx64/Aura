@@ -122,35 +122,42 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     const int maxQueueSongs = 200;
     final index = _favorites.indexWhere((s) => s.data == song.data);
 
-    if (index != -1) {
-      final handler = audioHandler as MyAudioHandler;
-      // Guardar el origen en SharedPreferences
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('last_queue_source', LocaleProvider.tr('favorites_title'));
-      // Comprobar si la cola actual es igual a la nueva (por ids y orden)
-      final currentQueue = handler.queue.value;
-      final isSameQueue = currentQueue.length == _favorites.length &&
-        List.generate(_favorites.length, (i) => currentQueue[i].id == _favorites[i].data).every((x) => x);
-
-      if (isSameQueue) {
-        await handler.skipToQueueItem(index);
-        await handler.play();
-        return;
+    if (index == -1) return;
+    final handler = audioHandler as MyAudioHandler;
+    final currentQueue = handler.queue.value;
+    bool isSameQueue = false;
+    if (currentQueue.length == _favorites.length) {
+      isSameQueue = true;
+      for (int i = 0; i < _favorites.length; i++) {
+        if (currentQueue[i].id != _favorites[i].data) {
+          isSameQueue = false;
+          break;
+        }
       }
-
-      int before = (maxQueueSongs / 2).floor();
-      int after = maxQueueSongs - before;
-      int start = (index - before).clamp(0, _favorites.length);
-      int end = (index + after).clamp(0, _favorites.length);
-      List<SongModel> limitedQueue = _favorites.sublist(start, end);
-      int newIndex = index - start;
-
-      await handler.setQueueFromSongs(
-        limitedQueue,
-        initialIndex: newIndex,
-      );
-      await handler.play();
     }
+
+    if (isSameQueue) {
+      await handler.skipToQueueItem(index);
+      await handler.play();
+      return;
+    }
+
+    // Solo guardar el origen si se va a cambiar la cola
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('last_queue_source', LocaleProvider.tr('favorites_title'));
+
+    int before = (maxQueueSongs / 2).floor();
+    int after = maxQueueSongs - before;
+    int start = (index - before).clamp(0, _favorites.length);
+    int end = (index + after).clamp(0, _favorites.length);
+    List<SongModel> limitedQueue = _favorites.sublist(start, end);
+    int newIndex = index - start;
+
+    await handler.setQueueFromSongs(
+      limitedQueue,
+      initialIndex: newIndex,
+    );
+    await handler.play();
   }
 
   Future<void> _removeFromFavorites(SongModel song) async {

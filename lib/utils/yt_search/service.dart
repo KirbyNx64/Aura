@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'package:dio/dio.dart';
 
+CancelToken? _searchCancelToken; // <-- Agregado para cancelación global
+
 const domain = "https://music.youtube.com/";
 const String baseUrl = '${domain}youtubei/v1/';
 const fixedParms =
@@ -128,13 +130,19 @@ dynamic nav(dynamic data, List<dynamic> path) {
 }
 
 // Función para enviar la petición
-Future<Response> sendRequest(String action, Map<dynamic, dynamic> data, {String additionalParams = ""}) async {
+Future<Response> sendRequest(String action, Map<dynamic, dynamic> data, {String additionalParams = "", CancelToken? cancelToken}) async {
   final dio = Dio();
   final url = "$baseUrl$action$fixedParms$additionalParams";
   return await dio.post(
     url,
-    options: Options(headers: headers),
+    options: Options(
+      headers: headers,
+      validateStatus: (status) {
+        return (status != null && (status >= 200 && status < 300)) || status == 400;
+      },
+    ),
     data: jsonEncode(data),
+    cancelToken: cancelToken,
   );
 }
 
@@ -203,74 +211,187 @@ void parseSongs(List items, List<YtMusicResult> results) {
 
 // Función para buscar solo canciones con paginación
 Future<List<YtMusicResult>> searchSongsOnly(String query, {String? continuationToken}) async {
+  // Cancela la búsqueda anterior si existe
+  _searchCancelToken?.cancel();
+  _searchCancelToken = CancelToken();
+
   final data = {
     ...ytServiceContext,
     'query': query,
     'params': getSearchParams('songs', null, false),
   };
 
-  // Si hay un token de continuación, usarlo para obtener más resultados
   if (continuationToken != null) {
     data['continuation'] = continuationToken;
   }
 
-  final response = (await sendRequest("search", data)).data;
-  final results = <YtMusicResult>[];
+  try {
+    final response = (await sendRequest("search", data, cancelToken: _searchCancelToken)).data;
+    final results = <YtMusicResult>[];
 
-  // Si es una búsqueda inicial
-  if (continuationToken == null) {
-    final contents = nav(response, [
-      'contents',
-      'tabbedSearchResultsRenderer',
-      'tabs',
-      0,
-      'tabRenderer',
-      'content',
-      'sectionListRenderer',
-      'contents',
-      0,
-      'musicShelfRenderer',
-      'contents'
-    ]);
+    // Si es una búsqueda inicial
+    if (continuationToken == null) {
+      final contents = nav(response, [
+        'contents',
+        'tabbedSearchResultsRenderer',
+        'tabs',
+        0,
+        'tabRenderer',
+        'content',
+        'sectionListRenderer',
+        'contents',
+        0,
+        'musicShelfRenderer',
+        'contents'
+      ]);
 
-    if (contents is List) {
-      parseSongs(contents, results);
-    }
-  } else {
-    // Si es una continuación, la estructura es diferente
-    // print('Respuesta de continuación: ${response.keys.toList()}');
-    
-    // Intentar diferentes rutas para la continuación
-    var contents = nav(response, [
-      'onResponseReceivedActions',
-      0,
-      'appendContinuationItemsAction',
-      'continuationItems'
-    ]);
+      if (contents is List) {
+        parseSongs(contents, results);
+      }
+    } else {
+      // Si es una continuación, la estructura es diferente
+      var contents = nav(response, [
+        'onResponseReceivedActions',
+        0,
+        'appendContinuationItemsAction',
+        'continuationItems'
+      ]);
 
-    contents ??= nav(response, [
-      'continuationContents',
-      'musicShelfContinuation',
-      'contents'
-    ]);
+      contents ??= nav(response, [
+        'continuationContents',
+        'musicShelfContinuation',
+        'contents'
+      ]);
 
-    // print('Continuación - elementos encontrados: ${contents?.length ?? 0}');
-    
-    if (contents is List) {
-      // Filtrar solo los elementos que son canciones (no el token de continuación)
-      final songItems = contents.where((item) => 
-        item['musicResponsiveListItemRenderer'] != null
-      ).toList();
-      
-      // print('Continuación - canciones encontradas: ${songItems.length}');
-      
-      if (songItems.isNotEmpty) {
-        parseSongs(songItems, results);
+      if (contents is List) {
+        final songItems = contents.where((item) => 
+          item['musicResponsiveListItemRenderer'] != null
+        ).toList();
+        if (songItems.isNotEmpty) {
+          parseSongs(songItems, results);
+        }
       }
     }
+    return results;
+  } on DioException catch (e) {
+    if (CancelToken.isCancel(e)) {
+      // print('Búsqueda cancelada');
+      return <YtMusicResult>[];
+    }
+    // Si es un error 400 (bad request), ignóralo y retorna lista vacía
+    if (e.response?.statusCode == 400) {
+      // print('Error 400 ignorado porque la búsqueda fue cancelada o la petición ya no es válida');
+      return <YtMusicResult>[];
+    }
+    rethrow;
   }
+}
 
-  return results;
+// Función para buscar con múltiples páginas
+Future<List<YtMusicResult>> searchSongsWithPagination(String query, {int maxPages = 3}) async {
+  final allResults = <YtMusicResult>[];
+  String? continuationToken;
+  int currentPage = 0;
+
+  while (currentPage < maxPages) {
+    final data = {
+      ...ytServiceContext,
+      'params': getSearchParams('songs', null, false),
+    };
+    if (continuationToken == null) {
+      data['query'] = query;
+    } else {
+      data['continuation'] = continuationToken;
+    }
+    final response = (await sendRequest("search", data)).data;
+    final results = <YtMusicResult>[];
+    String? nextToken;
+    if (continuationToken == null) {
+      final contents = nav(response, [
+        'contents',
+        'tabbedSearchResultsRenderer',
+        'tabs',
+        0,
+        'tabRenderer',
+        'content',
+        'sectionListRenderer',
+        'contents',
+        0,
+        'musicShelfRenderer',
+        'contents'
+      ]);
+      if (contents is List) {
+        parseSongs(contents, results);
+      }
+      final shelfRenderer = nav(response, [
+        'contents',
+        'tabbedSearchResultsRenderer',
+        'tabs',
+        0,
+        'tabRenderer',
+        'content',
+        'sectionListRenderer',
+        'contents',
+        0,
+        'musicShelfRenderer'
+      ]);
+      if (shelfRenderer != null && shelfRenderer['continuations'] != null) {
+        nextToken = shelfRenderer['continuations'][0]['nextContinuationData']['continuation'];
+      }
+    } else {
+      var contents = nav(response, [
+        'onResponseReceivedActions',
+        0,
+        'appendContinuationItemsAction',
+        'continuationItems'
+      ]);
+      contents ??= nav(response, [
+        'continuationContents',
+        'musicShelfContinuation',
+        'contents'
+      ]);
+      if (contents is List) {
+        final songItems = contents.where((item) => 
+          item['musicResponsiveListItemRenderer'] != null
+        ).toList();
+        if (songItems.isNotEmpty) {
+          parseSongs(songItems, results);
+        }
+      }
+      String? nextTokenTry;
+      try {
+        nextTokenTry = nav(response, [
+          'onResponseReceivedActions',
+          0,
+          'appendContinuationItemsAction',
+          'continuationItems',
+          0,
+          'continuationItemRenderer',
+          'continuationEndpoint',
+          'continuationCommand',
+          'token'
+        ]);
+        nextTokenTry ??= nav(response, [
+          'continuationContents',
+          'musicShelfContinuation',
+          'continuations',
+          0,
+          'nextContinuationData',
+          'continuation'
+        ]);
+        nextToken = nextTokenTry;
+      } catch (e) {
+        nextToken = null;
+      }
+    }
+    allResults.addAll(results);
+    if (results.isEmpty || nextToken == null) {
+      break;
+    }
+    continuationToken = nextToken;
+    currentPage++;
+  }
+  return allResults;
 }
 
 // Función para buscar con más resultados por página
@@ -335,74 +456,6 @@ String? getContinuationToken(Map<String, dynamic> response) {
     // Si no hay token de continuación, retornar null
   }
   return null;
-}
-
-// Función para buscar con múltiples páginas
-Future<List<YtMusicResult>> searchSongsWithPagination(String query, {int maxPages = 3}) async {
-  final allResults = <YtMusicResult>[];
-  String? continuationToken;
-  int currentPage = 0;
-
-  while (currentPage < maxPages) {
-    // print('Buscando página ${currentPage + 1}...');
-    final results = await searchSongsOnly(query, continuationToken: continuationToken);
-    // print('Resultados en página ${currentPage + 1}: ${results.length}');
-    allResults.addAll(results);
-
-    // Si no hay más resultados, parar
-    if (results.isEmpty) {
-      // print('No hay más resultados, parando...');
-      break;
-    }
-
-    // Obtener el token de continuación para la siguiente página
-    if (currentPage == 0) {
-      final response = (await sendRequest("search", {
-        ...ytServiceContext,
-        'query': query,
-        'params': getSearchParams('songs', null, false),
-      })).data;
-      continuationToken = getContinuationToken(response);
-      // print('Token de continuación obtenido: ${continuationToken != null ? 'Sí' : 'No'}');
-    } else {
-      // Para páginas subsiguientes, necesitamos hacer otra petición para obtener el siguiente token
-      final response = (await sendRequest("search", {
-        ...ytServiceContext,
-        'continuation': continuationToken,
-      })).data;
-      
-      // Obtener el siguiente token de continuación
-      try {
-        final nextToken = nav(response, [
-          'onResponseReceivedActions',
-          0,
-          'appendContinuationItemsAction',
-          'continuationItems',
-          0,
-          'continuationItemRenderer',
-          'continuationEndpoint',
-          'continuationCommand',
-          'token'
-        ]);
-        continuationToken = nextToken;
-        // print('Siguiente token obtenido: ${continuationToken != null ? 'Sí' : 'No'}');
-      } catch (e) {
-        // print('Error obteniendo siguiente token: $e');
-        continuationToken = null;
-      }
-    }
-
-    // Si no hay token de continuación, parar
-    if (continuationToken == null) {
-      // print('No hay token de continuación, parando...');
-      break;
-    }
-
-    currentPage++;
-  }
-
-  // print('Total de resultados obtenidos: ${allResults.length}');
-  return allResults;
 }
 
 // Función para obtener sugerencias de búsqueda de YouTube Music

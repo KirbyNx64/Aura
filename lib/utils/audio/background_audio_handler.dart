@@ -268,8 +268,36 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   Duration? _sleepStartPosition;
   bool _isSkipping = false;
 
+  // --- Precarga artwork de la siguiente canción cuando falten pocos segundos ---
+  int? _lastPreloadedNextIndex;
+  void _setupNextArtworkPreload() {
+    _player.positionStream.listen((position) {
+      final idx = _player.currentIndex;
+      final dur = _player.duration;
+      if (idx == null || dur == null) return;
+      // Si faltan menos de 10 segundos para el final de la canción actual
+      final remaining = dur - position;
+      if (remaining.inSeconds <= 10) {
+        final nextIndex = idx + 1;
+        if (nextIndex < _mediaQueue.length && _lastPreloadedNextIndex != nextIndex) {
+          final nextMediaItem = _mediaQueue[nextIndex];
+          final songId = nextMediaItem.extras?['songId'] as int?;
+          final songPath = nextMediaItem.extras?['data'] as String?;
+          if (songId != null && songPath != null) {
+            _lastPreloadedNextIndex = nextIndex;
+            unawaited(getOrCacheArtwork(songId, songPath));
+          }
+        }
+      } else if (remaining.inSeconds > 20) {
+        // Resetea el flag si el usuario retrocede mucho
+        _lastPreloadedNextIndex = null;
+      }
+    });
+  }
+
   MyAudioHandler() {
     _init();
+    _setupNextArtworkPreload();
   }
 
   Future<void> _init() async {
@@ -279,7 +307,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     // Precargar carátulas comunes en segundo plano
     unawaited(preloadCommonArtworks());
 
-    _player.playbackEventStream.listen((event) async {
+    _player.playbackEventStream.listen((event) {
       final playing = _player.playing;
       final processingState = _transformState(event.processingState);
 
@@ -305,14 +333,15 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         ),
       );
 
+      // Si se completó y está en loop one, lanza el seek/play en segundo plano
       if (event.processingState == ProcessingState.completed &&
           _player.loopMode == LoopMode.one) {
-        await _player.seek(Duration.zero);
-        await _player.play();
+        unawaited(_player.seek(Duration.zero));
+        unawaited(_player.play());
       }
     });
 
-    _player.currentIndexStream.listen((index) async {
+    _player.currentIndexStream.listen((index) {
       if (_initializing) return;
       if (index != null && index < _mediaQueue.length) {
         var currentMediaItem = _mediaQueue[index];
@@ -332,9 +361,9 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
           }
         }
         mediaItem.add(currentMediaItem);
-        // Si no tiene carátula, intenta cargarla
+        // Si no tiene carátula, lanza la carga en segundo plano
         if (currentMediaItem.artUri == null) {
-          loadArtworkForIndex(index);
+          unawaited(loadArtworkForIndex(index));
         }
       }
     });
@@ -431,15 +460,10 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
           ? Duration(milliseconds: song.duration!)
           : null;
       
-      // Cargar carátula inmediatamente solo para la canción actual
+      // No esperes la carátula, crea el MediaItem sin artUri
       Uri? artUri;
-      if (i == initialIndex) {
-        try {
-          artUri = await getOrCacheArtwork(song.id, song.data);
-        } catch (e) {
-          // Si falla, continuar sin carátula
-        }
-      }
+      // Lanza la carga de la carátula en segundo plano para todas las canciones
+      unawaited(loadArtworkForIndex(i));
       
       mediaItems.add(
         MediaItem(
@@ -523,6 +547,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     isQueueTransitioning.value = false;
 
     if (autoPlay) {
+      Future.delayed(const Duration(milliseconds: 1000));
       await play();
     }
   }
@@ -644,29 +669,21 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     try {
       final wasPlaying = _player.playing;
       final currentIndex = _player.currentIndex;
-      await _player.seekToNext();
-      
-      // Esperar a que el reproductor esté listo
-      int attempts = 0;
-      while (_player.processingState != ProcessingState.ready && attempts < 5) {
-        await Future.delayed(const Duration(milliseconds: 10));
-        attempts++;
+      final nextIndex = (currentIndex != null && currentIndex < _mediaQueue.length - 1)
+          ? currentIndex + 1
+          : null;
+
+      if (nextIndex != null) {
+        await _player.seek(Duration.zero, index: nextIndex);
+        if (wasPlaying && !_player.playing) {
+          await _player.play();
+        }
+      } else {
+        // Si no hay siguiente, reinicia la canción actual
+        await _player.seek(Duration.zero);
+        await _player.pause();
       }
-      
-      // Verificar que realmente cambió de canción
-      final newIndex = _player.currentIndex;
-      if (newIndex == currentIndex && currentIndex != null && currentIndex < _mediaQueue.length - 1) {
-        // Si no cambió, intentar manualmente
-        await _player.seek(Duration.zero, index: currentIndex + 1);
-      }
-      
       _updateSleepTimer();
-      
-      if (wasPlaying && !_player.playing) {
-        await _player.play();
-      }
-    } catch (e) {
-      // Error silencioso
     } finally {
       _isSkipping = false;
     }
@@ -679,29 +696,23 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     try {
       final wasPlaying = _player.playing;
       final currentIndex = _player.currentIndex;
-      await _player.seekToPrevious();
-      
-      // Esperar a que el reproductor esté listo
-      int attempts = 0;
-      while (_player.processingState != ProcessingState.ready && attempts < 5) {
-        await Future.delayed(const Duration(milliseconds: 10));
-        attempts++;
+      if (_player.position.inMilliseconds > 5000) {
+        await _player.seek(Duration.zero);
+        return;
       }
-      
-      // Verificar que realmente cambió de canción
-      final newIndex = _player.currentIndex;
-      if (newIndex == currentIndex && currentIndex != null && currentIndex > 0) {
-        // Si no cambió, intentar manualmente
-        await _player.seek(Duration.zero, index: currentIndex - 1);
+      final prevIndex = (currentIndex != null && currentIndex > 0)
+          ? currentIndex - 1
+          : null;
+
+      if (prevIndex != null) {
+        await _player.seek(Duration.zero, index: prevIndex);
+        if (wasPlaying && !_player.playing) {
+          await _player.play();
+        }
+      } else {
+        await _player.seek(Duration.zero);
       }
-      
       _updateSleepTimer();
-      
-      if (wasPlaying && !_player.playing) {
-        await _player.play();
-      }
-    } catch (e) {
-      // Error silencioso
     } finally {
       _isSkipping = false;
     }
@@ -944,7 +955,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
   /// Inicializa solo los listeners del reproductor sin configurar nueva sesión
   Future<void> _initListeners() async {
-    _player.playbackEventStream.listen((event) async {
+    _player.playbackEventStream.listen((event) {
       final playing = _player.playing;
       final processingState = _transformState(event.processingState);
 
@@ -970,14 +981,15 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         ),
       );
 
+      // Si se completó y está en loop one, lanza el seek/play en segundo plano
       if (event.processingState == ProcessingState.completed &&
           _player.loopMode == LoopMode.one) {
-        await _player.seek(Duration.zero);
-        await _player.play();
+        unawaited(_player.seek(Duration.zero));
+        unawaited(_player.play());
       }
     });
 
-    _player.currentIndexStream.listen((index) async {
+    _player.currentIndexStream.listen((index) {
       if (_initializing) return;
       if (index != null && index < _mediaQueue.length) {
         var currentMediaItem = _mediaQueue[index];
@@ -997,9 +1009,9 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
           }
         }
         mediaItem.add(currentMediaItem);
-        // Si no tiene carátula, intenta cargarla
+        // Si no tiene carátula, lanza la carga en segundo plano
         if (currentMediaItem.artUri == null) {
-          loadArtworkForIndex(index);
+          unawaited(loadArtworkForIndex(index));
         }
       }
     });

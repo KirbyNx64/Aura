@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'dart:async';
-import 'dart:typed_data';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -15,6 +14,20 @@ import 'package:music/main.dart';
 import 'package:image/image.dart' as img;
 import 'package:music/l10n/locale_provider.dart';
 import 'package:music/utils/notifiers.dart';
+import 'package:flutter/foundation.dart';
+
+// Top-level function para usar con compute
+Uint8List? decodeAndCropImage(Uint8List bytes) {
+  final original = img.decodeImage(bytes);
+  if (original != null) {
+    final minSide = original.width < original.height ? original.width : original.height;
+    final offsetX = (original.width - minSide) ~/ 2;
+    final offsetY = (original.height - minSide) ~/ 2;
+    final square = img.copyCrop(original, x: offsetX, y: offsetY, width: minSide, height: minSide);
+    return Uint8List.fromList(img.encodeJpg(square));
+  }
+  return null;
+}
 
 class DownloadManager {
   static final DownloadManager _instance = DownloadManager._internal();
@@ -589,13 +602,9 @@ class DownloadManager {
         }
       }
       // Recortar a cuadrado centrado
-      final original = img.decodeImage(bytes);
-      if (original != null) {
-        final minSide = original.width < original.height ? original.width : original.height;
-        final offsetX = (original.width - minSide) ~/ 2;
-        final offsetY = (original.height - minSide) ~/ 2;
-        final square = img.copyCrop(original, x: offsetX, y: offsetY, width: minSide, height: minSide);
-        bytes = img.encodeJpg(square);
+      final croppedBytes = await compute(decodeAndCropImage, bytes);
+      if (croppedBytes != null) {
+        bytes = croppedBytes;
       }
     } finally {
       client.close();

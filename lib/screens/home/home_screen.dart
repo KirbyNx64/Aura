@@ -708,6 +708,10 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     // Para 19.5:9 (≈2.16)
     // final is195by9 = (aspectRatio >= 2.10);
 
+    final quickPickSongsPerPage = 4;
+    final limitedQuickPick = _shuffledQuickPick.take(20).toList();
+    final quickPickPageCount = (limitedQuickPick.length / quickPickSongsPerPage).ceil();
+
     return WillPopScope(
       onWillPop: onWillPop,
       child: Scaffold(
@@ -1480,108 +1484,106 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                 ),
                                               );
                                             },
-                                            child: ClipRRect(
-                                              borderRadius: BorderRadius.circular(12),
-                                              child: Stack(
-                                                children: [
-                                                  QueryArtworkWidget(
-                                                    id: song.id,
-                                                    type: ArtworkType.AUDIO,
-                                                    artworkFit: BoxFit.cover,
-                                                    artworkBorder: BorderRadius.circular(12),
-                                                    keepOldArtwork: true,
-                                                    artworkHeight: 120,
-                                                    artworkWidth: 120,
-                                                    artworkQuality: FilterQuality.high,
-                                                    size: 400,
-                                                    nullArtworkWidget: Container(
-                                                      width: 120,
-                                                      height: 120,
-                                                      decoration: BoxDecoration(
+                                            child: AspectRatio(
+                                              aspectRatio: 1,
+                                              child: ClipRRect(
+                                                borderRadius: BorderRadius.circular(12),
+                                                child: Stack(
+                                                  children: [
+                                                    QueryArtworkWidget(
+                                                      id: song.id,
+                                                      type: ArtworkType.AUDIO,
+                                                      artworkFit: BoxFit.cover,
+                                                      artworkBorder: BorderRadius.circular(12),
+                                                      keepOldArtwork: true,
+                                                      artworkHeight: double.infinity,
+                                                      artworkWidth: double.infinity,
+                                                      artworkQuality: FilterQuality.high,
+                                                      size: 400,
+                                                      nullArtworkWidget: Container(
                                                         color: Theme.of(context).colorScheme.surfaceContainer,
-                                                        borderRadius: BorderRadius.circular(12),
-                                                      ),
-                                                      child: Center(
-                                                        child: Icon(
-                                                          Icons.music_note,
-                                                          color: Theme.of(context).colorScheme.onSurface,
-                                                          size: 48,
+                                                        child: Center(
+                                                          child: Icon(
+                                                            Icons.music_note,
+                                                            color: Theme.of(context).colorScheme.onSurface,
+                                                            size: 48,
+                                                          ),
                                                         ),
                                                       ),
                                                     ),
-                                                  ),
-                                                  // Animación visualizer en la esquina superior izquierda si es la canción actual
-                                                  if (audioHandler?.mediaItem.value?.extras?['data'] == song.data)
-                                                    Positioned(
-                                                      top: 6,
-                                                      left: 6,
-                                                      child: MiniMusicVisualizer(
-                                                        color: Colors.white,
-                                                        width: 5,
-                                                        height: 22,
-                                                        radius: 4,
-                                                        animate: isPlaying ? true : false,
+                                                    // Animación visualizer en la esquina superior izquierda si es la canción actual
+                                                    if (audioHandler?.mediaItem.value?.extras?['data'] == song.data)
+                                                      Positioned(
+                                                        top: 6,
+                                                        left: 6,
+                                                        child: MiniMusicVisualizer(
+                                                          color: Colors.white,
+                                                          width: 5,
+                                                          height: 22,
+                                                          radius: 4,
+                                                          animate: isPlaying ? true : false,
+                                                        ),
                                                       ),
-                                                    ),
-                                                  if (_shortcutSongs.any((s) => s.data == song.data))
+                                                    if (_shortcutSongs.any((s) => s.data == song.data))
+                                                      Positioned(
+                                                        top: 6,
+                                                        right: 6,
+                                                        child: Container(
+                                                          decoration: BoxDecoration(
+                                                            color: Colors.black.withValues(alpha: 0.4),
+                                                            shape: BoxShape.circle,
+                                                          ),
+                                                          padding: const EdgeInsets.all(4),
+                                                          child: const Icon(
+                                                            Icons.push_pin,
+                                                            color: Colors.white,
+                                                            size: 20,
+                                                            shadows: [
+                                                              Shadow(
+                                                                blurRadius: 4,
+                                                                color: Colors.black,
+                                                              ),
+                                                            ],
+                                                          ),
+                                                        ),
+                                                      ),
                                                     Positioned(
-                                                      top: 6,
-                                                      right: 6,
+                                                      left: 0,
+                                                      right: 0,
+                                                      bottom: 0,
                                                       child: Container(
+                                                        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 6),
                                                         decoration: BoxDecoration(
-                                                          color: Colors.black.withValues(alpha: 0.4),
-                                                          shape: BoxShape.circle,
+                                                          gradient: LinearGradient(
+                                                            begin: Alignment.bottomCenter,
+                                                            end: Alignment.topCenter,
+                                                            colors: [
+                                                              Colors.black.withAlpha(140),
+                                                              Colors.transparent,
+                                                            ],
+                                                          ),
                                                         ),
-                                                        padding: const EdgeInsets.all(4),
-                                                        child: const Icon(
-                                                          Icons.push_pin,
-                                                          color: Colors.white,
-                                                          size: 20,
-                                                          shadows: [
-                                                            Shadow(
-                                                              blurRadius: 4,
-                                                              color: Colors.black,
-                                                            ),
-                                                          ],
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  Positioned(
-                                                    left: 0,
-                                                    right: 0,
-                                                    bottom: 0,
-                                                    child: Container(
-                                                      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 6),
-                                                      decoration: BoxDecoration(
-                                                        gradient: LinearGradient(
-                                                          begin: Alignment.bottomCenter,
-                                                          end: Alignment.topCenter,
-                                                          colors: [
-                                                            Colors.black.withAlpha(140),
-                                                            Colors.transparent,
-                                                          ],
-                                                        ),
-                                                      ),
-                                                      child: Text(
-                                                        song.title,
-                                                        maxLines: 1,
-                                                        overflow: TextOverflow.ellipsis,
-                                                        style: const TextStyle(
-                                                          color: Colors.white,
-                                                          fontWeight: FontWeight.w600,
-                                                          fontSize: 13,
-                                                          shadows: [
-                                                            Shadow(
-                                                              blurRadius: 8,
-                                                              color: Colors.black54,
-                                                              offset: Offset(0, 2),
-                                                            ),
-                                                          ],
+                                                        child: Text(
+                                                          song.title,
+                                                          maxLines: 1,
+                                                          overflow: TextOverflow.ellipsis,
+                                                          style: const TextStyle(
+                                                            color: Colors.white,
+                                                            fontWeight: FontWeight.w600,
+                                                            fontSize: 13,
+                                                            shadows: [
+                                                              Shadow(
+                                                                blurRadius: 8,
+                                                                color: Colors.black54,
+                                                                offset: Offset(0, 2),
+                                                              ),
+                                                            ],
+                                                          ),
                                                         ),
                                                       ),
                                                     ),
-                                                  ),
-                                                ],
+                                                  ],
+                                                ),
                                               ),
                                             ),
                                           );
@@ -1608,7 +1610,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                               ),
                             ),
                           ),
-                          const SizedBox(height: 18),
+                          const SizedBox(height: 10),
                           Center(
                             child: SmoothPageIndicator(
                               controller: _pageController,
@@ -1657,9 +1659,9 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                       height: 320,
                                       child: PageView.builder(
                                         controller: _quickPickPageController,
-                                        itemCount: 3,
+                                        itemCount: quickPickPageCount,
                                         itemBuilder: (context, pageIndex) {
-                                          final songs = _shuffledQuickPick.skip(pageIndex * 6).take(6).toList();
+                                          final songs = limitedQuickPick.skip(pageIndex * quickPickSongsPerPage).take(quickPickSongsPerPage).toList();
                                           return Padding(
                                             padding: const EdgeInsets.symmetric(
                                               horizontal: 0,
@@ -1791,7 +1793,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                     const SizedBox(height: 12),
                                     SmoothPageIndicator(
                                       controller: _quickPickPageController,
-                                      count: _quickPickPages.length,
+                                      count: quickPickPageCount,
                                       effect: WormEffect(
                                         dotHeight: 8,
                                         dotWidth: 8,

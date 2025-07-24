@@ -19,6 +19,61 @@ import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'dart:async';
 import 'package:dio/dio.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+
+// Función para mostrar la notificación de progreso de descarga
+class DownloadNotificationThrottler {
+  double _lastProgress = 0;
+  DateTime _lastUpdate = DateTime.fromMillisecondsSinceEpoch(0);
+  static final DownloadNotificationThrottler _instance = DownloadNotificationThrottler._internal();
+  factory DownloadNotificationThrottler() => _instance;
+  DownloadNotificationThrottler._internal();
+
+  void show(double progress) {
+    final now = DateTime.now();
+    final percentDelta = (progress - _lastProgress).abs();
+    final timeDelta = now.difference(_lastUpdate).inMilliseconds;
+    if (percentDelta >= 3 || timeDelta >= 400) {
+      _lastProgress = progress;
+      _lastUpdate = now;
+      showDownloadProgressNotification(progress);
+    }
+  }
+}
+
+Future<void> showDownloadProgressNotification(double progress) async {
+  const int notificationId = 0;
+  final AndroidNotificationDetails androidPlatformChannelSpecifics =
+      AndroidNotificationDetails(
+    'download_channel',
+    'Descargas',
+    channelDescription: 'Notificaciones de progreso de descarga',
+    importance: Importance.defaultImportance,
+    priority: Priority.defaultPriority, 
+    showProgress: true,
+    maxProgress: 100,
+    progress: progress.toInt(),
+    indeterminate: false,
+    onlyAlertOnce: true,
+    enableVibration: false,
+    vibrationPattern: null,
+    ongoing: true,
+  );
+  final NotificationDetails platformChannelSpecifics =
+      NotificationDetails(android: androidPlatformChannelSpecifics);
+
+  await flutterLocalNotificationsPlugin.show(
+    notificationId,
+    'Descargando...',
+    '${progress.toInt()}%',
+    platformChannelSpecifics,
+    payload: 'download',
+  );
+}
+
+Future<void> cancelDownloadNotification() async {
+  await flutterLocalNotificationsPlugin.cancel(0);
+}
 
 class YtSearchTestScreen extends StatefulWidget {
   final String? initialQuery;
@@ -342,6 +397,9 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
   // Métodos para manejar el progreso de descarga
   void _onDownloadProgress(double progress) {
     downloadProgressNotifier.value = progress;
+    // showDownloadProgressNotification(progress * 100); // 0% a 100% durante la descarga
+    DownloadNotificationThrottler().show(progress * 100);
+    // Ya no cancelamos la notificación aquí, solo cuando ambos procesos terminen
   }
 
   void _onDownloadStart(String title, String artist) {
@@ -365,6 +423,8 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
       
       // Actualizar la longitud de la cola
       queueLengthNotifier.value = downloadQueue.queueLength;
+      // Ahora sí, cancelar la notificación solo cuando ambos hayan terminado
+      cancelDownloadNotification();
     }
   }
 
@@ -376,6 +436,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
       isDownloadingNotifier.value = false;
       isProcessingNotifier.value = false;
       downloadProgressNotifier.value = 0.0;
+      cancelDownloadNotification();
     }
     
     // Actualizar la longitud de la cola
@@ -390,6 +451,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
       isDownloadingNotifier.value = false;
       isProcessingNotifier.value = false;
       downloadProgressNotifier.value = 0.0;
+      cancelDownloadNotification();
     }
     
     // Actualizar la longitud de la cola
@@ -649,104 +711,6 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
         ),
         body: Column(
           children: [
-            // Barra de progreso de descarga arriba de la barra de búsqueda
-            ValueListenableBuilder<bool>(
-              valueListenable: isDownloadingNotifier,
-              builder: (context, isDownloading, _) {
-                return ValueListenableBuilder<bool>(
-                  valueListenable: isProcessingNotifier,
-                  builder: (context, isProcessing, _) {
-                    return ValueListenableBuilder<int>(
-                      valueListenable: queueLengthNotifier,
-                      builder: (context, queueLength, _) {
-                        if (!isDownloading && !isProcessing && queueLength == 0) return SizedBox.shrink();
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 12, left: 16, right: 16, top: 8),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Icon(
-                                    isProcessing ? Icons.audio_file : Icons.download,
-                                    size: 20,
-                                    color: Theme.of(context).colorScheme.primary,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      isProcessing
-                                          ? LocaleProvider.tr('processing_audio')
-                                          : LocaleProvider.tr('downloading_audio'),
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w500,
-                                        color: Theme.of(context).colorScheme.onSurface,
-                                      ),
-                                    ),
-                                  ),
-                                  ValueListenableBuilder<double>(
-                                    valueListenable: downloadProgressNotifier,
-                                    builder: (context, progress, _) => Text(
-                                      '${(progress * 100).round()}%',
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w500,
-                                        color: Theme.of(context).colorScheme.primary,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              
-                              // Mostrar información de la cola si hay más de una descarga
-                              if (queueLength > 0)
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 2, left: 28),
-                                  child: Row(
-                                    children: [
-                                      Icon(
-                                        Icons.queue_music,
-                                        size: 12,
-                                        color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.8),
-                                      ),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        LocaleProvider.tr('queue_info').replaceAll('{count}', queueLength.toString()),
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.8),
-                                          fontStyle: FontStyle.italic,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              const SizedBox(height: 8),
-                              ValueListenableBuilder<double>(
-                                valueListenable: downloadProgressNotifier,
-                                builder: (context, progress, _) => ClipRRect(
-                                  borderRadius: BorderRadius.circular(8), // Barra redondeada
-                                  child: LinearProgressIndicator(
-                                    borderRadius: BorderRadius.circular(8),
-                                    minHeight: 8, // Más gruesa y moderna
-                                    value: progress,
-                                    backgroundColor: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
-                                    valueColor: AlwaysStoppedAnimation<Color>(
-                                      Theme.of(context).colorScheme.primary,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                    );
-                  },
-                );
-              },
-            ),
             // Contenido principal
             Expanded(
               child: Padding(

@@ -14,3 +14,7 @@ final audioProcessorNotifier = ValueNotifier<bool>(false); // true: FFmpeg, fals
 final colorSchemeNotifier = ValueNotifier<AppColorScheme>(AppColorScheme.deepPurple);
 
 final ValueNotifier<bool> shortcutsShouldReload = ValueNotifier(false);
+
+final ValueNotifier<bool> audioQualityNotifier = ValueNotifier<bool>(true); // true: alta, false: baja
+
+final ValueNotifier<bool> heroAnimationNotifier = ValueNotifier(false);

@@ -66,6 +66,8 @@ const Map<String, String> appLocalizationsEs = {
   // App settings
   'app_settings': 'Ajustes de la app',
   'artwork_quality': 'Calidad de carátula al reproducir',
+  'hero_animation': 'Animación Hero',
+  'hero_animation_desc': 'Activa la animación Hero entre overlay y reproductor.',
   'artwork_quality_description': 'Selecciona la calidad de las carátulas al reproducir música',
   '100_percent_maximum': '100% (Máximo)',
   '80_percent_recommended': '80% (Recomendado)',

@@ -13,6 +13,7 @@ import 'package:flutter/services.dart';
 import 'package:music/utils/yt_search/yt_screen.dart';
 import 'package:music/l10n/locale_provider.dart';
 import 'package:music/utils/notifiers.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 // Cambiar de late final a nullable para mejor manejo de errores
 AudioHandler? audioHandler;
@@ -163,9 +164,27 @@ class _MainNavRootState extends State<MainNavRoot> {
   }
 }
 
+final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
+
 void main() async {
-  // print('🚀 main() iniciado');
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Inicialización de notificaciones locales
+  const AndroidInitializationSettings initializationSettingsAndroid =
+      AndroidInitializationSettings('@mipmap/ic_stat_music_note');
+
+  final InitializationSettings initializationSettings = InitializationSettings(
+    android: initializationSettingsAndroid,
+  );
+
+  await flutterLocalNotificationsPlugin.initialize(initializationSettings);
+
+  // Solicitar permisos de notificación en Android 13+
+  await flutterLocalNotificationsPlugin
+      .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+      ?.requestNotificationsPermission();
+
+  // print('🚀 main() iniciado');
   // print('✅ WidgetsFlutterBinding inicializado');
   // WidgetsBinding.instance.addObserver(LifecycleHandler());
   // print('✅ LifecycleHandler agregado');
