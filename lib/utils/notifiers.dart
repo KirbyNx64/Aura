@@ -18,3 +18,8 @@ final ValueNotifier<bool> shortcutsShouldReload = ValueNotifier(false);
 final ValueNotifier<bool> audioQualityNotifier = ValueNotifier<bool>(true); // true: alta, false: baja
 
 final ValueNotifier<bool> heroAnimationNotifier = ValueNotifier(false);
+
+final ValueNotifier<bool> playLoadingNotifier = ValueNotifier(false);
+
+// Notifier para controlar si el overlay puede abrir la pantalla del reproductor
+final ValueNotifier<bool> overlayPlayerNavigationEnabled = ValueNotifier(true);

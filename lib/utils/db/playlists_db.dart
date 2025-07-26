@@ -1,118 +1,80 @@
-import 'package:sqflite/sqflite.dart';
-import 'package:path/path.dart';
+import 'package:hive/hive.dart';
 import 'package:on_audio_query/on_audio_query.dart';
+import 'playlist_model.dart' as hive_model;
 
 class PlaylistsDB {
   static final PlaylistsDB _instance = PlaylistsDB._internal();
   factory PlaylistsDB() => _instance;
   PlaylistsDB._internal();
 
-  Database? _db;
+  Box<hive_model.PlaylistModel>? _box;
 
-  Future<Database> get database async {
-    if (_db != null) return _db!;
-    _db = await _initDB();
-    return _db!;
-  }
-
-  Future<Database> _initDB() async {
-    final dbPath = await getDatabasesPath();
-    final path = join(dbPath, 'playlists.db');
-    return await openDatabase(
-      path,
-      version: 1,
-      onCreate: (db, version) async {
-        // Tabla de listas
-        await db.execute('''
-          CREATE TABLE playlists(
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL
-          );
-        ''');
-        // Tabla de canciones por lista
-        await db.execute('''
-          CREATE TABLE playlist_songs(
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            playlist_id INTEGER NOT NULL,
-            song_path TEXT NOT NULL,
-            FOREIGN KEY (playlist_id) REFERENCES playlists(id) ON DELETE CASCADE
-          );
-        ''');
-      },
-    );
+  Future<Box<hive_model.PlaylistModel>> get box async {
+    if (_box != null) return _box!;
+    _box = await Hive.openBox<hive_model.PlaylistModel>('playlists');
+    return _box!;
   }
 
   // Crear una nueva lista
-  Future<int> createPlaylist(String name) async {
-    final db = await database;
-    return await db.insert('playlists', {'name': name});
+  Future<String> createPlaylist(String name) async {
+    final b = await box;
+    final id = DateTime.now().millisecondsSinceEpoch.toString();
+    final playlist = hive_model.PlaylistModel(id: id, name: name, songPaths: []);
+    await b.put(id, playlist);
+    return id;
   }
 
   // Eliminar una lista y sus canciones
-  Future<void> deletePlaylist(int playlistId) async {
-    final db = await database;
-    await db.delete('playlists', where: 'id = ?', whereArgs: [playlistId]);
-    await db.delete(
-      'playlist_songs',
-      where: 'playlist_id = ?',
-      whereArgs: [playlistId],
-    );
+  Future<void> deletePlaylist(String playlistId) async {
+    final b = await box;
+    await b.delete(playlistId);
   }
 
   // Obtener todas las listas
-  Future<List<Map<String, dynamic>>> getAllPlaylists() async {
-    final db = await database;
-    return await db.query('playlists', orderBy: 'id DESC');
+  Future<List<hive_model.PlaylistModel>> getAllPlaylists() async {
+    final b = await box;
+    return b.values.toList().reversed.toList();
   }
 
   // Renombrar una lista
-  Future<void> renamePlaylist(int playlistId, String newName) async {
-    final db = await database;
-    await db.update(
-      'playlists',
-      {'name': newName},
-      where: 'id = ?',
-      whereArgs: [playlistId],
-    );
+  Future<void> renamePlaylist(String playlistId, String newName) async {
+    final b = await box;
+    final playlist = b.get(playlistId);
+    if (playlist != null) {
+      playlist.name = newName;
+      await playlist.save();
+    }
   }
 
   // Agregar canción a una lista
-  Future<void> addSongToPlaylist(int playlistId, SongModel song) async {
-    final db = await database;
-    await db.insert('playlist_songs', {
-      'playlist_id': playlistId,
-      'song_path': song.data,
-    }, conflictAlgorithm: ConflictAlgorithm.ignore);
+  Future<void> addSongToPlaylist(String playlistId, SongModel song) async {
+    final b = await box;
+    final playlist = b.get(playlistId);
+    if (playlist != null && !playlist.songPaths.contains(song.data)) {
+      playlist.songPaths.add(song.data);
+      await playlist.save();
+    }
   }
 
   // Quitar canción de una lista
-  Future<void> removeSongFromPlaylist(int playlistId, String songPath) async {
-    final db = await database;
-    await db.delete(
-      'playlist_songs',
-      where: 'playlist_id = ? AND song_path = ?',
-      whereArgs: [playlistId, songPath],
-    );
+  Future<void> removeSongFromPlaylist(String playlistId, String songPath) async {
+    final b = await box;
+    final playlist = b.get(playlistId);
+    if (playlist != null && playlist.songPaths.contains(songPath)) {
+      playlist.songPaths.remove(songPath);
+      await playlist.save();
+    }
   }
 
   // Obtener canciones de una lista
-  Future<List<SongModel>> getSongsFromPlaylist(int playlistId) async {
-    final db = await database;
-    final rows = await db.query(
-      'playlist_songs',
-      where: 'playlist_id = ?',
-      whereArgs: [playlistId],
-      orderBy: 'id DESC',
-    );
-    final List<String> paths = rows
-        .map((e) => e['song_path'] as String)
-        .toList();
-
+  Future<List<SongModel>> getSongsFromPlaylist(String playlistId) async {
+    final b = await box;
+    final playlist = b.get(playlistId);
+    if (playlist == null) return [];
     final OnAudioQuery query = OnAudioQuery();
     final allSongs = await query.querySongs();
-
     List<SongModel> ordered = [];
-    for (final path in paths) {
+    for (final path in playlist.songPaths) {
       final match = allSongs.where((s) => s.data == path);
       if (match.isNotEmpty) {
         ordered.add(match.first);
@@ -122,13 +84,9 @@ class PlaylistsDB {
   }
 
   // Verificar si una canción está en una lista
-  Future<bool> isSongInPlaylist(int playlistId, String songPath) async {
-    final db = await database;
-    final result = await db.query(
-      'playlist_songs',
-      where: 'playlist_id = ? AND song_path = ?',
-      whereArgs: [playlistId, songPath],
-    );
-    return result.isNotEmpty;
+  Future<bool> isSongInPlaylist(String playlistId, String songPath) async {
+    final b = await box;
+    final playlist = b.get(playlistId);
+    return playlist?.songPaths.contains(songPath) ?? false;
   }
 }

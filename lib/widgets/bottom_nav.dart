@@ -26,7 +26,6 @@ class Material3BottomNav extends StatefulWidget {
 class _Material3BottomNavState extends State<Material3BottomNav> {
   late int _selectedIndex;
   late final List<Widget?> _pages;
-  final ValueNotifier<bool> _overlayVisible = ValueNotifier<bool>(false);
 
   @override
   void initState() {
@@ -55,7 +54,6 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
 
   @override
   void dispose() {
-    _overlayVisible.dispose();
     super.dispose();
   }
 
@@ -110,11 +108,11 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
             stream: audioHandler?.mediaItem,
             builder: (context, snapshot) {
               // El overlay permanece visible una vez que aparece
-              if (snapshot.data != null && !_overlayVisible.value) {
-                _overlayVisible.value = true;
+              if (snapshot.data != null && !overlayVisibleNotifier.value) {
+                overlayVisibleNotifier.value = true;
               }
-                            return ValueListenableBuilder<bool>(
-                valueListenable: _overlayVisible,
+              return ValueListenableBuilder<bool>(
+                valueListenable: overlayVisibleNotifier,
                 builder: (context, overlayActive, child) {
                   return Stack(
                     children: [

@@ -1,83 +1,53 @@
-import 'package:sqflite/sqflite.dart';
-import 'package:path/path.dart';
+import 'package:hive/hive.dart';
 
 class ShortcutsDB {
   static final ShortcutsDB _instance = ShortcutsDB._internal();
   factory ShortcutsDB() => _instance;
   ShortcutsDB._internal();
 
-  Database? _db;
+  static const int maxShortcuts = 18;
+  Box<List>? _box;
 
-  Future<Database> get database async {
-    if (_db != null) return _db!;
-    _db = await _initDB();
-    return _db!;
+  Future<Box<List>> get box async {
+    if (_box != null) return _box!;
+    _box = await Hive.openBox<List>('shortcuts');
+    return _box!;
   }
 
-  Future<Database> _initDB() async {
-    final dbPath = await getDatabasesPath();
-    final path = join(dbPath, 'shortcuts.db');
-    return await openDatabase(
-      path,
-      version: 1,
-      onCreate: (db, version) async {
-        await db.execute('''
-          CREATE TABLE shortcuts (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            song_path TEXT UNIQUE,
-            order_index INTEGER
-          )
-        ''');
-      },
-    );
-  }
-
+  // Devuelve la lista de shortcuts (paths), ordenados
   Future<List<String>> getShortcuts() async {
-    final db = await database;
-    final res = await db.query(
-      'shortcuts',
-      orderBy: 'order_index ASC',
-      limit: 18,
-    );
-    return res.map((e) => e['song_path'] as String).toList();
+    final b = await box;
+    final shortcuts = b.get('shortcuts') ?? <String>[];
+    return List<String>.from(shortcuts);
   }
 
+  // Agrega un shortcut si no existe y hay espacio
   Future<void> addShortcut(String songPath) async {
-    final db = await database;
+    final b = await box;
     final shortcuts = await getShortcuts();
     if (shortcuts.contains(songPath)) return;
-    if (shortcuts.length >= 18) {
-      // No agregar si ya hay 18
-      return;
-    }
-    await db.insert(
-      'shortcuts',
-      {
-        'song_path': songPath,
-        'order_index': shortcuts.length,
-      },
-      conflictAlgorithm: ConflictAlgorithm.ignore,
-    );
+    if (shortcuts.length >= maxShortcuts) return;
+    shortcuts.add(songPath);
+    await b.put('shortcuts', shortcuts);
   }
 
+  // Elimina un shortcut y reordena
   Future<void> removeShortcut(String songPath) async {
-    final db = await database;
-    await db.delete('shortcuts', where: 'song_path = ?', whereArgs: [songPath]);
-    // Reordenar los accesos directos restantes
+    final b = await box;
     final shortcuts = await getShortcuts();
-    for (int i = 0; i < shortcuts.length; i++) {
-      await db.update('shortcuts', {'order_index': i}, where: 'song_path = ?', whereArgs: [shortcuts[i]]);
-    }
+    shortcuts.remove(songPath);
+    await b.put('shortcuts', shortcuts);
   }
 
+  // Verifica si existe el shortcut
   Future<bool> isShortcut(String songPath) async {
-    final db = await database;
-    final res = await db.query('shortcuts', where: 'song_path = ?', whereArgs: [songPath]);
-    return res.isNotEmpty;
+    final shortcuts = await getShortcuts();
+    return shortcuts.contains(songPath);
   }
 
+  // Borra todos los shortcuts
   Future<void> clearAll() async {
-    final db = await database;
-    await db.delete('shortcuts');
+    final b = await box;
+    await b.put('shortcuts', <String>[]);
   }
 } 

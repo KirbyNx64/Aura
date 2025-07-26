@@ -1,5 +1,4 @@
-import 'package:sqflite/sqflite.dart';
-import 'package:path/path.dart';
+import 'package:hive/hive.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 
 class MostPlayedDB {
@@ -7,67 +6,26 @@ class MostPlayedDB {
   factory MostPlayedDB() => _instance;
   MostPlayedDB._internal();
 
-  Database? _db;
+  Box<Map>? _box;
 
-  Future<Database> get database async {
-    if (_db != null) return _db!;
-    _db = await _initDB();
-    return _db!;
-  }
-
-  Future<Database> _initDB() async {
-    final dbPath = await getDatabasesPath();
-    final path = join(dbPath, 'most_played.db');
-    return await openDatabase(
-      path,
-      version: 1,
-      onCreate: (db, version) async {
-        await db.execute('''
-          CREATE TABLE most_played(
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            path TEXT NOT NULL UNIQUE,
-            play_count INTEGER NOT NULL DEFAULT 0
-          );
-        ''');
-      },
-    );
+  Future<Box<Map>> get box async {
+    if (_box != null) return _box!;
+    _box = await Hive.openBox<Map>('most_played');
+    return _box!;
   }
 
   Future<void> incrementPlayCount(SongModel song) async {
-    final db = await database;
-    final existing = await db.query(
-      'most_played',
-      where: 'path = ?',
-      whereArgs: [song.data],
-    );
-    if (existing.isNotEmpty) {
-      final count = (existing.first['play_count'] as int) + 1;
-      await db.update(
-        'most_played',
-        {'play_count': count},
-        where: 'path = ?',
-        whereArgs: [song.data],
-      );
-    } else {
-      await db.insert('most_played', {
-        'path': song.data,
-        'play_count': 1,
-      }, conflictAlgorithm: ConflictAlgorithm.ignore);
-      await db.rawUpdate(
-        'UPDATE most_played SET play_count = play_count + 1 WHERE path = ?',
-        [song.data],
-      );
-    }
+    final b = await box;
+    final path = song.data;
+    final playCount = b.get(path)?['play_count'] ?? 0;
+    await b.put(path, {'play_count': playCount + 1});
   }
 
   Future<List<SongModel>> getMostPlayed({int limit = 20}) async {
-    final db = await database;
-    final rows = await db.query(
-      'most_played',
-      orderBy: 'play_count DESC, id DESC',
-      limit: limit,
-    );
-    final List<String> paths = rows.map((e) => e['path'] as String).toList();
+    final b = await box;
+    final entries = b.toMap().entries.toList();
+    entries.sort((a, b) => (b.value['play_count'] as int).compareTo(a.value['play_count'] as int));
+    final paths = entries.take(limit).map((e) => e.key as String).toList();
 
     final OnAudioQuery query = OnAudioQuery();
     final allSongs = await query.querySongs();
@@ -83,15 +41,7 @@ class MostPlayedDB {
   }
 
   Future<int> getPlayCount(String path) async {
-    final db = await database;
-    final result = await db.query(
-      'most_played',
-      where: 'path = ?',
-      whereArgs: [path],
-    );
-    if (result.isNotEmpty) {
-      return result.first['play_count'] as int;
-    }
-    return 0;
+    final b = await box;
+    return b.get(path)?['play_count'] ?? 0;
   }
 }

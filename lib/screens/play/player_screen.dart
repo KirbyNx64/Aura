@@ -156,7 +156,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     final lyricsData = await SyncedLyricsService.getSyncedLyrics(mediaItem);
     if (!mounted) return; 
 
-    final synced = lyricsData?['synced'];
+    final synced = lyricsData?.synced;
     if (synced != null) {
       final lines = synced.split('\n');
       final parsed = <LyricLine>[];
@@ -192,47 +192,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     }
   }
 
-  Future<void> _loadLyricsWithoutSetState(MediaItem mediaItem) async {
-    if (!mounted) return;
-    
-    // Solo cargar datos sin setState
-    final lyricsData = await SyncedLyricsService.getSyncedLyrics(mediaItem);
-    if (!mounted) return; 
 
-    final synced = lyricsData?['synced'];
-    if (synced != null) {
-      final lines = synced.split('\n');
-      final parsed = <LyricLine>[];
-      final reg = RegExp(r'\[(\d{2}):(\d{2})(?:\.(\d{2,3}))?\](.*)');
-      for (final line in lines) {
-        final match = reg.firstMatch(line);
-        if (match != null) {
-          final min = int.parse(match.group(1)!);
-          final sec = int.parse(match.group(2)!);
-          final ms = match.group(3) != null
-              ? int.parse(match.group(3)!.padRight(3, '0'))
-              : 0;
-          final text = match.group(4)!.trim();
-          parsed.add(
-            LyricLine(
-              Duration(minutes: min, seconds: sec, milliseconds: ms),
-              text,
-            ),
-          );
-        }
-      }
-      // Solo actualizar variables sin setState
-      if (mounted) {
-        _lyricLines = parsed;
-        _loadingLyrics = false;
-      }
-    } else {
-      if (mounted) {
-        _lyricLines = [];
-        _loadingLyrics = false;
-      }
-    }
-  }
 
   @override
   void initState() {
@@ -486,7 +446,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                       return ListTile(
                         leading: const Icon(Icons.queue_music, size: 32),
                         title: Text(
-                          pl['name'],
+                          pl.name,
                           style: const TextStyle(fontSize: 18),
                         ),
                         onTap: () async {
@@ -500,7 +460,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
 
                           if (songList.isNotEmpty) {
                             await PlaylistsDB().addSongToPlaylist(
-                              pl['id'],
+                              pl.id,
                               songList.first,
                             );
                             playlistsShouldReload.value =
@@ -668,7 +628,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
         builder: (context, snapshot) {
           final mediaItem = snapshot.data;
           
-          // Optimización: Solo procesar si es una canción nueva
+          // Solo procesar si es una canción nueva
           if (mediaItem != null && mediaItem.id != _lastMediaItemId) {
             _lastMediaItemId = mediaItem.id;
             
@@ -676,25 +636,28 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
             if (_showLyrics) {
               _showLyrics = false;
             }
-            
-            // Precargar letras en segundo plano sin setState
-            unawaited(_loadLyricsWithoutSetState(mediaItem));
-          }
-          
-
-          
-          if (mediaItem == null) {
-            return Scaffold(
-              body: Center(child: Text(LocaleProvider.tr('no_song_playing'))),
-            );
           }
 
-          return Scaffold(
-            appBar: AppBar(
-              leading: IconButton(
-                iconSize: 38,
-                icon: const Icon(Icons.keyboard_arrow_down),
-                onPressed: () => Navigator.of(context).pop(),
+          // Usar el MediaItem inicial si no hay uno actual
+          final currentMediaItem = mediaItem ?? widget.initialMediaItem;
+
+
+
+          return WillPopScope(
+            onWillPop: () async {
+              return !playLoadingNotifier.value;
+            },
+            child: Scaffold(
+              appBar: AppBar(
+              leading: ValueListenableBuilder<bool>(
+                valueListenable: playLoadingNotifier,
+                builder: (context, isLoading, _) {
+                  return IconButton(
+                    iconSize: 38,
+                    icon: const Icon(Icons.keyboard_arrow_down),
+                    onPressed: isLoading ? null : () => Navigator.of(context).pop(),
+                  );
+                },
               ),
               title: FutureBuilder<SharedPreferences>(
                 future: SharedPreferences.getInstance(),
@@ -738,7 +701,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                   iconSize: 38,
                   icon: const Icon(Icons.more_vert),
                   onPressed: () {
-                    _showSongOptions(context, mediaItem);
+                    _showSongOptions(context, currentMediaItem!);
                   },
                 ),
               ],
@@ -767,10 +730,10 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                               //   _usedInitialArtwork = true;
                               // }
                               return ArtworkHeroCached(
-                                artUri: mediaItem.artUri,
+                                artUri: currentMediaItem!.artUri,
                                 size: artworkSize,
                                 borderRadius: BorderRadius.circular(artworkSize * 0.06),
-                                heroTag: 'now_playing_artwork_${(mediaItem.extras?['songId'] ?? mediaItem.id).toString()}',
+                                heroTag: 'now_playing_artwork_${(currentMediaItem.extras?['songId'] ?? currentMediaItem.id).toString()}',
                               );
                             },
                           ),
@@ -858,7 +821,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                           children: [
                             Expanded(
                               child: TitleMarquee(
-                                text: mediaItem.title,
+                                text: currentMediaItem!.title,
                                 maxWidth:
                                     artworkSize - (isSmallScreen ? 60 : 40),
                                 style: Theme.of(context).textTheme.headlineSmall
@@ -871,9 +834,9 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                             ),
                             SizedBox(width: width * 0.04),
                             FutureBuilder<bool>(
-                              future: (mediaItem.extras?['isStreaming'] == true || mediaItem.extras?['data'] == null || (mediaItem.extras?['data'] as String?)?.startsWith('http') == true)
+                              future: (currentMediaItem.extras?['isStreaming'] == true || currentMediaItem.extras?['data'] == null || (currentMediaItem.extras?['data'] as String?)?.startsWith('http') == true)
                                   ? Future.value(false)
-                                  : FavoritesDB().isFavorite(mediaItem.extras?['data'] ?? ''),
+                                  : FavoritesDB().isFavorite(currentMediaItem.extras?['data'] ?? ''),
                               builder: (context, favSnapshot) {
                                 final isFav = favSnapshot.data ?? false;
                                 // Trigger heartbeat animation only when state changes
@@ -881,53 +844,61 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                   _favController.forward(from: 0.0);
                                   _lastIsFav = isFav;
                                 }
-                                return AnimatedTapButton(
-                                  onTap: () async {
-                                    final path =
-                                        mediaItem.extras?['data'] ?? '';
-                                    if (path.isEmpty) return;
+                                return ValueListenableBuilder<bool>(
+                                  valueListenable: playLoadingNotifier,
+                                  builder: (context, isLoading, _) {
+                                    return AnimatedTapButton(
+                                      onTap: () {
+                                        if (isLoading) return;
+                                        unawaited(() async {
+                                          final path =
+                                              currentMediaItem.extras?['data'] ?? '';
+                                          if (path.isEmpty) return;
 
-                                    if (isFav) {
-                                      await FavoritesDB().removeFavorite(path);
-                                      favoritesShouldReload.value =
-                                          !favoritesShouldReload.value;
-                                      if (!context.mounted) return;
-                                      setState(() {});
-                                    } else {
-                                      final allSongs = await _audioQuery
-                                          .querySongs();
-                                      final songList = allSongs
-                                          .where((s) => s.data == path)
-                                          .toList();
+                                          if (isFav) {
+                                            await FavoritesDB().removeFavorite(path);
+                                            favoritesShouldReload.value =
+                                                !favoritesShouldReload.value;
+                                            if (!context.mounted) return;
+                                            setState(() {});
+                                          } else {
+                                            final allSongs = await _audioQuery
+                                                .querySongs();
+                                            final songList = allSongs
+                                                .where((s) => s.data == path)
+                                                .toList();
 
-                                      if (songList.isEmpty) {
-                                        if (!context.mounted) return;
-                                        ScaffoldMessenger.of(
-                                          context,
-                                        ).showSnackBar(
-                                          SnackBar(
-                                            content: Text(
-                                              LocaleProvider.tr('song_not_found'),
-                                            ),
-                                          ),
-                                        );
-                                        return;
-                                      }
+                                            if (songList.isEmpty) {
+                                              if (!context.mounted) return;
+                                              ScaffoldMessenger.of(
+                                                context,
+                                              ).showSnackBar(
+                                                SnackBar(
+                                                  content: Text(
+                                                    LocaleProvider.tr('song_not_found'),
+                                                  ),
+                                                ),
+                                              );
+                                              return;
+                                            }
 
-                                      final song = songList.first;
-                                      await _addToFavorites(song);
-                                      if (!context.mounted) return;
-                                      setState(() {}); // <-- fuerza actualización visual
-                                    }
+                                            final song = songList.first;
+                                            await _addToFavorites(song);
+                                            if (!context.mounted) return;
+                                            setState(() {}); // <-- fuerza actualización visual
+                                          }
+                                        }());
+                                      },
+                                      child: ScaleTransition(
+                                        scale: _favAnimation,
+                                        child: Icon(
+                                          isFav ? Icons.favorite : Icons.favorite_border,
+                                          size: 34,
+                                          color: Theme.of(context).colorScheme.onSurface,
+                                        ),
+                                      ),
+                                    );
                                   },
-                                  child: ScaleTransition(
-                                    scale: _favAnimation,
-                                    child: Icon(
-                                      isFav ? Icons.favorite : Icons.favorite_border,
-                                      size: 34,
-                                      color: Theme.of(context).colorScheme.onSurface,
-                                    ),
-                                  ),
                                 );
                               },
                             ),
@@ -938,10 +909,10 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                       SizedBox(
                         width: is16by9 ? 310 : isSmallScreen ? 300 : artworkSize,
                         child: Text(
-                          (mediaItem.artist == null ||
-                                  mediaItem.artist!.trim().isEmpty)
+                          (currentMediaItem.artist == null ||
+                                  currentMediaItem.artist!.trim().isEmpty)
                               ? LocaleProvider.tr('unknown_artist')
-                              : mediaItem.artist!,
+                              : currentMediaItem.artist!,
                           style: Theme.of(context).textTheme.titleMedium
                               ?.copyWith(
                                 color: Theme.of(context).colorScheme.onSurface,
@@ -973,7 +944,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                 stream: (audioHandler as MyAudioHandler).player.durationStream,
                                 builder: (context, durationSnapshot) {
                                   final fallbackDuration = durationSnapshot.data;
-                                  final mediaDuration = mediaItem.duration;
+                                  final mediaDuration = currentMediaItem.duration;
                                   // Si no hay duración, usa 1 segundo como mínimo para el slider
                                   final duration = (mediaDuration != null && mediaDuration.inMilliseconds > 0)
                                     ? mediaDuration
@@ -1117,29 +1088,42 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                       ValueListenableBuilder<bool>(
                                         valueListenable: (audioHandler as MyAudioHandler).isShuffleNotifier,
                                         builder: (context, isShuffle, _) {
-                                          return IconButton(
-                                            icon: const Icon(Icons.shuffle),
-                                            color: isShuffle
-                                                ? Theme.of(context).colorScheme.primary
-                                                : Theme.of(context).brightness == Brightness.light
-                                                    ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.9)
-                                                    : Theme.of(context).colorScheme.onSurface,
-                                            iconSize: iconSize,
-                                            onPressed: () async {
-                                              await (audioHandler as MyAudioHandler).toggleShuffle(!isShuffle);
+                                          return ValueListenableBuilder<bool>(
+                                            valueListenable: playLoadingNotifier,
+                                            builder: (context, isLoading, _) {
+                                              return IconButton(
+                                                icon: const Icon(Icons.shuffle),
+                                                color: isShuffle
+                                                    ? Theme.of(context).colorScheme.primary
+                                                    : Theme.of(context).brightness == Brightness.light
+                                                        ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.9)
+                                                        : Theme.of(context).colorScheme.onSurface,
+                                                iconSize: iconSize,
+                                                onPressed: () async {
+                                                  if (isLoading) return;
+                                                  await (audioHandler as MyAudioHandler).toggleShuffle(!isShuffle);
+                                                },
+                                                tooltip: LocaleProvider.tr('shuffle'),
+                                              );
                                             },
-                                            tooltip: LocaleProvider.tr('shuffle'),
                                           );
                                         },
                                       ),
-                                      IconButton(
-                                        icon: const Icon(Icons.skip_previous),
-                                        color: Theme.of(context).brightness == Brightness.light
-                                              ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.9)
-                                              : Theme.of(context).colorScheme.onSurface,
-                                        iconSize: sideIconSize,
-                                        onPressed: () =>
-                                            audioHandler?.skipToPrevious(),
+                                      ValueListenableBuilder<bool>(
+                                        valueListenable: playLoadingNotifier,
+                                        builder: (context, isLoading, _) {
+                                          return IconButton(
+                                            icon: const Icon(Icons.skip_previous),
+                                            color: Theme.of(context).brightness == Brightness.light
+                                                  ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.9)
+                                                  : Theme.of(context).colorScheme.onSurface,
+                                            iconSize: sideIconSize,
+                                            onPressed: () {
+                                              if (isLoading) return;
+                                              audioHandler?.skipToPrevious();
+                                            },
+                                          );
+                                        },
                                       ),
                                       Padding(
                                         padding: EdgeInsets.symmetric(
@@ -1159,6 +1143,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                             splashColor: Colors.transparent,
                                             highlightColor: Colors.transparent,
                                             onTap: () {
+                                              if (playLoadingNotifier.value) return;
                                               isPlaying
                                                   ? audioHandler?.pause()
                                                   : audioHandler?.play();
@@ -1167,49 +1152,79 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                               width: mainIconSize,
                                               height: mainIconSize,
                                               child: Center(
-                                                child: AnimatedIcon(
-                                                  icon: AnimatedIcons.play_pause,
-                                                  progress: _playPauseController,
-                                                  size: playIconSize,
-                                                  color: Theme.of(context).brightness == Brightness.light
-                                                      ? Theme.of(context).colorScheme.surface.withValues(alpha: 0.9)
-                                                      : Theme.of(context).colorScheme.surface,
+                                                child: ValueListenableBuilder<bool>(
+                                                  valueListenable: playLoadingNotifier,
+                                                  builder: (context, isLoading, _) {
+                                                    return isLoading
+                                                        ? SizedBox(
+                                                            width: playIconSize,
+                                                            height: playIconSize,
+                                                            child: CircularProgressIndicator(
+                                                              strokeWidth: 5,
+                                                              strokeCap: StrokeCap.round,
+                                                              color: Theme.of(context).brightness == Brightness.light
+                                                                  ? Theme.of(context).colorScheme.surface.withValues(alpha: 0.9)
+                                                                  : Theme.of(context).colorScheme.surface,
+                                                            ),
+                                                          )
+                                                        : AnimatedIcon(
+                                                            icon: AnimatedIcons.play_pause,
+                                                            progress: _playPauseController,
+                                                            size: playIconSize,
+                                                            color: Theme.of(context).brightness == Brightness.light
+                                                                ? Theme.of(context).colorScheme.surface.withValues(alpha: 0.9)
+                                                                : Theme.of(context).colorScheme.surface,
+                                                          );
+                                                  },
                                                 ),
                                               ),
                                             ),
                                           ),
                                         ),
                                       ),
-                                      IconButton(
-                                        icon: const Icon(Icons.skip_next),
-                                        color: Theme.of(context).brightness == Brightness.light
-                                              ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.9)
-                                              : Theme.of(context).colorScheme.onSurface,
-                                        iconSize: sideIconSize,
-                                        onPressed: () =>
-                                            audioHandler?.skipToNext(),  
-                                      ),
-                                      IconButton(
-                                        icon: Icon(repeatIcon),
-                                        color: repeatColor,
-                                        iconSize: iconSize,
-                                        onPressed: () {
-                                          AudioServiceRepeatMode newMode;
-                                          if (repeatMode ==
-                                              AudioServiceRepeatMode.none) {
-                                            newMode =
-                                                AudioServiceRepeatMode.all;
-                                          } else if (repeatMode ==
-                                              AudioServiceRepeatMode.all) {
-                                            newMode =
-                                                AudioServiceRepeatMode.one;
-                                          } else {
-                                            newMode =
-                                                AudioServiceRepeatMode.none;
-                                          }
-                                          audioHandler?.setRepeatMode(newMode);
+                                      ValueListenableBuilder<bool>(
+                                        valueListenable: playLoadingNotifier,
+                                        builder: (context, isLoading, _) {
+                                          return IconButton(
+                                            icon: const Icon(Icons.skip_next),
+                                            color: Theme.of(context).brightness == Brightness.light
+                                                  ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.9)
+                                                  : Theme.of(context).colorScheme.onSurface,
+                                            iconSize: sideIconSize,
+                                            onPressed: () {
+                                              if (isLoading) return;
+                                              audioHandler?.skipToNext();  
+                                            },
+                                          );
                                         },
-                                        tooltip: LocaleProvider.tr('repeat'),
+                                      ),
+                                      ValueListenableBuilder<bool>(
+                                        valueListenable: playLoadingNotifier,
+                                        builder: (context, isLoading, _) {
+                                          return IconButton(
+                                            icon: Icon(repeatIcon),
+                                            color: repeatColor,
+                                            iconSize: iconSize,
+                                            onPressed: () {
+                                              if (isLoading) return;
+                                              AudioServiceRepeatMode newMode;
+                                              if (repeatMode ==
+                                                  AudioServiceRepeatMode.none) {
+                                                newMode =
+                                                    AudioServiceRepeatMode.all;
+                                              } else if (repeatMode ==
+                                                  AudioServiceRepeatMode.all) {
+                                                newMode =
+                                                    AudioServiceRepeatMode.one;
+                                              } else {
+                                                newMode =
+                                                    AudioServiceRepeatMode.none;
+                                              }
+                                              audioHandler?.setRepeatMode(newMode);
+                                            },
+                                            tooltip: LocaleProvider.tr('repeat'),
+                                          );
+                                        },
                                       ),
                                     ],
                                   ),
@@ -1241,18 +1256,21 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                         MainAxisAlignment.spaceEvenly,
                                     children: [
                                       // Botón Guardar
-                                      AnimatedTapButton(
-                                        onTap: () async {
-                                          if (!mounted) {
-                                            return;
-                                          }
+                                      ValueListenableBuilder<bool>(
+                                        valueListenable: playLoadingNotifier,
+                                        builder: (context, isLoading, _) {
+                                          return AnimatedTapButton(
+                                            onTap: isLoading ? () {} : () async {
+                                              if (!mounted) {
+                                                return;
+                                              }
 
-                                          final safeContext = context;
-                                          await _showAddToPlaylistDialog(
-                                            safeContext,
-                                            mediaItem,
-                                          );
-                                        },
+                                              final safeContext = context;
+                                              await _showAddToPlaylistDialog(
+                                                safeContext,
+                                                currentMediaItem,
+                                              );
+                                            },
                                         child: Container(
                                           decoration: BoxDecoration(
                                             color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
@@ -1286,22 +1304,27 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                             ],
                                           ),
                                         ),
-                                      ),
+                                      );
+                                    },
+                                  ),
 
                                       // Botón Letra
-                                      AnimatedTapButton(
-                                        onTap: () async {
-                                          if (!_showLyrics) {
-                                            setState(() {
-                                              _showLyrics = true;
-                                            });
-                                            await _loadLyrics(mediaItem);
-                                          } else {
-                                            setState(() {
-                                              _showLyrics = false;
-                                            });
-                                          }
-                                        },
+                                      ValueListenableBuilder<bool>(
+                                        valueListenable: playLoadingNotifier,
+                                        builder: (context, isLoading, _) {
+                                          return AnimatedTapButton(
+                                            onTap: isLoading ? () {} : () async {
+                                              if (!_showLyrics) {
+                                                setState(() {
+                                                  _showLyrics = true;
+                                                });
+                                                await _loadLyrics(currentMediaItem);
+                                              } else {
+                                                setState(() {
+                                                  _showLyrics = false;
+                                                });
+                                              }
+                                            },
                                         child: Container(
                                           decoration: BoxDecoration(
                                             color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
@@ -1335,13 +1358,18 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                             ],
                                           ),
                                         ),
-                                      ),
+                                      );
+                                    },
+                                  ),
 
                                       // Botón Compartir
-                                      AnimatedTapButton(
-                                        onTap: () async {
-                                          // Acción del botón
-                                        },
+                                      ValueListenableBuilder<bool>(
+                                        valueListenable: playLoadingNotifier,
+                                        builder: (context, isLoading, _) {
+                                          return AnimatedTapButton(
+                                            onTap: isLoading ? () {} : () async {
+                                              // Acción del botón
+                                            },
                                         child: Container(
                                           decoration: BoxDecoration(
                                             color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
@@ -1361,13 +1389,13 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                             ),
                                             onTap: () async {
                                               final dataPath =
-                                                  mediaItem.extras?['data']
+                                                  currentMediaItem.extras?['data']
                                                       as String?;
                                               if (dataPath != null &&
                                                   dataPath.isNotEmpty) {
                                                 await SharePlus.instance.share(
                                                   ShareParams(
-                                                    text: mediaItem.title,
+                                                    text: currentMediaItem.title,
                                                     files: [XFile(dataPath)],
                                                   ),
                                                 );
@@ -1384,7 +1412,9 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                             ),
                                           ),
                                         ),
-                                      ),
+                                      );
+                                    },
+                                  ),
                                     ],
                                   ),
                                 ),
@@ -1398,9 +1428,10 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                 ),
               ),
             ),
-          );
-        },
-      ),
+          ),
+        );
+      },
+    )
     );
   }
 }

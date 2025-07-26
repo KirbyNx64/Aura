@@ -10,7 +10,6 @@ import 'package:music/utils/db/favorites_db.dart';
 import 'package:music/utils/db/playlists_db.dart';
 import 'package:music/utils/db/recent_db.dart';
 import 'package:music/utils/db/mostplayer_db.dart';
-import 'package:sqflite/sqflite.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:music/utils/notifiers.dart';
@@ -19,6 +18,7 @@ import 'package:music/l10n/locale_provider.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'dart:convert';
 import 'package:flutter/services.dart';
+import 'package:music/utils/db/playlist_model.dart' as hive_model;
 
 class SettingsScreen extends StatefulWidget {
   final void Function(AppThemeMode)? setThemeMode;
@@ -853,7 +853,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              '${LocaleProvider.tr('version')}: v1.4.1',
+                              '${LocaleProvider.tr('version')}: v1.4.2',
                               style: const TextStyle(
                                 fontSize: 15,
                               ),
@@ -893,10 +893,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
       final playlistsRaw = await PlaylistsDB().getAllPlaylists();
       final playlists = <Map<String, dynamic>>[];
       for (final pl in playlistsRaw) {
-        final songs = await PlaylistsDB().getSongsFromPlaylist(pl['id'] as int);
+        final songs = await PlaylistsDB().getSongsFromPlaylist(pl.id);
         playlists.add({
-          'id': pl['id'],
-          'name': pl['name'],
+          'id': pl.id,
+          'name': pl.name,
           'songs': songs.map((s) => s.data).toList(),
         });
       }
@@ -963,42 +963,43 @@ class _SettingsScreenState extends State<SettingsScreen> {
       );
       if (confirmed != true) return;
       // Limpiar bases de datos
-      final dbFav = await FavoritesDB().database;
-      await dbFav.delete('favorites');
-      final dbRec = await RecentsDB().database;
-      await dbRec.delete('recents');
-      final dbMost = await MostPlayedDB().database;
-      await dbMost.delete('most_played');
-      final dbPl = await PlaylistsDB().database;
-      await dbPl.delete('playlist_songs');
-      await dbPl.delete('playlists');
+      final boxFav = await FavoritesDB().box;
+      await boxFav.clear();
+      final boxRec = await RecentsDB().box;
+      await boxRec.clear();
+      final boxMost = await MostPlayedDB().box;
+      await boxMost.clear();
+      final boxPl = await PlaylistsDB().box;
+      await boxPl.clear();
       // Restaurar favoritos
       if (data['favorites'] is List) {
         for (final path in data['favorites']) {
-          await dbFav.insert('favorites', {'path': path}, conflictAlgorithm: ConflictAlgorithm.ignore);
+          if (!boxFav.values.contains(path)) {
+            await boxFav.add(path);
+          }
         }
       }
       // Restaurar recientes
       if (data['recents'] is List) {
         for (final path in data['recents']) {
-          await dbRec.insert('recents', {'path': path, 'timestamp': DateTime.now().millisecondsSinceEpoch}, conflictAlgorithm: ConflictAlgorithm.replace);
+          await boxRec.put(path, DateTime.now().millisecondsSinceEpoch);
         }
       }
       // Restaurar más escuchadas
+      final mostPlayedBox = await MostPlayedDB().box;
       if (data['mostPlayed'] is List) {
         for (final path in data['mostPlayed']) {
-          await dbMost.insert('most_played', {'path': path, 'play_count': 1}, conflictAlgorithm: ConflictAlgorithm.replace);
+          await mostPlayedBox.put(path, {'play_count': 1});
         }
       }
       // Restaurar playlists
       if (data['playlists'] is List) {
         for (final pl in data['playlists']) {
-          final playlistId = await dbPl.insert('playlists', {'name': pl['name']}, conflictAlgorithm: ConflictAlgorithm.ignore);
-          if (pl['songs'] is List) {
-            for (final songPath in pl['songs']) {
-              await dbPl.insert('playlist_songs', {'playlist_id': playlistId, 'song_path': songPath}, conflictAlgorithm: ConflictAlgorithm.ignore);
-            }
-          }
+          final id = pl['id']?.toString() ?? DateTime.now().millisecondsSinceEpoch.toString();
+          final name = pl['name'] as String;
+          final songPaths = (pl['songs'] as List).map((e) => e.toString()).toList();
+          final playlist = hive_model.PlaylistModel(id: id, name: name, songPaths: songPaths);
+          await boxPl.put(id, playlist);
         }
       }
       if (!mounted) return;

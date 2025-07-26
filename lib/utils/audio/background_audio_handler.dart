@@ -5,10 +5,6 @@ import 'package:on_audio_query/on_audio_query.dart';
 import 'dart:io';
 import 'dart:async';
 import 'package:path_provider/path_provider.dart';
-import 'package:music/utils/db/recent_db.dart';
-import 'package:music/utils/db/favorites_db.dart';
-import 'package:music/utils/db/mostplayer_db.dart';
-import 'package:music/utils/db/playlists_db.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -147,6 +143,8 @@ final Map<String, Uri?> _artworkCache = {};
 // Cache para precarga de carátulas
 final Map<String, Future<Uri?>> _preloadCache = {};
 
+Map<String, Uri?> get artworkCache => _artworkCache;
+
 Future<Uri?> getOrCacheArtwork(int songId, String songPath) async {
   // 1. Verifica cache en memoria primero
   if (_artworkCache.containsKey(songPath)) {
@@ -214,44 +212,6 @@ void clearArtworkCache() {
 /// Obtiene el tamaño actual del cache de carátulas
 int get artworkCacheSize => _artworkCache.length;
 
-/// Precarga carátulas de canciones recientes y favoritas
-Future<void> preloadCommonArtworks() async {
-  try {
-    // Precargar carátulas de canciones recientes
-    final recentSongs = await RecentsDB().getRecents();
-    final limitedRecents = recentSongs.take(20).toList();
-    unawaited(preloadArtworks(limitedRecents));
-    
-    // Precargar carátulas de favoritos
-    final favoriteSongs = await FavoritesDB().getFavorites();
-    final limitedFavorites = favoriteSongs.take(20).toList();
-    unawaited(preloadArtworks(limitedFavorites));
-  } catch (e) {
-    // Ignorar errores de precarga
-  }
-}
-
-/// Precarga carátulas para una playlist específica
-Future<void> preloadPlaylistArtworks(int playlistId) async {
-  try {
-    final playlistSongs = await PlaylistsDB().getSongsFromPlaylist(playlistId);
-    unawaited(preloadArtworks(playlistSongs));
-  } catch (e) {
-    // Ignorar errores de precarga
-  }
-}
-
-/// Precarga carátulas para canciones más reproducidas
-Future<void> preloadMostPlayedArtworks() async {
-  try {
-    final mostPlayedSongs = await MostPlayedDB().getMostPlayed();
-    final limitedMostPlayed = mostPlayedSongs.take(30).toList();
-    unawaited(preloadArtworks(limitedMostPlayed));
-  } catch (e) {
-    // Ignorar errores de precarga
-  }
-}
-
 class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   AudioPlayer _player = AudioPlayer();
   final List<MediaItem> _mediaQueue = [];
@@ -268,17 +228,16 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   Duration? _sleepStartPosition;
   bool _isSkipping = false;
 
-  // --- Precarga artwork de la siguiente canción cuando falten pocos segundos ---
+  // --- Precarga artwork de forma inteligente para fluidez ---
   int? _lastPreloadedNextIndex;
   void _setupNextArtworkPreload() {
     _player.positionStream.listen((position) {
       final idx = _player.currentIndex;
-      final dur = _player.duration;
-      if (idx == null || dur == null) return;
-      // Si faltan menos de 10 segundos para el final de la canción actual
-      final remaining = dur - position;
-      if (remaining.inSeconds <= 10) {
-        final nextIndex = idx + 1;
+      if (idx == null) return;
+      
+      // Precarga inteligente: solo las próximas 2 canciones (suficiente para fluidez)
+      for (int i = 1; i <= 2; i++) {
+        final nextIndex = idx + i;
         if (nextIndex < _mediaQueue.length && _lastPreloadedNextIndex != nextIndex) {
           final nextMediaItem = _mediaQueue[nextIndex];
           final songId = nextMediaItem.extras?['songId'] as int?;
@@ -288,9 +247,6 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
             unawaited(getOrCacheArtwork(songId, songPath));
           }
         }
-      } else if (remaining.inSeconds > 20) {
-        // Resetea el flag si el usuario retrocede mucho
-        _lastPreloadedNextIndex = null;
       }
     });
   }
@@ -303,9 +259,6 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   Future<void> _init() async {
     final session = await AudioSession.instance;
     await session.configure(const AudioSessionConfiguration.music());
-    
-    // Precargar carátulas comunes en segundo plano
-    unawaited(preloadCommonArtworks());
 
     _player.playbackEventStream.listen((event) {
       final playing = _player.playing;
@@ -435,7 +388,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     }
     _currentSongList = List<SongModel>.from(songs);
     isQueueTransitioning.value = true;
-    initializingNotifier.value = true;
+    initializingNotifier.value = false;
     _initializing = true;
     _loadVersion++;
     final int currentVersion = _loadVersion;
@@ -489,9 +442,6 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     // 2. Crear AudioSources sin verificación de archivos (just_audio maneja errores)
     final sources = songs.map((song) => AudioSource.uri(Uri.file(song.data))).toList();
 
-    // Precargar carátulas para toda la lista en segundo plano
-    unawaited(preloadArtworks(songs));
-
     // 3. Cargar fuentes en el reproductor inmediatamente
     try {
       await _player.setAudioSources(
@@ -536,48 +486,16 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       }
     }
 
-    // 4. Precargar carátulas inmediatamente
-    unawaited(preloadArtworks(songs));
-    
-    // 5. Cargar carátulas en segundo plano (sin bloquear)
-    unawaited(_loadArtworkInBackground(songs, currentVersion, initialIndex));
-    
-    _initializing = false;
-    initializingNotifier.value = false;
-    isQueueTransitioning.value = false;
+    // 4. Precargar carátulas inmediatamente (solo la canción actual)
+    unawaited(loadArtworkForIndex(initialIndex));
 
     if (autoPlay) {
-      Future.delayed(const Duration(milliseconds: 1000));
       await play();
-    }
-  }
-
-  /// Carga carátulas en segundo plano sin bloquear la UI
-  Future<void> _loadArtworkInBackground(List<SongModel> songs, int loadVersion, int initialIndex) async {
-    if (loadVersion != _loadVersion) return;
-    
-    try {
-      // Cargar carátulas para toda la lista de una sola vez, saltando la canción actual
-      for (int i = 0; i < songs.length; i++) {
-        if (loadVersion != _loadVersion) return;
-        // Saltar la canción actual ya que su carátula ya se cargó
-        if (i != initialIndex && i < _mediaQueue.length) {
-          try {
-            final artUri = await getOrCacheArtwork(songs[i].id, songs[i].data);
-            if (loadVersion == _loadVersion && i < _mediaQueue.length) {
-              _mediaQueue[i] = _mediaQueue[i].copyWith(artUri: artUri);
-            }
-          } catch (e) {
-            // Ignorar errores de carátulas
-          }
-        }
-      }
-      // Actualizar la cola con las carátulas cargadas
-      if (loadVersion == _loadVersion) {
-        queue.add(_mediaQueue);
-      }
-    } catch (e) {
-      // Ignorar errores de carga de carátulas
+    } else {
+      _initializing = false;
+      initializingNotifier.value = false;
+      isQueueTransitioning.value = false;
+      unawaited(preloadArtworks(songs));
     }
   }
 
@@ -642,10 +560,6 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
           updatePosition: Duration.zero,
         ),
       );
-      
-      // Limpia archivos faltantes de las bases de datos en segundo plano
-      cleanMissingFilesFromDatabases();
-      
       // Limpiar la instancia global
       // clearAudioHandlerInstance();
     } catch (e) {
@@ -1046,125 +960,5 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       await stop();
     }
     return super.customAction(name, extras);
-  }
-
-  /// Limpia archivos faltantes de las bases de datos
-  static Future<void> cleanMissingFilesFromDatabases() async {
-    try {
-      // Importar las clases de base de datos
-      final recentDB = RecentsDB();
-      final favoritesDB = FavoritesDB();
-      final mostPlayedDB = MostPlayedDB();
-      final playlistsDB = PlaylistsDB();
-      
-      // Obtener todas las rutas de archivos de las bases de datos
-      final recentPaths = await _getAllPathsFromRecents(recentDB);
-      final favoritePaths = await _getAllPathsFromFavorites(favoritesDB);
-      final mostPlayedPaths = await _getAllPathsFromMostPlayed(mostPlayedDB);
-      final playlistPaths = await _getAllPathsFromPlaylists(playlistsDB);
-      
-      // Verificar y limpiar archivos faltantes
-      await _cleanMissingPaths(recentDB, recentPaths, 'recents');
-      await _cleanMissingPaths(favoritesDB, favoritePaths, 'favorites');
-      await _cleanMissingPaths(mostPlayedDB, mostPlayedPaths, 'most_played');
-      await _cleanMissingPlaylistPaths(playlistsDB, playlistPaths);
-      
-      // print('✅ Limpieza de archivos faltantes completada');
-    } catch (e) {
-      // print('⚠️ Error durante la limpieza de archivos faltantes: $e');
-    }
-  }
-
-  /// Obtiene todas las rutas de la base de datos de recientes
-  static Future<List<String>> _getAllPathsFromRecents(RecentsDB db) async {
-    final database = await db.database;
-    final rows = await database.query('recents');
-    return rows.map((e) => e['path'] as String).toList();
-  }
-
-  /// Obtiene todas las rutas de la base de datos de favoritos
-  static Future<List<String>> _getAllPathsFromFavorites(FavoritesDB db) async {
-    final database = await db.database;
-    final rows = await database.query('favorites');
-    return rows.map((e) => e['path'] as String).toList();
-  }
-
-  /// Obtiene todas las rutas de la base de datos de más reproducidas
-  static Future<List<String>> _getAllPathsFromMostPlayed(MostPlayedDB db) async {
-    final database = await db.database;
-    final rows = await database.query('most_played');
-    return rows.map((e) => e['path'] as String).toList();
-  }
-
-  /// Obtiene todas las rutas de la base de datos de playlists
-  static Future<List<String>> _getAllPathsFromPlaylists(PlaylistsDB db) async {
-    final database = await db.database;
-    final rows = await database.query('playlist_songs');
-    return rows.map((e) => e['song_path'] as String).toList();
-  }
-
-  /// Limpia rutas faltantes de una base de datos específica
-  static Future<void> _cleanMissingPaths(
-    dynamic db,
-    List<String> paths,
-    String dbName,
-  ) async {
-    final database = await db.database;
-    int cleanedCount = 0;
-    
-    for (final path in paths) {
-      final file = File(path);
-      if (!await file.exists()) {
-        try {
-          if (dbName == 'recents') {
-            await RecentsDB().removeRecent(path);
-          } else if (dbName == 'favorites') {
-            await FavoritesDB().removeFavorite(path);
-          } else if (dbName == 'most_played') {
-            await database.delete(
-              'most_played',
-              where: 'path = ?',
-              whereArgs: [path],
-            );
-          }
-          cleanedCount++;
-        } catch (e) {
-          // print('⚠️ Error al limpiar ruta $path de $dbName: $e');
-        }
-      }
-    }
-    
-    if (cleanedCount > 0) {
-      // print('🧹 Limpiados $cleanedCount archivos faltantes de $dbName');
-    }
-  }
-
-  /// Limpia rutas faltantes de playlists
-  static Future<void> _cleanMissingPlaylistPaths(
-    PlaylistsDB db,
-    List<String> paths,
-  ) async {
-    final database = await db.database;
-    int cleanedCount = 0;
-    
-    for (final path in paths) {
-      final file = File(path);
-      if (!await file.exists()) {
-        try {
-          await database.delete(
-            'playlist_songs',
-            where: 'song_path = ?',
-            whereArgs: [path],
-          );
-          cleanedCount++;
-        } catch (e) {
-          // print('⚠️ Error al limpiar ruta $path de playlists: $e');
-        }
-      }
-    }
-    
-    if (cleanedCount > 0) {
-      // print('🧹 Limpiados $cleanedCount archivos faltantes de playlists');
-    }
   }
 }

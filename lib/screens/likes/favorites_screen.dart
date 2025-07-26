@@ -13,6 +13,8 @@ import 'package:music/utils/db/recent_db.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:music/utils/db/shortcuts_db.dart';
 import 'package:mini_music_visualizer/mini_music_visualizer.dart';
+import 'package:music/utils/db/playlist_model.dart' as hive_model;
+import 'package:music/screens/play/player_screen.dart';
 
 enum OrdenFavoritos { normal, alfabetico, invertido, ultimoAgregado }
 
@@ -107,11 +109,8 @@ class _FavoritesScreenState extends State<FavoritesScreen>
   Future<void> _preloadArtworksForSongs(List<SongModel> songs) async {
     try {
       for (final song in songs.take(20)) {
-        unawaited(OnAudioQuery().queryArtwork(
-          song.id,
-          ArtworkType.AUDIO,
-          size: 256,
-        ));
+        // Usar el sistema de caché del MyAudioHandler en lugar de OnAudioQuery directamente
+        unawaited(getOrCacheArtwork(song.id, song.data));
       }
     } catch (e) {
       // Ignorar errores de precarga
@@ -141,6 +140,41 @@ class _FavoritesScreenState extends State<FavoritesScreen>
       await handler.play();
       return;
     }
+
+    // Limpiar la cola y el MediaItem antes de mostrar la nueva canción
+    (audioHandler as MyAudioHandler).queue.add([]);
+    (audioHandler as MyAudioHandler).mediaItem.add(null);
+    
+    // Precargar la carátula antes de crear el MediaItem temporal
+    Uri? cachedArtUri;
+    if (artworkCache.containsKey(song.data)) {
+      cachedArtUri = artworkCache[song.data];
+    } else {
+      // Si no está en caché, intentar cargarla inmediatamente
+      try {
+        cachedArtUri = await getOrCacheArtwork(song.id, song.data);
+      } catch (e) {
+        // Si falla, continuar sin carátula
+      }
+    }
+    
+    // Crear MediaItem temporal para mostrar el overlay inmediatamente
+    final tempMediaItem = MediaItem(
+      id: song.data,
+      title: song.title,
+      artist: song.artist,
+      duration: (song.duration != null && song.duration! > 0)
+          ? Duration(milliseconds: song.duration!)
+          : null,
+      artUri: cachedArtUri,
+      extras: {
+        'songId': song.id,
+        'albumId': song.albumId,
+        'data': song.data,
+        'queueIndex': 0,
+      },
+    );
+    (audioHandler as MyAudioHandler).mediaItem.add(tempMediaItem);
 
     // Solo guardar el origen si se va a cambiar la cola
     final prefs = await SharedPreferences.getInstance();
@@ -247,7 +281,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     return texto.toLowerCase();
   }
 
-  void _onSongSelected(SongModel song) {
+  void _onSongSelected(SongModel song) async {
     try {
       (audioHandler as MyAudioHandler).isShuffleNotifier.value = false;
     } catch (_) {}
@@ -264,11 +298,93 @@ class _FavoritesScreenState extends State<FavoritesScreen>
       });
       return;
     }
-    _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 300), () async {
-      if (!mounted) return;
-      await _playSong(song);
+    
+    // Deshabilitar temporalmente la navegación del overlay
+    overlayPlayerNavigationEnabled.value = false;
+    
+    // Precargar la carátula antes de mostrar el overlay
+    unawaited(_preloadArtworkForSong(song));
+    
+    // Mostrar overlay inmediatamente al tocar una canción
+    if (!overlayVisibleNotifier.value) {
+      overlayVisibleNotifier.value = true;
+    }
+    
+    // Obtener la carátula para la pantalla del reproductor
+    final songId = song.id;
+    final songPath = song.data;
+    final artUri = await getOrCacheArtwork(songId, songPath);
+    
+    // Crear el MediaItem para la pantalla del reproductor
+    final mediaItem = MediaItem(
+      id: song.data,
+      title: song.title,
+      artist: song.artist,
+      duration: (song.duration != null && song.duration! > 0)
+          ? Duration(milliseconds: song.duration!)
+          : null,
+      artUri: artUri,
+      extras: {
+        'songId': song.id,
+        'albumId': song.albumId,
+        'data': song.data,
+      },
+    );
+    
+    // Navegar a la pantalla del reproductor primero
+    if (!mounted) return;
+    Navigator.of(context).push(
+      PageRouteBuilder(
+        pageBuilder: (context, animation, secondaryAnimation) =>
+          FullPlayerScreen(
+            initialMediaItem: mediaItem,
+            initialArtworkUri: artUri,
+          ),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          return SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(0, 1),
+              end: Offset.zero,
+            ).animate(CurvedAnimation(
+              parent: animation,
+              curve: Curves.easeOutCubic,
+            )),
+            child: child,
+          );
+        },
+        transitionDuration: const Duration(milliseconds: 350),
+      ),
+    );
+    
+    // Activar indicador de carga
+    playLoadingNotifier.value = true;
+    
+    // Reproducir la canción después de un breve delay para que se abra la pantalla
+    Future.delayed(const Duration(milliseconds: 600), () {
+      if (mounted) {
+        _playSong(song);
+        // Desactivar indicador de carga después de reproducir
+        Future.delayed(const Duration(milliseconds: 200), () {
+          playLoadingNotifier.value = false;
+        });
+      }
     });
+    
+    // Rehabilitar la navegación del overlay después de un delay
+    Future.delayed(const Duration(milliseconds: 1000), () {
+      overlayPlayerNavigationEnabled.value = true;
+    });
+  }
+
+  Future<void> _preloadArtworkForSong(SongModel song) async {
+    try {
+      // Si no está en caché, cargarla inmediatamente
+      if (!artworkCache.containsKey(song.data)) {
+        await getOrCacheArtwork(song.id, song.data);
+      }
+    } catch (e) {
+      // Ignorar errores de precarga
+    }
   }
 
   void _handleLongPress(BuildContext context, SongModel song) async {
@@ -328,10 +444,10 @@ class _FavoritesScreenState extends State<FavoritesScreen>
   }
 
   Future<void> _handleAddToPlaylistSingle(BuildContext context, SongModel song) async {
-    final playlists = List<Map<String, dynamic>>.from(await PlaylistsDB().getAllPlaylists());
+    final playlists = await PlaylistsDB().getAllPlaylists(); // List<PlaylistModel>
     if (!context.mounted) return;
     final TextEditingController playlistNameController = TextEditingController();
-    final selectedPlaylistId = await showDialog<int>(
+    final selectedPlaylistId = await showDialog<String>(
       context: context,
       builder: (context) {
         return StatefulBuilder(
@@ -343,9 +459,9 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                   for (final playlist in playlists)
                     SimpleDialogOption(
                       onPressed: () {
-                        Navigator.of(context).pop(playlist['id'] as int);
+                        Navigator.of(context).pop(playlist.id);
                       },
-                      child: Text(playlist['name'] as String),
+                      child: Text(playlist.name),
                     ),
                   const Divider(),
                 ],
@@ -366,9 +482,8 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                   final name = playlistNameController.text.trim();
                   if (name.isEmpty) return;
                   final id = await PlaylistsDB().createPlaylist(name);
-                  playlistsShouldReload.value = !playlistsShouldReload.value;
                   setStateDialog(() {
-                    playlists.insert(0, {'id': id, 'name': name});
+                    playlists.insert(0, hive_model.PlaylistModel(id: id, name: name, songPaths: []));
                   });
                   playlistNameController.clear();
                   if (context.mounted) {
@@ -387,10 +502,10 @@ class _FavoritesScreenState extends State<FavoritesScreen>
   }
 
   Future<void> _handleAddToPlaylistMassive(BuildContext context) async {
-    final playlists = List<Map<String, dynamic>>.from(await PlaylistsDB().getAllPlaylists());
+    final playlists = await PlaylistsDB().getAllPlaylists(); // List<PlaylistModel>
     if (!context.mounted) return;
     final TextEditingController playlistNameController = TextEditingController();
-    final selectedPlaylistId = await showDialog<int>(
+    final selectedPlaylistId = await showDialog<String>(
       context: context,
       builder: (context) {
         return StatefulBuilder(
@@ -402,9 +517,9 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                   for (final playlist in playlists)
                     SimpleDialogOption(
                       onPressed: () {
-                        Navigator.of(context).pop(playlist['id'] as int);
+                        Navigator.of(context).pop(playlist.id);
                       },
-                      child: Text(playlist['name'] as String),
+                      child: Text(playlist.name),
                     ),
                   const Divider(),
                 ],
@@ -427,7 +542,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                   final id = await PlaylistsDB().createPlaylist(name);
                   playlistsShouldReload.value = !playlistsShouldReload.value;
                   setStateDialog(() {
-                    playlists.insert(0, {'id': id, 'name': name});
+                    playlists.insert(0, hive_model.PlaylistModel(id: id, name: name, songPaths: []));
                   });
                   playlistNameController.clear();
                   if (context.mounted) {
@@ -661,7 +776,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                               : _favorites;
                       if (songsToShow.isNotEmpty) {
                         final random = (songsToShow.toList()..shuffle()).first;
-                        _playSong(random);
+                        _onSongSelected(random);
                       }
                     },
                   ),
@@ -891,7 +1006,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                                             ? (audioHandler as MyAudioHandler).pause()
                                             : (audioHandler as MyAudioHandler).play();
                                       } else {
-                                        _playSong(song);
+                                        _onSongSelected(song);
                                       }
                                     },
                                   ),

@@ -14,6 +14,9 @@ import 'package:music/utils/yt_search/yt_screen.dart';
 import 'package:music/l10n/locale_provider.dart';
 import 'package:music/utils/notifiers.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:hive_flutter/hive_flutter.dart';
+import 'package:music/utils/db/playlist_model.dart';
+import 'package:music/utils/audio/synced_lyrics_service.dart';
 
 // Cambiar de late final a nullable para mejor manejo de errores
 AudioHandler? audioHandler;
@@ -22,6 +25,7 @@ bool _audioHandlerInitializing = false;
 
 /// Notifier para indicar cuando el AudioService está listo
 final ValueNotifier<bool> audioServiceReady = ValueNotifier<bool>(false);
+final ValueNotifier<bool> overlayVisibleNotifier = ValueNotifier<bool>(false); // Notificador global para el overlay
 
 /// Verifica si el AudioService está inicializando
 bool get isAudioServiceInitializing => _audioHandlerInitializing;
@@ -168,6 +172,9 @@ final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterL
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await Hive.initFlutter();
+  Hive.registerAdapter(PlaylistModelAdapter());
+  await SyncedLyricsService.initialize();
 
   // Inicialización de notificaciones locales
   const AndroidInitializationSettings initializationSettingsAndroid =

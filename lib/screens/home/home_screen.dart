@@ -18,6 +18,7 @@ import 'package:music/l10n/locale_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:music/utils/db/shortcuts_db.dart';
 import 'package:mini_music_visualizer/mini_music_visualizer.dart';
+import 'package:music/screens/play/player_screen.dart';
 import 'dart:async';
 
 enum OrdenCancionesPlaylist { normal, alfabetico, invertido, ultimoAgregado }
@@ -243,18 +244,14 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Future<void> _loadPlaylists() async {
     final playlists = await PlaylistsDB().getAllPlaylists();
-    final db = PlaylistsDB();
     List<Map<String, dynamic>> playlistsWithSongs = [];
     for (final playlist in playlists) {
-      final dbInstance = await db.database;
-      final songsRows = await dbInstance.query(
-        'playlist_songs',
-        where: 'playlist_id = ?',
-        whereArgs: [playlist['id']],
-        orderBy: 'id DESC',
-      );
-      final songPaths = songsRows.map((e) => e['song_path'] as String).toList();
-      playlistsWithSongs.add({...playlist, 'songs': songPaths});
+      // playlist es un PlaylistModel, accede directo a sus campos
+      playlistsWithSongs.add({
+        'id': playlist.id,
+        'name': playlist.name,
+        'songs': playlist.songPaths,
+      });
     }
     setState(() {
       _playlists = playlistsWithSongs;
@@ -289,11 +286,19 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Future<void> _preloadArtworksForSongs(List<SongModel> songs) async {
     try {
       for (final song in songs.take(20)) {
-        unawaited(OnAudioQuery().queryArtwork(
-          song.id,
-          ArtworkType.AUDIO,
-          size: 256,
-        ));
+        // Usar el sistema de caché del MyAudioHandler en lugar de OnAudioQuery directamente
+        unawaited(getOrCacheArtwork(song.id, song.data));
+      }
+    } catch (e) {
+      // Ignorar errores de precarga
+    }
+  }
+
+  Future<void> _preloadArtworkForSong(SongModel song) async {
+    try {
+      // Si no está en caché, cargarla inmediatamente
+      if (!artworkCache.containsKey(song.data)) {
+        await getOrCacheArtwork(song.id, song.data);
       }
     } catch (e) {
       // Ignorar errores de precarga
@@ -424,6 +429,76 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _lastBottomInset = View.of(context).viewInsets.bottom;
   }
 
+  Future<void> _playSongAndOpenPlayer(SongModel song, List<SongModel> queue, {String? queueSource}) async {
+    // Deshabilitar temporalmente la navegación del overlay
+    overlayPlayerNavigationEnabled.value = false;
+    
+    // Obtener la carátula para la pantalla del reproductor
+    final songId = song.id;
+    final songPath = song.data;
+    final artUri = await getOrCacheArtwork(songId, songPath);
+    
+    // Crear el MediaItem para la pantalla del reproductor
+    final mediaItem = MediaItem(
+      id: song.data,
+      title: song.title,
+      artist: song.artist,
+      duration: (song.duration != null && song.duration! > 0)
+          ? Duration(milliseconds: song.duration!)
+          : null,
+      artUri: artUri,
+      extras: {
+        'songId': song.id,
+        'albumId': song.albumId,
+        'data': song.data,
+      },
+    );
+    
+    // Navegar a la pantalla del reproductor primero
+    if (!mounted) return;
+    Navigator.of(context).push(
+      PageRouteBuilder(
+        pageBuilder: (context, animation, secondaryAnimation) =>
+          FullPlayerScreen(
+            initialMediaItem: mediaItem,
+            initialArtworkUri: artUri,
+          ),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          return SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(0, 1),
+              end: Offset.zero,
+            ).animate(CurvedAnimation(
+              parent: animation,
+              curve: Curves.easeOutCubic,
+            )),
+            child: child,
+          );
+        },
+        transitionDuration: const Duration(milliseconds: 350),
+      ),
+    );
+    
+    // Activar indicador de carga
+    playLoadingNotifier.value = true;
+    
+    // Reproducir la canción después de un breve delay para que se abra la pantalla
+    Future.delayed(const Duration(milliseconds: 600), () {
+      if (mounted) {
+        _playSong(song, queue, queueSource: queueSource);
+        // Desactivar indicador de carga después de reproducir
+        Future.delayed(const Duration(milliseconds: 200), () {
+          playLoadingNotifier.value = false;
+        });
+      }
+    });
+    
+    // Rehabilitar la navegación del overlay después de un delay
+    Future.delayed(const Duration(milliseconds: 1000), () {
+      overlayPlayerNavigationEnabled.value = true;
+    });
+  }
+
   Future<void> _playSong(SongModel song, List<SongModel> queue, {String? queueSource}) async {
     // Desactiva visualmente el shuffle
     try {
@@ -453,6 +528,41 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         await handler.play();
         return;
       }
+
+      // Limpiar la cola y el MediaItem antes de mostrar la nueva canción
+      handler.queue.add([]);
+      handler.mediaItem.add(null);
+      
+      // Crear MediaItem temporal para mostrar el overlay inmediatamente
+      Uri? cachedArtUri;
+      if (artworkCache.containsKey(song.data)) {
+        cachedArtUri = artworkCache[song.data];
+      } else {
+        // Si no está en caché, intentar cargarla inmediatamente
+        try {
+          cachedArtUri = await getOrCacheArtwork(song.id, song.data);
+        } catch (e) {
+          // Si falla, continuar sin carátula
+        }
+      }
+      
+      final tempMediaItem = MediaItem(
+        id: song.data,
+        album: song.album ?? '',
+        title: song.title,
+        artist: song.artist ?? '',
+        duration: (song.duration != null && song.duration! > 0)
+            ? Duration(milliseconds: song.duration!)
+            : null,
+        artUri: cachedArtUri,
+        extras: {
+          'songId': song.id,
+          'albumId': song.albumId,
+          'data': song.data,
+          'queueIndex': 0,
+        },
+      );
+      handler.mediaItem.add(tempMediaItem);
 
       int before = (maxQueueSongs / 2).floor();
       int after = maxQueueSongs - before;
@@ -840,7 +950,9 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                     : _playlistSongs;
                             if (songsToShow.isNotEmpty) {
                               final random = (songsToShow.toList()..shuffle()).first;
-                              _playSong(random, songsToShow);
+                              // Precargar la carátula antes de reproducir
+                              unawaited(_preloadArtworkForSong(random));
+                              _playSongAndOpenPlayer(random, songsToShow, queueSource: _selectedPlaylist?['name'] ?? '');
                             }
                           },
                         ),
@@ -1027,7 +1139,9 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                         ? (audioHandler as MyAudioHandler).pause()
                                         : (audioHandler as MyAudioHandler).play();
                                   } else {
-                                    _playSong(song, songsToShow);
+                                    // Precargar la carátula antes de reproducir
+                                    unawaited(_preloadArtworkForSong(song));
+                                    _playSongAndOpenPlayer(song, songsToShow);
                                   }
                                 },
                               ),
@@ -1036,10 +1150,12 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                   ? Colors.white.withValues(alpha: 0.1)
                                   : Theme.of(context).colorScheme.primaryContainer,
                               onTap: () async {
+                                // Precargar la carátula antes de reproducir
+                                unawaited(_preloadArtworkForSong(song));
                                 _debounce?.cancel();
                                 _debounce = Timer(const Duration(milliseconds: 300), () async {
                                   if (!mounted) return;
-                                  await _playSong(song, songsToShow);
+                                  await _playSongAndOpenPlayer(song, songsToShow);
                                 });
                               },
                               onLongPress: () {
@@ -1143,7 +1259,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                   _debounce?.cancel();
                                   _debounce = Timer(const Duration(milliseconds: 300), () async {
                                     if (!mounted) return;
-                                    await _playSong(song, songsToShow);
+                                    await _playSongAndOpenPlayer(song, songsToShow);
                                   });
                                 }
                               },
@@ -1319,7 +1435,9 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                         ? (audioHandler as MyAudioHandler).pause()
                                         : (audioHandler as MyAudioHandler).play();
                                   } else {
-                                    _playSong(song, songsToShow);
+                                    // Precargar la carátula antes de reproducir
+                                    unawaited(_preloadArtworkForSong(song));
+                                    _playSongAndOpenPlayer(song, songsToShow);
                                   }
                                 },
                               ),
@@ -1431,10 +1549,12 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                               song.data;
                                           return AnimatedTapButton(
                                             onTap: () {
+                                              // Precargar la carátula antes de reproducir
+                                              unawaited(_preloadArtworkForSong(song));
                                               _debounce?.cancel();
                                               _debounce = Timer(const Duration(milliseconds: 300), () async {
                                                 if (!mounted) return;
-                                                await _playSong(song, _accessDirectSongs, queueSource: LocaleProvider.tr('quick_access_songs'));
+                                                await _playSongAndOpenPlayer(song, _accessDirectSongs, queueSource: LocaleProvider.tr('quick_access_songs'));
                                               });
                                             },
                                             onLongPress: () async {
@@ -1771,10 +1891,12 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                       ),
                                                     ),
                                                     onTap: () {
+                                                      // Precargar la carátula antes de reproducir
+                                                      unawaited(_preloadArtworkForSong(song));
                                                       _debounce?.cancel();
                                                       _debounce = Timer(const Duration(milliseconds: 300), () async {
                                                         if (!mounted) return;
-                                                        await _playSong(song, _mostPlayed, queueSource: LocaleProvider.tr('quick_pick_songs'));
+                                                        await _playSongAndOpenPlayer(song, _mostPlayed, queueSource: LocaleProvider.tr('quick_pick_songs'));
                                                       });
                                                     },
                                                     onLongPress: () =>

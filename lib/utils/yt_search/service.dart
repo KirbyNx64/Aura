@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:dio/dio.dart';
 
-CancelToken? _searchCancelToken; // <-- Agregado para cancelación global
+CancelToken? _searchCancelToken;
 
 const domain = "https://music.youtube.com/";
 const String baseUrl = '${domain}youtubei/v1/';

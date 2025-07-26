@@ -1,57 +1,34 @@
-import 'package:sqflite/sqflite.dart';
-import 'package:path/path.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 
 class ArtworkDB {
-  static Database? _db;
+  static const String _boxName = 'artwork_cache';
+  static Box<String>? _box;
 
-  static Future<Database> get database async {
-    if (_db != null) return _db!;
-    _db = await _initDB();
-    return _db!;
-  }
-
-  static Future<Database> _initDB() async {
-    final dbPath = await getDatabasesPath();
-    final path = join(dbPath, 'artwork_cache.db');
-    return await openDatabase(
-      path,
-      version: 1,
-      onCreate: (db, version) async {
-        await db.execute('''
-          CREATE TABLE artwork_cache (
-            song_path TEXT PRIMARY KEY,
-            artwork_path TEXT
-          )
-        ''');
-      },
-    );
+  static Future<Box<String>> get box async {
+    if (_box != null && _box!.isOpen) return _box!;
+    _box = await Hive.openBox<String>(_boxName);
+    return _box!;
   }
 
   static Future<void> insertArtwork(String songPath, String artworkPath) async {
-    final db = await database;
-    await db.insert(
-      'artwork_cache',
-      {'song_path': songPath, 'artwork_path': artworkPath},
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    final artworkBox = await box;
+    await artworkBox.put(songPath, artworkPath);
   }
 
   static Future<String?> getArtwork(String songPath) async {
-    final db = await database;
-    final result = await db.query(
-      'artwork_cache',
-      where: 'song_path = ?',
-      whereArgs: [songPath],
-      limit: 1,
-    );
-    if (result.isNotEmpty) {
-      return result.first['artwork_path'] as String;
-    }
-    return null;
+    final artworkBox = await box;
+    return artworkBox.get(songPath);
   }
 
   static Future<void> clearCache() async {
-    final db = await database;
-    await db.delete('artwork_cache');
+    final artworkBox = await box;
+    await artworkBox.clear();
+  }
+
+  static Future<void> closeBox() async {
+    if (_box != null && _box!.isOpen) {
+      await _box!.close();
+      _box = null;
+    }
   }
 }

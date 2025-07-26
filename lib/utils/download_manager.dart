@@ -401,7 +401,7 @@ class DownloadManager {
       MediaScanner.loadMedia(path: mp3Path);
 
       onProgressUpdate?.call(1.0);
-      await Future.delayed(const Duration(seconds: 2));
+      await Future.delayed(const Duration(seconds: 1));
       
       foldersShouldReload.value = !foldersShouldReload.value;
 
@@ -463,7 +463,7 @@ class DownloadManager {
       MediaScanner.loadMedia(path: m4aPath);
 
       onProgressUpdate?.call(1.0);
-      await Future.delayed(const Duration(seconds: 2));
+      await Future.delayed(const Duration(seconds: 1));
       
       foldersShouldReload.value = !foldersShouldReload.value;
 

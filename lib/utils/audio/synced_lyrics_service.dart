@@ -1,50 +1,52 @@
 import 'package:audio_service/audio_service.dart';
 import 'package:dio/dio.dart';
-import 'package:sqflite/sqflite.dart';
-import 'package:path/path.dart';
+import 'package:hive_flutter/hive_flutter.dart';
+
+part 'synced_lyrics_service.g.dart';
+
+@HiveType(typeId: 0)
+class LyricsData extends HiveObject {
+  @HiveField(0)
+  String id;
+
+  @HiveField(1)
+  String? synced;
+
+  @HiveField(2)
+  String? plainLyrics;
+
+  LyricsData({
+    required this.id,
+    this.synced,
+    this.plainLyrics,
+  });
+}
 
 class SyncedLyricsService {
-  static Database? _db;
+  static const String _boxName = 'lyrics_box';
+  static Box<LyricsData>? _box;
 
-  static Future<Database> get database async {
-    if (_db != null) return _db!;
-    _db = await _initDb();
-    return _db!;
+  static Future<Box<LyricsData>> get box async {
+    if (_box != null) return _box!;
+    _box = await Hive.openBox<LyricsData>(_boxName);
+    return _box!;
   }
 
-  static Future<Database> _initDb() async {
-    final dbPath = await getDatabasesPath();
-    final path = join(dbPath, 'lyrics.db');
-    return openDatabase(
-      path,
-      version: 1,
-      onCreate: (db, version) async {
-        await db.execute('''
-          CREATE TABLE lyrics (
-            id TEXT PRIMARY KEY,
-            synced TEXT,
-            plainLyrics TEXT
-          )
-        ''');
-      },
-    );
+  static Future<void> initialize() async {
+    await Hive.initFlutter();
+    Hive.registerAdapter(LyricsDataAdapter());
   }
 
-  static Future<Map<String, dynamic>?> getSyncedLyrics(
+  static Future<LyricsData?> getSyncedLyrics(
     MediaItem song, {
     int? durInSec,
   }) async {
-    final db = await database;
+    final lyricsBox = await box;
 
     // Buscar en la base local
-    final result = await db.query(
-      'lyrics',
-      where: 'id = ?',
-      whereArgs: [song.id],
-      limit: 1,
-    );
-    if (result.isNotEmpty) {
-      return result.first;
+    final existingLyrics = lyricsBox.get(song.id);
+    if (existingLyrics != null) {
+      return existingLyrics;
     }
 
     // Si no está, buscar online
@@ -57,16 +59,12 @@ class SyncedLyricsService {
     try {
       final response = (await Dio().get(url)).data;
       if (response["syncedLyrics"] != null) {
-        final lyricsData = {
-          "id": song.id,
-          "synced": response["syncedLyrics"],
-          "plainLyrics": response["plainLyrics"],
-        };
-        await db.insert(
-          'lyrics',
-          lyricsData,
-          conflictAlgorithm: ConflictAlgorithm.replace,
+        final lyricsData = LyricsData(
+          id: song.id,
+          synced: response["syncedLyrics"],
+          plainLyrics: response["plainLyrics"],
         );
+        await lyricsBox.put(song.id, lyricsData);
         return lyricsData;
       }
     } on DioException {
@@ -76,7 +74,7 @@ class SyncedLyricsService {
   }
 
   static Future<void> clearLyrics() async {
-    final db = await database;
-    await db.delete('lyrics');
+    final lyricsBox = await box;
+    await lyricsBox.clear();
   }
 }

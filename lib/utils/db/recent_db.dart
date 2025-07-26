@@ -1,5 +1,4 @@
-import 'package:sqflite/sqflite.dart';
-import 'package:path/path.dart';
+import 'package:hive/hive.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 
 class RecentsDB {
@@ -8,72 +7,37 @@ class RecentsDB {
   RecentsDB._internal();
 
   static const int maxRecents = 50;
-  Database? _db;
+  Box<int>? _box;
 
-  Future<Database> get database async {
-    if (_db != null) return _db!;
-    _db = await _initDB();
-    return _db!;
-  }
-
-  Future<Database> _initDB() async {
-    final dbPath = await getDatabasesPath();
-    final path = join(dbPath, 'recents.db');
-    return await openDatabase(
-      path,
-      version: 1,
-      onCreate: (db, version) async {
-        await db.execute('''
-          CREATE TABLE recents(
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            path TEXT NOT NULL UNIQUE,
-            timestamp INTEGER NOT NULL
-          );
-        ''');
-      },
-    );
+  Future<Box<int>> get box async {
+    if (_box != null) return _box!;
+    _box = await Hive.openBox<int>('recents');
+    return _box!;
   }
 
   Future<void> addRecent(SongModel song) async {
-    final db = await database;
-    final now = DateTime.now().millisecondsSinceEpoch;
-    // Inserta o actualiza la canción con la nueva marca de tiempo
-    await db.insert('recents', {
-      'path': song.data,
-      'timestamp': now,
-    }, conflictAlgorithm: ConflictAlgorithm.replace);
-    // Borra las más antiguas si hay más de 50
-    await db.execute('''
-      DELETE FROM recents
-      WHERE id NOT IN (
-        SELECT id FROM recents ORDER BY timestamp DESC LIMIT $maxRecents
-      )
-    ''');
+    await addRecentPath(song.data);
   }
 
   Future<void> addRecentPath(String path) async {
-    final db = await database;
+    final b = await box;
     final now = DateTime.now().millisecondsSinceEpoch;
-    await db.insert('recents', {
-      'path': path,
-      'timestamp': now,
-    }, conflictAlgorithm: ConflictAlgorithm.replace);
-    await db.execute('''
-      DELETE FROM recents
-      WHERE id NOT IN (
-        SELECT id FROM recents ORDER BY timestamp DESC LIMIT $maxRecents
-      )
-    ''');
+    await b.put(path, now);
+
+    // Limita a los 50 más recientes
+    if (b.length > maxRecents) {
+      final entries = b.toMap().entries.toList();
+      entries.sort((a, b) => b.value.compareTo(a.value)); // Más recientes primero
+      final toRemove = entries.skip(maxRecents).map((e) => e.key).toList();
+      await b.deleteAll(toRemove);
+    }
   }
 
   Future<List<SongModel>> getRecents() async {
-    final db = await database;
-    final rows = await db.query(
-      'recents',
-      orderBy: 'timestamp DESC',
-      limit: maxRecents,
-    );
-    final List<String> paths = rows.map((e) => e['path'] as String).toList();
+    final b = await box;
+    final entries = b.toMap().entries.toList();
+    entries.sort((a, b) => b.value.compareTo(a.value)); // Más recientes primero
+    final paths = entries.take(maxRecents).map((e) => e.key as String).toList();
 
     final OnAudioQuery query = OnAudioQuery();
     final allSongs = await query.querySongs();
@@ -89,12 +53,12 @@ class RecentsDB {
   }
 
   Future<void> removeRecent(String path) async {
-    final db = await database;
-    await db.delete('recents', where: 'path = ?', whereArgs: [path]);
+    final b = await box;
+    await b.delete(path);
   }
 
   Future<void> clearAll() async {
-    final db = await database;
-    await db.delete('recents');
+    final b = await box;
+    await b.clear();
   }
 }

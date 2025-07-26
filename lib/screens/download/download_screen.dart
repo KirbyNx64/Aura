@@ -24,6 +24,7 @@ import 'package:music/main.dart';
 import 'package:image/image.dart' as img;
 import 'package:music/l10n/locale_provider.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:music/utils/yt_search/youtube_music_service.dart';
 
 class DownloadScreen extends StatefulWidget {
   const DownloadScreen({super.key});
@@ -59,6 +60,9 @@ class _DownloadScreenState extends State<DownloadScreen>
   int _downloadedVideos = 0;
   String? _playlistTitle;
   bool _isPlaylistDownloading = false;
+  
+  // Servicio de YouTube Music para manejar playlists grandes
+  final YouTubeMusicService _youtubeMusicService = YouTubeMusicService();
 
   @override
   void initState() {
@@ -167,7 +171,7 @@ class _DownloadScreenState extends State<DownloadScreen>
            url.contains('youtube.com/playlist');
   }
 
-  // Nuevo método para obtener información de playlist
+  // Nuevo método para obtener información de playlist con continuaciones
   Future<void> _fetchPlaylistInfo(String url) async {
     setState(() {
       _isDownloading = true;
@@ -191,17 +195,116 @@ class _DownloadScreenState extends State<DownloadScreen>
         _totalVideos = playlist.videoCount ?? 0;
       });
 
-      // Obtener videos de la playlist
-      final videos = <Video>[];
-      await for (final video in yt.playlists.getVideos(playlistId)) {
-        videos.add(video);
+      // Obtener videos usando el servicio de YouTube Music (maneja continuaciones)
+      List<Video> videos = [];
+      
+      try {
+        // Intentar primero con YouTube Music API
+        videos = await _youtubeMusicService.getPlaylistVideosWithContinuations(playlistId, onVideoFound: (video, totalFound) {
+          // Actualizar UI en tiempo real cuando se encuentra un video
+          if (mounted) {
+            setState(() {
+              _currentVideoIndex = totalFound;
+              _currentTitle = video.title;
+              _currentArtist = video.author;
+            });
+          }
+        });
+        
+        // Actualizar progreso final
+        if (mounted) {
+          setState(() {
+            _currentVideoIndex = videos.length;
+          });
+        }
+        
+        // Si no obtuvimos suficientes videos, intentar con YouTube Explode como fallback
+        if (videos.length < _totalVideos && _totalVideos > 0) {
+          // print('YouTube Music API obtuvo ${videos.length} videos, intentando con YouTube Explode...');
+          
+          final ytVideos = <Video>[];
+          await for (final video in yt.playlists.getVideos(playlistId)) {
+            // Evitar duplicados
+            if (!videos.any((v) => v.id == video.id)) {
+              ytVideos.add(video);
+            }
+          }
+          
+          // Combinar videos únicos
+          videos.addAll(ytVideos);
+          
+          if (mounted) {
+            setState(() {
+              _currentVideoIndex = videos.length;
+            });
+          }
+        }
+        
+      } catch (e) {
+        // print(' 👻 Error con YouTube Music API, usando solo YouTube Explode: $e');
+        
+        // Fallback completo a YouTube Explode
+        await for (final video in yt.playlists.getVideos(playlistId)) {
+          videos.add(video);
+          
+          if (mounted) {
+            setState(() {
+              _currentVideoIndex = videos.length;
+            });
+          }
+        }
       }
+      
       setState(() {
         _playlistVideos = videos;
+        _currentVideoIndex = 0; // Reset para descarga
       });
 
       if (videos.isEmpty) {
         throw Exception('No se encontraron videos en la playlist');
+      }
+
+      // Mostrar información sobre el resultado
+      if (mounted) {
+        if (_totalVideos > 0 && videos.length < _totalVideos) {
+          // Si no se obtuvieron todos los videos, mostrar advertencia
+          showDialog(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: Text(LocaleProvider.tr('playlist_partial_fetch')),
+              content: Text(
+                '${LocaleProvider.tr('playlist_partial_fetch_desc')}\n\n'
+                '${LocaleProvider.tr('videos_found')}: ${videos.length}\n'
+                '${LocaleProvider.tr('total_videos')}: $_totalVideos\n\n'
+                '${LocaleProvider.tr('will_download_available')}',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: Text(LocaleProvider.tr('continue_anyway')),
+                ),
+              ],
+            ),
+          );
+        } else if (videos.length > 100) {
+          // Mostrar confirmación para playlists grandes
+          showDialog(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: Text(LocaleProvider.tr('large_playlist_confirmation')),
+              content: Text(
+                '${LocaleProvider.tr('large_playlist_confirmation_desc')}\n\n'
+                '${LocaleProvider.tr('videos_found')}: ${videos.length}\n'
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: Text(LocaleProvider.tr('continue_anyway')),
+                ),
+              ],
+            ),
+          );
+        }
       }
 
     } catch (e) {
@@ -271,7 +374,7 @@ class _DownloadScreenState extends State<DownloadScreen>
         _progress = 1.0;
       });
 
-      await Future.delayed(const Duration(seconds: 2));
+      await Future.delayed(const Duration(seconds: 1));
       foldersShouldReload.value = !foldersShouldReload.value;
 
       // Guardar valores antes de resetear
@@ -1487,7 +1590,7 @@ class _DownloadScreenState extends State<DownloadScreen>
       MediaScanner.loadMedia(path: mp3Path);
 
       setState(() => _progress = 1.0);
-      await Future.delayed(const Duration(seconds: 2));
+      await Future.delayed(const Duration(seconds: 1));
       
       // Solo actualizar folders si no es descarga de playlist
       if (!isPlaylistDownload) {
@@ -1572,7 +1675,7 @@ class _DownloadScreenState extends State<DownloadScreen>
       MediaScanner.loadMedia(path: m4aPath);
 
       setState(() => _progress = 1.0);
-      await Future.delayed(const Duration(seconds: 2));
+      await Future.delayed(const Duration(seconds: 1));
       // Solo actualizar folders si no es descarga de playlist
       if (!isPlaylistDownload) {
         foldersShouldReload.value = !foldersShouldReload.value;
@@ -2023,6 +2126,97 @@ class _DownloadScreenState extends State<DownloadScreen>
                   ],
                 ),
               ),
+              // Nuevo: UI para obtención de información de playlist
+              if (_isPlaylist && _isDownloading && _playlistVideos.isEmpty)
+              Container(
+                width: double.infinity,
+                margin: const EdgeInsets.symmetric(vertical: 8),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surfaceContainer,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withAlpha((0.05 * 255).toInt()),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.playlist_play,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: TranslatedText(
+                            'fetching_playlist_info',
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        TranslatedText(
+                          'videos_found_so_far',
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            fontSize: 14,
+                          ),
+                        ),
+                        Text(
+                          ': $_currentVideoIndex',
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            fontSize: 14,
+                          ),
+                        ),
+                        if (_totalVideos > 0) ...[
+                          Text(
+                            ' / $_totalVideos',
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    if (_currentTitle != null) ...[
+                      Text(
+                        _currentTitle!,
+                        style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      if (_currentArtist != null) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          _currentArtist!,
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            fontSize: 12,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                      const SizedBox(height: 8),
+                    ],
+                    LinearProgressIndicator(
+                      value: _totalVideos > 0 ? (_currentVideoIndex / _totalVideos).clamp(0.0, 1.0) : null,
+                      minHeight: 8,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ],
+                ),
+              ),
               // Nuevo: UI para playlist detectada
               if (_isPlaylist && _playlistVideos.isNotEmpty && !_isPlaylistDownloading)
               Container(
@@ -2087,18 +2281,45 @@ class _DownloadScreenState extends State<DownloadScreen>
                       ],
                     ),
                     const SizedBox(height: 12),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        onPressed: _downloadPlaylist,
-                        icon: const Icon(Icons.download),
-                        label: TranslatedText('download_complete_playlist'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Theme.of(context).colorScheme.primary,
-                          foregroundColor: Theme.of(context).colorScheme.onPrimary,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: () {
+                              setState(() {
+                                _isPlaylist = false;
+                                _playlistVideos = [];
+                                _currentVideoIndex = 0;
+                                _totalVideos = 0;
+                                _downloadedVideos = 0;
+                                _playlistTitle = null;
+                                _isPlaylistDownloading = false;
+                                _isDownloading = false;
+                              });
+                            },
+                            icon: const Icon(Icons.cancel),
+                            label: TranslatedText('cancel'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.red.shade400,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                            ),
+                          ),
                         ),
-                      ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: _downloadPlaylist,
+                            icon: const Icon(Icons.download),
+                            label: TranslatedText('download_complete_playlist'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Theme.of(context).colorScheme.primary,
+                              foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),

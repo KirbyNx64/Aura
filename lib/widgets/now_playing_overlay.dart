@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
-import 'package:music/main.dart' show audioHandler, audioServiceReady;
+import 'package:music/main.dart' show audioHandler, audioServiceReady, overlayVisibleNotifier;
 import 'package:music/screens/play/player_screen.dart';
 import 'package:music/widgets/hero_cached.dart';
 import 'package:music/utils/audio/background_audio_handler.dart';
@@ -9,6 +9,7 @@ import 'package:music/utils/db/recent_db.dart';
 import 'package:marquee/marquee.dart';
 import 'package:music/utils/db/mostplayer_db.dart';
 import 'package:on_audio_query/on_audio_query.dart';
+import 'package:music/utils/notifiers.dart';
 
 // Función optimizada para actualizar más reproducidas
 Future<void> _updateMostPlayedAsync(String path) async {
@@ -37,6 +38,7 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> with TickerProvid
   String? _lastProcessedSongId;
   MediaItem? _lastKnownMediaItem;
   late AnimationController _playPauseController;
+  Timer? _temporaryItemTimer;
 
   @override
   void initState() {
@@ -51,6 +53,7 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> with TickerProvid
   @override
   void dispose() {
     _playPauseController.dispose();
+    _temporaryItemTimer?.cancel();
     super.dispose();
   }
   
@@ -66,11 +69,6 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> with TickerProvid
           stream: audioHandler?.mediaItem,
           builder: (context, snapshot) {
             final song = snapshot.data;
-            
-            // Mantener el último MediaItem conocido
-            if (song != null && song.id.isNotEmpty) {
-              _lastKnownMediaItem = song;
-            }
             
             // Mantener el último MediaItem conocido
             if (song != null && song.id.isNotEmpty) {
@@ -98,173 +96,234 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> with TickerProvid
               }
             }
 
-            
             final isLoading = (audioHandler as MyAudioHandler).initializingNotifier.value;
 
-            return GestureDetector(
-              behavior: HitTestBehavior.translucent,
-              onTap: () async {
-                if (isLoading) return;
-                final songId = currentSong.extras?['songId'] ?? 0;
-                final songPath = currentSong.extras?['data'] ?? '';
-                final artUri = await getOrCacheArtwork(songId, songPath);
-                if (!context.mounted) return;
-                Navigator.of(context).push(
-                  PageRouteBuilder(
-                    pageBuilder: (context, animation, secondaryAnimation) =>
-                      FullPlayerScreen(
-                        initialMediaItem: currentSong,
-                        initialArtworkUri: artUri,
-                      ),
-                    transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                      // El Hero se anima solo, solo animamos el resto del contenido
-                      return SlideTransition(
-                        position: Tween<Offset>(
-                          begin: const Offset(0, 1),
-                          end: Offset.zero,
-                        ).animate(CurvedAnimation(
-                          parent: animation,
-                          curve: Curves.easeOutCubic,
-                        )),
-                        child: child,
-                      );
-                    },
-                    transitionDuration: const Duration(milliseconds: 350),
-                  ),
-                );
-              },
-              onVerticalDragEnd: (details) async {
-                if (isLoading) return;
-                if (details.primaryVelocity != null &&
-                    details.primaryVelocity! < 0) {
-                  final currentSong = song;
-                  final songId = currentSong?.extras?['songId'] ?? 0;
-                  final songPath = currentSong?.extras?['data'] ?? '';
-                  final artUri = await getOrCacheArtwork(songId, songPath);
-                  if (!context.mounted) return;
-                  Navigator.of(context).push(
-                    PageRouteBuilder(
-                      pageBuilder: (context, animation, secondaryAnimation) =>
+            return ValueListenableBuilder<bool>(
+              valueListenable: overlayPlayerNavigationEnabled,
+              builder: (context, navigationEnabled, _) {
+                return GestureDetector(
+                  behavior: HitTestBehavior.translucent,
+                  onTap: () async {
+                    if (!overlayVisibleNotifier.value) {
+                      overlayVisibleNotifier.value = true;
+                    }
+                    if (isLoading || !navigationEnabled) return;
+                    final songId = currentSong.extras?['songId'] ?? 0;
+                    final songPath = currentSong.extras?['data'] ?? '';
+                    final artUri = await getOrCacheArtwork(songId, songPath);
+                    if (!context.mounted) return;
+                    Navigator.of(context).push(
+                      PageRouteBuilder(
+                        pageBuilder: (context, animation, secondaryAnimation) =>
                           FullPlayerScreen(
                             initialMediaItem: currentSong,
                             initialArtworkUri: artUri,
                           ),
-                      transitionsBuilder:
-                          (context, animation, secondaryAnimation, child) {
-                            final offsetAnimation =
-                                Tween<Offset>(
-                                  begin: const Offset(0, 1),
-                                  end: Offset.zero,
-                                ).animate(
-                                  CurvedAnimation(
-                                    parent: animation,
-                                    curve: Curves.easeOutCubic,
-                                  ),
+                        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                          // El Hero se anima solo, solo animamos el resto del contenido
+                          return SlideTransition(
+                            position: Tween<Offset>(
+                              begin: const Offset(0, 1),
+                              end: Offset.zero,
+                            ).animate(CurvedAnimation(
+                              parent: animation,
+                              curve: Curves.easeOutCubic,
+                            )),
+                            child: child,
+                          );
+                        },
+                        transitionDuration: const Duration(milliseconds: 350),
+                      ),
+                    );
+                  },
+                  onVerticalDragEnd: (details) async {
+                    if (!overlayVisibleNotifier.value) {
+                      overlayVisibleNotifier.value = true;
+                    }
+                    if (isLoading || !navigationEnabled) return;
+                    if (details.primaryVelocity != null &&
+                        details.primaryVelocity! < 0) {
+                      final currentSong = song;
+                      final songId = currentSong?.extras?['songId'] ?? 0;
+                      final songPath = currentSong?.extras?['data'] ?? '';
+                      final artUri = await getOrCacheArtwork(songId, songPath);
+                      if (!context.mounted) return;
+                      Navigator.of(context).push(
+                        PageRouteBuilder(
+                          pageBuilder: (context, animation, secondaryAnimation) =>
+                              FullPlayerScreen(
+                                initialMediaItem: currentSong,
+                                initialArtworkUri: artUri,
+                              ),
+                          transitionsBuilder:
+                              (context, animation, secondaryAnimation, child) {
+                                final offsetAnimation =
+                                    Tween<Offset>(
+                                      begin: const Offset(0, 1),
+                                      end: Offset.zero,
+                                    ).animate(
+                                      CurvedAnimation(
+                                        parent: animation,
+                                        curve: Curves.easeOutCubic,
+                                      ),
+                                    );
+                                return SlideTransition(
+                                  position: offsetAnimation,
+                                  child: child,
                                 );
-                            return SlideTransition(
-                              position: offsetAnimation,
-                              child: child,
-                            );
-                          },
-                      transitionDuration: const Duration(milliseconds: 350),
+                              },
+                          transitionDuration: const Duration(milliseconds: 350),
+                        ),
+                      );
+                    }
+                  },
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.surfaceContainer,
+                      borderRadius: BorderRadius.circular(16),
                     ),
-                  );
-                }
-              },
-              child: Container(
-                margin: const EdgeInsets.symmetric(horizontal: 12),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surfaceContainer,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Row(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        ValueListenableBuilder<bool>(
-                          valueListenable: (audioHandler as MyAudioHandler).initializingNotifier,
-                          builder: (context, isLoading, child) {
-                            if (isLoading) {
-                              return Container(
-                                width: 50,
-                                height: 50,
-                                decoration: BoxDecoration(
-                                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                        Row(
+                          children: [
+                            ValueListenableBuilder<bool>(
+                              valueListenable: (audioHandler as MyAudioHandler).initializingNotifier,
+                              builder: (context, isLoading, child) {
+                                if (isLoading) {
+                                  return Container(
+                                    width: 50,
+                                    height: 50,
+                                    decoration: BoxDecoration(
+                                      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: const Center(
+                                      child: SizedBox(
+                                        width: 28,
+                                        height: 28,
+                                        child: CircularProgressIndicator(strokeWidth: 3),
+                                      ),
+                                    ),
+                                  );
+                                }
+                                
+                                final songPath = currentSong.extras?['data'] as String?;
+                                Uri? fallbackArtUri;
+                                if (songPath != null && artworkCache.containsKey(songPath)) {
+                                  fallbackArtUri = artworkCache[songPath];
+                                }
+                                final artUri = currentSong.artUri ?? fallbackArtUri;
+                                
+                                return ArtworkHeroCached(
+                                  artUri: artUri,
+                                  size: 50,
                                   borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: const Center(
-                                  child: SizedBox(
-                                    width: 28,
-                                    height: 28,
-                                    child: CircularProgressIndicator(strokeWidth: 3),
+                                  heroTag: 'now_playing_artwork_${(currentSong.extras?['songId'] ?? currentSong.id).toString()}',
+                                );
+                              },
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  TitleMarquee(
+                                    text: currentSong.title,
+                                    maxWidth:
+                                        MediaQuery.of(context).size.width -
+                                        170, // Ajusta según tu layout
+                                    style: Theme.of(context).textTheme.titleMedium,
                                   ),
-                                ),
-                              );
-                            }
-                            // Obtener la lista de canciones y el índice actual
-                            return ArtworkHeroCached(
-                              artUri: currentSong.artUri,
-                              size: 50,
-                              borderRadius: BorderRadius.circular(8),
-                              heroTag: 'now_playing_artwork_${(currentSong.extras?['songId'] ?? currentSong.id).toString()}',
-                            );
-                          },
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              TitleMarquee(
-                                text: currentSong.title,
-                                maxWidth:
-                                    MediaQuery.of(context).size.width -
-                                    170, // Ajusta según tu layout
-                                style: Theme.of(context).textTheme.titleMedium,
+                                  Text(
+                                    (currentSong.artist == null || currentSong.artist!.trim().isEmpty)
+                                        ? 'Desconocido'
+                                        : currentSong.artist!,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(context).textTheme.bodyMedium,
+                                  ),
+                                ],
                               ),
-                              Text(
-                                (currentSong.artist == null || currentSong.artist!.trim().isEmpty)
-                                    ? 'Desconocido'
-                                    : currentSong.artist!,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: Theme.of(context).textTheme.bodyMedium,
+                            ),
+                            const SizedBox(width: 8),
+
+                            RepaintBoundary(
+                              child: StreamBuilder<bool>(
+                                stream: audioHandler?.playbackState
+                                    .map((s) => s.playing)
+                                    .distinct(),
+                                initialData: false,
+                                builder: (context, isPlayingSnapshot) {
+                                  final isPlaying = isPlayingSnapshot.data ?? false;
+                                  // Sincroniza la animación
+                                  if (isPlaying) {
+                                    _playPauseController.forward();
+                                  } else {
+                                    _playPauseController.reverse();
+                                  }
+                                  return IconButton(
+                                    iconSize: 36,
+                                    icon: AnimatedIcon(
+                                      icon: AnimatedIcons.play_pause,
+                                      progress: _playPauseController,
+                                      size: 36,
+                                    ),
+                                    onPressed: () {
+                                      if (isPlaying) {
+                                        audioHandler?.pause();
+                                      } else {
+                                        audioHandler?.play();
+                                      }
+                                    },
+                                  );
+                                },
                               ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: 8),
+                        const SizedBox(height: 6),
 
                         RepaintBoundary(
-                          child: StreamBuilder<bool>(
-                            stream: audioHandler?.playbackState
-                                .map((s) => s.playing)
-                                .distinct(),
-                            initialData: false,
-                            builder: (context, isPlayingSnapshot) {
-                              final isPlaying = isPlayingSnapshot.data ?? false;
-                              // Sincroniza la animación
-                              if (isPlaying) {
-                                _playPauseController.forward();
-                              } else {
-                                _playPauseController.reverse();
-                              }
-                              return IconButton(
-                                iconSize: 36,
-                                icon: AnimatedIcon(
-                                  icon: AnimatedIcons.play_pause,
-                                  progress: _playPauseController,
-                                  size: 36,
-                                ),
-                                onPressed: () {
-                                  if (isPlaying) {
-                                    audioHandler?.pause();
-                                  } else {
-                                    audioHandler?.play();
-                                  }
+                          child: StreamBuilder<Duration>(
+                            stream: (audioHandler as MyAudioHandler).positionStream,
+                            initialData: Duration.zero,
+                            builder: (context, posSnapshot) {
+                              final position = posSnapshot.data ?? Duration.zero;
+                              final hasDuration =
+                                  duration != null && duration.inMilliseconds > 0;
+
+                              return StreamBuilder<Duration?>(
+                                stream: (audioHandler as MyAudioHandler)
+                                    .player
+                                    .durationStream,
+                                builder: (context, durationSnapshot) {
+                                  final fallbackDuration = durationSnapshot.data;
+                                  final total = hasDuration
+                                      ? duration.inMilliseconds
+                                      : (fallbackDuration?.inMilliseconds ?? 1);
+                                  final current = position.inMilliseconds.clamp(0, total);
+
+                                  return Column(
+                                    children: [
+                                      ClipRRect(
+                                        borderRadius: BorderRadius.circular(8),
+                                        child: LinearProgressIndicator(
+                                          key: ValueKey(total),
+                                          value: total > 0 ? current / total : 0,
+                                          minHeight: 4,
+                                          borderRadius: BorderRadius.circular(8),
+                                          backgroundColor: Theme.of(
+                                            context,
+                                          ).colorScheme.onSurface.withAlpha(60),
+                                          color: Theme.of(context).colorScheme.primary,
+                                        ),
+                                      ),
+                                    ],
+                                  );
                                 },
                               );
                             },
@@ -272,53 +331,9 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> with TickerProvid
                         ),
                       ],
                     ),
-                    const SizedBox(height: 6),
-
-                    RepaintBoundary(
-                      child: StreamBuilder<Duration>(
-                        stream: (audioHandler as MyAudioHandler).positionStream,
-                        initialData: Duration.zero,
-                        builder: (context, posSnapshot) {
-                          final position = posSnapshot.data ?? Duration.zero;
-                          final hasDuration =
-                              duration != null && duration.inMilliseconds > 0;
-
-                          return StreamBuilder<Duration?>(
-                            stream: (audioHandler as MyAudioHandler)
-                                .player
-                                .durationStream,
-                            builder: (context, durationSnapshot) {
-                              final fallbackDuration = durationSnapshot.data;
-                              final total = hasDuration
-                                  ? duration.inMilliseconds
-                                  : (fallbackDuration?.inMilliseconds ?? 1);
-                              final current = position.inMilliseconds.clamp(0, total);
-
-                              return Column(
-                                children: [
-                                  ClipRRect(
-                                    borderRadius: BorderRadius.circular(8),
-                                    child: LinearProgressIndicator(
-                                      key: ValueKey(total),
-                                      value: total > 0 ? current / total : 0,
-                                      minHeight: 4,
-                                      borderRadius: BorderRadius.circular(8),
-                                      backgroundColor: Theme.of(
-                                        context,
-                                      ).colorScheme.onSurface.withAlpha(60),
-                                      color: Theme.of(context).colorScheme.primary,
-                                    ),
-                                  ),
-                                ],
-                              );
-                            },
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+                  ),
+                );
+              },
             );
           },
         );
