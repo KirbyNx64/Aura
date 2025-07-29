@@ -6,10 +6,8 @@ import 'dart:io';
 import 'dart:async';
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-
-// Variable global para rastrear si el AudioHandler ya está inicializado
-// AudioHandler? _currentInstance;
+import 'album_art_cache_manager.dart';
+import 'optimized_album_art_loader.dart';
 
 AudioHandler? _audioHandler;
 
@@ -138,79 +136,136 @@ Future<void> cleanupAudioHandler() async {
   await _forceCleanupAudioService();
 }
 
-// Cache global para carátulas en memoria (simplificado)
+// Cache Manager optimizado para carátulas
+final AlbumArtCacheManager _albumArtCacheManager = AlbumArtCacheManager();
+
+// Cargador optimizado con cancelación
+final OptimizedAlbumArtLoader _optimizedLoader = OptimizedAlbumArtLoader();
+
+// Cache global para URIs de carátulas (compatibilidad)
 final Map<String, Uri?> _artworkCache = {};
-// Cache para precarga de carátulas
 final Map<String, Future<Uri?>> _preloadCache = {};
+final Set<String> _loadingArtworks = {};
 
 Map<String, Uri?> get artworkCache => _artworkCache;
 
 Future<Uri?> getOrCacheArtwork(int songId, String songPath) async {
-  // 1. Verifica cache en memoria primero
+  // 1. Verifica cache en memoria primero (compatibilidad)
   if (_artworkCache.containsKey(songPath)) {
     return _artworkCache[songPath];
   }
+  
   // 2. Verifica si ya se está precargando
   if (_preloadCache.containsKey(songPath)) {
     return await _preloadCache[songPath]!;
   }
-  // 3. Intenta extraer la carátula embebida directamente del archivo usando OnAudioQuery
-  int size = 410; // Tamaño por defecto (80%)
+  
+  // 3. Evita cargas duplicadas
+  if (_loadingArtworks.contains(songPath)) {
+    // Espera a que termine la carga actual
+    while (_loadingArtworks.contains(songPath)) {
+      await Future.delayed(const Duration(milliseconds: 10));
+      // Si ya se cargó mientras esperaba, retorna inmediatamente
+      if (_artworkCache.containsKey(songPath)) {
+        return _artworkCache[songPath];
+      }
+    }
+    return _artworkCache[songPath];
+  }
+  
+  // 4. Marca como cargando y crea el Future
+  _loadingArtworks.add(songPath);
+  final future = _loadArtworkAsyncOptimized(songId, songPath);
+  _preloadCache[songPath] = future;
+  
   try {
-    final prefs = await SharedPreferences.getInstance();
-    size = prefs.getInt('artwork_quality') ?? 410; // 80% por defecto
-  } catch (_) {}
+    final result = await future;
+    _artworkCache[songPath] = result;
+    return result;
+  } finally {
+    _loadingArtworks.remove(songPath);
+    _preloadCache.remove(songPath);
+  }
+}
+
+/// Función optimizada que usa el nuevo cache manager y cargador
+Future<Uri?> _loadArtworkAsyncOptimized(int songId, String songPath) async {
   try {
-    final albumArt = await OnAudioQuery().queryArtwork(
-      songId,
-      ArtworkType.AUDIO,
-      size: size,
-    );
-    if (albumArt != null) {
+    // Usar el cargador optimizado con cancelación
+    final bytes = await _optimizedLoader.loadAlbumArt(songId, songPath);
+    
+    if (bytes != null) {
+      // Crear archivo temporal y retornar URI
       final tempDir = await getTemporaryDirectory();
-      final file = await File('${tempDir.path}/artwork_$songId.jpg').writeAsBytes(albumArt);
+      final file = await File('${tempDir.path}/artwork_$songId.jpg').writeAsBytes(bytes);
       final uri = Uri.file(file.path);
-      _artworkCache[songPath] = uri;
       return uri;
     }
   } catch (e) {
-    _artworkCache[songPath] = null;
+    // Error silencioso, retorna null
   }
-  _artworkCache[songPath] = null;
   return null;
 }
 
-
-
-/// Precarga carátulas para una lista de canciones
-Future<void> preloadArtworks(List<SongModel> songs) async {
-  for (final song in songs) {
-    if (!_artworkCache.containsKey(song.data) && !_preloadCache.containsKey(song.data)) {
-      _preloadCache[song.data] = _loadArtworkAsync(song.id, song.data);
-    }
-  }
+/// Precarga carátulas para una lista de canciones de forma asíncrona
+Future<void> preloadArtworks(List<SongModel> songs, {int maxConcurrent = 3}) async {
+  // Usar el cargador optimizado para precarga
+  final songsToLoad = songs.where((song) => 
+    !_artworkCache.containsKey(song.data) && 
+    !_preloadCache.containsKey(song.data) &&
+    !_loadingArtworks.contains(song.data)
+  ).take(10).toList(); // Limitar a 10 canciones para no sobrecargar
+  
+  if (songsToLoad.isEmpty) return;
+  
+  // Convertir SongModel a formato requerido por el cargador optimizado
+  final songsData = songsToLoad.map((song) => {
+    'id': song.id,
+    'data': song.data,
+  }).toList();
+  
+  // Usar el cargador optimizado con cancelación
+  await _optimizedLoader.loadMultipleAlbumArts(songsData);
 }
 
-/// Carga carátula de forma asíncrona
-Future<Uri?> _loadArtworkAsync(int songId, String songPath) async {
-  try {
-    final result = await getOrCacheArtwork(songId, songPath);
-    _preloadCache.remove(songPath);
-    return result;
-  } catch (e) {
-    _preloadCache.remove(songPath);
-    return null;
-  }
-}
+/// Obtiene el tamaño actual del cache de carátulas
+int get artworkCacheSize => _artworkCache.length + _albumArtCacheManager.memoryCacheSize;
 
 /// Limpia el cache de carátulas para liberar memoria
 void clearArtworkCache() {
   _artworkCache.clear();
   _preloadCache.clear();
+  _loadingArtworks.clear();
+  _albumArtCacheManager.clearCache();
 }
 
-/// Obtiene el tamaño actual del cache de carátulas
-int get artworkCacheSize => _artworkCache.length;
+/// Limpia carátulas específicas del cache
+void removeArtworkFromCache(String songPath) {
+  _artworkCache.remove(songPath);
+  _preloadCache.remove(songPath);
+  _loadingArtworks.remove(songPath);
+  // Nota: Para remover del cache optimizado necesitaríamos songId
+}
+
+/// Obtiene estadísticas del cache optimizado
+Map<String, dynamic> getOptimizedCacheStats() {
+  return _albumArtCacheManager.getCacheStats();
+}
+
+/// Cancela todas las cargas de carátulas activas
+void cancelAllArtworkLoads() {
+  _optimizedLoader.cancelAllLoads();
+}
+
+/// Cancela carga específica de carátula
+void cancelArtworkLoad(int songId) {
+  _optimizedLoader.cancelLoad(songId);
+}
+
+/// Obtiene estadísticas del cargador optimizado
+Map<String, dynamic> getOptimizedLoaderStats() {
+  return _optimizedLoader.getLoaderStats();
+}
 
 class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   AudioPlayer _player = AudioPlayer();
@@ -228,32 +283,8 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   Duration? _sleepStartPosition;
   bool _isSkipping = false;
 
-  // --- Precarga artwork de forma inteligente para fluidez ---
-  int? _lastPreloadedNextIndex;
-  void _setupNextArtworkPreload() {
-    _player.positionStream.listen((position) {
-      final idx = _player.currentIndex;
-      if (idx == null) return;
-      
-      // Precarga inteligente: solo las próximas 2 canciones (suficiente para fluidez)
-      for (int i = 1; i <= 2; i++) {
-        final nextIndex = idx + i;
-        if (nextIndex < _mediaQueue.length && _lastPreloadedNextIndex != nextIndex) {
-          final nextMediaItem = _mediaQueue[nextIndex];
-          final songId = nextMediaItem.extras?['songId'] as int?;
-          final songPath = nextMediaItem.extras?['data'] as String?;
-          if (songId != null && songPath != null) {
-            _lastPreloadedNextIndex = nextIndex;
-            unawaited(getOrCacheArtwork(songId, songPath));
-          }
-        }
-      }
-    });
-  }
-
   MyAudioHandler() {
     _init();
-    _setupNextArtworkPreload();
   }
 
   Future<void> _init() async {
@@ -303,21 +334,43 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         if (expectedIndex != null && index != expectedIndex) {
           // print('⚠️ Desincronización de índices: actual=$index, esperado=$expectedIndex');
         }
-        // Si la carátula ya está en caché, actualizar el MediaItem inmediatamente
+        
+        // Actualizar el MediaItem inmediatamente (con o sin carátula)
+        mediaItem.add(currentMediaItem);
+        
+        // Cargar carátula de forma asíncrona si no está en caché
         final songPath = currentMediaItem.extras?['data'] as String?;
-        if (songPath != null && _artworkCache.containsKey(songPath)) {
+        final songId = currentMediaItem.extras?['songId'] as int?;
+        
+        if (songPath != null && songId != null && !_artworkCache.containsKey(songPath)) {
+          // Cargar carátula en segundo plano
+          unawaited(() async {
+            try {
+              final artUri = await getOrCacheArtwork(songId, songPath);
+              if (artUri != null) {
+                // Actualizar el MediaItem con la carátula cargada
+                final updatedMediaItem = currentMediaItem.copyWith(artUri: artUri);
+                _mediaQueue[index] = updatedMediaItem;
+                queue.add(_mediaQueue);
+                mediaItem.add(updatedMediaItem);
+              }
+            } catch (e) {
+              // Error silencioso
+            }
+          }());
+        } else if (songPath != null && _artworkCache.containsKey(songPath)) {
+          // Si la carátula ya está en caché, actualizar inmediatamente
           final artUri = _artworkCache[songPath];
           if (artUri != null && currentMediaItem.artUri != artUri) {
             currentMediaItem = currentMediaItem.copyWith(artUri: artUri);
             _mediaQueue[index] = currentMediaItem;
             queue.add(_mediaQueue);
+            mediaItem.add(currentMediaItem);
           }
         }
-        mediaItem.add(currentMediaItem);
-        // Si no tiene carátula, lanza la carga en segundo plano
-        if (currentMediaItem.artUri == null) {
-          unawaited(loadArtworkForIndex(index));
-        }
+        
+        // Precargar carátulas de canciones próximas
+        _preloadNextArtworks(index);
       }
     });
 
@@ -374,7 +427,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     List<SongModel> songs, {
     int initialIndex = 0,
     bool autoPlay = false,
-    bool resetShuffle = true, // nuevo parámetro
+    bool resetShuffle = true,
   }) async {
     // Solo desactiva shuffle si la lista realmente cambia y resetShuffle es true
     bool shouldResetShuffle = false;
@@ -388,7 +441,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     }
     _currentSongList = List<SongModel>.from(songs);
     isQueueTransitioning.value = true;
-    initializingNotifier.value = false;
+    initializingNotifier.value = true;
     _initializing = true;
     _loadVersion++;
     final int currentVersion = _loadVersion;
@@ -415,8 +468,6 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       
       // No esperes la carátula, crea el MediaItem sin artUri
       Uri? artUri;
-      // Lanza la carga de la carátula en segundo plano para todas las canciones
-      unawaited(loadArtworkForIndex(i));
       
       mediaItems.add(
         MediaItem(
@@ -486,16 +537,23 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       }
     }
 
-    // 4. Precargar carátulas inmediatamente (solo la canción actual)
-    unawaited(loadArtworkForIndex(initialIndex));
-
     if (autoPlay) {
       await play();
     } else {
       _initializing = false;
       initializingNotifier.value = false;
       isQueueTransitioning.value = false;
-      unawaited(preloadArtworks(songs));
+    }
+    
+    // Precargar carátulas de las primeras canciones de forma asíncrona
+    if (songs.isNotEmpty) {
+      unawaited(() async {
+        try {
+          await preloadArtworks(songs.take(5).toList());
+        } catch (e) {
+          // Error silencioso
+        }
+      }());
     }
   }
 
@@ -533,11 +591,6 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   @override
   Future<void> stop() async {
     try {
-      // Limpia el cache de carátulas si es muy grande
-      if (artworkCacheSize > 100) {
-        clearArtworkCache();
-      }
-      
       // Detener y limpiar el reproductor completamente
       await _player.stop();
       await _player.dispose();
@@ -579,25 +632,15 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   @override
   Future<void> skipToNext() async {
     if (_initializing || _isSkipping) return;
+    
     _isSkipping = true;
     try {
-      final wasPlaying = _player.playing;
-      final currentIndex = _player.currentIndex;
-      final nextIndex = (currentIndex != null && currentIndex < _mediaQueue.length - 1)
-          ? currentIndex + 1
-          : null;
-
-      if (nextIndex != null) {
-        await _player.seek(Duration.zero, index: nextIndex);
-        if (wasPlaying && !_player.playing) {
-          await _player.play();
-        }
-      } else {
-        // Si no hay siguiente, reinicia la canción actual
-        await _player.seek(Duration.zero);
-        await _player.pause();
-      }
+      
+      await _player.seekToNext();
+      
       _updateSleepTimer();
+    } catch (e) {
+      // Error silencioso
     } finally {
       _isSkipping = false;
     }
@@ -606,27 +649,20 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   @override
   Future<void> skipToPrevious() async {
     if (_initializing || _isSkipping) return;
+    
     _isSkipping = true;
     try {
-      final wasPlaying = _player.playing;
-      final currentIndex = _player.currentIndex;
+      
       if (_player.position.inMilliseconds > 5000) {
         await _player.seek(Duration.zero);
         return;
       }
-      final prevIndex = (currentIndex != null && currentIndex > 0)
-          ? currentIndex - 1
-          : null;
-
-      if (prevIndex != null) {
-        await _player.seek(Duration.zero, index: prevIndex);
-        if (wasPlaying && !_player.playing) {
-          await _player.play();
-        }
-      } else {
-        await _player.seek(Duration.zero);
-      }
+      
+      await _player.seekToPrevious();
+      
       _updateSleepTimer();
+    } catch (e) {
+      // Error silencioso
     } finally {
       _isSkipping = false;
     }
@@ -640,14 +676,36 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     if (index >= 0 && index < _mediaQueue.length) {
       try {
         final wasPlaying = _player.playing;
+        
+        // Cambio inmediato sin esperar
         await _player.seek(Duration.zero, index: index);
         
-        // Esperar a que el reproductor esté listo
-        int attempts = 0;
-        while (_player.processingState != ProcessingState.ready && attempts < 5) {
-          await Future.delayed(const Duration(milliseconds: 10));
-          attempts++;
+        // Actualizar inmediatamente el MediaItem
+        final newMediaItem = _mediaQueue[index];
+        mediaItem.add(newMediaItem);
+        
+        // Cargar carátula de forma asíncrona si no está en caché
+        final songPath = newMediaItem.extras?['data'] as String?;
+        final songId = newMediaItem.extras?['songId'] as int?;
+        
+        if (songPath != null && songId != null && !_artworkCache.containsKey(songPath)) {
+          unawaited(() async {
+            try {
+              final artUri = await getOrCacheArtwork(songId, songPath);
+              if (artUri != null) {
+                final updatedMediaItem = newMediaItem.copyWith(artUri: artUri);
+                _mediaQueue[index] = updatedMediaItem;
+                queue.add(_mediaQueue);
+                mediaItem.add(updatedMediaItem);
+              }
+            } catch (e) {
+              // Error silencioso
+            }
+          }());
         }
+        
+        // Precargar carátulas de canciones próximas
+        _preloadNextArtworks(index);
         
         _updateSleepTimer();
         
@@ -825,33 +883,33 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
   bool get isSleepTimerActive => _sleepDuration != null;
 
-
-
-    /// Carga la carátula de una canción específica de forma inmediata
-  Future<void> loadArtworkForIndex(int index) async {
-    if (index < 0 || index >= _mediaQueue.length) return;
+  /// Precarga carátulas de canciones próximas
+  void _preloadNextArtworks(int currentIndex) {
+    if (_currentSongList.isEmpty) return;
     
-    final mediaItem = _mediaQueue[index];
-    if (mediaItem.artUri != null) return; // Ya tiene carátula
-    
-    // Busca la canción correspondiente
-    final songId = mediaItem.extras?['songId'] as int?;
-    final songPath = mediaItem.extras?['data'] as String?;
-    
-    if (songId != null && songPath != null) {
-      try {
-        final artUri = await getOrCacheArtwork(songId, songPath);
-        if (index < _mediaQueue.length) {
-          _mediaQueue[index] = _mediaQueue[index].copyWith(artUri: artUri);
-          queue.add(_mediaQueue);
-        }
-      } catch (e) {
-        // Si falla, no hace nada
+    // Precargar las siguientes 3 canciones
+    final nextIndices = <int>[];
+    for (int i = 1; i <= 3; i++) {
+      final nextIndex = currentIndex + i;
+      if (nextIndex < _currentSongList.length) {
+        nextIndices.add(nextIndex);
       }
     }
+    
+    // Precargar carátulas de forma asíncrona
+    unawaited(() async {
+      try {
+        for (final index in nextIndices) {
+          final song = _currentSongList[index];
+          if (!_artworkCache.containsKey(song.data)) {
+            unawaited(getOrCacheArtwork(song.id, song.data));
+          }
+        }
+      } catch (e) {
+        // Error silencioso
+      }
+    }());
   }
-
-
 
   /// Reinicializa el reproductor cuando es necesario
   Future<void> _reinitializePlayer() async {
@@ -907,26 +965,43 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       if (_initializing) return;
       if (index != null && index < _mediaQueue.length) {
         var currentMediaItem = _mediaQueue[index];
-        // Verificar que el índice coincida con el esperado
-        final expectedIndex = currentMediaItem.extras?['queueIndex'] as int?;
-        if (expectedIndex != null && index != expectedIndex) {
-          // print('⚠️ Desincronización de índices: actual=$index, esperado=$expectedIndex');
-        }
-        // Si la carátula ya está en caché, actualizar el MediaItem inmediatamente
+        
+        // Actualizar inmediatamente el MediaItem (con o sin carátula)
+        mediaItem.add(currentMediaItem);
+        
+        // Cargar carátula de forma asíncrona si no está en caché
         final songPath = currentMediaItem.extras?['data'] as String?;
-        if (songPath != null && _artworkCache.containsKey(songPath)) {
+        final songId = currentMediaItem.extras?['songId'] as int?;
+        
+        if (songPath != null && songId != null && !_artworkCache.containsKey(songPath)) {
+          // Cargar carátula en segundo plano
+          unawaited(() async {
+            try {
+              final artUri = await getOrCacheArtwork(songId, songPath);
+              if (artUri != null) {
+                // Actualizar el MediaItem con la carátula cargada
+                final updatedMediaItem = currentMediaItem.copyWith(artUri: artUri);
+                _mediaQueue[index] = updatedMediaItem;
+                queue.add(_mediaQueue);
+                mediaItem.add(updatedMediaItem);
+              }
+            } catch (e) {
+              // Error silencioso
+            }
+          }());
+        } else if (songPath != null && _artworkCache.containsKey(songPath)) {
+          // Si la carátula ya está en caché, actualizar inmediatamente
           final artUri = _artworkCache[songPath];
           if (artUri != null && currentMediaItem.artUri != artUri) {
             currentMediaItem = currentMediaItem.copyWith(artUri: artUri);
             _mediaQueue[index] = currentMediaItem;
             queue.add(_mediaQueue);
+            mediaItem.add(currentMediaItem);
           }
         }
-        mediaItem.add(currentMediaItem);
-        // Si no tiene carátula, lanza la carga en segundo plano
-        if (currentMediaItem.artUri == null) {
-          unawaited(loadArtworkForIndex(index));
-        }
+        
+        // Precargar carátulas de canciones próximas
+        _preloadNextArtworks(index);
       }
     });
 

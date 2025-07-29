@@ -35,10 +35,17 @@ class NowPlayingOverlay extends StatefulWidget {
 }
 
 class _NowPlayingOverlayState extends State<NowPlayingOverlay> with TickerProviderStateMixin {
-  String? _lastProcessedSongId;
+
   MediaItem? _lastKnownMediaItem;
   late AnimationController _playPauseController;
   Timer? _temporaryItemTimer;
+  
+  // Variables para tracking de tiempo de escucha
+  String? _currentSongId;
+  DateTime? _songStartTime;
+  Timer? _listeningTimer;
+  bool _hasBeenSaved = false;
+  Duration _elapsedTime = Duration.zero;
 
   @override
   void initState() {
@@ -54,7 +61,41 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> with TickerProvid
   void dispose() {
     _playPauseController.dispose();
     _temporaryItemTimer?.cancel();
+    _listeningTimer?.cancel();
     super.dispose();
+  }
+
+  // Función para guardar la canción después de 20 segundos
+  void _saveSongAfterDelay(String songId, String path) {
+    _listeningTimer?.cancel();
+    final remainingTime = const Duration(seconds: 20) - _elapsedTime;
+    if (remainingTime <= Duration.zero) {
+      // Ya pasó el tiempo, guardar inmediatamente
+      if (mounted && _currentSongId == songId && !_hasBeenSaved) {
+        _hasBeenSaved = true;
+        unawaited(RecentsDB().addRecentPath(path));
+        unawaited(_updateMostPlayedAsync(path));
+      }
+    } else {
+      _listeningTimer = Timer(remainingTime, () {
+        if (mounted && _currentSongId == songId && !_hasBeenSaved) {
+          _hasBeenSaved = true;
+          // Actualizar recientes de forma asíncrona
+          unawaited(RecentsDB().addRecentPath(path));
+          // Actualizar más reproducidas de forma asíncrona
+          unawaited(_updateMostPlayedAsync(path));
+        }
+      });
+    }
+  }
+
+  // Función para cancelar el timer cuando se pausa o cambia la canción
+  void _cancelListeningTimer() {
+    _listeningTimer?.cancel();
+    if (_songStartTime != null) {
+      _elapsedTime += DateTime.now().difference(_songStartTime!);
+    }
+    _hasBeenSaved = false;
   }
   
   @override
@@ -80,19 +121,25 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> with TickerProvid
             final duration = currentSong?.duration;
 
             if (!widget.showBar || currentSong == null || currentSong.id.isEmpty) {
+              // Cancelar timer si no hay canción
+              _cancelListeningTimer();
               return const SizedBox.shrink();
             }
 
-            // Optimización: Solo actualizar DB si es una canción nueva
-            if (currentSong.id.isNotEmpty && currentSong.id != _lastProcessedSongId) {
-              _lastProcessedSongId = currentSong.id;
+            // Tracking de tiempo de escucha: Solo guardar si se escucha más de 20 segundos
+            if (currentSong.id.isNotEmpty && currentSong.id != _currentSongId) {
+              // Nueva canción detectada - cancelar timer anterior si existe
+              _cancelListeningTimer();
+              
+              _currentSongId = currentSong.id;
+              _songStartTime = DateTime.now();
+              _hasBeenSaved = false;
+              _elapsedTime = Duration.zero;
+              
               final path = currentSong.extras?['data'];
               if (path != null) {
-                // Actualizar recientes de forma asíncrona
-                unawaited(RecentsDB().addRecentPath(path));
-
-                // Actualizar más reproducidas de forma asíncrona
-                unawaited(_updateMostPlayedAsync(path));
+                // Iniciar timer para guardar después de 20 segundos
+                _saveSongAfterDelay(currentSong.id, path);
               }
             }
 
@@ -262,8 +309,18 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> with TickerProvid
                                   // Sincroniza la animación
                                   if (isPlaying) {
                                     _playPauseController.forward();
+                                    // Reanudar timer si la canción vuelve a reproducirse
+                                    if (_currentSongId != null && !_hasBeenSaved) {
+                                      _songStartTime = DateTime.now();
+                                      final path = currentSong.extras?['data'];
+                                      if (path != null) {
+                                        _saveSongAfterDelay(_currentSongId!, path);
+                                      }
+                                    }
                                   } else {
                                     _playPauseController.reverse();
+                                    // Cancelar timer si se pausa la reproducción
+                                    _cancelListeningTimer();
                                   }
                                   return IconButton(
                                     iconSize: 36,

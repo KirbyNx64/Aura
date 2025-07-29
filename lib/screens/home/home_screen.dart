@@ -1770,7 +1770,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                     color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
                                   ),
                                   const SizedBox(height: 16),
-                                  TranslatedText('no_songs_to_show', style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6))),
+                                  TranslatedText('no_songs_to_show', style: TextStyle(fontSize: 14, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6))),
                                 ],
                               ))
                               : Column(

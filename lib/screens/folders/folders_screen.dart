@@ -1154,7 +1154,7 @@ class _FoldersScreenState extends State<FoldersScreen>
                                           : null,
                                       selected: isCurrent,
                                       selectedTileColor: isAmoledTheme
-                                         ? Colors.white.withValues(alpha: 0.1)
+                                        ? Colors.white.withValues(alpha: 0.1)
                                         : Theme.of(context).colorScheme.primaryContainer,
                                     ),
                                   );

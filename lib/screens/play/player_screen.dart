@@ -622,6 +622,18 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
           );
         }
       },
+      onHorizontalDragEnd: (details) {
+        // Detectar la dirección del deslizamiento horizontal
+        if (details.primaryVelocity != null) {
+          if (details.primaryVelocity! > 0) {
+            // Deslizar hacia la derecha: canción anterior
+            audioHandler?.skipToPrevious();
+          } else if (details.primaryVelocity! < 0) {
+            // Deslizar hacia la izquierda: siguiente canción
+            audioHandler?.skipToNext();
+          }
+        }
+      },
       child: StreamBuilder<MediaItem?>(
         stream: audioHandler?.mediaItem,
         initialData: widget.initialMediaItem,
