@@ -5,5 +5,5 @@
     "armeabi-v7a": "https://github.com/KirbyNx64/Aura/releases/download/v1.4.3/AuraMusic-v1.4.3-armeabi-v7a.apk",
     "x86_64": "https://github.com/KirbyNx64/Aura/releases/download/v1.4.3/AuraMusic-v1.4.3-x86_64.apk"
   },
-  "changelog": "• Mejoras de rendimiento y estabilidad."
+  "changelog": "• Mejoras de rendimiento y estabilidad.\n\n• Ahora puedes cambiar de canción deslizando hacia la izquierda o derecha en la caratula."
 }
