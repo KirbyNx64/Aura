@@ -350,30 +350,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.1.4"
-  ffmpeg_kit_flutter_android:
-    dependency: transitive
-    description:
-      name: ffmpeg_kit_flutter_android
-      sha256: "6fe3ece6a8c16b04f695dab9f58b39fc35e617fce8221d4183dd027e59f71c01"
-      url: "https://pub.dev"
-    source: hosted
-    version: "1.7.0"
-  ffmpeg_kit_flutter_new:
-    dependency: "direct main"
-    description:
-      name: ffmpeg_kit_flutter_new
-      sha256: "385c52a2e3308ea3927db4c88f8bf90fb42997f87ceb9081ddc9c6a8cc5f8bf7"
-      url: "https://pub.dev"
-    source: hosted
-    version: "2.0.0"
-  ffmpeg_kit_flutter_platform_interface:
-    dependency: transitive
-    description:
-      name: ffmpeg_kit_flutter_platform_interface
-      sha256: addf046ae44e190ad0101b2fde2ad909a3cd08a2a109f6106d2f7048b7abedee
-      url: "https://pub.dev"
-    source: hosted
-    version: "0.2.1"
   file:
     dependency: transitive
     description:
@@ -999,10 +975,10 @@ packages:
     dependency: "direct main"
     description:
       name: permission_handler
-      sha256: "2d070d8684b68efb580a5997eb62f675e8a885ef0be6e754fb9ef489c177470f"
+      sha256: bc917da36261b00137bbc8896bf1482169cd76f866282368948f032c8c1caae1
       url: "https://pub.dev"
     source: hosted
-    version: "12.0.0+1"
+    version: "12.0.1"
   permission_handler_android:
     dependency: transitive
     description:

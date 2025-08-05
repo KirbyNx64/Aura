@@ -1,7 +1,7 @@
 name: music
 description: "A new Flutter project."
 publish_to: 'none'
-version: 1.4.3+1
+version: 1.4.4+1
 
 environment:
   sdk: ^3.8.1
@@ -19,7 +19,7 @@ dependencies:
   path: ^1.9.1
   shared_preferences: ^2.5.3
   path_provider: ^2.1.5
-  permission_handler: ^12.0.0+1
+  permission_handler: ^12.0.1
   audio_info: ^0.0.3
   marquee: ^2.3.0
   share_plus: ^11.0.0
@@ -33,7 +33,6 @@ dependencies:
   file_selector: ^1.0.3
   audiotags: ^1.4.5
   url_launcher: ^6.3.1
-  ffmpeg_kit_flutter_new: ^2.0.0
   media_scanner: ^2.2.0
   device_info_plus: ^11.5.0
   dio: ^5.8.0+1

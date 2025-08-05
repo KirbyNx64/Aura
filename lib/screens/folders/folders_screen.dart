@@ -51,6 +51,8 @@ class _FoldersScreenState extends State<FoldersScreen>
   List<SongModel> _originalSongs = []; // Lista original para restaurar orden
 
   Timer? _debounce;
+  Timer? _playingDebounce;
+  final ValueNotifier<bool> _isPlayingNotifier = ValueNotifier<bool>(false);
 
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
@@ -130,6 +132,16 @@ class _FoldersScreenState extends State<FoldersScreen>
     WidgetsBinding.instance.addObserver(this);
     _loadOrderFilter().then((_) => cargarCanciones());
     foldersShouldReload.addListener(_onFoldersShouldReload);
+    
+    // Escuchar cambios en el estado de reproducción con debounce
+    audioHandler?.playbackState.listen((state) {
+      _playingDebounce?.cancel();
+      _playingDebounce = Timer(const Duration(milliseconds: 100), () {
+        if (mounted) {
+          _isPlayingNotifier.value = state.playing;
+        }
+      });
+    });
   }
 
   Future<void> _loadOrderFilter() async {
@@ -431,15 +443,10 @@ class _FoldersScreenState extends State<FoldersScreen>
       
       // Precargar la carátula antes de crear el MediaItem temporal
       Uri? cachedArtUri;
-      if (artworkCache.containsKey(song.data)) {
-        cachedArtUri = artworkCache[song.data];
-      } else {
-        // Si no está en caché, intentar cargarla inmediatamente
-        try {
-          cachedArtUri = await getOrCacheArtwork(song.id, song.data);
-        } catch (e) {
-          // Si falla, continuar sin carátula
-        }
+      try {
+        cachedArtUri = await getOrCacheArtwork(song.id, song.data);
+      } catch (e) {
+        // Si falla, continuar sin carátula
       }
       
       final tempMediaItem = MediaItem(
@@ -539,10 +546,8 @@ class _FoldersScreenState extends State<FoldersScreen>
 
   Future<void> _preloadArtworkForSong(SongModel song) async {
     try {
-      // Si no está en caché, cargarla inmediatamente
-      if (!artworkCache.containsKey(song.data)) {
-        await getOrCacheArtwork(song.id, song.data);
-      }
+      // Cargar la carátula inmediatamente
+      await getOrCacheArtwork(song.id, song.data);
     } catch (e) {
       // Ignorar errores de precarga
     }
@@ -629,6 +634,8 @@ class _FoldersScreenState extends State<FoldersScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _debounce?.cancel();
+    _playingDebounce?.cancel();
+    _isPlayingNotifier.dispose();
     _searchController.dispose();
     _searchFocusNode.dispose();
     foldersShouldReload.removeListener(_onFoldersShouldReload);
@@ -979,195 +986,227 @@ class _FoldersScreenState extends State<FoldersScreen>
               // Detectar si el tema AMOLED está activo
               final isAmoledTheme = colorSchemeNotifier.value == AppColorScheme.amoled;
               final current = currentSnapshot.data;
-              return StreamBuilder<bool>(
-                stream: audioHandler?.playbackState
-                    .map((s) => s.playing)
-                    .distinct(),
-                initialData: false,
-                builder: (context, playingSnapshot) {
-                  final playing = playingSnapshot.data ?? false;
-                  final space = current != null ? 100.0 : 0.0;
+              final space = current != null ? 100.0 : 0.0;
 
-                  return Padding(
-                    padding: EdgeInsets.only(bottom: space),
-                    child: _filteredSongs.isEmpty
-                        ? Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(Icons.folder_off, 
-                                size: 48, 
-                                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6)),
-                                const SizedBox(height: 16),
-                                TranslatedText(
-                                  'no_songs_in_folder',
-                                  style: TextStyle(fontSize: 14, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6)),
-                                ),
-                              ],
+              return Padding(
+                padding: EdgeInsets.only(bottom: space),
+                child: _filteredSongs.isEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.folder_off, 
+                            size: 48, 
+                            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6)),
+                            const SizedBox(height: 16),
+                            TranslatedText(
+                              'no_songs_in_folder',
+                              style: TextStyle(fontSize: 14, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6)),
                             ),
-                          )
-                        : ListView.builder(
-                            itemCount: _displaySongs.length,
-                            itemBuilder: (context, i) {
-                              final song = _displaySongs[i];
-                              final path = song.data;
-                              final isCurrent = (current?.id != null && path.isNotEmpty && current!.id == path);
-                              final isPlaying = isCurrent && playing;
-                              final isSelected = _selectedSongPaths.contains(path);
-                              final isIgnoredFuture = isSongIgnored(path);
-                              return FutureBuilder<bool>(
-                                future: isIgnoredFuture,
-                                builder: (context, snapshot) {
-                                  final isIgnored = snapshot.data ?? false;
-                                  final opacity = isIgnored ? 0.4 : 1.0;
-                                  return Opacity(
-                                    opacity: opacity,
-                                    child: ListTile(
-                                      onTap: isIgnored ? null : () => _onSongSelected(song),
-                                      onLongPress: () {
-                                        if (_isSelecting) {
-                                          setState(() {
-                                            if (_selectedSongPaths.contains(path)) {
-                                              _selectedSongPaths.remove(path);
-                                              if (_selectedSongPaths.isEmpty) {
-                                                _isSelecting = false;
-                                              }
-                                            } else {
-                                              _selectedSongPaths.add(path);
-                                            }
-                                          });
-                                        } else {
-                                          _handleLongPress(context, song);
-                                        }
-                                      },
-                                      leading: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          if (_isSelecting)
-                                            Checkbox(
-                                              value: isSelected,
-                                              onChanged: (checked) {
-                                                setState(() {
-                                                  if (checked == true) {
-                                                    _selectedSongPaths.add(path);
-                                                  } else {
-                                                    _selectedSongPaths.remove(path);
-                                                    if (_selectedSongPaths.isEmpty) {
-                                                      _isSelecting = false;
-                                                    }
-                                                  }
-                                                });
-                                              },
-                                            ),
-                                          ClipRRect(
-                                            borderRadius: BorderRadius.circular(8),
-                                            child: Opacity(
-                                              opacity: opacity,
-                                              child: QueryArtworkWidget(
-                                                id: song.id,
-                                                type: ArtworkType.AUDIO,
-                                                artworkBorder: BorderRadius.circular(8),
-                                                artworkHeight: 50,
-                                                artworkWidth: 50,
-                                                keepOldArtwork: true,
-                                                nullArtworkWidget: Container(
-                                                  color: Theme.of(
-                                                    context,
-                                                  ).colorScheme.surfaceContainer,
-                                                  width: 50,
-                                                  height: 50,
-                                                  child: Icon(
-                                                    Icons.music_note,
-                                                    color: Theme.of(context).colorScheme.onSurface,
-                                                  ),
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      title: Opacity(
-                                        opacity: opacity,
-                                        child: Row(
-                                          children: [
-                                            if (isCurrent)
-                                              Padding(
-                                                padding: const EdgeInsets.only(right: 8.0),
-                                                child: MiniMusicVisualizer(
-                                                  color: Theme.of(context).colorScheme.primary,
-                                                  width: 4,
-                                                  height: 15,
-                                                  radius: 4,
-                                                  animate: playing ? true : false,
-                                                ),
-                                              ),
-                                            Expanded(
-                                              child: Text(
-                                                song.title,
-                                                maxLines: 1,
-                                                overflow: TextOverflow.ellipsis,
-                                                style: isCurrent
-                                                    ? TextStyle(
-                                                        color: isAmoledTheme
-                                                            ? Colors.white
-                                                            : Theme.of(context).colorScheme.primary,
-                                                        fontWeight: FontWeight.bold,
-                                                      )
-                                                    : null,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      subtitle: Opacity(
-                                        opacity: opacity,
-                                        child: Text(
-                                          song.artist ?? LocaleProvider.tr('unknown_artist'),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ),
-                                      trailing: !_isSelecting
-                                          ? IconButton(
-                                              icon: Icon(
-                                                isCurrent
-                                                    ? (isPlaying
-                                                          ? Icons.pause
-                                                          : Icons.play_arrow)
-                                                    : Icons.play_arrow,
-                                                color: isCurrent
-                                                    ? Theme.of(context).colorScheme.primary
-                                                    : null,
-                                              ),
-                                              onPressed: isIgnored
-                                                  ? null
-                                                  : () {
-                                                      if (isCurrent) {
-                                                        isPlaying
-                                                            ? (audioHandler as MyAudioHandler).pause()
-                                                            : (audioHandler as MyAudioHandler).play();
-                                                      } else {
-                                                        _onSongSelected(song);
-                                                      }
-                                                    },
-                                            )
-                                          : null,
-                                      selected: isCurrent,
-                                      selectedTileColor: isAmoledTheme
-                                        ? Colors.white.withValues(alpha: 0.1)
-                                        : Theme.of(context).colorScheme.primaryContainer,
-                                    ),
-                                  );
-                                },
-                              );
+                          ],
+                        ),
+                      )
+                    : ListView.builder(
+                        itemCount: _displaySongs.length,
+                        itemBuilder: (context, i) {
+                          final song = _displaySongs[i];
+                          final path = song.data;
+                          final isCurrent = (current?.id != null && path.isNotEmpty && current!.id == path);
+                          final isSelected = _selectedSongPaths.contains(path);
+                          final isIgnoredFuture = isSongIgnored(path);
+                          return FutureBuilder<bool>(
+                            future: isIgnoredFuture,
+                            builder: (context, snapshot) {
+                              final isIgnored = snapshot.data ?? false;
+                              
+                              // Solo usar ValueListenableBuilder para la canción actual
+                              if (isCurrent) {
+                                return ValueListenableBuilder<bool>(
+                                  valueListenable: _isPlayingNotifier,
+                                  builder: (context, playing, child) {
+                                    return _buildOptimizedListTile(
+                                      context,
+                                      song,
+                                      isCurrent,
+                                      playing,
+                                      isAmoledTheme,
+                                      isIgnored,
+                                      isSelected,
+                                    );
+                                  },
+                                );
+                              } else {
+                                // Para canciones que no están reproduciéndose, no usar StreamBuilder
+                                return _buildOptimizedListTile(
+                                  context,
+                                  song,
+                                  isCurrent,
+                                  false, // No playing
+                                  isAmoledTheme,
+                                  isIgnored,
+                                  isSelected,
+                                );
+                              }
                             },
-                          ),
-                  );
-                },
+                          );
+                        },
+                      ),
               );
             },
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildOptimizedListTile(
+    BuildContext context,
+    SongModel song,
+    bool isCurrent,
+    bool playing,
+    bool isAmoledTheme,
+    bool isIgnored,
+    bool isSelected,
+  ) {
+    final path = song.data;
+    final opacity = isIgnored ? 0.4 : 1.0;
+    
+    return Opacity(
+      opacity: opacity,
+      child: ListTile(
+        onTap: isIgnored ? null : () => _onSongSelected(song),
+        onLongPress: () {
+          if (_isSelecting) {
+            setState(() {
+              if (_selectedSongPaths.contains(path)) {
+                _selectedSongPaths.remove(path);
+                if (_selectedSongPaths.isEmpty) {
+                  _isSelecting = false;
+                }
+              } else {
+                _selectedSongPaths.add(path);
+              }
+            });
+          } else {
+            _handleLongPress(context, song);
+          }
+        },
+        leading: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (_isSelecting)
+              Checkbox(
+                value: isSelected,
+                onChanged: (checked) {
+                  setState(() {
+                    if (checked == true) {
+                      _selectedSongPaths.add(path);
+                    } else {
+                      _selectedSongPaths.remove(path);
+                      if (_selectedSongPaths.isEmpty) {
+                        _isSelecting = false;
+                      }
+                    }
+                  });
+                },
+              ),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Opacity(
+                opacity: opacity,
+                child: QueryArtworkWidget(
+                  id: song.id,
+                  type: ArtworkType.AUDIO,
+                  artworkBorder: BorderRadius.circular(8),
+                  artworkHeight: 50,
+                  artworkWidth: 50,
+                  keepOldArtwork: true,
+                  nullArtworkWidget: Container(
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.surfaceContainer,
+                    width: 50,
+                    height: 50,
+                    child: Icon(
+                      Icons.music_note,
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        title: Opacity(
+          opacity: opacity,
+          child: Row(
+            children: [
+              if (isCurrent)
+                Padding(
+                  padding: const EdgeInsets.only(right: 8.0),
+                  child: MiniMusicVisualizer(
+                    color: Theme.of(context).colorScheme.primary,
+                    width: 4,
+                    height: 15,
+                    radius: 4,
+                    animate: playing ? true : false,
+                  ),
+                ),
+              Expanded(
+                child: Text(
+                  song.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: isCurrent
+                      ? TextStyle(
+                          color: isAmoledTheme
+                              ? Colors.white
+                              : Theme.of(context).colorScheme.primary,
+                          fontWeight: FontWeight.bold,
+                        )
+                      : null,
+                ),
+              ),
+            ],
+          ),
+        ),
+        subtitle: Opacity(
+          opacity: opacity,
+          child: Text(
+            song.artist ?? LocaleProvider.tr('unknown_artist'),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        trailing: !_isSelecting
+            ? IconButton(
+                icon: Icon(
+                  isCurrent
+                      ? (playing
+                            ? Icons.pause
+                            : Icons.play_arrow)
+                      : Icons.play_arrow,
+                  color: isCurrent
+                      ? Theme.of(context).colorScheme.primary
+                      : null,
+                ),
+                onPressed: isIgnored
+                    ? null
+                    : () {
+                        if (isCurrent) {
+                          playing
+                              ? (audioHandler as MyAudioHandler).pause()
+                              : (audioHandler as MyAudioHandler).play();
+                        } else {
+                          _onSongSelected(song);
+                        }
+                      },
+              )
+            : null,
+        selected: isCurrent,
+        selectedTileColor: isAmoledTheme
+          ? Colors.white.withValues(alpha: 0.1)
+          : Theme.of(context).colorScheme.primaryContainer,
       ),
     );
   }

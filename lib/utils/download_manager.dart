@@ -3,14 +3,14 @@ import 'dart:async';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit.dart';
+// import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit.dart';
 import 'package:media_scanner/media_scanner.dart';
 import 'package:http/http.dart' as http;
 import 'package:dio/dio.dart';
 import 'package:music/screens/download/stream_provider.dart';
-import 'package:audiotags/audiotags.dart';
-import 'package:path/path.dart' as p;
-import 'package:music/main.dart';
+import 'package:audiotags/audiotags.dart';  
+// import 'package:path/path.dart' as p;
+// import 'package:music/main.dart';
 import 'package:image/image.dart' as img;
 import 'package:music/l10n/locale_provider.dart';
 import 'package:music/utils/notifiers.dart';
@@ -54,7 +54,7 @@ class DownloadManager {
   Future<void> initialize() async {
     final prefs = await SharedPreferences.getInstance();
     _directoryPath = prefs.getString('download_directory');
-    _usarExplode = prefs.getBool('download_type_explode') ?? false;
+    _usarExplode = prefs.getBool('download_type_explode') ?? true;
     _usarFFmpeg = prefs.getBool('audio_processor_ffmpeg') ?? false;
   }
 
@@ -168,6 +168,7 @@ class DownloadManager {
 
       // Procesar audio
       if (usarFFmpeg) {
+        /*
         await _procesarAudio(
           video.id.toString(),
           filePath,
@@ -176,6 +177,7 @@ class DownloadManager {
           video.thumbnails.highResUrl,
           coverBytes ?? Uint8List(0),
         );
+        */
       } else {
         await _procesarAudioSinFFmpeg(
           video.id.toString(),
@@ -269,6 +271,7 @@ class DownloadManager {
     MediaScanner.loadMedia(path: filePath);
 
     if (usarFFmpeg) {
+      /*
       await _procesarAudio(
         video.id.toString(),
         filePath,
@@ -277,6 +280,7 @@ class DownloadManager {
         video.thumbnails.highResUrl,
         coverBytes ?? Uint8List(0),
       );
+      */
     } else {
       await _procesarAudioSinFFmpeg(
         video.id.toString(),
@@ -290,6 +294,7 @@ class DownloadManager {
   }
 
   // Método 3: Procesamiento con FFmpeg
+  /*
   Future<void> _procesarAudio(
     String videoId,
     String inputPath,
@@ -417,6 +422,7 @@ class DownloadManager {
       );
     }
   }
+  */
 
   // Método 4: Procesamiento con AudioTags
   Future<void> _procesarAudioSinFFmpeg(

@@ -36,7 +36,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String _currentLanguage = 'es';
   String? _downloadDirectory;
   bool _downloadTypeExplode = false; // true: Explode, false: Directo
-  bool _audioProcessorFFmpeg = false; // true: FFmpeg, false: AudioTags
   AppColorScheme _currentColorScheme = AppColorScheme.deepPurple;
   int _artworkQuality = 410; // 80% por defecto
 
@@ -46,7 +45,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _checkBatteryOptimization();
     _loadLanguage();
     _loadDownloadDirectory();
-    _loadDownloadTypeAndProcessor();
+    _loadDownloadType();
     _loadColorScheme();
     _loadArtworkQuality();
     _initHeroAnimationSetting();
@@ -356,14 +355,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  Future<void> _loadDownloadTypeAndProcessor() async {
+  Future<void> _loadDownloadType() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
-      _downloadTypeExplode = prefs.getBool('download_type_explode') ?? false;
-      _audioProcessorFFmpeg = prefs.getBool('audio_processor_ffmpeg') ?? false;
+      _downloadTypeExplode = prefs.getBool('download_type_explode') ?? true; // Changed default to true
     });
     downloadTypeNotifier.value = _downloadTypeExplode;
-    audioProcessorNotifier.value = _audioProcessorFFmpeg;
   }
 
   Future<void> _setDownloadType(bool explode) async {
@@ -373,15 +370,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _downloadTypeExplode = explode;
     });
     downloadTypeNotifier.value = explode;
-  }
-
-  Future<void> _setAudioProcessor(bool ffmpeg) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('audio_processor_ffmpeg', ffmpeg);
-    setState(() {
-      _audioProcessorFFmpeg = ffmpeg;
-    });
-    audioProcessorNotifier.value = ffmpeg;
   }
 
   Future<void> _loadColorScheme() async {
@@ -552,28 +540,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ],
                     onChanged: (v) {
                       if (v != null) _setDownloadType(v);
-                    },
-                  ),
-                ),
-                const Divider(height: 1),
-                ListTile(
-                  leading: const Icon(Icons.settings),
-                  title: Text(LocaleProvider.tr('audio_processor')),
-                  subtitle: Text(LocaleProvider.tr('audio_processor_desc'), style: const TextStyle(fontSize: 12)),
-                  trailing: DropdownButton<bool>(
-                    value: _audioProcessorFFmpeg,
-                    items: [
-                      DropdownMenuItem(
-                        value: true,
-                        child: Text(LocaleProvider.tr('ffmpeg')),
-                      ),
-                      DropdownMenuItem(
-                        value: false,
-                        child: Text(LocaleProvider.tr('audiotags')),
-                      ),
-                    ],
-                    onChanged: (v) {
-                      if (v != null) _setAudioProcessor(v);
                     },
                   ),
                 ),
@@ -853,7 +819,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              '${LocaleProvider.tr('version')}: v1.4.3',
+                              '${LocaleProvider.tr('version')}: v1.4.4',
                               style: const TextStyle(
                                 fontSize: 15,
                               ),

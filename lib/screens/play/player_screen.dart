@@ -1097,144 +1097,131 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     mainAxisSize: MainAxisSize.max,
                                     children: [
+                                      // Combinar todos los ValueListenableBuilder en uno solo
                                       ValueListenableBuilder<bool>(
-                                        valueListenable: (audioHandler as MyAudioHandler).isShuffleNotifier,
-                                        builder: (context, isShuffle, _) {
+                                        valueListenable: playLoadingNotifier,
+                                        builder: (context, isLoading, _) {
                                           return ValueListenableBuilder<bool>(
-                                            valueListenable: playLoadingNotifier,
-                                            builder: (context, isLoading, _) {
-                                              return IconButton(
-                                                icon: const Icon(Icons.shuffle),
-                                                color: isShuffle
-                                                    ? Theme.of(context).colorScheme.primary
-                                                    : Theme.of(context).brightness == Brightness.light
-                                                        ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.9)
-                                                        : Theme.of(context).colorScheme.onSurface,
-                                                iconSize: iconSize,
-                                                onPressed: () async {
-                                                  if (isLoading) return;
-                                                  await (audioHandler as MyAudioHandler).toggleShuffle(!isShuffle);
-                                                },
-                                                tooltip: LocaleProvider.tr('shuffle'),
+                                            valueListenable: (audioHandler as MyAudioHandler).isShuffleNotifier,
+                                            builder: (context, isShuffle, _) {
+                                              return Row(
+                                                mainAxisAlignment: MainAxisAlignment.center,
+                                                mainAxisSize: MainAxisSize.max,
+                                                children: [
+                                                  IconButton(
+                                                    icon: const Icon(Icons.shuffle),
+                                                    color: isShuffle
+                                                        ? Theme.of(context).colorScheme.primary
+                                                        : Theme.of(context).brightness == Brightness.light
+                                                            ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.9)
+                                                            : Theme.of(context).colorScheme.onSurface,
+                                                    iconSize: iconSize,
+                                                    onPressed: () async {
+                                                      if (isLoading) return;
+                                                      await (audioHandler as MyAudioHandler).toggleShuffle(!isShuffle);
+                                                    },
+                                                    tooltip: LocaleProvider.tr('shuffle'),
+                                                  ),
+                                                  IconButton(
+                                                    icon: const Icon(Icons.skip_previous),
+                                                    color: Theme.of(context).brightness == Brightness.light
+                                                          ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.9)
+                                                          : Theme.of(context).colorScheme.onSurface,
+                                                    iconSize: sideIconSize,
+                                                    onPressed: () {
+                                                      if (isLoading) return;
+                                                      audioHandler?.skipToPrevious();
+                                                    },
+                                                  ),
+                                                  Padding(
+                                                    padding: EdgeInsets.symmetric(
+                                                      horizontal: iconSize / 4,
+                                                    ),
+                                                    child: Material(
+                                                      color: Theme.of(context).brightness == Brightness.light
+                                                          ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.9)
+                                                          : Theme.of(context).colorScheme.onSurface,
+                                                      borderRadius: BorderRadius.circular(
+                                                        mainIconSize / 4,
+                                                      ),
+                                                      child: InkWell(
+                                                        borderRadius: BorderRadius.circular(
+                                                          mainIconSize / 3.5,
+                                                        ),
+                                                        splashColor: Colors.transparent,
+                                                        highlightColor: Colors.transparent,
+                                                        onTap: () {
+                                                          if (isLoading) return;
+                                                          isPlaying
+                                                              ? audioHandler?.pause()
+                                                              : audioHandler?.play();
+                                                        },
+                                                        child: SizedBox(
+                                                          width: mainIconSize,
+                                                          height: mainIconSize,
+                                                          child: Center(
+                                                            child: isLoading
+                                                                ? SizedBox(
+                                                                    width: playIconSize,
+                                                                    height: playIconSize,
+                                                                    child: CircularProgressIndicator(
+                                                                      strokeWidth: 5,
+                                                                      strokeCap: StrokeCap.round,
+                                                                      color: Theme.of(context).brightness == Brightness.light
+                                                                          ? Theme.of(context).colorScheme.surface.withValues(alpha: 0.9)
+                                                                          : Theme.of(context).colorScheme.surface,
+                                                                    ),
+                                                                  )
+                                                                : AnimatedIcon(
+                                                                    icon: AnimatedIcons.play_pause,
+                                                                    progress: _playPauseController,
+                                                                    size: playIconSize,
+                                                                    color: Theme.of(context).brightness == Brightness.light
+                                                                        ? Theme.of(context).colorScheme.surface.withValues(alpha: 0.9)
+                                                                        : Theme.of(context).colorScheme.surface,
+                                                                  ),
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  IconButton(
+                                                    icon: const Icon(Icons.skip_next),
+                                                    color: Theme.of(context).brightness == Brightness.light
+                                                          ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.9)
+                                                          : Theme.of(context).colorScheme.onSurface,
+                                                    iconSize: sideIconSize,
+                                                    onPressed: () {
+                                                      if (isLoading) return;
+                                                      audioHandler?.skipToNext();  
+                                                    },
+                                                  ),
+                                                  IconButton(
+                                                    icon: Icon(repeatIcon),
+                                                    color: repeatColor,
+                                                    iconSize: iconSize,
+                                                    onPressed: () {
+                                                      if (isLoading) return;
+                                                      AudioServiceRepeatMode newMode;
+                                                      if (repeatMode ==
+                                                          AudioServiceRepeatMode.none) {
+                                                        newMode =
+                                                            AudioServiceRepeatMode.all;
+                                                      } else if (repeatMode ==
+                                                          AudioServiceRepeatMode.all) {
+                                                        newMode =
+                                                            AudioServiceRepeatMode.one;
+                                                      } else {
+                                                        newMode =
+                                                            AudioServiceRepeatMode.none;
+                                                      }
+                                                      audioHandler?.setRepeatMode(newMode);
+                                                    },
+                                                    tooltip: LocaleProvider.tr('repeat'),
+                                                  ),
+                                                ],
                                               );
                                             },
-                                          );
-                                        },
-                                      ),
-                                      ValueListenableBuilder<bool>(
-                                        valueListenable: playLoadingNotifier,
-                                        builder: (context, isLoading, _) {
-                                          return IconButton(
-                                            icon: const Icon(Icons.skip_previous),
-                                            color: Theme.of(context).brightness == Brightness.light
-                                                  ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.9)
-                                                  : Theme.of(context).colorScheme.onSurface,
-                                            iconSize: sideIconSize,
-                                            onPressed: () {
-                                              if (isLoading) return;
-                                              audioHandler?.skipToPrevious();
-                                            },
-                                          );
-                                        },
-                                      ),
-                                      Padding(
-                                        padding: EdgeInsets.symmetric(
-                                          horizontal: iconSize / 4,
-                                        ),
-                                        child: Material(
-                                          color: Theme.of(context).brightness == Brightness.light
-                                              ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.9)
-                                              : Theme.of(context).colorScheme.onSurface,
-                                          borderRadius: BorderRadius.circular(
-                                            mainIconSize / 4,
-                                          ),
-                                          child: InkWell(
-                                            borderRadius: BorderRadius.circular(
-                                              mainIconSize / 3.5,
-                                            ),
-                                            splashColor: Colors.transparent,
-                                            highlightColor: Colors.transparent,
-                                            onTap: () {
-                                              if (playLoadingNotifier.value) return;
-                                              isPlaying
-                                                  ? audioHandler?.pause()
-                                                  : audioHandler?.play();
-                                            },
-                                            child: SizedBox(
-                                              width: mainIconSize,
-                                              height: mainIconSize,
-                                              child: Center(
-                                                child: ValueListenableBuilder<bool>(
-                                                  valueListenable: playLoadingNotifier,
-                                                  builder: (context, isLoading, _) {
-                                                    return isLoading
-                                                        ? SizedBox(
-                                                            width: playIconSize,
-                                                            height: playIconSize,
-                                                            child: CircularProgressIndicator(
-                                                              strokeWidth: 5,
-                                                              strokeCap: StrokeCap.round,
-                                                              color: Theme.of(context).brightness == Brightness.light
-                                                                  ? Theme.of(context).colorScheme.surface.withValues(alpha: 0.9)
-                                                                  : Theme.of(context).colorScheme.surface,
-                                                            ),
-                                                          )
-                                                        : AnimatedIcon(
-                                                            icon: AnimatedIcons.play_pause,
-                                                            progress: _playPauseController,
-                                                            size: playIconSize,
-                                                            color: Theme.of(context).brightness == Brightness.light
-                                                                ? Theme.of(context).colorScheme.surface.withValues(alpha: 0.9)
-                                                                : Theme.of(context).colorScheme.surface,
-                                                          );
-                                                  },
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                      ValueListenableBuilder<bool>(
-                                        valueListenable: playLoadingNotifier,
-                                        builder: (context, isLoading, _) {
-                                          return IconButton(
-                                            icon: const Icon(Icons.skip_next),
-                                            color: Theme.of(context).brightness == Brightness.light
-                                                  ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.9)
-                                                  : Theme.of(context).colorScheme.onSurface,
-                                            iconSize: sideIconSize,
-                                            onPressed: () {
-                                              if (isLoading) return;
-                                              audioHandler?.skipToNext();  
-                                            },
-                                          );
-                                        },
-                                      ),
-                                      ValueListenableBuilder<bool>(
-                                        valueListenable: playLoadingNotifier,
-                                        builder: (context, isLoading, _) {
-                                          return IconButton(
-                                            icon: Icon(repeatIcon),
-                                            color: repeatColor,
-                                            iconSize: iconSize,
-                                            onPressed: () {
-                                              if (isLoading) return;
-                                              AudioServiceRepeatMode newMode;
-                                              if (repeatMode ==
-                                                  AudioServiceRepeatMode.none) {
-                                                newMode =
-                                                    AudioServiceRepeatMode.all;
-                                              } else if (repeatMode ==
-                                                  AudioServiceRepeatMode.all) {
-                                                newMode =
-                                                    AudioServiceRepeatMode.one;
-                                              } else {
-                                                newMode =
-                                                    AudioServiceRepeatMode.none;
-                                              }
-                                              audioHandler?.setRepeatMode(newMode);
-                                            },
-                                            tooltip: LocaleProvider.tr('repeat'),
                                           );
                                         },
                                       ),
@@ -1518,7 +1505,6 @@ class _TitleMarqueeState extends State<TitleMarquee> {
           style: widget.style!,
           velocity: 30.0,
           blankSpace: 40.0,
-          pauseAfterRound: const Duration(seconds: 2),
           startPadding: 0.0,
           fadingEdgeStartFraction: 0.1,
           fadingEdgeEndFraction: 0.1,

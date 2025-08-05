@@ -39,6 +39,8 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> with TickerProvid
   MediaItem? _lastKnownMediaItem;
   late AnimationController _playPauseController;
   Timer? _temporaryItemTimer;
+  Timer? _playingDebounce;
+  final ValueNotifier<bool> _isPlayingNotifier = ValueNotifier<bool>(false);
   
   // Variables para tracking de tiempo de escucha
   String? _currentSongId;
@@ -55,6 +57,16 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> with TickerProvid
       duration: const Duration(milliseconds: 350),
       value: 1.0,
     );
+    
+    // Escuchar cambios en el estado de reproducción con debounce
+    audioHandler?.playbackState.listen((state) {
+      _playingDebounce?.cancel();
+      _playingDebounce = Timer(const Duration(milliseconds: 100), () {
+        if (mounted) {
+          _isPlayingNotifier.value = state.playing;
+        }
+      });
+    });
   }
 
   @override
@@ -62,6 +74,8 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> with TickerProvid
     _playPauseController.dispose();
     _temporaryItemTimer?.cancel();
     _listeningTimer?.cancel();
+    _playingDebounce?.cancel();
+    _isPlayingNotifier.dispose();
     super.dispose();
   }
 
@@ -257,12 +271,7 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> with TickerProvid
                                   );
                                 }
                                 
-                                final songPath = currentSong.extras?['data'] as String?;
-                                Uri? fallbackArtUri;
-                                if (songPath != null && artworkCache.containsKey(songPath)) {
-                                  fallbackArtUri = artworkCache[songPath];
-                                }
-                                final artUri = currentSong.artUri ?? fallbackArtUri;
+                                final artUri = currentSong.artUri;
                                 
                                 return ArtworkHeroCached(
                                   artUri: artUri,
@@ -299,13 +308,9 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> with TickerProvid
                             const SizedBox(width: 8),
 
                             RepaintBoundary(
-                              child: StreamBuilder<bool>(
-                                stream: audioHandler?.playbackState
-                                    .map((s) => s.playing)
-                                    .distinct(),
-                                initialData: false,
-                                builder: (context, isPlayingSnapshot) {
-                                  final isPlaying = isPlayingSnapshot.data ?? false;
+                              child: ValueListenableBuilder<bool>(
+                                valueListenable: _isPlayingNotifier,
+                                builder: (context, isPlaying, child) {
                                   // Sincroniza la animación
                                   if (isPlaying) {
                                     _playPauseController.forward();
@@ -478,7 +483,6 @@ class _TitleMarqueeState extends State<TitleMarquee> {
             style: textStyle,
             velocity: 30.0,
             blankSpace: 40.0,
-            pauseAfterRound: const Duration(seconds: 2),
             startPadding: 0.0,
             fadingEdgeStartFraction: 0.1,
             fadingEdgeEndFraction: 0.1,

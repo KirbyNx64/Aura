@@ -1,13 +1,12 @@
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
-import 'package:music/utils/audio/background_audio_handler.dart';
 import 'package:music/utils/permission/permission_handler.dart';
 import 'package:music/utils/theme_preferences.dart';
-import 'widgets/bottom_nav.dart';
-import 'screens/home/home_screen.dart';
-import 'screens/likes/favorites_screen.dart';
-import 'screens/folders/folders_screen.dart';
-import 'screens/download/download_screen.dart';
+import 'package:music/widgets/bottom_nav.dart';
+import 'package:music/screens/home/home_screen.dart';
+import 'package:music/screens/likes/favorites_screen.dart';
+import 'package:music/screens/folders/folders_screen.dart';
+import 'package:music/screens/download/download_screen.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter/services.dart';
 import 'package:music/utils/yt_search/yt_screen.dart';
@@ -17,6 +16,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:music/utils/db/playlist_model.dart';
 import 'package:music/utils/audio/synced_lyrics_service.dart';
+import 'package:music/utils/audio/background_audio_handler.dart';
 
 // Cambiar de late final a nullable para mejor manejo de errores
 AudioHandler? audioHandler;
@@ -47,11 +47,10 @@ Future<AudioHandler?> getAudioServiceSafely() async {
   }
   
   // Si no está inicializado, intentar inicializarlo
-  // print('🔄 AudioService no inicializado, inicializando...');
   return await initializeAudioServiceSafely();
 }
 
-/// Inicializa el AudioService de forma segura cuando se necesita
+/// Inicializa el AudioService de forma normal
 Future<AudioHandler?> initializeAudioServiceSafely() async {
   if (_audioHandlerInitialized && audioHandler != null) {
     return audioHandler;
@@ -67,28 +66,13 @@ Future<AudioHandler?> initializeAudioServiceSafely() async {
   
   try {
     _audioHandlerInitializing = true;
-    // print('🎵 Inicializando AudioService de forma segura...');
     
-    // Limpieza preventiva
-    try {
-      await cleanupAudioHandler();
-      await Future.delayed(const Duration(milliseconds: 200));
-    } catch (_) {}
-    
-    audioHandler = await initAudioService().timeout(
-      const Duration(seconds: 10),
-      onTimeout: () {
-        // print('⏰ Timeout en inicialización segura');
-        throw Exception('Timeout al inicializar el audio service');
-      },
-    );
+    audioHandler = await initAudioService();
     
     _audioHandlerInitialized = true;
     audioServiceReady.value = true; // Notificar que está listo
-    // print('✅ AudioService inicializado de forma segura');
     return audioHandler;
   } catch (e) {
-    // print('❌ Error al inicializar AudioService de forma segura: $e');
     _audioHandlerInitialized = false;
     audioHandler = null;
     audioServiceReady.value = false; // Resetear el estado
@@ -99,9 +83,6 @@ Future<AudioHandler?> initializeAudioServiceSafely() async {
 }
 
 class LifecycleHandler extends WidgetsBindingObserver {
-  LifecycleHandler() {
-    // print('🔧 LifecycleHandler constructor ejecutado');
-  }
   
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) async {
@@ -191,18 +172,13 @@ void main() async {
       .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
       ?.requestNotificationsPermission();
 
-  // print('🚀 main() iniciado');
-  // print('✅ WidgetsFlutterBinding inicializado');
-  // WidgetsBinding.instance.addObserver(LifecycleHandler());
-  // print('✅ LifecycleHandler agregado');
-  // print('🔍 Iniciando aplicación...');
   await LocaleProvider.loadLocale();
-  // print('🌍 Locale cargado (comentado)');
   final permisosOk = await pedirPermisosMedia();
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
   ]);
+  
   if (!permisosOk) {
     runApp(
       MaterialApp(
@@ -222,7 +198,6 @@ void main() async {
   try {
     await initializeAudioServiceSafely();
   } catch (e) {
-    // print('⚠️ Error al inicializar AudioService antes de runApp: $e');
     // La app seguirá, pero el audio podría no estar disponible hasta que se intente de nuevo
   }
 
@@ -235,11 +210,13 @@ void main() async {
       try {
         await initializeAudioServiceSafely();
       } catch (e) {
-        // print('⚠️ Error al inicializar AudioService en segundo plano: $e');
+        // Error silencioso
       }
     }
   });
 }
+
+
 
 class PermisosScreen extends StatefulWidget {
   const PermisosScreen({super.key});
@@ -505,7 +482,6 @@ class MyRootApp extends StatelessWidget {
     return ValueListenableBuilder<String>(
       valueListenable: languageNotifier,
       builder: (context, lang, _) {
-        // print('DEBUG: MyRootApp rebuilding with language: $lang');
         return MainApp(currentLanguage: lang);
       },
     );

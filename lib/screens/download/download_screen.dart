@@ -12,15 +12,15 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:music/utils/notifiers.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/services.dart';
-import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit.dart';
+// import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit.dart';
 import 'package:media_scanner/media_scanner.dart';
 import 'package:http/http.dart' as http;
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:dio/dio.dart';
 import 'package:music/screens/download/stream_provider.dart';
 import 'package:audiotags/audiotags.dart';
-import 'package:path/path.dart' as p;
-import 'package:music/main.dart';
+// import 'package:path/path.dart' as p;
+// import 'package:music/main.dart';
 import 'package:image/image.dart' as img;
 import 'package:music/l10n/locale_provider.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
@@ -75,7 +75,6 @@ class _DownloadScreenState extends State<DownloadScreen>
     // Escuchar cambios en la ruta de descargas
     downloadDirectoryNotifier.addListener(_onDownloadDirectoryChanged);
     downloadTypeNotifier.addListener(_onDownloadTypeChanged);
-    audioProcessorNotifier.addListener(_onAudioProcessorChanged);
     // Inicializar valores desde notifiers
     _loadDownloadPrefs();
   }
@@ -103,7 +102,6 @@ class _DownloadScreenState extends State<DownloadScreen>
     WidgetsBinding.instance.removeObserver(this);
     downloadDirectoryNotifier.removeListener(_onDownloadDirectoryChanged);
     downloadTypeNotifier.removeListener(_onDownloadTypeChanged);
-    audioProcessorNotifier.removeListener(_onAudioProcessorChanged);
     super.dispose();
   }
 
@@ -117,11 +115,7 @@ class _DownloadScreenState extends State<DownloadScreen>
       _usarExplode = downloadTypeNotifier.value;
     });
   }
-  void _onAudioProcessorChanged() {
-    setState(() {
-      _usarFFmpeg = audioProcessorNotifier.value;
-    });
-  }
+
 
   @override
   void didChangeDependencies() {
@@ -155,12 +149,11 @@ class _DownloadScreenState extends State<DownloadScreen>
 
   Future<void> _loadDownloadPrefs() async {
     final prefs = await SharedPreferences.getInstance();
-    final explode = prefs.getBool('download_type_explode') ?? false;
-    final ffmpeg = prefs.getBool('audio_processor_ffmpeg') ?? false;
+    final explode = prefs.getBool('download_type_explode') ?? true;
     _usarExplode = explode;
-    _usarFFmpeg = ffmpeg;
+    _usarFFmpeg = false; // Always use AudioTags (more efficient)
     downloadTypeNotifier.value = explode;
-    audioProcessorNotifier.value = ffmpeg;
+    audioProcessorNotifier.value = false; // Always use AudioTags
     setState(() {});
   }
 
@@ -494,6 +487,7 @@ class _DownloadScreenState extends State<DownloadScreen>
 
       // Procesar audio
       if (_usarFFmpeg) {
+        /*
         await _procesarAudio(
           video.id.toString(),
           filePath,
@@ -503,6 +497,7 @@ class _DownloadScreenState extends State<DownloadScreen>
           bytes ?? Uint8List(0),
           isPlaylistDownload: true,
         );
+        */
       } else {
         await _procesarAudioSinFFmpeg(
           video.id.toString(),
@@ -632,6 +627,7 @@ class _DownloadScreenState extends State<DownloadScreen>
       MediaScanner.loadMedia(path: filePath);
 
       if (_usarFFmpeg) {
+        /*
         await _procesarAudio(
           video.id.toString(),
           filePath,
@@ -641,6 +637,7 @@ class _DownloadScreenState extends State<DownloadScreen>
           bytes,
           isPlaylistDownload: true,
         );
+        */
       } else {
         await _procesarAudioSinFFmpeg(
           video.id.toString(),
@@ -1000,6 +997,7 @@ class _DownloadScreenState extends State<DownloadScreen>
       if (!await file.exists()) throw Exception('La descarga falló.');
 
       if (_usarFFmpeg) {
+        /*
         await _procesarAudio(
           video.id.toString(),
           filePath,
@@ -1008,6 +1006,7 @@ class _DownloadScreenState extends State<DownloadScreen>
           video.thumbnails.highResUrl,
           bytes,
         );
+        */
       } else {
         await _procesarAudioSinFFmpeg(
           video.id.toString(),
@@ -1298,6 +1297,7 @@ class _DownloadScreenState extends State<DownloadScreen>
       MediaScanner.loadMedia(path: filePath);
 
       if (_usarFFmpeg) {
+        /*
         await _procesarAudio(
           video.id.toString(),
           filePath,
@@ -1306,6 +1306,7 @@ class _DownloadScreenState extends State<DownloadScreen>
           video.thumbnails.highResUrl,
           bytes,
         );
+        */
       } else {
         await _procesarAudioSinFFmpeg(
           video.id.toString(),
@@ -1429,6 +1430,7 @@ class _DownloadScreenState extends State<DownloadScreen>
     );
   }
 
+  /*
   Future<void> _procesarAudio(
     String videoId,
     String inputPath,
@@ -1627,6 +1629,7 @@ class _DownloadScreenState extends State<DownloadScreen>
       }
     }
   }
+  */
 
   Future<void> _procesarAudioSinFFmpeg(
     String videoId,
@@ -1812,12 +1815,14 @@ class _DownloadScreenState extends State<DownloadScreen>
                             style: const TextStyle(fontWeight: FontWeight.bold),
                           ),
                           Text(LocaleProvider.tr('download_method_desc')),
+                          /*
                           const SizedBox(height: 16),
                           Text(
                             LocaleProvider.tr('audio_processing_title'),
                             style: const TextStyle(fontWeight: FontWeight.bold),
                           ),
                           Text(LocaleProvider.tr('audio_processing_desc')),
+                          */
                         ],
                       ),
                     ),
@@ -1872,7 +1877,11 @@ class _DownloadScreenState extends State<DownloadScreen>
                       focusNode: _focusNode,
                       decoration: InputDecoration(
                         labelText: LocaleProvider.tr('youtube_link'),
-                        border: const OutlineInputBorder(),
+                        border: const OutlineInputBorder(
+                          borderRadius: BorderRadius.all(
+                            Radius.circular(8),
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -2507,43 +2516,7 @@ class _DownloadScreenState extends State<DownloadScreen>
                   ),
                 ],
               ),
-              const SizedBox(height: 8),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.start,
-                children: [
-                  Icon(
-                    Icons.settings,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                  const SizedBox(width: 8),
-                  TranslatedText('audio_processing'),
-                  const SizedBox(width: 8),
-                  DropdownButton<bool>(
-                    value: _usarFFmpeg,
-                    items: [
-                      DropdownMenuItem(
-                        value: true,
-                        child: TranslatedText('ffmpeg'),
-                      ),
-                      DropdownMenuItem(
-                        value: false,
-                        child: TranslatedText('audiotags'),
-                      ),
-                    ],
-                    onChanged: (_isDownloading || _isPlaylistDownloading) 
-                        ? null 
-                        : (v) async {
-                            if (v != null) {
-                              setState(() => _usarFFmpeg = v);
-                              // Guardar en preferencias y actualizar notifier
-                              final prefs = await SharedPreferences.getInstance();
-                              await prefs.setBool('audio_processor_ffmpeg', v);
-                              audioProcessorNotifier.value = v;
-                            }
-                          },
-                  ),
-                ],
-              ),
+
             ],
           ),
         ),

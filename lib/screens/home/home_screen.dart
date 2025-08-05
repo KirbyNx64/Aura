@@ -74,6 +74,8 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   List<SongModel> _shuffledQuickPick = [];
 
   Timer? _debounce;
+  Timer? _playingDebounce;
+  final ValueNotifier<bool> _isPlayingNotifier = ValueNotifier<bool>(false);
 
   /// Helper para obtener el AudioHandler de forma segura
   Future<MyAudioHandler?> _getAudioHandler() async {
@@ -107,6 +109,16 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     playlistsShouldReload.addListener(_onPlaylistsShouldReload);
     shortcutsShouldReload.addListener(_onShortcutsShouldReload);
     _buscarActualizacion();
+    
+    // Escuchar cambios en el estado de reproducción con debounce
+    audioHandler?.playbackState.listen((state) {
+      _playingDebounce?.cancel();
+      _playingDebounce = Timer(const Duration(milliseconds: 100), () {
+        if (mounted) {
+          _isPlayingNotifier.value = state.playing;
+        }
+      });
+    });
   }
 
   void _onShortcutsShouldReload() {
@@ -296,10 +308,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Future<void> _preloadArtworkForSong(SongModel song) async {
     try {
-      // Si no está en caché, cargarla inmediatamente
-      if (!artworkCache.containsKey(song.data)) {
-        await getOrCacheArtwork(song.id, song.data);
-      }
+      await getOrCacheArtwork(song.id, song.data);
     } catch (e) {
       // Ignorar errores de precarga
     }
@@ -405,6 +414,8 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _searchPlaylistController.dispose();
     _searchPlaylistFocus.dispose();
     _debounce?.cancel();
+    _playingDebounce?.cancel();
+    _isPlayingNotifier.dispose();
     super.dispose();
   }
 
@@ -535,15 +546,10 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       
       // Crear MediaItem temporal para mostrar el overlay inmediatamente
       Uri? cachedArtUri;
-      if (artworkCache.containsKey(song.data)) {
-        cachedArtUri = artworkCache[song.data];
-      } else {
-        // Si no está en caché, intentar cargarla inmediatamente
-        try {
-          cachedArtUri = await getOrCacheArtwork(song.id, song.data);
-        } catch (e) {
-          // Si falla, continuar sin carátula
-        }
+      try {
+        cachedArtUri = await getOrCacheArtwork(song.id, song.data);
+      } catch (e) {
+        // Si falla, continuar sin carátula
       }
       
       final tempMediaItem = MediaItem(
@@ -1064,156 +1070,302 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                             final isCurrent =
                                 audioHandler?.mediaItem.value?.extras?['data'] ==
                                 song.data;
-                            final isPlaying =
-                                audioHandler?.playbackState.value.playing ?? false;
                             final isAmoledTheme = colorSchemeNotifier.value == AppColorScheme.amoled;
-                            return ListTile(
-                              leading: ClipRRect(
-                                borderRadius: BorderRadius.circular(8),
-                                child: QueryArtworkWidget(
-                                  id: song.id,
-                                  type: ArtworkType.AUDIO,
-                                  artworkBorder: BorderRadius.circular(8),
-                                  artworkHeight: 50,
-                                  artworkWidth: 50,
-                                  keepOldArtwork: true,
-                                  nullArtworkWidget: Container(
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.surfaceContainer,
-                                    width: 50,
-                                    height: 50,
-                                    child: Icon(
-                                      Icons.music_note,
-                                      color: Theme.of(context).colorScheme.onSurface,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              title: Row(
-                                children: [
-                                  if (isCurrent)
-                                    Padding(
-                                      padding: const EdgeInsets.only(right: 8.0),
-                                      child: MiniMusicVisualizer(
-                                        color: Theme.of(context).colorScheme.primary,
-                                        width: 4,
-                                        height: 15,
-                                        radius: 4,
-                                        animate: isPlaying ? true : false,
+                            
+                            // Solo usar ValueListenableBuilder para la canción actual
+                            if (isCurrent) {
+                              return ValueListenableBuilder<bool>(
+                                valueListenable: _isPlayingNotifier,
+                                builder: (context, playing, child) {
+                                  return ListTile(
+                                    leading: ClipRRect(
+                                      borderRadius: BorderRadius.circular(8),
+                                      child: QueryArtworkWidget(
+                                        id: song.id,
+                                        type: ArtworkType.AUDIO,
+                                        artworkBorder: BorderRadius.circular(8),
+                                        artworkHeight: 50,
+                                        artworkWidth: 50,
+                                        keepOldArtwork: true,
+                                        nullArtworkWidget: Container(
+                                          color: Theme.of(
+                                            context,
+                                          ).colorScheme.surfaceContainer,
+                                          width: 50,
+                                          height: 50,
+                                          child: Icon(
+                                            Icons.music_note,
+                                            color: Theme.of(context).colorScheme.onSurface,
+                                          ),
+                                        ),
                                       ),
                                     ),
-                                  Expanded(
-                                    child: Text(
-                                      song.title,
+                                    title: Row(
+                                      children: [
+                                        if (isCurrent)
+                                          Padding(
+                                            padding: const EdgeInsets.only(right: 8.0),
+                                            child: MiniMusicVisualizer(
+                                              color: Theme.of(context).colorScheme.primary,
+                                              width: 4,
+                                              height: 15,
+                                              radius: 4,
+                                              animate: playing ? true : false,
+                                            ),
+                                          ),
+                                        Expanded(
+                                          child: Text(
+                                            song.title,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                              fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
+                                              color: isCurrent
+                                                  ? (isAmoledTheme
+                                                      ? Colors.white
+                                                      : Theme.of(context).colorScheme.primary)
+                                                  : Theme.of(context).colorScheme.onSurface,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    subtitle: Text(
+                                      (song.artist?.trim().isEmpty ?? true)
+                                          ? LocaleProvider.tr('unknown_artist')
+                                          : song.artist!,
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
-                                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                        fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
-                                        color: isCurrent
-                                            ? (isAmoledTheme
-                                                ? Colors.white
-                                                : Theme.of(context).colorScheme.primary)
-                                            : Theme.of(context).colorScheme.onSurface,
+                                    ),
+                                    trailing: IconButton(
+                                      icon: Icon(
+                                        isCurrent && playing
+                                            ? Icons.pause
+                                            : Icons.play_arrow,
+                                      ),
+                                      onPressed: () {
+                                        if (isCurrent) {
+                                          playing
+                                              ? (audioHandler as MyAudioHandler).pause()
+                                              : (audioHandler as MyAudioHandler).play();
+                                        } else {
+                                          // Precargar la carátula antes de reproducir
+                                          unawaited(_preloadArtworkForSong(song));
+                                          _playSongAndOpenPlayer(song, songsToShow);
+                                        }
+                                      },
+                                    ),
+                                    selected: isCurrent,
+                                    selectedTileColor: isAmoledTheme
+                                        ? Colors.white.withValues(alpha: 0.1)
+                                        : Theme.of(context).colorScheme.primaryContainer,
+                                    onTap: () async {
+                                      // Precargar la carátula antes de reproducir
+                                      unawaited(_preloadArtworkForSong(song));
+                                      _debounce?.cancel();
+                                      _debounce = Timer(const Duration(milliseconds: 300), () async {
+                                        if (!mounted) return;
+                                        await _playSongAndOpenPlayer(song, songsToShow);
+                                      });
+                                    },
+                                    onLongPress: () {
+                                      showModalBottomSheet(
+                                        context: context,
+                                        builder: (context) => SafeArea(
+                                          child: FutureBuilder<bool>(
+                                            future: FavoritesDB().isFavorite(
+                                              song.data,
+                                            ),
+                                            builder: (context, snapshot) {
+                                              final isFav = snapshot.data ?? false;
+                                              return Column(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  ListTile(
+                                                    leading: Icon(
+                                                      isFav
+                                                          ? Icons.delete_outline
+                                                          : Icons.favorite_border,
+                                                    ),
+                                                    title: TranslatedText(
+                                                      isFav
+                                                          ? 'remove_from_favorites'
+                                                          : 'add_to_favorites',
+                                                    ),
+                                                    onTap: () async {
+                                                      Navigator.of(context).pop();
+                                                      if (isFav) {
+                                                        await FavoritesDB()
+                                                            .removeFavorite(
+                                                              song.data,
+                                                            );
+                                                        favoritesShouldReload.value =
+                                                            !favoritesShouldReload
+                                                                .value;
+                                                      } else {
+                                                        await _addToFavorites(song);
+                                                      }
+                                                    },
+                                                  ),
+                                                  ListTile(
+                                                    leading: const Icon(Icons.delete_outline),
+                                                    title: TranslatedText('remove_from_recents'),
+                                                    onTap: () async {
+                                                      Navigator.of(context).pop();
+                                                      await RecentsDB().removeRecent(song.data);
+                                                      await _loadRecents();
+                                                    },
+                                                  ),
+                                                ],
+                                              );
+                                            },
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  );
+                                },
+                              );
+                            } else {
+                              // Para canciones que no están reproduciéndose, no usar StreamBuilder
+                              return ListTile(
+                                leading: ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: QueryArtworkWidget(
+                                    id: song.id,
+                                    type: ArtworkType.AUDIO,
+                                    artworkBorder: BorderRadius.circular(8),
+                                    artworkHeight: 50,
+                                    artworkWidth: 50,
+                                    keepOldArtwork: true,
+                                    nullArtworkWidget: Container(
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.surfaceContainer,
+                                      width: 50,
+                                      height: 50,
+                                      child: Icon(
+                                        Icons.music_note,
+                                        color: Theme.of(context).colorScheme.onSurface,
                                       ),
                                     ),
                                   ),
-                                ],
-                              ),
-                              subtitle: Text(
-                                (song.artist?.trim().isEmpty ?? true)
-                                    ? LocaleProvider.tr('unknown_artist')
-                                    : song.artist!,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              trailing: IconButton(
-                                icon: Icon(
-                                  isCurrent && isPlaying
-                                      ? Icons.pause
-                                      : Icons.play_arrow,
                                 ),
-                                onPressed: () {
-                                  if (isCurrent) {
-                                    isPlaying
-                                        ? (audioHandler as MyAudioHandler).pause()
-                                        : (audioHandler as MyAudioHandler).play();
-                                  } else {
+                                title: Row(
+                                  children: [
+                                    if (isCurrent)
+                                      Padding(
+                                        padding: const EdgeInsets.only(right: 8.0),
+                                        child: MiniMusicVisualizer(
+                                          color: Theme.of(context).colorScheme.primary,
+                                          width: 4,
+                                          height: 15,
+                                          radius: 4,
+                                          animate: false, // No playing
+                                        ),
+                                      ),
+                                    Expanded(
+                                      child: Text(
+                                        song.title,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                          fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
+                                          color: isCurrent
+                                              ? (isAmoledTheme
+                                                  ? Colors.white
+                                                  : Theme.of(context).colorScheme.primary)
+                                              : Theme.of(context).colorScheme.onSurface,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                subtitle: Text(
+                                  (song.artist?.trim().isEmpty ?? true)
+                                      ? LocaleProvider.tr('unknown_artist')
+                                      : song.artist!,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                trailing: IconButton(
+                                  icon: const Icon(Icons.play_arrow),
+                                  onPressed: () {
                                     // Precargar la carátula antes de reproducir
                                     unawaited(_preloadArtworkForSong(song));
                                     _playSongAndOpenPlayer(song, songsToShow);
-                                  }
+                                  },
+                                ),
+                                selected: isCurrent,
+                                selectedTileColor: isAmoledTheme
+                                    ? Colors.white.withValues(alpha: 0.1)
+                                    : Theme.of(context).colorScheme.primaryContainer,
+                                onTap: () async {
+                                  // Precargar la carátula antes de reproducir
+                                  unawaited(_preloadArtworkForSong(song));
+                                  _debounce?.cancel();
+                                  _debounce = Timer(const Duration(milliseconds: 300), () async {
+                                    if (!mounted) return;
+                                    await _playSongAndOpenPlayer(song, songsToShow);
+                                  });
                                 },
-                              ),
-                              selected: isCurrent,
-                              selectedTileColor: isAmoledTheme
-                                  ? Colors.white.withValues(alpha: 0.1)
-                                  : Theme.of(context).colorScheme.primaryContainer,
-                              onTap: () async {
-                                // Precargar la carátula antes de reproducir
-                                unawaited(_preloadArtworkForSong(song));
-                                _debounce?.cancel();
-                                _debounce = Timer(const Duration(milliseconds: 300), () async {
-                                  if (!mounted) return;
-                                  await _playSongAndOpenPlayer(song, songsToShow);
-                                });
-                              },
-                              onLongPress: () {
-                                showModalBottomSheet(
-                                  context: context,
-                                  builder: (context) => SafeArea(
-                                    child: FutureBuilder<bool>(
-                                      future: FavoritesDB().isFavorite(
-                                        song.data,
+                                onLongPress: () {
+                                  showModalBottomSheet(
+                                    context: context,
+                                    builder: (context) => SafeArea(
+                                      child: FutureBuilder<bool>(
+                                        future: FavoritesDB().isFavorite(
+                                          song.data,
+                                        ),
+                                        builder: (context, snapshot) {
+                                          final isFav = snapshot.data ?? false;
+                                          return Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              ListTile(
+                                                leading: Icon(
+                                                  isFav
+                                                      ? Icons.delete_outline
+                                                      : Icons.favorite_border,
+                                                ),
+                                                title: TranslatedText(
+                                                  isFav
+                                                      ? 'remove_from_favorites'
+                                                      : 'add_to_favorites',
+                                                ),
+                                                onTap: () async {
+                                                  Navigator.of(context).pop();
+                                                  if (isFav) {
+                                                    await FavoritesDB()
+                                                        .removeFavorite(
+                                                          song.data,
+                                                        );
+                                                    favoritesShouldReload.value =
+                                                        !favoritesShouldReload
+                                                            .value;
+                                                  } else {
+                                                    await _addToFavorites(song);
+                                                  }
+                                                },
+                                              ),
+                                              ListTile(
+                                                leading: const Icon(Icons.delete_outline),
+                                                title: TranslatedText('remove_from_recents'),
+                                                onTap: () async {
+                                                  Navigator.of(context).pop();
+                                                  await RecentsDB().removeRecent(song.data);
+                                                  await _loadRecents();
+                                                },
+                                              ),
+                                            ],
+                                          );
+                                        },
                                       ),
-                                      builder: (context, snapshot) {
-                                        final isFav = snapshot.data ?? false;
-                                        return Column(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            ListTile(
-                                              leading: Icon(
-                                                isFav
-                                                    ? Icons.delete_outline
-                                                    : Icons.favorite_border,
-                                              ),
-                                              title: TranslatedText(
-                                                isFav
-                                                    ? 'remove_from_favorites'
-                                                    : 'add_to_favorites',
-                                              ),
-                                              onTap: () async {
-                                                Navigator.of(context).pop();
-                                                if (isFav) {
-                                                  await FavoritesDB()
-                                                      .removeFavorite(
-                                                        song.data,
-                                                      );
-                                                  favoritesShouldReload.value =
-                                                      !favoritesShouldReload
-                                                          .value;
-                                                } else {
-                                                  await _addToFavorites(song);
-                                                }
-                                              },
-                                            ),
-                                            ListTile(
-                                              leading: const Icon(Icons.delete_outline),
-                                              title: TranslatedText('remove_from_recents'),
-                                              onTap: () async {
-                                                Navigator.of(context).pop();
-                                                await RecentsDB().removeRecent(song.data);
-                                                await _loadRecents();
-                                              },
-                                            ),
-                                          ],
-                                        );
-                                      },
                                     ),
-                                  ),
-                                );
-                              },
-                            );
+                                  );
+                                },
+                              );
+                            }
                           },
                         );
                       },
@@ -1248,205 +1400,409 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                             final isCurrent =
                                 audioHandler?.mediaItem.value?.extras?['data'] ==
                                 song.data;
-                            final isPlaying =
-                                audioHandler?.playbackState.value.playing ?? false;
                             final isAmoledTheme = colorSchemeNotifier.value == AppColorScheme.amoled;
-                            return ListTile(
-                              onTap: () {
-                                if (_isSelectingPlaylistSongs) {
-                                  _onPlaylistSongSelected(song);
-                                } else {
-                                  _debounce?.cancel();
-                                  _debounce = Timer(const Duration(milliseconds: 300), () async {
-                                    if (!mounted) return;
-                                    await _playSongAndOpenPlayer(song, songsToShow);
-                                  });
-                                }
-                              },
-                              onLongPress: () async {
-                                if (_isSelectingPlaylistSongs) {
-                                  setState(() {
-                                    if (_selectedPlaylistSongIds.contains(song.id)) {
-                                      _selectedPlaylistSongIds.remove(song.id);
-                                      if (_selectedPlaylistSongIds.isEmpty) {
-                                        _isSelectingPlaylistSongs = false;
+                            
+                            // Solo usar ValueListenableBuilder para la canción actual
+                            if (isCurrent) {
+                              return ValueListenableBuilder<bool>(
+                                valueListenable: _isPlayingNotifier,
+                                builder: (context, playing, child) {
+                                  return ListTile(
+                                    onTap: () {
+                                      if (_isSelectingPlaylistSongs) {
+                                        _onPlaylistSongSelected(song);
+                                      } else {
+                                        _debounce?.cancel();
+                                        _debounce = Timer(const Duration(milliseconds: 300), () async {
+                                          if (!mounted) return;
+                                          await _playSongAndOpenPlayer(song, songsToShow);
+                                        });
                                       }
-                                    } else {
-                                      _selectedPlaylistSongIds.add(song.id);
-                                    }
-                                  });
-                                } else {
-                                  final isPinned = await ShortcutsDB().isShortcut(song.data);
-                                  final isFav = await FavoritesDB().isFavorite(song.data);
-                                  if (!context.mounted) return;
-                                  showModalBottomSheet(
-                                    context: context,
-                                    builder: (context) => SafeArea(
-                                      child: Column(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          ListTile(
-                                            leading: Icon(
-                                              isFav ? Icons.delete_outline : Icons.favorite_border,
-                                            ),
-                                            title: TranslatedText(
-                                              isFav ? 'remove_from_favorites' : 'add_to_favorites',
-                                            ),
-                                            onTap: () async {
-                                              if (!context.mounted) return;
-                                              Navigator.of(context).pop();
-                                              if (isFav) {
-                                                await FavoritesDB().removeFavorite(song.data);
-                                                favoritesShouldReload.value = !favoritesShouldReload.value;
-                                              } else {
-                                                await FavoritesDB().addFavorite(song);
-                                                favoritesShouldReload.value = !favoritesShouldReload.value;
-                                              }
-                                            },
-                                          ),
-                                          ListTile(
-                                            leading: const Icon(Icons.playlist_remove),
-                                            title: TranslatedText('remove_from_playlist'),
-                                            onTap: () async {
-                                              if (!context.mounted) return;
-                                              Navigator.of(context).pop();
-                                              await PlaylistsDB().removeSongFromPlaylist(_selectedPlaylist!['id'], song.data);
-                                              await _loadPlaylistSongs(_selectedPlaylist!);
-                                            },
-                                          ),
-                                          ListTile(
-                                            leading: Icon(isPinned ? Icons.push_pin : Icons.push_pin_outlined),
-                                            title: TranslatedText(isPinned ? 'unpin_shortcut' : 'pin_shortcut'),
-                                            onTap: () async {
-                                              if (!context.mounted) return;
-                                              Navigator.of(context).pop();
-                                              if (isPinned) {
-                                                await ShortcutsDB().removeShortcut(song.data);
-                                              } else {
-                                                await ShortcutsDB().addShortcut(song.data);
-                                              }
-                                              shortcutsShouldReload.value = !shortcutsShouldReload.value;
-                                            },
-                                          ),
-                                          ListTile(
-                                            leading: const Icon(Icons.check_box_outlined),
-                                            title: TranslatedText('select'),
-                                            onTap: () {
-                                              Navigator.of(context).pop();
-                                              setState(() {
-                                                _isSelectingPlaylistSongs = true;
-                                                _selectedPlaylistSongIds.add(song.id);
-                                              });
-                                            },
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  );
-                                }
-                              },
-                              leading: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  if (_isSelectingPlaylistSongs)
-                                    Checkbox(
-                                      value: _selectedPlaylistSongIds.contains(song.id),
-                                      onChanged: (checked) {
+                                    },
+                                    onLongPress: () async {
+                                      if (_isSelectingPlaylistSongs) {
                                         setState(() {
-                                          if (checked == true) {
-                                            _selectedPlaylistSongIds.add(song.id);
-                                          } else {
+                                          if (_selectedPlaylistSongIds.contains(song.id)) {
                                             _selectedPlaylistSongIds.remove(song.id);
                                             if (_selectedPlaylistSongIds.isEmpty) {
                                               _isSelectingPlaylistSongs = false;
                                             }
+                                          } else {
+                                            _selectedPlaylistSongIds.add(song.id);
                                           }
                                         });
+                                      } else {
+                                        final isPinned = await ShortcutsDB().isShortcut(song.data);
+                                        final isFav = await FavoritesDB().isFavorite(song.data);
+                                        if (!context.mounted) return;
+                                        showModalBottomSheet(
+                                          context: context,
+                                          builder: (context) => SafeArea(
+                                            child: Column(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                ListTile(
+                                                  leading: Icon(
+                                                    isFav ? Icons.delete_outline : Icons.favorite_border,
+                                                  ),
+                                                  title: TranslatedText(
+                                                    isFav ? 'remove_from_favorites' : 'add_to_favorites',
+                                                  ),
+                                                  onTap: () async {
+                                                    if (!context.mounted) return;
+                                                    Navigator.of(context).pop();
+                                                    if (isFav) {
+                                                      await FavoritesDB().removeFavorite(song.data);
+                                                      favoritesShouldReload.value = !favoritesShouldReload.value;
+                                                    } else {
+                                                      await FavoritesDB().addFavorite(song);
+                                                      favoritesShouldReload.value = !favoritesShouldReload.value;
+                                                    }
+                                                  },
+                                                ),
+                                                ListTile(
+                                                  leading: const Icon(Icons.playlist_remove),
+                                                  title: TranslatedText('remove_from_playlist'),
+                                                  onTap: () async {
+                                                    if (!context.mounted) return;
+                                                    Navigator.of(context).pop();
+                                                    await PlaylistsDB().removeSongFromPlaylist(_selectedPlaylist!['id'], song.data);
+                                                    await _loadPlaylistSongs(_selectedPlaylist!);
+                                                  },
+                                                ),
+                                                ListTile(
+                                                  leading: Icon(isPinned ? Icons.push_pin : Icons.push_pin_outlined),
+                                                  title: TranslatedText(isPinned ? 'unpin_shortcut' : 'pin_shortcut'),
+                                                  onTap: () async {
+                                                    if (!context.mounted) return;
+                                                    Navigator.of(context).pop();
+                                                    if (isPinned) {
+                                                      await ShortcutsDB().removeShortcut(song.data);
+                                                    } else {
+                                                      await ShortcutsDB().addShortcut(song.data);
+                                                    }
+                                                    shortcutsShouldReload.value = !shortcutsShouldReload.value;
+                                                  },
+                                                ),
+                                                ListTile(
+                                                  leading: const Icon(Icons.check_box_outlined),
+                                                  title: TranslatedText('select'),
+                                                  onTap: () {
+                                                    Navigator.of(context).pop();
+                                                    setState(() {
+                                                      _isSelectingPlaylistSongs = true;
+                                                      _selectedPlaylistSongIds.add(song.id);
+                                                    });
+                                                  },
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        );
+                                      }
+                                    },
+                                    leading: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        if (_isSelectingPlaylistSongs)
+                                          Checkbox(
+                                            value: _selectedPlaylistSongIds.contains(song.id),
+                                            onChanged: (checked) {
+                                              setState(() {
+                                                if (checked == true) {
+                                                  _selectedPlaylistSongIds.add(song.id);
+                                                } else {
+                                                  _selectedPlaylistSongIds.remove(song.id);
+                                                  if (_selectedPlaylistSongIds.isEmpty) {
+                                                    _isSelectingPlaylistSongs = false;
+                                                  }
+                                                }
+                                              });
+                                            },
+                                          ),
+                                        ClipRRect(
+                                          borderRadius: BorderRadius.circular(8),
+                                          child: QueryArtworkWidget(
+                                            id: song.id,
+                                            type: ArtworkType.AUDIO,
+                                            artworkBorder: BorderRadius.circular(8),
+                                            artworkHeight: 50,
+                                            artworkWidth: 50,
+                                            keepOldArtwork: true,
+                                            nullArtworkWidget: Container(
+                                              color: Theme.of(context).colorScheme.surfaceContainer,
+                                              width: 50,
+                                              height: 50,
+                                              child: Icon(
+                                                Icons.music_note,
+                                                color: Theme.of(context).colorScheme.onSurface,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    title: Row(
+                                      children: [
+                                        if (isCurrent)
+                                          Padding(
+                                            padding: const EdgeInsets.only(right: 8.0),
+                                            child: MiniMusicVisualizer(
+                                              color: Theme.of(context).colorScheme.primary,
+                                              width: 4,
+                                              height: 15,
+                                              radius: 4,
+                                              animate: playing ? true : false,
+                                            ),
+                                          ),
+                                        Expanded(
+                                          child: Text(
+                                            song.title,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                              fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
+                                              color: isCurrent
+                                                  ? (isAmoledTheme
+                                                      ? Colors.white
+                                                      : Theme.of(context).colorScheme.primary)
+                                                  : Theme.of(context).colorScheme.onSurface,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    subtitle: Text(
+                                      (song.artist?.trim().isEmpty ?? true)
+                                          ? LocaleProvider.tr('unknown_artist')
+                                          : song.artist!,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    trailing: IconButton(
+                                      icon: Icon(
+                                        isCurrent && playing
+                                            ? Icons.pause
+                                            : Icons.play_arrow,
+                                      ),
+                                      onPressed: () {
+                                        if (isCurrent) {
+                                          playing
+                                              ? (audioHandler as MyAudioHandler).pause()
+                                              : (audioHandler as MyAudioHandler).play();
+                                        } else {
+                                          // Precargar la carátula antes de reproducir
+                                          unawaited(_preloadArtworkForSong(song));
+                                          _playSongAndOpenPlayer(song, songsToShow);
+                                        }
                                       },
                                     ),
-                                  ClipRRect(
-                                    borderRadius: BorderRadius.circular(8),
-                                    child: QueryArtworkWidget(
-                                      id: song.id,
-                                      type: ArtworkType.AUDIO,
-                                      artworkBorder: BorderRadius.circular(8),
-                                      artworkHeight: 50,
-                                      artworkWidth: 50,
-                                      keepOldArtwork: true,
-                                      nullArtworkWidget: Container(
-                                        color: Theme.of(context).colorScheme.surfaceContainer,
-                                        width: 50,
-                                        height: 50,
-                                        child: Icon(
-                                          Icons.music_note,
-                                          color: Theme.of(context).colorScheme.onSurface,
+                                    selected: isCurrent,
+                                    selectedTileColor: isAmoledTheme
+                                        ? Colors.white.withValues(alpha: 0.1)
+                                        : Theme.of(context).colorScheme.primaryContainer,
+                                  );
+                                },
+                              );
+                            } else {
+                              // Para canciones que no están reproduciéndose, no usar StreamBuilder
+                              final playing = audioHandler?.playbackState.value.playing ?? false;
+                              return ListTile(
+                                onTap: () {
+                                  if (_isSelectingPlaylistSongs) {
+                                    _onPlaylistSongSelected(song);
+                                  } else {
+                                    _debounce?.cancel();
+                                    _debounce = Timer(const Duration(milliseconds: 300), () async {
+                                      if (!mounted) return;
+                                      await _playSongAndOpenPlayer(song, songsToShow);
+                                    });
+                                  }
+                                },
+                                onLongPress: () async {
+                                  if (_isSelectingPlaylistSongs) {
+                                    setState(() {
+                                      if (_selectedPlaylistSongIds.contains(song.id)) {
+                                        _selectedPlaylistSongIds.remove(song.id);
+                                        if (_selectedPlaylistSongIds.isEmpty) {
+                                          _isSelectingPlaylistSongs = false;
+                                        }
+                                      } else {
+                                        _selectedPlaylistSongIds.add(song.id);
+                                      }
+                                    });
+                                  } else {
+                                    final isPinned = await ShortcutsDB().isShortcut(song.data);
+                                    final isFav = await FavoritesDB().isFavorite(song.data);
+                                    if (!context.mounted) return;
+                                    showModalBottomSheet(
+                                      context: context,
+                                      builder: (context) => SafeArea(
+                                        child: Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            ListTile(
+                                              leading: Icon(
+                                                isFav ? Icons.delete_outline : Icons.favorite_border,
+                                              ),
+                                              title: TranslatedText(
+                                                isFav ? 'remove_from_favorites' : 'add_to_favorites',
+                                              ),
+                                              onTap: () async {
+                                                if (!context.mounted) return;
+                                                Navigator.of(context).pop();
+                                                if (isFav) {
+                                                  await FavoritesDB().removeFavorite(song.data);
+                                                  favoritesShouldReload.value = !favoritesShouldReload.value;
+                                                } else {
+                                                  await FavoritesDB().addFavorite(song);
+                                                  favoritesShouldReload.value = !favoritesShouldReload.value;
+                                                }
+                                              },
+                                            ),
+                                            ListTile(
+                                              leading: const Icon(Icons.playlist_remove),
+                                              title: TranslatedText('remove_from_playlist'),
+                                              onTap: () async {
+                                                if (!context.mounted) return;
+                                                Navigator.of(context).pop();
+                                                await PlaylistsDB().removeSongFromPlaylist(_selectedPlaylist!['id'], song.data);
+                                                await _loadPlaylistSongs(_selectedPlaylist!);
+                                              },
+                                            ),
+                                            ListTile(
+                                              leading: Icon(isPinned ? Icons.push_pin : Icons.push_pin_outlined),
+                                              title: TranslatedText(isPinned ? 'unpin_shortcut' : 'pin_shortcut'),
+                                              onTap: () async {
+                                                if (!context.mounted) return;
+                                                Navigator.of(context).pop();
+                                                if (isPinned) {
+                                                  await ShortcutsDB().removeShortcut(song.data);
+                                                } else {
+                                                  await ShortcutsDB().addShortcut(song.data);
+                                                }
+                                                shortcutsShouldReload.value = !shortcutsShouldReload.value;
+                                              },
+                                            ),
+                                            ListTile(
+                                              leading: const Icon(Icons.check_box_outlined),
+                                              title: TranslatedText('select'),
+                                              onTap: () {
+                                                Navigator.of(context).pop();
+                                                setState(() {
+                                                  _isSelectingPlaylistSongs = true;
+                                                  _selectedPlaylistSongIds.add(song.id);
+                                                });
+                                              },
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    );
+                                  }
+                                },
+                                leading: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    if (_isSelectingPlaylistSongs)
+                                      Checkbox(
+                                        value: _selectedPlaylistSongIds.contains(song.id),
+                                        onChanged: (checked) {
+                                          setState(() {
+                                            if (checked == true) {
+                                              _selectedPlaylistSongIds.add(song.id);
+                                            } else {
+                                              _selectedPlaylistSongIds.remove(song.id);
+                                              if (_selectedPlaylistSongIds.isEmpty) {
+                                                _isSelectingPlaylistSongs = false;
+                                              }
+                                            }
+                                          });
+                                        },
+                                      ),
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(8),
+                                      child: QueryArtworkWidget(
+                                        id: song.id,
+                                        type: ArtworkType.AUDIO,
+                                        artworkBorder: BorderRadius.circular(8),
+                                        artworkHeight: 50,
+                                        artworkWidth: 50,
+                                        keepOldArtwork: true,
+                                        nullArtworkWidget: Container(
+                                          color: Theme.of(context).colorScheme.surfaceContainer,
+                                          width: 50,
+                                          height: 50,
+                                          child: Icon(
+                                            Icons.music_note,
+                                            color: Theme.of(context).colorScheme.onSurface,
+                                          ),
                                         ),
                                       ),
                                     ),
-                                  ),
-                                ],
-                              ),
-                              title: Row(
-                                children: [
-                                  if (isCurrent)
-                                    Padding(
-                                      padding: const EdgeInsets.only(right: 8.0),
-                                      child: MiniMusicVisualizer(
-                                        color: Theme.of(context).colorScheme.primary,
-                                        width: 4,
-                                        height: 15,
-                                        radius: 4,
-                                        animate: isPlaying ? true : false,
-                                      ),
-                                    ),
-                                  Expanded(
-                                    child: Text(
-                                      song.title,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                        fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
-                                        color: isCurrent
-                                            ? (isAmoledTheme
-                                                ? Colors.white
-                                                : Theme.of(context).colorScheme.primary)
-                                            : Theme.of(context).colorScheme.onSurface,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              subtitle: Text(
-                                (song.artist?.trim().isEmpty ?? true)
-                                    ? LocaleProvider.tr('unknown_artist')
-                                    : song.artist!,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              trailing: IconButton(
-                                icon: Icon(
-                                  isCurrent && isPlaying
-                                      ? Icons.pause
-                                      : Icons.play_arrow,
+                                  ],
                                 ),
-                                onPressed: () {
-                                  if (isCurrent) {
-                                    isPlaying
-                                        ? (audioHandler as MyAudioHandler).pause()
-                                        : (audioHandler as MyAudioHandler).play();
-                                  } else {
-                                    // Precargar la carátula antes de reproducir
-                                    unawaited(_preloadArtworkForSong(song));
-                                    _playSongAndOpenPlayer(song, songsToShow);
-                                  }
-                                },
-                              ),
-                              selected: isCurrent,
-                              selectedTileColor: isAmoledTheme
-                                  ? Colors.white.withValues(alpha: 0.1)
-                                  : Theme.of(context).colorScheme.primaryContainer,
-                              
-                            );
+                                title: Row(
+                                  children: [
+                                    if (isCurrent)
+                                      Padding(
+                                        padding: const EdgeInsets.only(right: 8.0),
+                                        child: MiniMusicVisualizer(
+                                          color: Theme.of(context).colorScheme.primary,
+                                          width: 4,
+                                          height: 15,
+                                          radius: 4,
+                                          animate: false, // No playing
+                                        ),
+                                      ),
+                                    Expanded(
+                                      child: Text(
+                                        song.title,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                          fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
+                                          color: isCurrent
+                                              ? (isAmoledTheme
+                                                  ? Colors.white
+                                                  : Theme.of(context).colorScheme.primary)
+                                              : Theme.of(context).colorScheme.onSurface,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                subtitle: Text(
+                                  (song.artist?.trim().isEmpty ?? true)
+                                      ? LocaleProvider.tr('unknown_artist')
+                                      : song.artist!,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                trailing: IconButton(
+                                  icon: Icon(
+                                    isCurrent && playing
+                                        ? Icons.pause
+                                        : Icons.play_arrow,
+                                  ),
+                                  onPressed: () {
+                                    if (isCurrent) {
+                                      playing
+                                          ? (audioHandler as MyAudioHandler).pause()
+                                          : (audioHandler as MyAudioHandler).play();
+                                    } else {
+                                      // Precargar la carátula antes de reproducir
+                                      unawaited(_preloadArtworkForSong(song));
+                                      _playSongAndOpenPlayer(song, songsToShow);
+                                    }
+                                  },
+                                ),
+                                selected: isCurrent,
+                                selectedTileColor: isAmoledTheme
+                                    ? Colors.white.withValues(alpha: 0.1)
+                                    : Theme.of(context).colorScheme.primaryContainer,
+                              );
+                            }
                           },
                         );
                       },
@@ -1925,7 +2281,8 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                     ),
                                   ],
                                 ),
-                          const SizedBox(height: 32),
+                                const SizedBox(height: 32),
+
                           Padding(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 20,
@@ -2221,7 +2578,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                   ],
                                 );
                               },
-                            ),
+                            )
                         ],
                       ),
                     ),
