@@ -1,9 +1,9 @@
 {
-  "version": "1.4.3",
+  "version": "1.4.6",
   "apk_urls": {
-    "arm64-v8a": "https://github.com/KirbyNx64/Aura/releases/download/v1.4.3/AuraMusic-v1.4.3-arm64-v8a.apk",
-    "armeabi-v7a": "https://github.com/KirbyNx64/Aura/releases/download/v1.4.3/AuraMusic-v1.4.3-armeabi-v7a.apk",
-    "x86_64": "https://github.com/KirbyNx64/Aura/releases/download/v1.4.3/AuraMusic-v1.4.3-x86_64.apk"
+    "arm64-v8a": "https://github.com/KirbyNx64/Aura/releases/download/v1.4.6/AuraMusic-v1.4.6-arm64-v8a.apk",
+    "armeabi-v7a": "https://github.com/KirbyNx64/Aura/releases/download/v1.4.6/AuraMusic-v1.4.6-armeabi-v7a.apk",
+    "x86_64": "https://github.com/KirbyNx64/Aura/releases/download/v1.4.6/AuraMusic-v1.4.6-x86_64.apk"
   },
-  "changelog": "• Mejoras de rendimiento y estabilidad.\n\n• Ahora puedes cambiar de canción deslizando hacia la izquierda o derecha en la caratula."
+  "changelog": "• Se añadió la opción de agregar canciones a la cola de reproducción.\n\n• Se eliminó el antiguo método de procesamiento de audio con FFmpeg.\n\n• Se redujo el tamaño de la aplicación.\n\n• Pequeñas mejoras visuales en la interfaz.\n\n• Corrección de errores y nuevas optimizaciones internas."
 }
