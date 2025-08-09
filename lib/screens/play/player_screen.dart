@@ -57,7 +57,6 @@ class FullPlayerScreen extends StatefulWidget {
 
 class _FullPlayerScreenState extends State<FullPlayerScreen>
     with TickerProviderStateMixin {
-  double? _dragValueSeconds;
   bool _showLyrics = false;
   String? _syncedLyrics;
   bool _loadingLyrics = false;
@@ -78,6 +77,11 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
 
   // Flag para usar initialArtworkUri solo en el primer build
   // bool _usedInitialArtwork = false;
+  // Optimizaciones de rendimiento
+  late final Future<SharedPreferences> _prefsFuture;
+  final ValueNotifier<double?> _dragValueSecondsNotifier = ValueNotifier<double?>(null);
+  String? _currentSongDataPath;
+  bool _isCurrentFavorite = false;
 
   String _formatDuration(Duration duration) {
     final hours = duration.inHours;
@@ -209,6 +213,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
       duration: const Duration(milliseconds: 350),
       value: 1.0, // Empieza en pausa (o 0.0 si quieres que empiece en play)
     );
+    _prefsFuture = SharedPreferences.getInstance();
     // Eliminado: _loadQueueSource();
     // Eliminado: (audioHandler as MyAudioHandler).queueSourceNotifier.addListener(_onQueueSourceChanged);
   }
@@ -219,6 +224,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     _lyricsScrollController.dispose();
     _favController.dispose();
     _playPauseController.dispose();
+    _dragValueSecondsNotifier.dispose();
     // Eliminado: (audioHandler as MyAudioHandler).queueSourceNotifier.removeListener(_onQueueSourceChanged);
     super.dispose();
   }
@@ -622,18 +628,6 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
           );
         }
       },
-      onHorizontalDragEnd: (details) {
-        // Detectar la dirección del deslizamiento horizontal
-        if (details.primaryVelocity != null) {
-          if (details.primaryVelocity! > 0) {
-            // Deslizar hacia la derecha: canción anterior
-            audioHandler?.skipToPrevious();
-          } else if (details.primaryVelocity! < 0) {
-            // Deslizar hacia la izquierda: siguiente canción
-            audioHandler?.skipToNext();
-          }
-        }
-      },
       child: StreamBuilder<MediaItem?>(
         stream: audioHandler?.mediaItem,
         initialData: widget.initialMediaItem,
@@ -648,6 +642,24 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
             if (_showLyrics) {
               _showLyrics = false;
             }
+
+            // Calcular favorito una sola vez por canción para evitar consultas repetidas
+            final path = mediaItem.extras?['data'] as String?;
+            unawaited(() async {
+              bool fav = false;
+              if (path != null && path.isNotEmpty && !(mediaItem.extras?['isStreaming'] == true)) {
+                try {
+                  fav = await FavoritesDB().isFavorite(path);
+                } catch (_) {}
+              }
+              if (!mounted) return;
+              if (_currentSongDataPath != path || _isCurrentFavorite != fav) {
+                setState(() {
+                  _currentSongDataPath = path;
+                  _isCurrentFavorite = fav;
+                });
+              }
+            }());
           }
 
           // Usar el MediaItem inicial si no hay uno actual
@@ -672,7 +684,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                 },
               ),
               title: FutureBuilder<SharedPreferences>(
-                future: SharedPreferences.getInstance(),
+                future: _prefsFuture,
                 builder: (context, snapshot) {
                   final prefs = snapshot.data;
                   final queueSource = prefs?.getString('last_queue_source');
@@ -741,81 +753,119 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                               //   initialUri = widget.initialArtworkUri;
                               //   _usedInitialArtwork = true;
                               // }
-                              return ArtworkHeroCached(
-                                artUri: currentMediaItem!.artUri,
-                                size: artworkSize,
-                                borderRadius: BorderRadius.circular(artworkSize * 0.06),
-                                heroTag: 'now_playing_artwork_${(currentMediaItem.extras?['songId'] ?? currentMediaItem.id).toString()}',
+                              return GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onHorizontalDragEnd: (details) {
+                                  // Detectar la dirección del deslizamiento horizontal solo en la carátula
+                                  if (details.primaryVelocity != null) {
+                                    if (details.primaryVelocity! > 0) {
+                                      // Deslizar hacia la derecha: canción anterior
+                                      audioHandler?.skipToPrevious();
+                                    } else if (details.primaryVelocity! < 0) {
+                                      // Deslizar hacia la izquierda: siguiente canción
+                                      audioHandler?.skipToNext();
+                                    }
+                                  }
+                                },
+                                onTap: () {
+                                  // Toggle lyrics display when tapping the album cover
+                                  setState(() {
+                                    _showLyrics = !_showLyrics;
+                                  });
+                                  
+                                  // Load lyrics if we're showing them and they haven't been loaded yet
+                                  if (_showLyrics && _lyricLines.isEmpty && !_loadingLyrics) {
+                                    _loadLyrics(currentMediaItem);
+                                  }
+                                },
+                                child: RepaintBoundary(
+                                  child: ArtworkHeroCached(
+                                    artUri: currentMediaItem!.artUri,
+                                    size: artworkSize,
+                                    borderRadius: BorderRadius.circular(artworkSize * 0.06),
+                                    heroTag: 'now_playing_artwork_${(currentMediaItem.extras?['songId'] ?? currentMediaItem.id).toString()}',
+                                  ),
+                                ),
                               );
                             },
                           ),
                           if (_showLyrics)
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(
-                                artworkSize * 0.06,
-                              ),
-                              child: Container(
-                                width: artworkSize,
-                                height: artworkSize,
-                                decoration: BoxDecoration(
-                                  color: Colors.black.withAlpha(
-                                    (0.75 * 255).toInt(),
+                            GestureDetector(
+                              onTap: () {
+                                // Toggle lyrics display when tapping on the lyrics overlay
+                                setState(() {
+                                  _showLyrics = !_showLyrics;
+                                });
+                              },
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(
+                                  artworkSize * 0.06,
+                                ),
+                                child: RepaintBoundary(
+                                  child: Container(
+                                  width: artworkSize,
+                                  height: artworkSize,
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withAlpha(
+                                      (0.75 * 255).toInt(),
+                                    ),
+                                    borderRadius: BorderRadius.circular(
+                                      artworkSize * 0.06,
+                                    ),
                                   ),
-                                  borderRadius: BorderRadius.circular(
-                                    artworkSize * 0.06,
+                                  alignment: Alignment.center,
+                                  padding: const EdgeInsets.all(18),
+                                  child: _loadingLyrics
+                                      ? const Center(
+                                          child: CircularProgressIndicator(
+                                            color: Colors.white,
+                                          ),
+                                        )
+                                      : _lyricLines.isEmpty
+                                      ? Text(
+                                          _syncedLyrics ??
+                                              LocaleProvider.tr('lyrics_not_found'),
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 16,
+                                          ),
+                                          textAlign: TextAlign.center,
+                                        )
+                                      : StreamBuilder<Duration>(
+                                          stream:
+                                              (audioHandler as MyAudioHandler)
+                                                  .positionStream,
+                                          builder: (context, posSnapshot) {
+                                            final position =
+                                                posSnapshot.data ??
+                                                Duration.zero;
+                                            int idx = 0;
+                                            for (
+                                              int i = 0;
+                                              i < _lyricLines.length;
+                                              i++
+                                            ) {
+                                              if (position >=
+                                                  _lyricLines[i].time) {
+                                                idx = i;
+                                              } else {
+                                                break;
+                                              }
+                                            }
+                                            // Actualizar índice directamente sin setState
+                                            if (_currentLyricIndex != idx) {
+                                              _currentLyricIndex = idx;
+                                            }
+                                            return VerticalMarqueeLyrics(
+                                              lyricLines: _lyricLines,
+                                              currentLyricIndex: _currentLyricIndex,
+                                              context: context,
+                                              artworkSize: artworkSize,
+                                            );
+                                          },
+                                        ),
                                   ),
                                 ),
-                                alignment: Alignment.center,
-                                padding: const EdgeInsets.all(18),
-                                child: _loadingLyrics
-                                    ? const Center(
-                                        child: CircularProgressIndicator(
-                                          color: Colors.white,
-                                        ),
-                                      )
-                                    : _lyricLines.isEmpty
-                                    ? Text(
-                                        _syncedLyrics ??
-                                            LocaleProvider.tr('lyrics_not_found'),
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 16,
-                                        ),
-                                        textAlign: TextAlign.center,
-                                      )
-                                    : StreamBuilder<Duration>(
-                                        stream:
-                                            (audioHandler as MyAudioHandler)
-                                                .positionStream,
-                                        builder: (context, posSnapshot) {
-                                          final position =
-                                              posSnapshot.data ??
-                                              Duration.zero;
-                                          int idx = 0;
-                                          for (
-                                            int i = 0;
-                                            i < _lyricLines.length;
-                                            i++
-                                          ) {
-                                            if (position >=
-                                                _lyricLines[i].time) {
-                                              idx = i;
-                                            } else {
-                                              break;
-                                            }
-                                          }
-                                          // Actualizar índice directamente sin setState
-                                          if (_currentLyricIndex != idx) {
-                                            _currentLyricIndex = idx;
-                                          }
-                                          return VerticalMarqueeLyrics(
-                                            lyricLines: _lyricLines,
-                                            currentLyricIndex: _currentLyricIndex,
-                                            context: context,
-                                            artworkSize: artworkSize,
-                                          );
-                                        },
-                                      ),
                               ),
                             ),
                         ],
@@ -845,13 +895,9 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                               ),
                             ),
                             SizedBox(width: width * 0.04),
-                            FutureBuilder<bool>(
-                              future: (currentMediaItem.extras?['isStreaming'] == true || currentMediaItem.extras?['data'] == null || (currentMediaItem.extras?['data'] as String?)?.startsWith('http') == true)
-                                  ? Future.value(false)
-                                  : FavoritesDB().isFavorite(currentMediaItem.extras?['data'] ?? ''),
-                              builder: (context, favSnapshot) {
-                                final isFav = favSnapshot.data ?? false;
-                                // Trigger heartbeat animation only when state changes
+                            Builder(
+                              builder: (context) {
+                                final isFav = _isCurrentFavorite;
                                 if (_lastIsFav != isFav) {
                                   _favController.forward(from: 0.0);
                                   _lastIsFav = isFav;
@@ -863,41 +909,27 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                       onTap: () {
                                         if (isLoading) return;
                                         unawaited(() async {
-                                          final path =
-                                              currentMediaItem.extras?['data'] ?? '';
+                                          final path = currentMediaItem.extras?['data'] ?? '';
                                           if (path.isEmpty) return;
-
                                           if (isFav) {
                                             await FavoritesDB().removeFavorite(path);
-                                            favoritesShouldReload.value =
-                                                !favoritesShouldReload.value;
+                                            favoritesShouldReload.value = !favoritesShouldReload.value;
                                             if (!context.mounted) return;
-                                            setState(() {});
+                                            setState(() { _isCurrentFavorite = false; });
                                           } else {
-                                            final allSongs = await _audioQuery
-                                                .querySongs();
-                                            final songList = allSongs
-                                                .where((s) => s.data == path)
-                                                .toList();
-
+                                            final allSongs = await _audioQuery.querySongs();
+                                            final songList = allSongs.where((s) => s.data == path).toList();
                                             if (songList.isEmpty) {
                                               if (!context.mounted) return;
-                                              ScaffoldMessenger.of(
-                                                context,
-                                              ).showSnackBar(
-                                                SnackBar(
-                                                  content: Text(
-                                                    LocaleProvider.tr('song_not_found'),
-                                                  ),
-                                                ),
+                                              ScaffoldMessenger.of(context).showSnackBar(
+                                                SnackBar(content: Text(LocaleProvider.tr('song_not_found'))),
                                               );
                                               return;
                                             }
-
                                             final song = songList.first;
                                             await _addToFavorites(song);
                                             if (!context.mounted) return;
-                                            setState(() {}); // <-- fuerza actualización visual
+                                            setState(() { _isCurrentFavorite = true; });
                                           }
                                         }());
                                       },
@@ -964,60 +996,65 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                       ? fallbackDuration
                                       : const Duration(seconds: 1);
                                   final durationMs = duration.inMilliseconds > 0 ? duration.inMilliseconds : 1;
-                                  final sliderValueMs = (_dragValueSeconds != null)
-                                      ? (_dragValueSeconds! * 1000).clamp(0, durationMs.toDouble())
-                                      : position.inMilliseconds.clamp(0, durationMs).toDouble();
-                                  return Column(
-                                    children: [
-                                      SizedBox(
-                                        width: progressBarWidth,
-                                        child: Slider(
-                                          min: 0.0,
-                                          max: durationMs.toDouble(),
-                                          value: sliderValueMs.toDouble(),
-                                          onChanged: (value) {
-                                            _dragValueSeconds = value / 1000.0;
-                                            setState(() {});
-                                          },
-                                          onChangeEnd: (value) {
-                                            final now = DateTime.now();
-                                            final ms = value.toInt();
-                                            if (now.difference(_lastSeekTime).inMilliseconds > _seekThrottleMs) {
-                                              audioHandler?.seek(Duration(milliseconds: ms));
-                                              _lastSeekTime = now;
-                                            } else {
-                                              _lastSeekMs = ms;
-                                              Future.delayed(Duration(milliseconds: _seekThrottleMs), () {
-                                                if (_lastSeekMs != null && DateTime.now().difference(_lastSeekTime).inMilliseconds >= _seekThrottleMs) {
-                                                  audioHandler?.seek(Duration(milliseconds: _lastSeekMs!));
-                                                  _lastSeekTime = DateTime.now();
-                                                  _lastSeekMs = null;
-                                                }
-                                              });
-                                            }
-                                            _dragValueSeconds = null;
-                                            setState(() {});
-                                          },
-                                        ),
-                                      ),
-                                      Padding(
-                                        padding: const EdgeInsets.symmetric(horizontal: 24),
-                                        child: Row(
-                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  return RepaintBoundary(
+                                    child: ValueListenableBuilder<double?>(
+                                      valueListenable: _dragValueSecondsNotifier,
+                                      builder: (context, dragValueSeconds, _) {
+                                        final sliderValueMs = (dragValueSeconds != null)
+                                            ? (dragValueSeconds * 1000).clamp(0, durationMs.toDouble())
+                                            : position.inMilliseconds.clamp(0, durationMs).toDouble();
+                                        return Column(
                                           children: [
-                                            Text(
-                                              _formatDuration(Duration(milliseconds: sliderValueMs.toInt())),
-                                              style: TextStyle(fontSize: is16by9 ? 18 : 15),
+                                            SizedBox(
+                                              width: progressBarWidth,
+                                              child: Slider(
+                                                min: 0.0,
+                                                max: durationMs.toDouble(),
+                                                value: sliderValueMs.toDouble(),
+                                                onChanged: (value) {
+                                                  _dragValueSecondsNotifier.value = value / 1000.0;
+                                                },
+                                                onChangeEnd: (value) {
+                                                  final now = DateTime.now();
+                                                  final ms = value.toInt();
+                                                  if (now.difference(_lastSeekTime).inMilliseconds > _seekThrottleMs) {
+                                                    audioHandler?.seek(Duration(milliseconds: ms));
+                                                    _lastSeekTime = now;
+                                                  } else {
+                                                    _lastSeekMs = ms;
+                                                    Future.delayed(Duration(milliseconds: _seekThrottleMs), () {
+                                                      if (_lastSeekMs != null && DateTime.now().difference(_lastSeekTime).inMilliseconds >= _seekThrottleMs) {
+                                                        audioHandler?.seek(Duration(milliseconds: _lastSeekMs!));
+                                                        _lastSeekTime = DateTime.now();
+                                                        _lastSeekMs = null;
+                                                      }
+                                                    });
+                                                  }
+                                                  _dragValueSecondsNotifier.value = null;
+                                                },
+                                              ),
                                             ),
-                                            Text(
-                                              // Si la duración es desconocida, muestra '--:--'
-                                              (mediaDuration == null || mediaDuration.inMilliseconds <= 0) ? '--:--' : _formatDuration(duration),
-                                              style: TextStyle(fontSize: is16by9 ? 18 : 15),
+                                            Padding(
+                                              padding: const EdgeInsets.symmetric(horizontal: 24),
+                                              child: Row(
+                                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                children: [
+                                                  Text(
+                                                    _formatDuration(Duration(milliseconds: sliderValueMs.toInt())),
+                                                    style: TextStyle(fontSize: is16by9 ? 18 : 15),
+                                                  ),
+                                                  Text(
+                                                    // Si la duración es desconocida, muestra '--:--'
+                                                    (mediaDuration == null || mediaDuration.inMilliseconds <= 0) ? '--:--' : _formatDuration(duration),
+                                                    style: TextStyle(fontSize: is16by9 ? 18 : 15),
+                                                  ),
+                                                ],
+                                              ),
                                             ),
                                           ],
-                                        ),
-                                      ),
-                                    ],
+                                        );
+                                      },
+                                    ),
                                   );
                                 },
                               );
@@ -1088,15 +1125,16 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                   (maxControlsWidth / 400 * 52).clamp(40, 80);
 
                               return Center(
-                                child: Container(
-                                  alignment: Alignment.center,
-                                  constraints: BoxConstraints(
-                                    maxWidth: progressBarWidth,
-                                  ),
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    mainAxisSize: MainAxisSize.max,
-                                    children: [
+                                child: RepaintBoundary(
+                                  child: Container(
+                                    alignment: Alignment.center,
+                                    constraints: BoxConstraints(
+                                      maxWidth: progressBarWidth,
+                                    ),
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      mainAxisSize: MainAxisSize.max,
+                                      children: [
                                       // Combinar todos los ValueListenableBuilder en uno solo
                                       ValueListenableBuilder<bool>(
                                         valueListenable: playLoadingNotifier,
@@ -1138,15 +1176,12 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                       horizontal: iconSize / 4,
                                                     ),
                                                     child: Material(
-                                                      color: Theme.of(context).brightness == Brightness.light
-                                                          ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.9)
-                                                          : Theme.of(context).colorScheme.onSurface,
-                                                      borderRadius: BorderRadius.circular(
-                                                        mainIconSize / 4,
-                                                      ),
+                                                      color: Colors.transparent,
                                                       child: InkWell(
-                                                        borderRadius: BorderRadius.circular(
-                                                          mainIconSize / 3.5,
+                                                        customBorder: RoundedRectangleBorder(
+                                                          borderRadius: BorderRadius.circular(
+                                                            isPlaying ? (mainIconSize / 3) : (mainIconSize / 2),
+                                                          ),
                                                         ),
                                                         splashColor: Colors.transparent,
                                                         highlightColor: Colors.transparent,
@@ -1156,14 +1191,24 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                               ? audioHandler?.pause()
                                                               : audioHandler?.play();
                                                         },
-                                                        child: SizedBox(
+                                                        child: AnimatedContainer(
+                                                          duration: const Duration(milliseconds: 340),
+                                                          curve: Curves.easeInOut,
                                                           width: mainIconSize,
                                                           height: mainIconSize,
+                                                          decoration: BoxDecoration(
+                                                            color: Theme.of(context).brightness == Brightness.light
+                                                                ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.9)
+                                                                : Theme.of(context).colorScheme.onSurface,
+                                                            borderRadius: BorderRadius.circular(
+                                                              isPlaying ? (mainIconSize / 3) : (mainIconSize / 2),
+                                                            ),
+                                                          ),
                                                           child: Center(
                                                             child: isLoading
                                                                 ? SizedBox(
-                                                                    width: playIconSize,
-                                                                    height: playIconSize,
+                                                                    width: playIconSize - 15,
+                                                                    height: playIconSize - 15,
                                                                     child: CircularProgressIndicator(
                                                                       strokeWidth: 5,
                                                                       strokeCap: StrokeCap.round,
@@ -1227,6 +1272,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                       ),
                                     ],
                                   ),
+                                ),
                                 ),
                               );
                             },

@@ -11,6 +11,7 @@ import 'package:music/l10n/locale_provider.dart';
 import 'package:music/utils/theme_preferences.dart';
 import 'package:music/utils/db/playlists_db.dart';
 import 'package:music/utils/db/songs_index_db.dart';
+import 'package:music/utils/db/recent_db.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:music/utils/db/shortcuts_db.dart';
 import 'package:mini_music_visualizer/mini_music_visualizer.dart';
@@ -223,6 +224,14 @@ class _FoldersScreenState extends State<FoldersScreen>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            ListTile(
+              leading: const Icon(Icons.queue_music),
+              title: TranslatedText('add_to_queue'),
+              onTap: () async {
+                Navigator.of(context).pop();
+                await (audioHandler as MyAudioHandler).addSongsToQueueEnd([song]);
+              },
+            ),
             ListTile(
               leading: Icon(
                 isFavorite ? Icons.delete_outline : Icons.favorite_border,
@@ -479,7 +488,52 @@ class _FoldersScreenState extends State<FoldersScreen>
     try {
       final file = File(song.data);
       if (await file.exists()) {
+        // Si está reproduciéndose esta canción, pasar a la siguiente antes de borrar
+        try {
+          final handler = audioHandler as MyAudioHandler;
+          final current = handler.mediaItem.valueOrNull;
+          final isCurrent = current?.id == song.data || current?.extras?['data'] == song.data;
+          if (isCurrent) {
+            // Quitar de la cola priorizando saltar a la siguiente
+            await handler.removeSongByPath(song.data);
+          } else {
+            // Quitarla de la cola si estuviera presente
+            await handler.removeSongByPath(song.data);
+          }
+        } catch (_) {}
+
         await file.delete();
+
+        // Limpiar caches relacionadas con la canción borrada
+        try {
+          removeArtworkFromCache(song.data);
+        } catch (_) {}
+
+        // Limpiar persistencias: favoritos, recientes, atajos y playlists
+        try {
+          await FavoritesDB().removeFavorite(song.data);
+        } catch (_) {}
+        try {
+          await RecentsDB().removeRecent(song.data);
+        } catch (_) {}
+        try {
+          if (await ShortcutsDB().isShortcut(song.data)) {
+            await ShortcutsDB().removeShortcut(song.data);
+          }
+        } catch (_) {}
+        try {
+          final playlists = await PlaylistsDB().getAllPlaylists();
+          for (final p in playlists) {
+            if (p.songPaths.contains(song.data)) {
+              await PlaylistsDB().removeSongFromPlaylist(p.id, song.data);
+            }
+          }
+        } catch (_) {}
+
+        // Sincronizar índice de canciones (por si quedó rastro)
+        try {
+          await SongsIndexDB().cleanNonExistentFiles();
+        } catch (_) {}
 
         if (carpetaSeleccionada != null) {
           setState(() {
@@ -491,6 +545,14 @@ class _FoldersScreenState extends State<FoldersScreen>
                 ?.removeWhere((path) => path == song.data);
           });
         }
+
+        // Notificar a otras pantallas que deben refrescar
+        try {
+          favoritesShouldReload.value = !favoritesShouldReload.value;
+          playlistsShouldReload.value = !playlistsShouldReload.value;
+          recentsShouldReload.value = !recentsShouldReload.value;
+          shortcutsShouldReload.value = !shortcutsShouldReload.value;
+        } catch (_) {}
 
         return true;
       }
@@ -508,6 +570,30 @@ class _FoldersScreenState extends State<FoldersScreen>
       texto = texto.replaceAll(conAcentos[i], sinAcentos[i]);
     }
     return texto.toLowerCase();
+  }
+
+  String _formatArtistWithDuration(SongModel song) {
+    final artist = (song.artist == null || song.artist!.trim().isEmpty)
+        ? LocaleProvider.tr('unknown_artist')
+        : song.artist!;
+    
+    if (song.duration != null && song.duration! > 0) {
+      final duration = Duration(milliseconds: song.duration!);
+      final hours = duration.inHours;
+      final minutes = duration.inMinutes % 60;
+      final seconds = (duration.inSeconds % 60).toString().padLeft(2, '0');
+      
+      String durationString;
+      if (hours > 0) {
+        durationString = '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:$seconds';
+      } else {
+        durationString = '$minutes:$seconds';
+      }
+      
+      return '$artist • $durationString';
+    }
+    
+    return artist;
   }
 
   Future<void> _preloadArtworksForSongs(List<SongModel> songs) async {
@@ -1173,7 +1259,7 @@ class _FoldersScreenState extends State<FoldersScreen>
         subtitle: Opacity(
           opacity: opacity,
           child: Text(
-            song.artist ?? LocaleProvider.tr('unknown_artist'),
+            _formatArtistWithDuration(song),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
@@ -1339,6 +1425,12 @@ class _FoldersScreenState extends State<FoldersScreen>
     try {
       final songPaths = songPathsByFolder[folderKey] ?? [];
       bool allDeleted = true;
+      // Primero retirar todas las canciones de la cola (maneja salto si alguna es la actual)
+      try {
+        final handler = audioHandler as MyAudioHandler;
+        await handler.removeSongsByPath(List<String>.from(songPaths));
+      } catch (_) {}
+
       for (final path in songPaths) {
         final file = File(path);
         if (await file.exists()) {
@@ -1348,11 +1440,40 @@ class _FoldersScreenState extends State<FoldersScreen>
             allDeleted = false;
           }
         }
+        // Limpiar por cada path
+        try { removeArtworkFromCache(path); } catch (_) {}
+        try { await FavoritesDB().removeFavorite(path); } catch (_) {}
+        try { await RecentsDB().removeRecent(path); } catch (_) {}
+        try {
+          if (await ShortcutsDB().isShortcut(path)) {
+            await ShortcutsDB().removeShortcut(path);
+          }
+        } catch (_) {}
       }
+      // Limpiar de todas las playlists en una sola pasada
+      try {
+        final playlists = await PlaylistsDB().getAllPlaylists();
+        for (final p in playlists) {
+          final toRemove = p.songPaths.where((sp) => songPaths.contains(sp)).toList();
+          for (final sp in toRemove) {
+            await PlaylistsDB().removeSongFromPlaylist(p.id, sp);
+          }
+        }
+      } catch (_) {}
+      // Sincronizar índice
+      try { await SongsIndexDB().cleanNonExistentFiles(); } catch (_) {}
       setState(() {
         songPathsByFolder.remove(folderKey);
         folderDisplayNames.remove(folderKey);
       });
+
+      // Notificar a otras pantallas
+      try {
+        favoritesShouldReload.value = !favoritesShouldReload.value;
+        playlistsShouldReload.value = !playlistsShouldReload.value;
+        recentsShouldReload.value = !recentsShouldReload.value;
+        shortcutsShouldReload.value = !shortcutsShouldReload.value;
+      } catch (_) {}
       return allDeleted;
     } catch (e) {
       return false;

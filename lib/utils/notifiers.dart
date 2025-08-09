@@ -7,6 +7,10 @@ final favoritesShouldReload = ValueNotifier<bool>(false);
 
 final playlistsShouldReload = ValueNotifier<bool>(false);
 
+final recentsShouldReload = ValueNotifier<bool>(false);
+
+final mostPlayedShouldReload = ValueNotifier<bool>(false);
+
 final downloadDirectoryNotifier = ValueNotifier<String?>(null);
 final downloadTypeNotifier = ValueNotifier<bool>(false); // true: Explode, false: Directo
 final audioProcessorNotifier = ValueNotifier<bool>(false); // true: FFmpeg, false: AudioTags

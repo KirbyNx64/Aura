@@ -163,6 +163,7 @@ const Map<String, String> appLocalizationsEn = {
   'play_all': 'Play all',
   'add_to_favorites': 'Add to favorites',
   'add_to_playlist': 'Add to playlist',
+  'add_to_queue': 'Add to queue',
   'remove_from_playlist': 'Remove from playlist',
   'delete_song': 'Delete song',
   'delete_song_confirm': 'Are you sure you want to delete this song?',
@@ -266,6 +267,7 @@ const Map<String, String> appLocalizationsEn = {
   
   // Home screen
   'recent': 'Recent',
+  'playlists': 'Playlists',
   'recent_playlists': 'Recent playlists',
   'no_recent_playlists': 'No recent playlists.',
   'quick_pick_songs': 'quick pick',

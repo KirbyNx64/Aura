@@ -290,6 +290,30 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     return texto.toLowerCase();
   }
 
+  String _formatArtistWithDuration(SongModel song) {
+    final artist = (song.artist == null || song.artist!.trim().isEmpty)
+        ? LocaleProvider.tr('unknown_artist')
+        : song.artist!;
+    
+    if (song.duration != null && song.duration! > 0) {
+      final duration = Duration(milliseconds: song.duration!);
+      final hours = duration.inHours;
+      final minutes = duration.inMinutes % 60;
+      final seconds = (duration.inSeconds % 60).toString().padLeft(2, '0');
+      
+      String durationString;
+      if (hours > 0) {
+        durationString = '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:$seconds';
+      } else {
+        durationString = '$minutes:$seconds';
+      }
+      
+      return '$artist • $durationString';
+    }
+    
+    return artist;
+  }
+
   void _onSongSelected(SongModel song) async {
     try {
       (audioHandler as MyAudioHandler).isShuffleNotifier.value = false;
@@ -403,6 +427,14 @@ class _FavoritesScreenState extends State<FavoritesScreen>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            ListTile(
+                leading: const Icon(Icons.queue_music),
+                title: TranslatedText('add_to_queue'),
+                onTap: () async {
+                  Navigator.of(context).pop();
+                  await (audioHandler as MyAudioHandler).addSongsToQueueEnd([song]);
+                },
+              ),
             ListTile(
               leading: const Icon(Icons.delete_outline),
               title: TranslatedText('remove_from_favorites'),
@@ -809,10 +841,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
         ],
       ),
       subtitle: Text(
-        (song.artist == null ||
-                song.artist!.trim().isEmpty)
-            ? LocaleProvider.tr('unknown_artist')
-            : song.artist!,
+        _formatArtistWithDuration(song),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
       ),

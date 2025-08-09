@@ -17,7 +17,6 @@ import 'package:music/utils/audio/synced_lyrics_service.dart';
 import 'package:music/l10n/locale_provider.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'dart:convert';
-import 'package:flutter/services.dart';
 import 'package:music/utils/db/playlist_model.dart' as hive_model;
 
 class SettingsScreen extends StatefulWidget {
@@ -819,7 +818,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              '${LocaleProvider.tr('version')}: v1.4.4',
+                              '${LocaleProvider.tr('version')}: v1.4.6',
                               style: const TextStyle(
                                 fontSize: 15,
                               ),
@@ -969,6 +968,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
         }
       }
       if (!mounted) return;
+      
+      // Activar notifiers para recargar datos sin reiniciar la app
+      favoritesShouldReload.value = !favoritesShouldReload.value;
+      playlistsShouldReload.value = !playlistsShouldReload.value;
+      shortcutsShouldReload.value = !shortcutsShouldReload.value;
+      mostPlayedShouldReload.value = !mostPlayedShouldReload.value;
+      
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
@@ -976,10 +982,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           content: Text(LocaleProvider.tr('backup_imported')),
           actions: [
             TextButton(
-              onPressed: () {
-                SystemNavigator.pop();
-              },
-              child: Text(LocaleProvider.tr('restart_app')),
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text(LocaleProvider.tr('ok')),
             ),
           ],
         ),
