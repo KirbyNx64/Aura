@@ -278,6 +278,7 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> with TickerProvid
                                   size: 50,
                                   borderRadius: BorderRadius.circular(8),
                                   heroTag: 'now_playing_artwork_${(currentSong.extras?['songId'] ?? currentSong.id).toString()}',
+                                  showPlaceholderIcon: true,
                                 );
                               },
                             ),
@@ -374,6 +375,7 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> with TickerProvid
                                       ClipRRect(
                                         borderRadius: BorderRadius.circular(8),
                                         child: LinearProgressIndicator(
+                                          year2023: false,
                                           key: ValueKey(total),
                                           value: total > 0 ? current / total : 0,
                                           minHeight: 4,

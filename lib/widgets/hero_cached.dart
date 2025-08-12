@@ -6,6 +6,7 @@ class ArtworkHeroCached extends StatelessWidget {
   final double size;
   final BorderRadius borderRadius;
   final String heroTag;
+  final bool showPlaceholderIcon;
 
   const ArtworkHeroCached({
     super.key,
@@ -13,6 +14,7 @@ class ArtworkHeroCached extends StatelessWidget {
     required this.size,
     required this.borderRadius,
     required this.heroTag,
+    this.showPlaceholderIcon = true,
   });
 
   @override
@@ -33,7 +35,9 @@ class ArtworkHeroCached extends StatelessWidget {
                 width: size,
                 height: size,
                 color: Theme.of(context).colorScheme.surfaceContainer,
-                child: Icon(Icons.music_note, size: size * 0.6),
+                child: showPlaceholderIcon
+                    ? Icon(Icons.music_note, size: size * 0.6)
+                    : null,
               ),
       ),
     );

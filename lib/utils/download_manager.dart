@@ -15,6 +15,7 @@ import 'package:image/image.dart' as img;
 import 'package:music/l10n/locale_provider.dart';
 import 'package:music/utils/notifiers.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 
 // Top-level function para usar con compute
 Uint8List? decodeAndCropImage(Uint8List bytes) {
@@ -50,6 +51,9 @@ class DownloadManager {
   bool _isDownloading = false;
   bool _isProcessing = false;
 
+  // Contexto opcional para mostrar diálogos directamente desde el manager
+  BuildContext? _dialogContext;
+
   // Inicializar configuración
   Future<void> initialize() async {
     final prefs = await SharedPreferences.getInstance();
@@ -73,12 +77,18 @@ class DownloadManager {
     this.onSuccess = onSuccess;
   }
 
+  // Permite inyectar un contexto para mostrar diálogos de error directamente desde el manager
+  void setDialogContext(BuildContext? context) {
+    _dialogContext = context;
+  }
+
   // Método principal de descarga
   Future<void> downloadAudio({
     required String url,
     String? directoryPath,
     bool? usarExplode,
     bool? usarFFmpeg,
+    String? songTitle,
   }) async {
     // Usar parámetros proporcionados o valores por defecto
     final dirPath = directoryPath ?? _directoryPath;
@@ -90,6 +100,12 @@ class DownloadManager {
         LocaleProvider.tr('folder_not_selected'),
         LocaleProvider.tr('folder_not_selected_desc'),
       );
+      if (onError == null) {
+        _showErrorDialog(
+          LocaleProvider.tr('folder_not_selected'),
+          LocaleProvider.tr('folder_not_selected_desc'),
+        );
+      }
       return;
     }
 
@@ -98,15 +114,20 @@ class DownloadManager {
 
     try {
       if (explode) {
-        await _downloadAudioOnlyExplode(url, dirPath, ffmpeg);
+        await _downloadAudioOnlyExplode(url, dirPath, ffmpeg, songTitle);
       } else {
-        await _downloadAudioOnly(url, dirPath, ffmpeg);
+        await _downloadAudioOnly(url, dirPath, ffmpeg, songTitle);
       }
     } catch (e) {
-      onError?.call(
-        LocaleProvider.tr('download_failed_title'),
-        '${LocaleProvider.tr('download_failed_desc')}\n\nDetalles: ${e.toString()}',
-      );
+      if (e is VideoUnplayableException) {
+        final suffix = (songTitle != null && songTitle.trim().isNotEmpty)
+            ? '\n\n${songTitle.trim()}'
+            : '';
+        onError?.call(
+          LocaleProvider.tr('download_failed_title'),
+          '${LocaleProvider.tr('download_failed_desc_2')}$suffix',
+        );
+      }
     } finally {
       _updateState(false, false);
     }
@@ -117,6 +138,7 @@ class DownloadManager {
     String url,
     String directoryPath,
     bool usarFFmpeg,
+    String? songTitle,
   ) async {
     final yt = YoutubeExplode();
     try {
@@ -186,6 +208,7 @@ class DownloadManager {
           video.author,
           video.thumbnails.highResUrl,
           coverBytes ?? Uint8List(0),
+          songTitle,
         );
       }
 
@@ -199,6 +222,7 @@ class DownloadManager {
     String url,
     String directoryPath,
     bool usarFFmpeg,
+    String? songTitle,
   ) async {
     // Extraer videoId de la URL
     final videoId = VideoId.parseVideoId(url);
@@ -289,6 +313,7 @@ class DownloadManager {
         video.author,
         video.thumbnails.highResUrl,
         coverBytes ?? Uint8List(0),
+        songTitle,
       );
     }
   }
@@ -420,6 +445,10 @@ class DownloadManager {
         LocaleProvider.tr('audio_processing_error'),
         e.toString(),
       );
+      _showErrorDialog(
+        LocaleProvider.tr('audio_processing_error'),
+        e.toString(),
+      );
     }
   }
   */
@@ -432,6 +461,7 @@ class DownloadManager {
     String author,
     String thumbnailUrl,
     Uint8List bytes,
+    String? songTitle,
   ) async {
     _updateState(true, true);
 
@@ -474,7 +504,7 @@ class DownloadManager {
       foldersShouldReload.value = !foldersShouldReload.value;
 
       onSuccess?.call(
-        LocaleProvider.tr('download_completed'),
+        songTitle ?? LocaleProvider.tr('download_completed'),
         LocaleProvider.tr('download_completed_desc'),
       );
 
@@ -643,6 +673,29 @@ class DownloadManager {
     _isDownloading = isDownloading;
     _isProcessing = isProcessing;
     onStateUpdate?.call(isDownloading, isProcessing);
+  }
+
+  void _showErrorDialog(String title, String message) async {
+    final ctx = _dialogContext;
+    if (ctx == null) return;
+    try {
+      // Evitar mostrar diálogo de completado aquí, solo errores
+      await showDialog(
+        context: ctx,
+        builder: (context) => AlertDialog(
+          title: Text(title),
+          content: Text(message),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text(LocaleProvider.tr('ok')),
+            ),
+          ],
+        ),
+      );
+    } catch (_) {
+      // Ignorar si el contexto no es válido
+    }
   }
 
   // Getters para el estado actual

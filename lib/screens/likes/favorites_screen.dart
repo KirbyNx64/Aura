@@ -67,7 +67,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     // Escuchar cambios en el estado de reproducción con debounce
     audioHandler?.playbackState.listen((state) {
       _playingDebounce?.cancel();
-      _playingDebounce = Timer(const Duration(milliseconds: 100), () {
+      _playingDebounce = Timer(const Duration(milliseconds: 400), () {
         if (mounted) {
           _isPlayingNotifier.value = state.playing;
         }
@@ -332,17 +332,6 @@ class _FavoritesScreenState extends State<FavoritesScreen>
       return;
     }
     
-    // Deshabilitar temporalmente la navegación del overlay
-    overlayPlayerNavigationEnabled.value = false;
-    
-    // Precargar la carátula antes de mostrar el overlay
-    unawaited(_preloadArtworkForSong(song));
-    
-    // Mostrar overlay inmediatamente al tocar una canción
-    if (!overlayVisibleNotifier.value) {
-      overlayVisibleNotifier.value = true;
-    }
-    
     // Obtener la carátula para la pantalla del reproductor
     final songId = song.id;
     final songPath = song.data;
@@ -371,7 +360,6 @@ class _FavoritesScreenState extends State<FavoritesScreen>
         pageBuilder: (context, animation, secondaryAnimation) =>
           FullPlayerScreen(
             initialMediaItem: mediaItem,
-            initialArtworkUri: artUri,
           ),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           return SlideTransition(
@@ -393,7 +381,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     playLoadingNotifier.value = true;
     
     // Reproducir la canción después de un breve delay para que se abra la pantalla
-    Future.delayed(const Duration(milliseconds: 600), () {
+    Future.delayed(const Duration(milliseconds: 400), () {
       if (mounted) {
         _playSong(song);
         // Desactivar indicador de carga después de reproducir
@@ -402,20 +390,6 @@ class _FavoritesScreenState extends State<FavoritesScreen>
         });
       }
     });
-    
-    // Rehabilitar la navegación del overlay después de un delay
-    Future.delayed(const Duration(milliseconds: 1000), () {
-      overlayPlayerNavigationEnabled.value = true;
-    });
-  }
-
-  Future<void> _preloadArtworkForSong(SongModel song) async {
-    try {
-      // Si no está en caché, cargarla inmediatamente
-      await getOrCacheArtwork(song.id, song.data);
-    } catch (e) {
-      // Ignorar errores de precarga
-    }
   }
 
   void _handleLongPress(BuildContext context, SongModel song) async {

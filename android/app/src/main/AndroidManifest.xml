@@ -86,7 +86,7 @@
 
         <!-- Actividad principal con soporte para audio_service -->
         <activity
-            android:name="com.ryanheise.audioservice.AudioServiceActivity"
+            android:name="com.kirby.aura.MainActivity"
             android:exported="true"
             android:launchMode="singleTop"
             android:taskAffinity=""

@@ -643,6 +643,11 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
               _showLyrics = false;
             }
 
+            // Reiniciar estado de letras para evitar que persistan entre canciones
+            _lyricLines = [];
+            _currentLyricIndex = 0;
+            _loadingLyrics = false;
+
             // Calcular favorito una sola vez por canción para evitar consultas repetidas
             final path = mediaItem.extras?['data'] as String?;
             unawaited(() async {
@@ -773,8 +778,8 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                     _showLyrics = !_showLyrics;
                                   });
                                   
-                                  // Load lyrics if we're showing them and they haven't been loaded yet
-                                  if (_showLyrics && _lyricLines.isEmpty && !_loadingLyrics) {
+                                  // Always load lyrics when enabling, to ensure they match current song
+                                  if (_showLyrics && !_loadingLyrics) {
                                     _loadLyrics(currentMediaItem);
                                   }
                                 },
@@ -784,6 +789,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                     size: artworkSize,
                                     borderRadius: BorderRadius.circular(artworkSize * 0.06),
                                     heroTag: 'now_playing_artwork_${(currentMediaItem.extras?['songId'] ?? currentMediaItem.id).toString()}',
+                                    showPlaceholderIcon: !_showLyrics,
                                   ),
                                 ),
                               );
@@ -1078,6 +1084,9 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                           final isPlaying = state?.playing ?? false;
                           final repeatMode =
                               state?.repeatMode ?? AudioServiceRepeatMode.none;
+                          // Detect AMOLED theme to adapt control visibility
+                          final bool isAmoledTheme =
+                              colorSchemeNotifier.value == AppColorScheme.amoled;
 
                           IconData repeatIcon;
                           Color repeatColor;
@@ -1098,7 +1107,9 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                               repeatIcon = Icons.repeat;
                               repeatColor = Theme.of(context).brightness == Brightness.light
                                               ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.9)
-                                              : Theme.of(context).colorScheme.onSurface;
+                                              : (isAmoledTheme
+                                                  ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7)
+                                                  : Theme.of(context).colorScheme.onSurface);
                           }
 
                           // Controla la animación según el estado
@@ -1146,20 +1157,47 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                 mainAxisAlignment: MainAxisAlignment.center,
                                                 mainAxisSize: MainAxisSize.max,
                                                 children: [
-                                                  IconButton(
-                                                    icon: const Icon(Icons.shuffle),
-                                                    color: isShuffle
-                                                        ? Theme.of(context).colorScheme.primary
-                                                        : Theme.of(context).brightness == Brightness.light
-                                                            ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.9)
-                                                            : Theme.of(context).colorScheme.onSurface,
-                                                    iconSize: iconSize,
-                                                    onPressed: () async {
-                                                      if (isLoading) return;
-                                                      await (audioHandler as MyAudioHandler).toggleShuffle(!isShuffle);
-                                                    },
-                                                    tooltip: LocaleProvider.tr('shuffle'),
-                                                  ),
+                                                  (isAmoledTheme && isShuffle)
+                                                      ? Container(
+                                                          decoration: BoxDecoration(
+                                                            color: Colors.white.withValues(alpha: 0.12),
+                                                            borderRadius: BorderRadius.circular(12),
+                                                          ),
+                                                          child: IconButton(
+                                                            icon: const Icon(Icons.shuffle),
+                                                            color: Colors.white,
+                                                            iconSize: iconSize,
+                                                            onPressed: () async {
+                                                              if (isLoading) return;
+                                                              await (audioHandler as MyAudioHandler)
+                                                                  .toggleShuffle(!isShuffle);
+                                                            },
+                                                            tooltip: LocaleProvider.tr('shuffle'),
+                                                          ),
+                                                        )
+                                                      : IconButton(
+                                                          icon: const Icon(Icons.shuffle),
+                                                          color: isShuffle
+                                                              ? Theme.of(context).colorScheme.primary
+                                                              : isAmoledTheme
+                                                                  ? Theme.of(context)
+                                                                      .colorScheme
+                                                                      .onSurface
+                                                                      .withValues(alpha: 0.7)
+                                                                  : Theme.of(context).brightness == Brightness.light
+                                                                      ? Theme.of(context)
+                                                                          .colorScheme
+                                                                          .onSurface
+                                                                          .withValues(alpha: 0.9)
+                                                                      : Theme.of(context).colorScheme.onSurface,
+                                                          iconSize: iconSize,
+                                                          onPressed: () async {
+                                                            if (isLoading) return;
+                                                            await (audioHandler as MyAudioHandler)
+                                                                .toggleShuffle(!isShuffle);
+                                                          },
+                                                          tooltip: LocaleProvider.tr('shuffle'),
+                                                        ),
                                                   IconButton(
                                                     icon: const Icon(Icons.skip_previous),
                                                     color: Theme.of(context).brightness == Brightness.light
@@ -1241,29 +1279,53 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                       audioHandler?.skipToNext();  
                                                     },
                                                   ),
-                                                  IconButton(
-                                                    icon: Icon(repeatIcon),
-                                                    color: repeatColor,
-                                                    iconSize: iconSize,
-                                                    onPressed: () {
-                                                      if (isLoading) return;
-                                                      AudioServiceRepeatMode newMode;
-                                                      if (repeatMode ==
-                                                          AudioServiceRepeatMode.none) {
-                                                        newMode =
-                                                            AudioServiceRepeatMode.all;
-                                                      } else if (repeatMode ==
-                                                          AudioServiceRepeatMode.all) {
-                                                        newMode =
-                                                            AudioServiceRepeatMode.one;
-                                                      } else {
-                                                        newMode =
-                                                            AudioServiceRepeatMode.none;
-                                                      }
-                                                      audioHandler?.setRepeatMode(newMode);
-                                                    },
-                                                    tooltip: LocaleProvider.tr('repeat'),
-                                                  ),
+                                                  (isAmoledTheme && repeatMode != AudioServiceRepeatMode.none)
+                                                      ? Container(
+                                                          decoration: BoxDecoration(
+                                                            color: Colors.white.withValues(alpha: 0.12),
+                                                            borderRadius: BorderRadius.circular(12),
+                                                          ),
+                                                          child: IconButton(
+                                                            icon: Icon(repeatIcon),
+                                                            color: Colors.white,
+                                                            iconSize: iconSize,
+                                                            onPressed: () {
+                                                              if (isLoading) return;
+                                                              AudioServiceRepeatMode newMode;
+                                                              if (repeatMode ==
+                                                                  AudioServiceRepeatMode.none) {
+                                                                newMode = AudioServiceRepeatMode.all;
+                                                              } else if (repeatMode ==
+                                                                  AudioServiceRepeatMode.all) {
+                                                                newMode = AudioServiceRepeatMode.one;
+                                                              } else {
+                                                                newMode = AudioServiceRepeatMode.none;
+                                                              }
+                                                              audioHandler?.setRepeatMode(newMode);
+                                                            },
+                                                            tooltip: LocaleProvider.tr('repeat'),
+                                                          ),
+                                                        )
+                                                      : IconButton(
+                                                          icon: Icon(repeatIcon),
+                                                          color: repeatColor,
+                                                          iconSize: iconSize,
+                                                          onPressed: () {
+                                                            if (isLoading) return;
+                                                            AudioServiceRepeatMode newMode;
+                                                            if (repeatMode ==
+                                                                AudioServiceRepeatMode.none) {
+                                                              newMode = AudioServiceRepeatMode.all;
+                                                            } else if (repeatMode ==
+                                                                AudioServiceRepeatMode.all) {
+                                                              newMode = AudioServiceRepeatMode.one;
+                                                            } else {
+                                                              newMode = AudioServiceRepeatMode.none;
+                                                            }
+                                                            audioHandler?.setRepeatMode(newMode);
+                                                          },
+                                                          tooltip: LocaleProvider.tr('repeat'),
+                                                        ),
                                                 ],
                                               );
                                             },

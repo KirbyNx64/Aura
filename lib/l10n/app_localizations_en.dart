@@ -24,6 +24,11 @@ const Map<String, String> appLocalizationsEn = {
 
   // Downloads
   'downloads': 'Downloads',
+  'available_storage': 'Available storage',
+  'used_storage': 'Used storage',
+  'total_storage': 'Total storage',
+  'free_of': 'free of',
+  'calculating': 'Calculating...',
   'save_path': 'Save path',
   'not_selected': 'Not selected',
   'download_type': 'Download type',
@@ -86,6 +91,8 @@ const Map<String, String> appLocalizationsEn = {
   'confirm_clear_artwork': 'Clear artwork cache?',
   'confirm': 'Confirm',
   'success': 'Success',
+  'download_completed': 'Download completed',
+  'download_completed_desc': 'The download has finished successfully.',
   'error': 'Error',
   'are_you_sure': 'Are you sure?',
   // Backup

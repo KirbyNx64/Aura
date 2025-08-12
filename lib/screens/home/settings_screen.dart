@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:music/screens/home/ota_update_screen.dart';
 import 'package:music/utils/theme_preferences.dart';
 import 'package:android_intent_plus/android_intent.dart';
@@ -37,6 +38,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _downloadTypeExplode = false; // true: Explode, false: Directo
   AppColorScheme _currentColorScheme = AppColorScheme.deepPurple;
   int _artworkQuality = 410; // 80% por defecto
+  int? _availableBytesAtDownloadDir;
+  int? _totalBytesAtDownloadDir;
 
   @override
   void initState() {
@@ -266,6 +269,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _downloadDirectory = prefs.getString('download_directory');
     });
     downloadDirectoryNotifier.value = _downloadDirectory;
+    _refreshAvailableSpace();
   }
 
   Future<void> _setDownloadDirectory(String? path) async {
@@ -275,6 +279,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _downloadDirectory = path;
     });
     downloadDirectoryNotifier.value = path;
+    _refreshAvailableSpace();
   }
 
   Future<void> _pickDownloadDirectory() async {
@@ -360,6 +365,44 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _downloadTypeExplode = prefs.getBool('download_type_explode') ?? true; // Changed default to true
     });
     downloadTypeNotifier.value = _downloadTypeExplode;
+  }
+
+  Future<void> _refreshAvailableSpace() async {
+    try {
+      if (Platform.isAndroid) {
+        const channel = MethodChannel('com.kirby.aura/storage');
+        final stats = await channel.invokeMethod<Map<dynamic, dynamic>>('getStorageStats', {
+          'path': _downloadDirectory ?? '/storage/emulated/0',
+        });
+        if (mounted) {
+          setState(() {
+            _availableBytesAtDownloadDir = (stats?['availableBytes'] as num?)?.toInt();
+            _totalBytesAtDownloadDir = (stats?['totalBytes'] as num?)?.toInt();
+          });
+        }
+      } else {
+        if (mounted) {
+          setState(() { _availableBytesAtDownloadDir = null; _totalBytesAtDownloadDir = null; });
+        }
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() { _availableBytesAtDownloadDir = null; _totalBytesAtDownloadDir = null; });
+      }
+    }
+  }
+
+  String _formatBytes(int bytes) {
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    double size = bytes.toDouble();
+    int unitIndex = 0;
+    while (size >= 1024 && unitIndex < units.length - 1) {
+      size /= 1024;
+      unitIndex++;
+    }
+    return unitIndex <= 1
+        ? '${size.toStringAsFixed(0)} ${units[unitIndex]}'
+        : '${size.toStringAsFixed(1)} ${units[unitIndex]}';
   }
 
   Future<void> _setDownloadType(bool explode) async {
@@ -505,6 +548,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Card(
             child: Column(
               children: [
+                ListTile(
+                  leading: const Icon(Icons.sd_storage),
+                  title: Text(
+                    _availableBytesAtDownloadDir != null && _totalBytesAtDownloadDir != null
+                        ? '${_formatBytes(_availableBytesAtDownloadDir!)} ${LocaleProvider.tr('free_of')} ${_formatBytes(_totalBytesAtDownloadDir!)}'
+                        : LocaleProvider.tr('calculating'),
+                  ),
+                  subtitle: (_availableBytesAtDownloadDir != null && _totalBytesAtDownloadDir != null)
+                      ? Padding(
+                          padding: const EdgeInsets.only(top: 8, right: 0),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: LinearProgressIndicator(
+                              year2023: false,
+                              value: (_totalBytesAtDownloadDir! > 0)
+                                  ? (1 - (_availableBytesAtDownloadDir! / _totalBytesAtDownloadDir!))
+                                  : null,
+                              minHeight: 6,
+                            ),
+                          ),
+                        )
+                      : null,
+                ),
+                const Divider(height: 1),
                 ListTile(
                   leading: const Icon(Icons.folder),
                   title: TranslatedText('save_path'),
@@ -818,7 +885,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              '${LocaleProvider.tr('version')}: v1.4.6',
+                              '${LocaleProvider.tr('version')}: v1.4.7',
                               style: const TextStyle(
                                 fontSize: 15,
                               ),

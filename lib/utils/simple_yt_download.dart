@@ -15,21 +15,22 @@ class DownloadQueue {
   bool _isProcessing = false;
   DownloadTask? _currentTask;
   bool _isFirstDownload = true;
+  int _nextNotificationId = 1; // Contador para IDs únicos de notificación
   
   // Callbacks globales para actualizar la UI
-  Function(double progress)? _onProgressCallback;
+  Function(double progress, int notificationId)? _onProgressCallback;
   Function(bool isDownloading, bool isProcessing)? _onStateChangeCallback;
-  Function(String title, String message)? _onSuccessCallback;
+  Function(String title, String message, int notificationId)? _onSuccessCallback;
   Function(String title, String message)? _onErrorCallback;
-  Function(String title, String artist)? _onDownloadStartCallback;
+  Function(String title, String artist, int notificationId)? _onDownloadStartCallback;
   Function(String title, String artist)? _onDownloadAddedToQueueCallback;
 
   void setCallbacks({
-    Function(double progress)? onProgress,
+    Function(double progress, int notificationId)? onProgress,
     Function(bool isDownloading, bool isProcessing)? onStateChange,
-    Function(String title, String message)? onSuccess,
+    Function(String title, String message, int notificationId)? onSuccess,
     Function(String title, String message)? onError,
-    Function(String title, String artist)? onDownloadStart,
+    Function(String title, String artist, int notificationId)? onDownloadStart,
     Function(String title, String artist)? onDownloadAddedToQueue,
   }) {
     _onProgressCallback = onProgress;
@@ -52,13 +53,14 @@ class DownloadQueue {
       videoId: videoId,
       title: title,
       artist: artist,
+      notificationId: _nextNotificationId++, // Asignar ID único
     );
     
     _queue.add(task);
     
     // Si no hay ninguna descarga en proceso, mostrar el título inmediatamente e iniciar el procesamiento
     if (!_isProcessing) {
-      _onDownloadStartCallback?.call(task.title, task.artist);
+      _onDownloadStartCallback?.call(task.title, task.artist, task.notificationId);
       _processQueue();
     } else {
       // Si ya hay una descarga en proceso, notificar que se agregó a la cola
@@ -80,7 +82,7 @@ class DownloadQueue {
       try {
         // Para descargas adicionales (no la primera), notificar el inicio
         if (!_isFirstDownload) {
-          _onDownloadStartCallback?.call(task.title, task.artist);
+          _onDownloadStartCallback?.call(task.title, task.artist, task.notificationId);
         }
         
         // Iniciar la descarga
@@ -91,7 +93,10 @@ class DownloadQueue {
         
       } catch (e) {
         // Manejar errores individuales sin detener la cola
-        _onErrorCallback?.call(task.title, 'Error: $e');
+        _onErrorCallback?.call(
+          LocaleProvider.tr('download_failed_title'),
+          e.toString(),
+        );
       } finally {
         _currentTask = null;
       }
@@ -111,6 +116,9 @@ class DownloadQueue {
     final videoUrl = 'https://www.youtube.com/watch?v=${task.videoId}';
     final downloadManager = DownloadManager();
     await downloadManager.initialize();
+    if (task.context.mounted) {
+      downloadManager.setDialogContext(task.context);
+    }
     
     downloadManager.setCallbacks(
       onInfoUpdate: (title, artist, coverBytes) {
@@ -118,7 +126,7 @@ class DownloadQueue {
       },
       onProgressUpdate: (progress) {
         // print('Progreso: ${(progress * 100).toStringAsFixed(1)}%');
-        _onProgressCallback?.call(progress);
+        _onProgressCallback?.call(progress, task.notificationId);
       },
       onStateUpdate: (isDownloading, isProcessing) {
         // print('Estado: Descargando=$isDownloading, Procesando=$isProcessing');
@@ -130,11 +138,11 @@ class DownloadQueue {
       },
       onSuccess: (title, message) {
         _showDialogSafely(task.context, title, message);
-        _onSuccessCallback?.call(title, message);
+        _onSuccessCallback?.call(title, message, task.notificationId);
       },
     );
     
-    await downloadManager.downloadAudio(url: videoUrl);
+    await downloadManager.downloadAudio(url: videoUrl, songTitle: task.title);
   }
 
   // Método seguro para mostrar diálogo verificando si el contexto sigue válido
@@ -190,12 +198,14 @@ class DownloadTask {
   final String videoId;
   final String title;
   final String artist;
+  final int notificationId; // Nuevo campo para el ID de notificación
 
   DownloadTask({
     required this.context,
     required this.videoId,
     required this.title,
     required this.artist,
+    required this.notificationId,
   });
 }
 

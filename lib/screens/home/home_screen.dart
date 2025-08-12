@@ -138,7 +138,6 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
-  Timer? _debounce;
   Timer? _playingDebounce;
   final ValueNotifier<bool> _isPlayingNotifier = ValueNotifier<bool>(false);
   final ValueNotifier<String?> _currentSongPathNotifier = ValueNotifier<String?>(null);
@@ -180,7 +179,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     // Escuchar cambios en el estado de reproducción con debounce
     audioHandler?.playbackState.listen((state) {
       _playingDebounce?.cancel();
-      _playingDebounce = Timer(const Duration(milliseconds: 100), () {
+      _playingDebounce = Timer(const Duration(milliseconds: 400), () {
         if (mounted) {
           _isPlayingNotifier.value = state.playing;
         }
@@ -441,14 +440,11 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
 
     final widget = AnimatedTapButton(
-        onTap: () {
+        onTap: () async {
           // Precargar la carátula antes de reproducir
           unawaited(_preloadArtworkForSong(song));
-          _debounce?.cancel();
-          _debounce = Timer(const Duration(milliseconds: 300), () async {
-            if (!mounted) return;
-            await _playSongAndOpenPlayer(song, _accessDirectSongs, queueSource: LocaleProvider.tr('quick_access_songs'));
-          });
+          if (!mounted) return;
+          await _playSongAndOpenPlayer(song, _accessDirectSongs, queueSource: LocaleProvider.tr('quick_access_songs'));
         },
         onLongPress: () async {
           HapticFeedback.mediumImpact();
@@ -577,21 +573,17 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           opacity: 0,
           child: Icon(Icons.more_vert),
         ),
-        onTap: () {
+        onTap: () async {
           // Precargar la carátula antes de reproducir
           unawaited(_preloadArtworkForSong(song));
-          _debounce?.cancel();
-          _debounce = Timer(const Duration(milliseconds: 300), () async {
-            if (!mounted) return;
-            // Usar todas las canciones de selección rápida (limitadas a 20) para mantener el orden completo
-            final limitedQuickPick = _shuffledQuickPick.take(20).toList();
-            await _playSongAndOpenPlayer(song, limitedQuickPick, queueSource: LocaleProvider.tr('quick_pick_songs'));
-          });
+          if (!mounted) return;
+          // Usar todas las canciones de selección rápida (limitadas a 20) para mantener el orden completo
+          final limitedQuickPick = _shuffledQuickPick.take(20).toList();
+          await _playSongAndOpenPlayer(song, limitedQuickPick, queueSource: LocaleProvider.tr('quick_pick_songs'));
         },
         onLongPress: () => _handleLongPress(context, song),
       ),
     );
-
     return widget;
   }
 
@@ -778,7 +770,6 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _searchRecentsFocus.dispose();
     _searchPlaylistController.dispose();
     _searchPlaylistFocus.dispose();
-    _debounce?.cancel();
     _playingDebounce?.cancel();
     _isPlayingNotifier.dispose();
     super.dispose();
@@ -806,8 +797,6 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _playSongAndOpenPlayer(SongModel song, List<SongModel> queue, {String? queueSource}) async {
-    // Deshabilitar temporalmente la navegación del overlay
-    overlayPlayerNavigationEnabled.value = false;
     
     // Obtener la carátula para la pantalla del reproductor
     final songId = song.id;
@@ -837,7 +826,6 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         pageBuilder: (context, animation, secondaryAnimation) =>
           FullPlayerScreen(
             initialMediaItem: mediaItem,
-            initialArtworkUri: artUri,
           ),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           return SlideTransition(
@@ -859,7 +847,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     playLoadingNotifier.value = true;
     
     // Reproducir la canción después de un breve delay para que se abra la pantalla
-    Future.delayed(const Duration(milliseconds: 600), () {
+    Future.delayed(const Duration(milliseconds: 400), () {
       if (mounted) {
         _playSong(song, queue, queueSource: queueSource);
         // Desactivar indicador de carga después de reproducir
@@ -867,11 +855,6 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           playLoadingNotifier.value = false;
         });
       }
-    });
-    
-    // Rehabilitar la navegación del overlay después de un delay
-    Future.delayed(const Duration(milliseconds: 1000), () {
-      overlayPlayerNavigationEnabled.value = true;
     });
   }
 
@@ -1573,11 +1556,8 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                     onTap: () async {
                                       // Precargar la carátula antes de reproducir
                                       unawaited(_preloadArtworkForSong(song));
-                                      _debounce?.cancel();
-                                      _debounce = Timer(const Duration(milliseconds: 300), () async {
-                                        if (!mounted) return;
-                                        await _playSongAndOpenPlayer(song, songsToShow);
-                                      });
+                                      if (!mounted) return;
+                                      await _playSongAndOpenPlayer(song, songsToShow);
                                     },
                                     onLongPress: () {
                                       showModalBottomSheet(
@@ -1720,11 +1700,8 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                 onTap: () async {
                                   // Precargar la carátula antes de reproducir
                                   unawaited(_preloadArtworkForSong(song));
-                                  _debounce?.cancel();
-                                  _debounce = Timer(const Duration(milliseconds: 300), () async {
-                                    if (!mounted) return;
-                                    await _playSongAndOpenPlayer(song, songsToShow);
-                                  });
+                                  if (!mounted) return;
+                                  await _playSongAndOpenPlayer(song, songsToShow);
                                 },
                                 onLongPress: () {
                                   showModalBottomSheet(
@@ -1833,15 +1810,12 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                 valueListenable: _isPlayingNotifier,
                                 builder: (context, playing, child) {
                                   return ListTile(
-                                    onTap: () {
+                                    onTap: () async {
                                       if (_isSelectingPlaylistSongs) {
                                         _onPlaylistSongSelected(song);
                                       } else {
-                                        _debounce?.cancel();
-                                        _debounce = Timer(const Duration(milliseconds: 300), () async {
-                                          if (!mounted) return;
-                                          await _playSongAndOpenPlayer(song, songsToShow);
-                                        });
+                                        if (!mounted) return;
+                                        await _playSongAndOpenPlayer(song, songsToShow);
                                       }
                                     },
                                     onLongPress: () async {
@@ -2040,15 +2014,12 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                               // Para canciones que no están reproduciéndose, no usar StreamBuilder
                               final playing = audioHandler?.playbackState.value.playing ?? false;
                               return ListTile(
-                                onTap: () {
+                                onTap: () async {
                                   if (_isSelectingPlaylistSongs) {
                                     _onPlaylistSongSelected(song);
                                   } else {
-                                    _debounce?.cancel();
-                                    _debounce = Timer(const Duration(milliseconds: 300), () async {
-                                      if (!mounted) return;
-                                      await _playSongAndOpenPlayer(song, songsToShow);
-                                    });
+                                    if (!mounted) return;
+                                    await _playSongAndOpenPlayer(song, songsToShow);
                                   }
                                 },
                                 onLongPress: () async {

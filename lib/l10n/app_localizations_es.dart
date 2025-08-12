@@ -24,6 +24,11 @@ const Map<String, String> appLocalizationsEs = {
 
   // Downloads
   'downloads': 'Descargas',
+  'available_storage': 'Almacenamiento disponible',
+  'used_storage': 'Almacenamiento en uso',
+  'total_storage': 'Almacenamiento total',
+  'free_of': 'libres de',
+  'calculating': 'Calculando...',
   'save_path': 'Ruta de guardado',
   'not_selected': 'No seleccionada',
   'download_type': 'Tipo de descarga',
@@ -87,6 +92,8 @@ const Map<String, String> appLocalizationsEs = {
   'confirm': 'Confirmar',
   'success': 'Éxito',
   'error': 'Error',
+  'download_completed': 'Descarga completada',
+  'download_completed_desc': 'La descarga ha finalizado correctamente.',
   'are_you_sure': '¿Estás seguro?',
   // Respaldo
   'backup': 'Respaldo',
@@ -212,6 +219,7 @@ const Map<String, String> appLocalizationsEs = {
   'video_unavailable_desc': 'El video no está disponible. Puede haber sido eliminado, es privado o está restringido por YouTube.',
   'download_failed_title': 'Descarga fallida',
   'download_failed_desc': 'Ocurrió un error, intentalo de nuevo.',
+  'download_failed_desc_2': 'Ocurrió un error, intentalo de nuevo. Si el problema persiste, es posible que el video no esté disponible por restricciones de YouTube.',
   'playlist_error': 'Error al obtener lista de reproducción',
   'playlist_error_desc': 'No se pudo obtener la información de la lista de reproducción',
   'playlist_completed': 'Lista de reproducción completada',

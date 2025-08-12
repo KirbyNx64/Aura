@@ -10,6 +10,7 @@ import 'package:flutter/foundation.dart';
 import 'album_art_cache_manager.dart';
 import 'optimized_album_art_loader.dart';
 import 'package:music/utils/db/songs_index_db.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 AudioHandler? _audioHandler;
 
@@ -26,11 +27,13 @@ Future<AudioHandler> initAudioService() async {
         androidNotificationChannelId: 'com.aura.music.channel',
         androidNotificationChannelName: 'Aura Music',
         androidNotificationOngoing: true,
-        androidStopForegroundOnPause: false,
+        androidNotificationClickStartsActivity: true,
+        androidStopForegroundOnPause: false, 
         androidResumeOnClick: true,
+        preloadArtwork: false,
       ),
     );
-    
+
     return _audioHandler!;
   } catch (e) {
     _audioHandler = null;
@@ -203,6 +206,20 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   StreamSubscription<Duration?>? _durationSubscription;
   StreamSubscription<bool>? _playingSubscription;
   StreamSubscription<ProcessingState>? _processingStateSubscription;
+  StreamSubscription<Duration>? _positionSubscription;
+
+  // Persistencia
+  SharedPreferences? _prefs;
+  bool _restoredSession = false;
+  DateTime _lastPositionPersist = DateTime.fromMillisecondsSinceEpoch(0);
+
+  // Claves de SharedPreferences
+  static const String _kPrefQueuePaths = 'playback_queue_paths';
+  static const String _kPrefQueueIndex = 'playback_queue_index';
+  static const String _kPrefSongPositionSec = 'playback_song_position_sec';
+  static const String _kPrefRepeatMode = 'playback_repeat_mode'; // 0 none, 1 one, 2 all
+  static const String _kPrefShuffleEnabled = 'playback_shuffle_enabled';
+  static const String _kPrefWasPlaying = 'playback_was_playing';
 
   MyAudioHandler() {
     _init();
@@ -257,6 +274,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     if (_isInitialized) return;
     
     try {
+      _prefs ??= await SharedPreferences.getInstance();
       final session = await AudioSession.instance;
       await session.configure(const AudioSessionConfiguration.music());
 
@@ -300,6 +318,10 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       _currentIndexSubscription = _player.currentIndexStream.listen((index) {
         if (_initializing) return;
         if (index != null && index < _mediaQueue.length) {
+          // Persistir índice actual
+          unawaited(() async {
+            try { await _prefs?.setInt(_kPrefQueueIndex, index); } catch (_) {}
+          }());
           var currentMediaItem = _mediaQueue[index];
           
           // Actualizar el MediaItem inmediatamente para la notificación
@@ -398,6 +420,12 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
           // Nudge extra para refrescar notificación cuando comienza a reproducir
           forceUpdateCurrentMediaItem();
         }
+        // Guardar estado de reproducción actual
+        unawaited(() async {
+          try {
+            await _prefs?.setBool(_kPrefWasPlaying, playing);
+          } catch (_) {}
+        }());
       });
 
       _processingStateSubscription = _player.processingStateStream.listen((state) {
@@ -410,9 +438,26 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
           forceUpdateCurrentMediaItem();
         }
       });
+
+      // Suscripción para persistir la posición cada ~2s
+      _positionSubscription = _player.positionStream.listen((pos) {
+        final now = DateTime.now();
+        if (now.difference(_lastPositionPersist).inMilliseconds >= 2000) {
+          _lastPositionPersist = now;
+          unawaited(() async {
+            try {
+              await _prefs?.setInt(_kPrefSongPositionSec, pos.inSeconds);
+            } catch (_) {}
+          }());
+        }
+      });
       
       _isInitialized = true;
       _initRetryCount = 0;
+      // Intentar restaurar sesión previa si no hay cola actual
+      if (!_restoredSession && _mediaQueue.isEmpty) {
+        unawaited(_attemptRestoreFromPrefs());
+      }
     } catch (e) {
       // Si hay error en la inicialización, intentar reinicializar
       _isInitialized = false;
@@ -432,12 +477,14 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     await _durationSubscription?.cancel();
     await _playingSubscription?.cancel();
     await _processingStateSubscription?.cancel();
+    await _positionSubscription?.cancel();
     
     _currentIndexSubscription = null;
     _playbackEventSubscription = null;
     _durationSubscription = null;
     _playingSubscription = null;
     _processingStateSubscription = null;
+    _positionSubscription = null;
   }
 
   /// Verifica si el handler está montado (para evitar actualizaciones después de dispose)
@@ -627,6 +674,13 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     
     _mediaQueue.addAll(mediaItems);
     queue.add(List<MediaItem>.from(_mediaQueue));
+    // Persistir cola inmediatamente (lista de rutas)
+    unawaited(() async {
+      try {
+        final paths = _mediaQueue.map((m) => m.id).toList();
+        await _prefs?.setStringList(_kPrefQueuePaths, paths);
+      } catch (_) {}
+    }());
 
     // 2. Crear AudioSources sin verificación de archivos (just_audio maneja errores)
     // ignore: deprecated_member_use
@@ -659,6 +713,13 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
                 queueIndex: initialIndex,
               ),
             );
+            // Persistir índice y posición inicial
+            unawaited(() async {
+              try {
+                await _prefs?.setInt(_kPrefQueueIndex, initialIndex);
+                await _prefs?.setInt(_kPrefSongPositionSec, initialPosition.inSeconds);
+              } catch (_) {}
+            }());
             
             // Si la carátula está en caché, actualizar inmediatamente
             final songPath = selectedMediaItem.extras?['data'] as String?;
@@ -680,6 +741,12 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         
         if (autoPlay) {
           await play();
+        }
+        // Forzar carga/actualización inmediata de la carátula de la canción actual
+        forceUpdateCurrentMediaItem();
+        // Precargar próximas carátulas tras restaurar/establecer cola
+        if (initialIndex >= 0) {
+          _preloadNextArtworks(initialIndex);
         }
       } catch (e) {
         // Si falla, intentar con una sola canción
@@ -958,6 +1025,12 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       await _player.setShuffleModeEnabled(false);
     }
     playbackState.add(playbackState.value.copyWith(shuffleMode: shuffleMode));
+    // Persistir modo shuffle (solo habilitado/deshabilitado)
+    unawaited(() async {
+      try {
+        await _prefs?.setBool(_kPrefShuffleEnabled, shuffleMode == AudioServiceShuffleMode.all);
+      } catch (_) {}
+    }());
   }
 
   @override
@@ -970,6 +1043,17 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       await _player.setLoopMode(LoopMode.off);
     }
     playbackState.add(playbackState.value.copyWith(repeatMode: repeatMode));
+    // Persistir repeat mode como entero
+    unawaited(() async {
+      try {
+        final int modeInt = repeatMode == AudioServiceRepeatMode.one
+            ? 1
+            : repeatMode == AudioServiceRepeatMode.all
+                ? 2
+                : 0;
+        await _prefs?.setInt(_kPrefRepeatMode, modeInt);
+      } catch (_) {}
+    }());
   }
 
   /// Activa o desactiva el modo aleatorio mezclando la lista actual sin repetir canciones y reconstruyendo el audio source
@@ -1023,6 +1107,10 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       }
       isQueueTransitioning.value = false;
     }
+    // Persistir flag de shuffle
+    unawaited(() async {
+      try { await _prefs?.setBool(_kPrefShuffleEnabled, enable); } catch (_) {}
+    }());
   }
 
   Stream<Duration> get positionStream => _player.positionStream;
@@ -1079,6 +1167,13 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
           _mediaQueue.add(mediaItem);
         }
         queue.add(List<MediaItem>.from(_mediaQueue));
+        // Persistir cola actualizada
+        unawaited(() async {
+          try {
+            final paths = _mediaQueue.map((m) => m.id).toList();
+            await _prefs?.setStringList(_kPrefQueuePaths, paths);
+          } catch (_) {}
+        }());
         return;
       } catch (_) {
         // Fallback a reconstrucción si llegara a fallar el append
@@ -1098,6 +1193,15 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       autoPlay: wasPlaying,
       resetShuffle: false,
     );
+    // Persistir cola reconstruida
+    unawaited(() async {
+      try {
+        final paths = _mediaQueue.map((m) => m.id).toList();
+        await _prefs?.setStringList(_kPrefQueuePaths, paths);
+        final idx = _player.currentIndex ?? safeIndex;
+        await _prefs?.setInt(_kPrefQueueIndex, idx);
+      } catch (_) {}
+    }());
   }
 
   /// Inicia el temporizador de apagado automático.
@@ -1232,10 +1336,83 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     }
   }
 
+  // Guarda toda la sesión actual en SharedPreferences
+  Future<void> _saveSessionToPrefs() async {
+    try {
+      final prefs = _prefs ?? await SharedPreferences.getInstance();
+      final paths = _mediaQueue.map((m) => m.id).toList();
+      await prefs.setStringList(_kPrefQueuePaths, paths);
+      final idx = _player.currentIndex ?? 0;
+      await prefs.setInt(_kPrefQueueIndex, idx);
+      await prefs.setInt(_kPrefSongPositionSec, _player.position.inSeconds);
+      final repeat = playbackState.value.repeatMode;
+      final repeatInt = repeat == AudioServiceRepeatMode.one ? 1 : repeat == AudioServiceRepeatMode.all ? 2 : 0;
+      await prefs.setInt(_kPrefRepeatMode, repeatInt);
+      final shuffleEnabled = playbackState.value.shuffleMode == AudioServiceShuffleMode.all || isShuffleNotifier.value;
+      await prefs.setBool(_kPrefShuffleEnabled, shuffleEnabled);
+      await prefs.setBool(_kPrefWasPlaying, _player.playing);
+    } catch (_) {}
+  }
+
+  // Restaura la sesión previa si es posible
+  Future<void> _attemptRestoreFromPrefs() async {
+    try {
+      final prefs = _prefs ?? await SharedPreferences.getInstance();
+      final savedPaths = prefs.getStringList(_kPrefQueuePaths) ?? const [];
+      if (savedPaths.isEmpty) { _restoredSession = true; return; }
+
+      // Consultar todas las canciones y mapear por ruta
+      final query = OnAudioQuery();
+      final allSongs = await query.querySongs();
+      if (allSongs.isEmpty) { _restoredSession = true; return; }
+      final Map<String, SongModel> byPath = { for (final s in allSongs) s.data: s };
+      final List<SongModel> songs = [];
+      for (final p in savedPaths) {
+        final s = byPath[p];
+        if (s != null) songs.add(s);
+      }
+      if (songs.isEmpty) { _restoredSession = true; return; }
+
+      final savedIndex = (prefs.getInt(_kPrefQueueIndex) ?? 0).clamp(0, songs.length - 1);
+      final posSec = prefs.getInt(_kPrefSongPositionSec) ?? 0;
+      final repeatInt = prefs.getInt(_kPrefRepeatMode) ?? 0;
+      final shuffleEnabled = prefs.getBool(_kPrefShuffleEnabled) ?? false;
+
+      await setQueueFromSongsWithPosition(
+        songs,
+        initialIndex: savedIndex,
+        initialPosition: Duration(seconds: posSec),
+        autoPlay: false,
+        resetShuffle: false,
+      );
+
+      // Aplicar repeat
+      final repeatMode = repeatInt == 1
+          ? AudioServiceRepeatMode.one
+          : repeatInt == 2
+              ? AudioServiceRepeatMode.all
+              : AudioServiceRepeatMode.none;
+      await setRepeatMode(repeatMode);
+
+      // Aplicar shuffle propio si estaba activo
+      if (shuffleEnabled) {
+        unawaited(toggleShuffle(true));
+      }
+
+      // Forzar actualización inmediata de MediaItem y carátula tras restaurar
+      forceUpdateCurrentMediaItem();
+      _preloadNextArtworks(savedIndex);
+    } catch (_) {
+      // Ignorar errores de restauración
+    } finally {
+      _restoredSession = true;
+    }
+  }
+
   @override
   Future customAction(String name, [Map<String, dynamic>? extras]) async {
     if (name == "saveSession") {
-      await stop();
+      await _saveSessionToPrefs();
     }
     return super.customAction(name, extras);
   }
@@ -1344,6 +1521,15 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       autoPlay: shouldAutoplay,
       resetShuffle: false,
     );
+    // Persistir nueva cola tras eliminar
+    unawaited(() async {
+      try {
+        final paths = _mediaQueue.map((m) => m.id).toList();
+        await _prefs?.setStringList(_kPrefQueuePaths, paths);
+        final idx = _player.currentIndex ?? initialIndex;
+        await _prefs?.setInt(_kPrefQueueIndex, idx);
+      } catch (_) {}
+    }());
   }
 
   /// Helper para eliminar una sola canción por ruta

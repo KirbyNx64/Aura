@@ -25,24 +25,28 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 class DownloadNotificationThrottler {
   double _lastProgress = 0;
   DateTime _lastUpdate = DateTime.fromMillisecondsSinceEpoch(0);
+  String _currentTitle = 'Descargando...';
   static final DownloadNotificationThrottler _instance = DownloadNotificationThrottler._internal();
   factory DownloadNotificationThrottler() => _instance;
   DownloadNotificationThrottler._internal();
 
-  void show(double progress) {
+  void setTitle(String title) {
+    _currentTitle = title;
+  }
+
+  void show(double progress, {int notificationId = 0}) {
     final now = DateTime.now();
     final percentDelta = (progress - _lastProgress).abs();
     final timeDelta = now.difference(_lastUpdate).inMilliseconds;
     if (percentDelta >= 3 || timeDelta >= 400) {
       _lastProgress = progress;
       _lastUpdate = now;
-      showDownloadProgressNotification(progress);
+      showDownloadProgressNotification(progress, _currentTitle, notificationId: notificationId);
     }
   }
 }
 
-Future<void> showDownloadProgressNotification(double progress) async {
-  const int notificationId = 0;
+Future<void> showDownloadProgressNotification(double progress, String title, {int notificationId = 0}) async {
   final AndroidNotificationDetails androidPlatformChannelSpecifics =
       AndroidNotificationDetails(
     'download_channel',
@@ -64,15 +68,64 @@ Future<void> showDownloadProgressNotification(double progress) async {
 
   await flutterLocalNotificationsPlugin.show(
     notificationId,
-    'Descargando...',
+    title,
     '${progress.toInt()}%',
     platformChannelSpecifics,
     payload: 'download',
   );
 }
 
-Future<void> cancelDownloadNotification() async {
-  await flutterLocalNotificationsPlugin.cancel(0);
+Future<void> showDownloadCompletedNotification(String title, int notificationId) async {
+  final AndroidNotificationDetails androidPlatformChannelSpecifics =
+      AndroidNotificationDetails(
+    'download_channel',
+    'Descargas',
+    channelDescription: 'Notificaciones de progreso de descarga',
+    importance: Importance.defaultImportance,
+    priority: Priority.defaultPriority, 
+    showProgress: false,
+    enableVibration: false,
+    vibrationPattern: null,
+    ongoing: false, // No es persistente
+  );
+  final NotificationDetails platformChannelSpecifics =
+      NotificationDetails(android: androidPlatformChannelSpecifics);
+
+  await flutterLocalNotificationsPlugin.show(
+    notificationId,
+    title,
+    LocaleProvider.tr('download_complete'),
+    platformChannelSpecifics,
+    payload: 'download_completed',
+  );
+}
+
+Future<void> showDownloadFailedNotification(String title, int notificationId) async {
+  final AndroidNotificationDetails androidPlatformChannelSpecifics =
+      AndroidNotificationDetails(
+    'download_channel',
+    'Descargas',
+    channelDescription: 'Notificaciones de progreso de descarga',
+    importance: Importance.defaultImportance,
+    priority: Priority.defaultPriority,
+    showProgress: false,
+    enableVibration: true,
+    ongoing: false,
+  );
+  final NotificationDetails platformChannelSpecifics =
+      NotificationDetails(android: androidPlatformChannelSpecifics);
+
+  await flutterLocalNotificationsPlugin.show(
+    notificationId,
+    title,
+    LocaleProvider.tr('download_failed_title'),
+    platformChannelSpecifics,
+    payload: 'download_failed',
+  );
+}
+
+Future<void> cancelDownloadNotification({int notificationId = 0}) async {
+  await flutterLocalNotificationsPlugin.cancel(notificationId);
 }
 
 class YtSearchTestScreen extends StatefulWidget {
@@ -395,18 +448,21 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
   }
 
   // Métodos para manejar el progreso de descarga
-  void _onDownloadProgress(double progress) {
+  void _onDownloadProgress(double progress, int notificationId) {
     downloadProgressNotifier.value = progress;
     // showDownloadProgressNotification(progress * 100); // 0% a 100% durante la descarga
-    DownloadNotificationThrottler().show(progress * 100);
+    DownloadNotificationThrottler().show(progress * 100, notificationId: notificationId);
     // Ya no cancelamos la notificación aquí, solo cuando ambos procesos terminen
   }
 
-  void _onDownloadStart(String title, String artist) {
+    void _onDownloadStart(String title, String artist, int notificationId) {
     // Actualizar la longitud de la cola
     final downloadQueue = DownloadQueue();
     queueLengthNotifier.value = downloadQueue.queueLength;
-    
+
+    // Establecer el título de la canción en la notificación
+    DownloadNotificationThrottler().setTitle(title);
+
     // Mostrar el estado de descarga
     isDownloadingNotifier.value = true;
     isProcessingNotifier.value = false;
@@ -423,20 +479,22 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
       
       // Actualizar la longitud de la cola
       queueLengthNotifier.value = downloadQueue.queueLength;
-      // Ahora sí, cancelar la notificación solo cuando ambos hayan terminado
-      cancelDownloadNotification();
+      // Ya no cancelamos la notificación aquí, las notificaciones se mantienen individualmente
     }
   }
 
-  void _onDownloadSuccess(String title, String message) {
+  void _onDownloadSuccess(String title, String message, int notificationId) {
     final downloadQueue = DownloadQueue();
+    
+    // Mostrar notificación de descarga completada
+    showDownloadCompletedNotification(title, notificationId);
     
     // Solo limpiar el estado si no hay más descargas en la cola
     if (downloadQueue.queueLength == 0) {
       isDownloadingNotifier.value = false;
       isProcessingNotifier.value = false;
       downloadProgressNotifier.value = 0.0;
-      cancelDownloadNotification();
+      // Ya no cancelamos la notificación aquí, las notificaciones se mantienen individualmente
     }
     
     // Actualizar la longitud de la cola
@@ -451,7 +509,13 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
       isDownloadingNotifier.value = false;
       isProcessingNotifier.value = false;
       downloadProgressNotifier.value = 0.0;
-      cancelDownloadNotification();
+      // Ya no cancelamos la notificación aquí, las notificaciones se mantienen individualmente
+    }
+    
+    // Mostrar notificación de fallo para la tarea actual si corresponde
+    final task = downloadQueue.currentTask;
+    if (task != null) {
+      showDownloadFailedNotification(task.title, task.notificationId);
     }
     
     // Actualizar la longitud de la cola
@@ -459,10 +523,13 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
   }
 
   // Método para manejar cuando se agrega una descarga a la cola
-  void _onDownloadAddedToQueue(String title, String artist) {
+    void _onDownloadAddedToQueue(String title, String artist) {
     final downloadQueue = DownloadQueue();
     queueLengthNotifier.value = downloadQueue.queueLength;
-    
+
+    // Establecer el título de la canción en la notificación
+    DownloadNotificationThrottler().setTitle(title);
+
     // Si hay más de una descarga en la cola, mostrar el estado de descarga
     if (downloadQueue.queueLength > 1) {
       isDownloadingNotifier.value = true;
@@ -1993,7 +2060,7 @@ class _YtPreviewPlayerState extends State<_YtPreviewPlayer> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(8),
                       child: (_currentItem.thumbUrl != null && _currentItem.thumbUrl!.isNotEmpty)
                           ? Image.network(
                               _currentItem.thumbUrl!,

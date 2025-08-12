@@ -137,7 +137,7 @@ class _FoldersScreenState extends State<FoldersScreen>
     // Escuchar cambios en el estado de reproducción con debounce
     audioHandler?.playbackState.listen((state) {
       _playingDebounce?.cancel();
-      _playingDebounce = Timer(const Duration(milliseconds: 100), () {
+      _playingDebounce = Timer(const Duration(milliseconds: 400), () {
         if (mounted) {
           _isPlayingNotifier.value = state.playing;
         }
@@ -339,8 +339,6 @@ class _FoldersScreenState extends State<FoldersScreen>
 
   // Para reproducir y abrir PlayerScreen:
   Future<void> _playSongAndOpenPlayer(String path) async {
-    // Deshabilitar temporalmente la navegación del overlay
-    overlayPlayerNavigationEnabled.value = false;
     
     final ignored = await getIgnoredSongs();
     final filtered = _filteredSongs.where((s) => !ignored.contains(s.data)).toList();
@@ -376,7 +374,6 @@ class _FoldersScreenState extends State<FoldersScreen>
           pageBuilder: (context, animation, secondaryAnimation) =>
             FullPlayerScreen(
               initialMediaItem: mediaItem,
-              initialArtworkUri: artUri,
             ),
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
             return SlideTransition(
@@ -398,7 +395,7 @@ class _FoldersScreenState extends State<FoldersScreen>
       playLoadingNotifier.value = true;
       
       // Reproducir la canción después de un breve delay para que se abra la pantalla
-      Future.delayed(const Duration(milliseconds: 600), () {
+      Future.delayed(const Duration(milliseconds: 400), () {
         if (mounted) {
           _playSong(path);
           Future.delayed(const Duration(milliseconds: 200), () {
@@ -406,11 +403,6 @@ class _FoldersScreenState extends State<FoldersScreen>
             playLoadingNotifier.value = false;
           });
         }
-      });
-      
-      // Rehabilitar la navegación del overlay después de un delay
-      Future.delayed(const Duration(milliseconds: 1000), () {
-        overlayPlayerNavigationEnabled.value = true;
       });
     }
   }
