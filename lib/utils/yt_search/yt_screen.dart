@@ -310,6 +310,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
       _hasSearched = true;
       _loadingMoreSongs = false;
       _loadingMoreVideos = false;
+      _showSuggestions = false;
     });
     try {
       // 1. Obtener los primeros 20 resultados rápidamente
@@ -813,6 +814,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                 _clearResults();
                                                 setState(() {
                                                   _showSuggestions = true;
+                                                  _hasSearched = false;
                                                 });
                                               },
                                             )
@@ -843,6 +845,14 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                       setState(() {
                                         _showSuggestions = true;
                                         _noInternet = false;
+                                        // Si el usuario está escribiendo, permitir sugerencias incluso después de una búsqueda
+                                        if (value.isNotEmpty) {
+                                          _hasSearched = false;
+                                          // Limpiar resultados anteriores cuando se escribe algo nuevo
+                                          _songResults = [];
+                                          _videoResults = [];
+                                          _albumResults = [];
+                                        }
                                       });
                                       if (value.isEmpty) {
                                         _checkHistory().then((_) {
@@ -853,8 +863,10 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                     onSubmitted: (_) => _search(),
                                     onTap: () {
                                       setState(() {
-                                        if (_controller.text.isEmpty) {
-                                          _showSuggestions = true;
+                                        _showSuggestions = true;
+                                        // Si hay texto, permitir sugerencias
+                                        if (_controller.text.isNotEmpty) {
+                                          _hasSearched = false;
                                         }
                                       });
                                     },
@@ -921,7 +933,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                               ),
                             ),
                           )
-                        else if (_showSuggestions && !_loading && !_hasSearched && _controller.text.isEmpty)
+                        else if (_showSuggestions && !_loading && _controller.text.isEmpty)
                           Expanded(
                             child: FutureBuilder<List<String>>(
                               future: SearchHistory.getHistory(),
@@ -958,7 +970,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                               },
                             ),
                           )
-                        else if (_showSuggestions && !_loading && !_hasSearched && _controller.text.isNotEmpty)
+                        else if (_showSuggestions && !_loading && _controller.text.isNotEmpty && !_hasSearched)
                           Expanded(
                             child: SearchSuggestionsWidget(
                               query: _controller.text,
@@ -2253,6 +2265,7 @@ class _YtPreviewPlayerState extends State<_YtPreviewPlayer> {
               builder: (context, snapshot) {
                 if (_duration == null) {
                   return LinearProgressIndicator(
+                    year2023: false,
                     value: 0.0,
                     minHeight: 6,
                     backgroundColor: Theme.of(context).colorScheme.outline.withValues(alpha: 0.15),
@@ -2266,6 +2279,7 @@ class _YtPreviewPlayerState extends State<_YtPreviewPlayer> {
                     ? pos.inMilliseconds / _duration!.inMilliseconds
                     : 0.0;
                 return LinearProgressIndicator(
+                  year2023: false,
                   borderRadius: BorderRadius.circular(8),
                   value: progress.clamp(0.0, 1.0),
                   minHeight: 6,

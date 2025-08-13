@@ -23,6 +23,7 @@ class SearchSuggestionsWidget extends StatefulWidget {
 class _SearchSuggestionsWidgetState extends State<SearchSuggestionsWidget> {
   List<String> _suggestions = [];
   List<String> _historySuggestions = [];
+  Timer? _debounceTimer;
   // Eliminado el spinner y timer
 
   @override
@@ -35,7 +36,12 @@ class _SearchSuggestionsWidgetState extends State<SearchSuggestionsWidget> {
   void didUpdateWidget(SearchSuggestionsWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.query != widget.query) {
-      _loadSuggestions();
+      // Cancelar el timer anterior si existe
+      _debounceTimer?.cancel();
+      // Agregar un pequeño delay para evitar demasiadas llamadas a la API
+      _debounceTimer = Timer(const Duration(milliseconds: 100), () {
+        _loadSuggestions();
+      });
     }
   }
 

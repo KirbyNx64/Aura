@@ -1332,6 +1332,10 @@ class _FoldersScreenState extends State<FoldersScreen>
                     playlists.insert(0, hive_model.PlaylistModel(id: id, name: name, songPaths: []));
                   });
                   playlistNameController.clear();
+                  
+                  // Notificar a la pantalla de inicio que debe actualizar las playlists
+                  playlistsShouldReload.value = !playlistsShouldReload.value;
+                  
                   if (context.mounted) {
                     Navigator.of(context).pop(id);
                   }
@@ -1351,6 +1355,9 @@ class _FoldersScreenState extends State<FoldersScreen>
         _isSelecting = false;
         _selectedSongPaths.clear();
       });
+      
+      // Notificar a la pantalla de inicio que debe actualizar las playlists
+      playlistsShouldReload.value = !playlistsShouldReload.value;
     }
   }
 
@@ -1397,6 +1404,10 @@ class _FoldersScreenState extends State<FoldersScreen>
                     playlists.insert(0, hive_model.PlaylistModel(id: id, name: name, songPaths: []));
                   });
                   playlistNameController.clear();
+                  
+                  // Notificar a la pantalla de inicio que debe actualizar las playlists
+                  playlistsShouldReload.value = !playlistsShouldReload.value;
+                  
                   if (context.mounted) {
                     Navigator.of(context).pop(id);
                   }
@@ -1409,7 +1420,9 @@ class _FoldersScreenState extends State<FoldersScreen>
     );
     if (selectedPlaylistId != null) {
       await PlaylistsDB().addSongToPlaylist(selectedPlaylistId, song);
-      // Confirmación eliminada: no mostrar SnackBar
+      
+      // Notificar a la pantalla de inicio que debe actualizar las playlists
+      playlistsShouldReload.value = !playlistsShouldReload.value;
     }
   }
 

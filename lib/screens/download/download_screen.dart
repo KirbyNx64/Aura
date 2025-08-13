@@ -2128,6 +2128,7 @@ class _DownloadScreenState extends State<DownloadScreen>
                     ),
                     const SizedBox(height: 12),
                     LinearProgressIndicator(
+                      year2023: false,
                       value: _progress,
                       minHeight: 8,
                       borderRadius: BorderRadius.circular(8),
@@ -2219,6 +2220,7 @@ class _DownloadScreenState extends State<DownloadScreen>
                       const SizedBox(height: 8),
                     ],
                     LinearProgressIndicator(
+                      year2023: false,
                       value: _totalVideos > 0 ? (_currentVideoIndex / _totalVideos).clamp(0.0, 1.0) : null,
                       minHeight: 8,
                       borderRadius: BorderRadius.circular(8),
@@ -2436,6 +2438,7 @@ class _DownloadScreenState extends State<DownloadScreen>
                       const SizedBox(height: 8),
                     ],
                     LinearProgressIndicator(
+                      year2023: false,
                       value: _progress,
                       minHeight: 8,
                       borderRadius: BorderRadius.circular(8),

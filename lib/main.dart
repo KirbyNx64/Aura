@@ -179,6 +179,17 @@ void main() async {
     DeviceOrientation.portraitDown,
   ]);
   
+  // Configuración inicial de la barra de navegación del sistema
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      systemNavigationBarColor: Colors.transparent,
+      systemNavigationBarIconBrightness: Brightness.light,
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.light,
+      systemNavigationBarDividerColor: Colors.transparent,
+    ),
+  );
+  
   if (!permisosOk) {
     runApp(
       MaterialApp(
@@ -215,8 +226,6 @@ void main() async {
     }
   });
 }
-
-
 
 class PermisosScreen extends StatefulWidget {
   const PermisosScreen({super.key});
@@ -329,14 +338,85 @@ class MainApp extends StatefulWidget {
   State<MainApp> createState() => _MainAppState();
 }
 
-class _MainAppState extends State<MainApp> {
+class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
   AppThemeMode _themeMode = AppThemeMode.system;
   bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadThemePreferences();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    
+    // Reconfigurar la barra de navegación cuando la app regrese
+    if (state == AppLifecycleState.resumed) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _updateSystemNavigationBar();
+      });
+    }
+  }
+
+  // Método para actualizar la barra de navegación del sistema
+  void _updateSystemNavigationBar() {
+    if (!mounted) return;
+    
+    try {
+      final isDark = _themeMode == AppThemeMode.dark || 
+                    (_themeMode == AppThemeMode.system && 
+                    MediaQuery.of(context).platformBrightness == Brightness.dark);
+      
+      // Crear un tema temporal para obtener los colores del sistema
+      final tempTheme = _buildTheme(isDark ? Brightness.dark : Brightness.light);
+      
+      // Configurar la barra de navegación del sistema
+      SystemChrome.setSystemUIOverlayStyle(
+        SystemUiOverlayStyle(
+          systemNavigationBarColor: tempTheme.colorScheme.surface,
+          systemNavigationBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+          statusBarColor: Colors.transparent,
+          statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+          systemNavigationBarDividerColor: Colors.transparent,
+        ),
+      );
+      
+      // Configuración adicional para Android con retraso para asegurar que se aplique
+      if (Theme.of(context).platform == TargetPlatform.android) {
+        Future.delayed(const Duration(milliseconds: 100), () {
+          if (mounted) {
+            SystemChrome.setSystemUIOverlayStyle(
+              SystemUiOverlayStyle(
+                systemNavigationBarColor: tempTheme.colorScheme.surface,
+                systemNavigationBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+                statusBarColor: Colors.transparent,
+                statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+                systemNavigationBarDividerColor: Colors.transparent,
+              ),
+            );
+          }
+        });
+      }
+    } catch (e) {
+      // En caso de error, usar configuración por defecto
+      SystemChrome.setSystemUIOverlayStyle(
+        const SystemUiOverlayStyle(
+          systemNavigationBarColor: Colors.transparent,
+          systemNavigationBarIconBrightness: Brightness.light,
+          statusBarColor: Colors.transparent,
+          statusBarIconBrightness: Brightness.light,
+        ),
+      );
+    }
   }
 
   Future<void> _loadThemePreferences() async {
@@ -349,6 +429,10 @@ class _MainAppState extends State<MainApp> {
       });
       // Inicializar el notifier con el color guardado
       colorSchemeNotifier.value = savedColorScheme;
+      // Configurar la barra de navegación del sistema después de cargar las preferencias
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _updateSystemNavigationBar();
+      });
     }
   }
 
@@ -358,6 +442,10 @@ class _MainAppState extends State<MainApp> {
     });
     // Guardar la preferencia
     await ThemePreferences.setThemeMode(themeMode);
+    // Actualizar la barra de navegación del sistema
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _updateSystemNavigationBar();
+    });
   }
 
   void _setColorScheme(AppColorScheme colorScheme) async {
@@ -365,6 +453,10 @@ class _MainAppState extends State<MainApp> {
     colorSchemeNotifier.value = colorScheme;
     // Guardar la preferencia
     await ThemePreferences.setColorScheme(colorScheme);
+    // Actualizar la barra de navegación del sistema
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _updateSystemNavigationBar();
+    });
   }
 
   ThemeData _buildTheme(Brightness brightness) {
@@ -422,46 +514,19 @@ class _MainAppState extends State<MainApp> {
       );
     }
 
-    // Determinar el brightness basado en el tema seleccionado
-    Brightness? brightness;
-    switch (_themeMode) {
-      case AppThemeMode.light:
-        brightness = Brightness.light;
-        break;
-      case AppThemeMode.dark:
-        brightness = Brightness.dark;
-        break;
-      case AppThemeMode.system:
-        brightness = null; // Usar el del sistema
-        break;
-    }
-
     return ValueListenableBuilder<AppColorScheme>(
       valueListenable: colorSchemeNotifier,
       builder: (context, colorScheme, child) {
         // Actualizar la barra de navegación cuando cambie el color
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          final isDark = brightness == Brightness.dark || 
-                        (brightness == null && MediaQuery.of(context).platformBrightness == Brightness.dark);
-          
-          // Crear un tema temporal para obtener los colores del sistema
-          final tempTheme = _buildTheme(isDark ? Brightness.dark : Brightness.light);
-          
-          SystemChrome.setSystemUIOverlayStyle(
-            SystemUiOverlayStyle(
-              systemNavigationBarColor: tempTheme.colorScheme.surface,
-              systemNavigationBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
-              statusBarColor: Colors.transparent,
-              statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
-            ),
-          );
+          _updateSystemNavigationBar();
         });
         
         return MaterialApp(
           title: 'Mi App de Música',
           debugShowCheckedModeBanner: false,
           themeMode: _themeMode == AppThemeMode.system ? ThemeMode.system : 
-                     _themeMode == AppThemeMode.dark ? ThemeMode.dark : ThemeMode.light,
+                    _themeMode == AppThemeMode.dark ? ThemeMode.dark : ThemeMode.light,
           theme: _buildTheme(Brightness.light),
           darkTheme: _buildTheme(Brightness.dark),
           home: MainNavRoot(

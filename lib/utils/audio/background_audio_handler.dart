@@ -30,7 +30,7 @@ Future<AudioHandler> initAudioService() async {
         androidNotificationClickStartsActivity: true,
         androidStopForegroundOnPause: false, 
         androidResumeOnClick: true,
-        preloadArtwork: false,
+        preloadArtwork: true,
       ),
     );
 

@@ -499,6 +499,10 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                     playlists.insert(0, hive_model.PlaylistModel(id: id, name: name, songPaths: []));
                   });
                   playlistNameController.clear();
+                  
+                  // Notificar a la pantalla de inicio que debe actualizar las playlists
+                  playlistsShouldReload.value = !playlistsShouldReload.value;
+                  
                   if (context.mounted) {
                     Navigator.of(context).pop(id);
                   }
@@ -511,6 +515,9 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     );
     if (selectedPlaylistId != null) {
       await PlaylistsDB().addSongToPlaylist(selectedPlaylistId, song);
+      
+      // Notificar a la pantalla de inicio que debe actualizar las playlists
+      playlistsShouldReload.value = !playlistsShouldReload.value;
     }
   }
 
@@ -578,6 +585,9 @@ class _FavoritesScreenState extends State<FavoritesScreen>
         _isSelecting = false;
         _selectedSongIds.clear();
       });
+      
+      // Notificar a la pantalla de inicio que debe actualizar las playlists
+      playlistsShouldReload.value = !playlistsShouldReload.value;
     }
   }
 

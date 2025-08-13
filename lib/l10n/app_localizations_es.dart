@@ -318,6 +318,8 @@ const Map<String, String> appLocalizationsEs = {
   'location': 'Ubicación',
   'duration': 'Duración',
   'close': 'Cerrar',
+  'next': 'Siguiente',
+  'share': 'Compartir',
   'show_lyrics': 'Mostrar letra',
   'no_song_playing': 'No hay canción en reproducción',
   'lyrics_not_found': 'Letra no encontrada.',

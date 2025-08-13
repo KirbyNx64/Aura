@@ -28,7 +28,7 @@ class AlbumArtCacheManager {
   // Configuración
   static const int _maxMemoryCacheSize = 200;
   static const Duration _cacheExpiry = Duration(hours: 24);
-  static const int _maxConcurrentLoads = 5;
+  static const int _maxConcurrentLoads = 20;
   
   // Control de concurrencia
   int _activeLoads = 0;

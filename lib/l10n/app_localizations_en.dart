@@ -317,6 +317,8 @@ const Map<String, String> appLocalizationsEn = {
   'location': 'Location',
   'duration': 'Duration',
   'close': 'Close',
+  'next': 'Next',
+  'share': 'Share',
   'no_song_playing': 'No song playing',
   'lyrics_not_found': 'Lyrics not found.',
   'playlist': 'Playlist',

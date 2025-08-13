@@ -885,7 +885,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              '${LocaleProvider.tr('version')}: v1.4.7',
+                              '${LocaleProvider.tr('version')}: v1.4.8',
                               style: const TextStyle(
                                 fontSize: 15,
                               ),
