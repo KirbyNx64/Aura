@@ -24,10 +24,10 @@ void main() {
 }
 
 class Songs extends StatefulWidget {
-  const Songs({Key? key}) : super(key: key);
+  const Songs({super.key});
 
   @override
-  _SongsState createState() => _SongsState();
+  State<Songs> createState() => _SongsState();
 }
 
 class _SongsState extends State<Songs> {
@@ -53,7 +53,7 @@ class _SongsState extends State<Songs> {
     checkAndRequestPermissions();
   }
 
-  checkAndRequestPermissions({bool retry = false}) async {
+  Future<void> checkAndRequestPermissions({bool retry = false}) async {
     // The param 'retryRequest' is false, by default.
     _hasPermission = await _audioQuery.checkAndRequest(
       retryRequest: retry,

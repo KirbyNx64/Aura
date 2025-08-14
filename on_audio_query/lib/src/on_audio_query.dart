@@ -12,7 +12,7 @@ Copyright: © 2021, Lucas Josino. All rights reserved.
 =============
 */
 
-part of on_audio_query;
+part of '../on_audio_query.dart';
 
 /// Interface and Main method for use on_audio_query
 class OnAudioQuery {

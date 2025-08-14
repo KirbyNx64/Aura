@@ -12,7 +12,7 @@ Copyright: © 2021, Lucas Josino. All rights reserved.
 =============
 */
 
-part of on_audio_query;
+part of '../on_audio_query.dart';
 
 /// Widget that will help to "query" artwork for song/album.
 ///
@@ -261,7 +261,7 @@ class QueryArtworkWidget extends StatelessWidget {
   ///
   /// See more: [QueryArtworkWidget](https://pub.dev/documentation/on_audio_query/latest/on_audio_query/QueryArtworkWidget-class.html)
   const QueryArtworkWidget({
-    Key? key,
+    super.key,
     required this.id,
     required this.type,
     this.quality = 50,
@@ -282,8 +282,7 @@ class QueryArtworkWidget extends StatelessWidget {
     this.nullArtworkWidget,
     this.errorBuilder,
     this.frameBuilder,
-  })  : assert(quality <= 100),
-        super(key: key);
+  }) : assert(quality <= 100);
 
   @override
   Widget build(BuildContext context) {

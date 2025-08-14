@@ -4,6 +4,13 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+import java.util.Properties
+
+// Cargar propiedades del keystore
+def keystorePropertiesFile = rootProject.file("key.properties")
+def keystoreProperties = new Properties()
+keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+
 android {
     namespace = "com.example.music"
     compileSdk = flutter.compileSdkVersion
@@ -31,9 +38,20 @@ android {
         }
     }
 
+    signingConfigs {
+        release {
+            keyAlias keystoreProperties['keyAlias']
+            keyPassword keystoreProperties['keyPassword']
+            storeFile file(keystoreProperties['storeFile'])
+            storePassword keystoreProperties['storePassword']
+        }
+    }
+
     buildTypes {
         release {
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig signingConfigs.release
+            minifyEnabled false
+            shrinkResources false
         }
     }
 }
