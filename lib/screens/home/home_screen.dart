@@ -142,10 +142,10 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     );
                   });
                   playlistNameController.clear();
-                  
+
                   // Notificar a la pantalla de inicio que debe actualizar las playlists
                   playlistsShouldReload.value = !playlistsShouldReload.value;
-                  
+
                   if (context.mounted) {
                     Navigator.of(context).pop(id);
                   }
@@ -158,16 +158,21 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
     if (selectedPlaylistId != null) {
       await PlaylistsDB().addSongToPlaylist(selectedPlaylistId, song);
-      
+
       // Notificar a la pantalla de inicio que debe actualizar las playlists
       playlistsShouldReload.value = !playlistsShouldReload.value;
     }
   }
 
   Timer? _playingDebounce;
+  Timer? _mediaItemDebounce;
   final ValueNotifier<bool> _isPlayingNotifier = ValueNotifier<bool>(false);
   final ValueNotifier<String?> _currentSongPathNotifier =
       ValueNotifier<String?>(null);
+  final ValueNotifier<MediaItem?> _currentMediaItemNotifier =
+      ValueNotifier<MediaItem?>(null);
+  final ValueNotifier<MediaItem?> _immediateMediaItemNotifier =
+      ValueNotifier<MediaItem?>(null);
 
   /// Helper para obtener el AudioHandler de forma segura
   Future<MyAudioHandler?> _getAudioHandler() async {
@@ -203,6 +208,21 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     mostPlayedShouldReload.addListener(_onMostPlayedShouldReload);
     _buscarActualizacion();
 
+    // Inicializar con el valor actual si ya hay algo reproduciéndose
+    if (audioHandler?.mediaItem.valueOrNull != null) {
+      _immediateMediaItemNotifier.value = audioHandler!.mediaItem.valueOrNull;
+      _currentMediaItemNotifier.value = audioHandler!.mediaItem.valueOrNull;
+      final path =
+          audioHandler!.mediaItem.valueOrNull?.extras?['data'] as String?;
+      _currentSongPathNotifier.value = path;
+    }
+
+    // Inicializar el estado de reproducción actual
+    if (audioHandler?.playbackState.valueOrNull != null) {
+      _isPlayingNotifier.value =
+          audioHandler!.playbackState.valueOrNull!.playing;
+    }
+
     // Escuchar cambios en el estado de reproducción con debounce
     audioHandler?.playbackState.listen((state) {
       _playingDebounce?.cancel();
@@ -213,13 +233,26 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       });
     });
 
-    // Escuchar cambios de la canción actual, y publicar solo la ruta
-    audioHandler?.mediaItem.listen((item) {
-      if (!mounted) return;
-      final path = item?.extras?['data'] as String?;
-      if (_currentSongPathNotifier.value != path) {
-        _currentSongPathNotifier.value = path;
+    // Escuchar cambios en el MediaItem inmediatamente (para detección de canción actual)
+    audioHandler?.mediaItem.listen((mediaItem) {
+      if (mounted) {
+        _immediateMediaItemNotifier.value = mediaItem;
+        // Actualizar también el path inmediatamente para compatibilidad
+        final path = mediaItem?.extras?['data'] as String?;
+        if (_currentSongPathNotifier.value != path) {
+          _currentSongPathNotifier.value = path;
+        }
       }
+    });
+
+    // Escuchar cambios en el MediaItem con debounce (para espaciado y elementos no críticos)
+    audioHandler?.mediaItem.listen((mediaItem) {
+      _mediaItemDebounce?.cancel();
+      _mediaItemDebounce = Timer(const Duration(milliseconds: 400), () {
+        if (mounted) {
+          _currentMediaItemNotifier.value = mediaItem;
+        }
+      });
     });
   }
 
@@ -369,12 +402,12 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Widget _buildShortcutWidget(SongModel song, BuildContext context) {
     final String shortcutKey = 'shortcut_${song.id}_${song.data}';
 
-    // Cachear solo el contenido visual pesado
-    Widget visual;
+    // Cachear solo el contenido visual pesado (carátula base, pin, título)
+    Widget cachedVisual;
     if (_shortcutWidgetCache.containsKey(shortcutKey)) {
-      visual = _shortcutWidgetCache[shortcutKey]!;
+      cachedVisual = _shortcutWidgetCache[shortcutKey]!;
     } else {
-      visual = RepaintBoundary(
+      cachedVisual = RepaintBoundary(
         child: AspectRatio(
           aspectRatio: 1,
           child: ClipRRect(
@@ -415,7 +448,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       child: const Icon(
                         Icons.push_pin,
                         color: Colors.white,
-                        size: 20,
+                        size: 14,
                         shadows: [Shadow(blurRadius: 4, color: Colors.black)],
                       ),
                     ),
@@ -463,7 +496,83 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           ),
         ),
       );
-      _shortcutWidgetCache[shortcutKey] = visual;
+      _shortcutWidgetCache[shortcutKey] = cachedVisual;
+    }
+
+    // Detectar si esta canción es la actual con debounce optimizado
+    return ValueListenableBuilder<MediaItem?>(
+      valueListenable: _immediateMediaItemNotifier,
+      builder: (context, immediateMediaItem, child) {
+        final path = song.data;
+        final isCurrent =
+            (immediateMediaItem?.id != null &&
+            path.isNotEmpty &&
+            (immediateMediaItem!.id == path ||
+                immediateMediaItem.extras?['data'] == path));
+
+        // Solo usar ValueListenableBuilder para el estado de reproducción si es la canción actual
+        if (isCurrent) {
+          return ValueListenableBuilder<bool>(
+            valueListenable: _isPlayingNotifier,
+            builder: (context, playing, child) {
+              return _buildOptimizedShortcutTile(
+                song: song,
+                context: context,
+                cachedVisual: cachedVisual,
+                isCurrent: isCurrent,
+                playing: playing,
+              );
+            },
+          );
+        } else {
+          // Para canciones que no están reproduciéndose, no usar listener de estado
+          return _buildOptimizedShortcutTile(
+            song: song,
+            context: context,
+            cachedVisual: cachedVisual,
+            isCurrent: isCurrent,
+            playing: false,
+          );
+        }
+      },
+    );
+  }
+
+  Widget _buildOptimizedShortcutTile({
+    required SongModel song,
+    required BuildContext context,
+    required Widget cachedVisual,
+    required bool isCurrent,
+    required bool playing,
+  }) {
+    // Agregar overlay dinámico para el visualizador si es la canción actual
+    Widget finalVisual = cachedVisual;
+
+    if (isCurrent) {
+      finalVisual = Stack(
+        children: [
+          cachedVisual,
+          // MiniMusicVisualizer en esquina superior izquierda
+          Positioned(
+            top: 6,
+            left: 6,
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.4),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              padding: const EdgeInsets.all(4),
+              child: MiniMusicVisualizer(
+                color: Colors.white,
+                width: 3,
+                height: 12,
+                radius: 3,
+                animate: playing,
+              ),
+            ),
+          ),
+        ],
+      );
     }
 
     final widget = AnimatedTapButton(
@@ -547,7 +656,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           ),
         );
       },
-      child: visual,
+      child: finalVisual,
     );
     return widget;
   }
@@ -587,7 +696,62 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       _quickPickWidgetCache[quickPickKey] = leading;
     }
 
-    final widget = RepaintBoundary(
+    // Detectar si esta canción es la actual con debounce optimizado
+    return ValueListenableBuilder<MediaItem?>(
+      valueListenable: _immediateMediaItemNotifier,
+      builder: (context, immediateMediaItem, child) {
+        final path = song.data;
+        final isCurrent =
+            (immediateMediaItem?.id != null &&
+            path.isNotEmpty &&
+            (immediateMediaItem!.id == path ||
+                immediateMediaItem.extras?['data'] == path));
+
+        final isAmoledTheme =
+            colorSchemeNotifier.value == AppColorScheme.amoled;
+
+        // Solo usar ValueListenableBuilder para el estado de reproducción si es la canción actual
+        if (isCurrent) {
+          return ValueListenableBuilder<bool>(
+            valueListenable: _isPlayingNotifier,
+            builder: (context, playing, child) {
+              return _buildOptimizedQuickPickTile(
+                song: song,
+                context: context,
+                leading: leading,
+                isCurrent: isCurrent,
+                playing: playing,
+                isAmoledTheme: isAmoledTheme,
+                pageSongs: pageSongs,
+              );
+            },
+          );
+        } else {
+          // Para canciones que no están reproduciéndose, no usar listener de estado
+          return _buildOptimizedQuickPickTile(
+            song: song,
+            context: context,
+            leading: leading,
+            isCurrent: isCurrent,
+            playing: false,
+            isAmoledTheme: isAmoledTheme,
+            pageSongs: pageSongs,
+          );
+        }
+      },
+    );
+  }
+
+  Widget _buildOptimizedQuickPickTile({
+    required SongModel song,
+    required BuildContext context,
+    required Widget leading,
+    required bool isCurrent,
+    required bool playing,
+    required bool isAmoledTheme,
+    required List<SongModel> pageSongs,
+  }) {
+    return RepaintBoundary(
       child: ListTile(
         key: ValueKey(song.id),
         contentPadding: const EdgeInsets.symmetric(horizontal: 0),
@@ -595,11 +759,30 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         leading: leading,
         title: Row(
           children: [
+            if (isCurrent)
+              Padding(
+                padding: const EdgeInsets.only(right: 8.0),
+                child: MiniMusicVisualizer(
+                  color: Theme.of(context).colorScheme.primary,
+                  width: 4,
+                  height: 15,
+                  radius: 4,
+                  animate: playing,
+                ),
+              ),
             Expanded(
               child: Text(
                 song.title,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
+                style: isCurrent
+                    ? TextStyle(
+                        color: isAmoledTheme
+                            ? Colors.white
+                            : Theme.of(context).colorScheme.primary,
+                        fontWeight: FontWeight.bold,
+                      )
+                    : null,
               ),
             ),
           ],
@@ -608,6 +791,13 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           _formatArtistWithDuration(song),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
+          style: isCurrent
+              ? TextStyle(
+                  color: isAmoledTheme
+                      ? Colors.white
+                      : Theme.of(context).colorScheme.primary,
+                )
+              : null,
         ),
         trailing: const Opacity(opacity: 0, child: Icon(Icons.more_vert)),
         onTap: () async {
@@ -625,7 +815,6 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         onLongPress: () => _handleLongPress(context, song),
       ),
     );
-    return widget;
   }
 
   Future<void> _buscarActualizacion() async {
@@ -812,7 +1001,11 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _searchPlaylistController.dispose();
     _searchPlaylistFocus.dispose();
     _playingDebounce?.cancel();
+    _mediaItemDebounce?.cancel();
     _isPlayingNotifier.dispose();
+    _currentSongPathNotifier.dispose();
+    _currentMediaItemNotifier.dispose();
+    _immediateMediaItemNotifier.dispose();
     super.dispose();
   }
 
@@ -1229,9 +1422,10 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           if (context.mounted) {
                             Navigator.of(context).pop();
                             await _loadPlaylistSongs(_selectedPlaylist!);
-                            
+
                             // Notificar a otras pantallas que deben actualizar las playlists
-                            playlistsShouldReload.value = !playlistsShouldReload.value;
+                            playlistsShouldReload.value =
+                                !playlistsShouldReload.value;
                           }
                         },
                   child: TranslatedText('add'),
@@ -1281,21 +1475,6 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    final screenHeight = MediaQuery.of(context).size.height;
-    final isSmallScreen = screenHeight < 650;
-
-    final sizeScreen = MediaQuery.of(context).size;
-    final aspectRatio = sizeScreen.height / sizeScreen.width;
-
-    // Para 16:9 (≈1.77)
-    final is16by9 = (aspectRatio < 1.85);
-
-    // Para 18:9 (≈2.0)
-    // final is18by9 = (aspectRatio >= 1.95 && aspectRatio < 2.05);
-
-    // Para 19.5:9 (≈2.16)
-    // final is195by9 = (aspectRatio >= 2.10);
-
     final quickPickSongsPerPage = 4;
     final limitedQuickPick = _shuffledQuickPick.take(20).toList();
     final quickPickPageCount = (limitedQuickPick.length / quickPickSongsPerPage)
@@ -1320,10 +1499,6 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               : null,
           title: Row(
             children: [
-              if (!_showingRecents && !_showingPlaylistSongs)
-                const Icon(Icons.home_outlined, size: 28),
-              if (!_showingRecents && !_showingPlaylistSongs)
-                const SizedBox(width: 8),
               Expanded(
                 child: _showingRecents
                     ? TranslatedText(
@@ -1352,10 +1527,23 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                   )))
-                    : Text(
-                        "Aura Music",
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                    : Row(
+                        children: [
+                          Text(
+                            "Aura",
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            "Music",
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                          ),
+                        ],
                       ),
               ),
             ],
@@ -1556,11 +1744,10 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 )
               : null,
         ),
-        body: StreamBuilder<MediaItem?>(
-          stream: audioHandler?.mediaItem,
-          builder: (context, currentSnapshot) {
-            final current = currentSnapshot.data;
-            final space = current != null ? 100.0 : 0.0;
+        body: ValueListenableBuilder<MediaItem?>(
+          valueListenable: _currentMediaItemNotifier,
+          builder: (context, debouncedMediaItem, child) {
+            final space = debouncedMediaItem != null ? 100.0 : 0.0;
 
             return Padding(
               padding: EdgeInsets.only(bottom: space),
@@ -1572,32 +1759,275 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                             ? _filteredRecents
                             : _recentSongs;
                         if (songsToShow.isEmpty) {
-                          return const Center(
-                            child: TranslatedText(
-                              'no_recent_songs',
-                              style: TextStyle(fontSize: 16),
+                          return Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.history,
+                                  size: 48,
+                                  color: Theme.of(context).colorScheme.onSurface
+                                      .withValues(alpha: 0.6),
+                                ),
+                                const SizedBox(height: 16),
+                                TranslatedText(
+                                  'no_recent_songs',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurface
+                                        .withValues(alpha: 0.6),
+                                  ),
+                                ),
+                              ],
                             ),
                           );
                         }
-                        return ListView.builder(
-                          itemCount: songsToShow.length,
-                          itemBuilder: (context, index) {
-                            final song = songsToShow[index];
-                            final isCurrent =
-                                audioHandler
-                                    ?.mediaItem
-                                    .value
-                                    ?.extras?['data'] ==
-                                song.data;
-                            final isAmoledTheme =
-                                colorSchemeNotifier.value ==
-                                AppColorScheme.amoled;
+                        return ValueListenableBuilder<MediaItem?>(
+                          valueListenable: _immediateMediaItemNotifier,
+                          builder: (context, immediateMediaItem, child) {
+                            return ListView.builder(
+                              itemCount: songsToShow.length,
+                              itemBuilder: (context, index) {
+                                final song = songsToShow[index];
+                                final path = song.data;
+                                final isCurrent =
+                                    (immediateMediaItem?.id != null &&
+                                    path.isNotEmpty &&
+                                    (immediateMediaItem!.id == path ||
+                                        immediateMediaItem.extras?['data'] ==
+                                            path));
+                                final isAmoledTheme =
+                                    colorSchemeNotifier.value ==
+                                    AppColorScheme.amoled;
 
-                            // Solo usar ValueListenableBuilder para la canción actual
-                            if (isCurrent) {
-                              return ValueListenableBuilder<bool>(
-                                valueListenable: _isPlayingNotifier,
-                                builder: (context, playing, child) {
+                                // Solo usar ValueListenableBuilder para la canción actual
+                                if (isCurrent) {
+                                  return ValueListenableBuilder<bool>(
+                                    valueListenable: _isPlayingNotifier,
+                                    builder: (context, playing, child) {
+                                      return ListTile(
+                                        leading: ClipRRect(
+                                          borderRadius: BorderRadius.circular(
+                                            8,
+                                          ),
+                                          child: QueryArtworkWidget(
+                                            id: song.id,
+                                            type: ArtworkType.AUDIO,
+                                            artworkBorder:
+                                                BorderRadius.circular(8),
+                                            artworkHeight: 50,
+                                            artworkWidth: 50,
+                                            keepOldArtwork: true,
+                                            nullArtworkWidget: Container(
+                                              color: Theme.of(
+                                                context,
+                                              ).colorScheme.surfaceContainer,
+                                              width: 50,
+                                              height: 50,
+                                              child: Icon(
+                                                Icons.music_note,
+                                                color: Theme.of(
+                                                  context,
+                                                ).colorScheme.onSurface,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                        title: Row(
+                                          children: [
+                                            if (isCurrent)
+                                              Padding(
+                                                padding: const EdgeInsets.only(
+                                                  right: 8.0,
+                                                ),
+                                                child: MiniMusicVisualizer(
+                                                  color: Theme.of(
+                                                    context,
+                                                  ).colorScheme.primary,
+                                                  width: 4,
+                                                  height: 15,
+                                                  radius: 4,
+                                                  animate: playing
+                                                      ? true
+                                                      : false,
+                                                ),
+                                              ),
+                                            Expanded(
+                                              child: Text(
+                                                song.title,
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: Theme.of(context)
+                                                    .textTheme
+                                                    .titleMedium
+                                                    ?.copyWith(
+                                                      fontWeight: isCurrent
+                                                          ? FontWeight.bold
+                                                          : FontWeight.normal,
+                                                      color: isCurrent
+                                                          ? (isAmoledTheme
+                                                                ? Colors.white
+                                                                : Theme.of(
+                                                                        context,
+                                                                      )
+                                                                      .colorScheme
+                                                                      .primary)
+                                                          : Theme.of(context)
+                                                                .colorScheme
+                                                                .onSurface,
+                                                    ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        subtitle: Text(
+                                          _formatArtistWithDuration(song),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        trailing: IconButton(
+                                          icon: Icon(
+                                            isCurrent && playing
+                                                ? Icons.pause
+                                                : Icons.play_arrow,
+                                          ),
+                                          onPressed: () {
+                                            if (isCurrent) {
+                                              playing
+                                                  ? (audioHandler
+                                                            as MyAudioHandler)
+                                                        .pause()
+                                                  : (audioHandler
+                                                            as MyAudioHandler)
+                                                        .play();
+                                            } else {
+                                              // Precargar la carátula antes de reproducir
+                                              unawaited(
+                                                _preloadArtworkForSong(song),
+                                              );
+                                              _playSongAndOpenPlayer(
+                                                song,
+                                                songsToShow,
+                                              );
+                                            }
+                                          },
+                                        ),
+                                        selected: isCurrent,
+                                        selectedTileColor: isAmoledTheme
+                                            ? Colors.white.withValues(
+                                                alpha: 0.1,
+                                              )
+                                            : Theme.of(
+                                                context,
+                                              ).colorScheme.primaryContainer,
+                                        onTap: () async {
+                                          // Precargar la carátula antes de reproducir
+                                          unawaited(
+                                            _preloadArtworkForSong(song),
+                                          );
+                                          if (!mounted) return;
+                                          await _playSongAndOpenPlayer(
+                                            song,
+                                            songsToShow,
+                                          );
+                                        },
+                                        onLongPress: () {
+                                          showModalBottomSheet(
+                                            context: context,
+                                            builder: (context) => SafeArea(
+                                              child: FutureBuilder<bool>(
+                                                future: FavoritesDB()
+                                                    .isFavorite(song.data),
+                                                builder: (context, snapshot) {
+                                                  final isFav =
+                                                      snapshot.data ?? false;
+                                                  return Column(
+                                                    mainAxisSize:
+                                                        MainAxisSize.min,
+                                                    children: [
+                                                      ListTile(
+                                                        leading: const Icon(
+                                                          Icons.queue_music,
+                                                        ),
+                                                        title: TranslatedText(
+                                                          'add_to_queue',
+                                                        ),
+                                                        onTap: () async {
+                                                          Navigator.of(
+                                                            context,
+                                                          ).pop();
+                                                          await (audioHandler
+                                                                  as MyAudioHandler)
+                                                              .addSongsToQueueEnd(
+                                                                [song],
+                                                              );
+                                                        },
+                                                      ),
+                                                      ListTile(
+                                                        leading: Icon(
+                                                          isFav
+                                                              ? Icons
+                                                                    .delete_outline
+                                                              : Icons
+                                                                    .favorite_border,
+                                                        ),
+                                                        title: TranslatedText(
+                                                          isFav
+                                                              ? 'remove_from_favorites'
+                                                              : 'add_to_favorites',
+                                                        ),
+                                                        onTap: () async {
+                                                          Navigator.of(
+                                                            context,
+                                                          ).pop();
+                                                          if (isFav) {
+                                                            await FavoritesDB()
+                                                                .removeFavorite(
+                                                                  song.data,
+                                                                );
+                                                            favoritesShouldReload
+                                                                    .value =
+                                                                !favoritesShouldReload
+                                                                    .value;
+                                                          } else {
+                                                            await _addToFavorites(
+                                                              song,
+                                                            );
+                                                          }
+                                                        },
+                                                      ),
+                                                      ListTile(
+                                                        leading: const Icon(
+                                                          Icons.delete_outline,
+                                                        ),
+                                                        title: TranslatedText(
+                                                          'remove_from_recents',
+                                                        ),
+                                                        onTap: () async {
+                                                          Navigator.of(
+                                                            context,
+                                                          ).pop();
+                                                          await RecentsDB()
+                                                              .removeRecent(
+                                                                song.data,
+                                                              );
+                                                          await _loadRecents();
+                                                        },
+                                                      ),
+                                                    ],
+                                                  );
+                                                },
+                                              ),
+                                            ),
+                                          );
+                                        },
+                                      );
+                                    },
+                                  );
+                                } else {
+                                  // Para canciones que no están reproduciéndose, no usar StreamBuilder
                                   return ListTile(
                                     leading: ClipRRect(
                                       borderRadius: BorderRadius.circular(8),
@@ -1637,7 +2067,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                               width: 4,
                                               height: 15,
                                               radius: 4,
-                                              animate: playing ? true : false,
+                                              animate: false, // No playing
                                             ),
                                           ),
                                         Expanded(
@@ -1672,28 +2102,14 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                       overflow: TextOverflow.ellipsis,
                                     ),
                                     trailing: IconButton(
-                                      icon: Icon(
-                                        isCurrent && playing
-                                            ? Icons.pause
-                                            : Icons.play_arrow,
-                                      ),
+                                      icon: const Icon(Icons.play_arrow),
                                       onPressed: () {
-                                        if (isCurrent) {
-                                          playing
-                                              ? (audioHandler as MyAudioHandler)
-                                                    .pause()
-                                              : (audioHandler as MyAudioHandler)
-                                                    .play();
-                                        } else {
-                                          // Precargar la carátula antes de reproducir
-                                          unawaited(
-                                            _preloadArtworkForSong(song),
-                                          );
-                                          _playSongAndOpenPlayer(
-                                            song,
-                                            songsToShow,
-                                          );
-                                        }
+                                        // Precargar la carátula antes de reproducir
+                                        unawaited(_preloadArtworkForSong(song));
+                                        _playSongAndOpenPlayer(
+                                          song,
+                                          songsToShow,
+                                        );
                                       },
                                     ),
                                     selected: isCurrent,
@@ -1801,185 +2217,9 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                       );
                                     },
                                   );
-                                },
-                              );
-                            } else {
-                              // Para canciones que no están reproduciéndose, no usar StreamBuilder
-                              return ListTile(
-                                leading: ClipRRect(
-                                  borderRadius: BorderRadius.circular(8),
-                                  child: QueryArtworkWidget(
-                                    id: song.id,
-                                    type: ArtworkType.AUDIO,
-                                    artworkBorder: BorderRadius.circular(8),
-                                    artworkHeight: 50,
-                                    artworkWidth: 50,
-                                    keepOldArtwork: true,
-                                    nullArtworkWidget: Container(
-                                      color: Theme.of(
-                                        context,
-                                      ).colorScheme.surfaceContainer,
-                                      width: 50,
-                                      height: 50,
-                                      child: Icon(
-                                        Icons.music_note,
-                                        color: Theme.of(
-                                          context,
-                                        ).colorScheme.onSurface,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                title: Row(
-                                  children: [
-                                    if (isCurrent)
-                                      Padding(
-                                        padding: const EdgeInsets.only(
-                                          right: 8.0,
-                                        ),
-                                        child: MiniMusicVisualizer(
-                                          color: Theme.of(
-                                            context,
-                                          ).colorScheme.primary,
-                                          width: 4,
-                                          height: 15,
-                                          radius: 4,
-                                          animate: false, // No playing
-                                        ),
-                                      ),
-                                    Expanded(
-                                      child: Text(
-                                        song.title,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .titleMedium
-                                            ?.copyWith(
-                                              fontWeight: isCurrent
-                                                  ? FontWeight.bold
-                                                  : FontWeight.normal,
-                                              color: isCurrent
-                                                  ? (isAmoledTheme
-                                                        ? Colors.white
-                                                        : Theme.of(
-                                                            context,
-                                                          ).colorScheme.primary)
-                                                  : Theme.of(
-                                                      context,
-                                                    ).colorScheme.onSurface,
-                                            ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                subtitle: Text(
-                                  _formatArtistWithDuration(song),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                trailing: IconButton(
-                                  icon: const Icon(Icons.play_arrow),
-                                  onPressed: () {
-                                    // Precargar la carátula antes de reproducir
-                                    unawaited(_preloadArtworkForSong(song));
-                                    _playSongAndOpenPlayer(song, songsToShow);
-                                  },
-                                ),
-                                selected: isCurrent,
-                                selectedTileColor: isAmoledTheme
-                                    ? Colors.white.withValues(alpha: 0.1)
-                                    : Theme.of(
-                                        context,
-                                      ).colorScheme.primaryContainer,
-                                onTap: () async {
-                                  // Precargar la carátula antes de reproducir
-                                  unawaited(_preloadArtworkForSong(song));
-                                  if (!mounted) return;
-                                  await _playSongAndOpenPlayer(
-                                    song,
-                                    songsToShow,
-                                  );
-                                },
-                                onLongPress: () {
-                                  showModalBottomSheet(
-                                    context: context,
-                                    builder: (context) => SafeArea(
-                                      child: FutureBuilder<bool>(
-                                        future: FavoritesDB().isFavorite(
-                                          song.data,
-                                        ),
-                                        builder: (context, snapshot) {
-                                          final isFav = snapshot.data ?? false;
-                                          return Column(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              ListTile(
-                                                leading: const Icon(
-                                                  Icons.queue_music,
-                                                ),
-                                                title: TranslatedText(
-                                                  'add_to_queue',
-                                                ),
-                                                onTap: () async {
-                                                  Navigator.of(context).pop();
-                                                  await (audioHandler
-                                                          as MyAudioHandler)
-                                                      .addSongsToQueueEnd([
-                                                        song,
-                                                      ]);
-                                                },
-                                              ),
-                                              ListTile(
-                                                leading: Icon(
-                                                  isFav
-                                                      ? Icons.delete_outline
-                                                      : Icons.favorite_border,
-                                                ),
-                                                title: TranslatedText(
-                                                  isFav
-                                                      ? 'remove_from_favorites'
-                                                      : 'add_to_favorites',
-                                                ),
-                                                onTap: () async {
-                                                  Navigator.of(context).pop();
-                                                  if (isFav) {
-                                                    await FavoritesDB()
-                                                        .removeFavorite(
-                                                          song.data,
-                                                        );
-                                                    favoritesShouldReload
-                                                            .value =
-                                                        !favoritesShouldReload
-                                                            .value;
-                                                  } else {
-                                                    await _addToFavorites(song);
-                                                  }
-                                                },
-                                              ),
-                                              ListTile(
-                                                leading: const Icon(
-                                                  Icons.delete_outline,
-                                                ),
-                                                title: TranslatedText(
-                                                  'remove_from_recents',
-                                                ),
-                                                onTap: () async {
-                                                  Navigator.of(context).pop();
-                                                  await RecentsDB()
-                                                      .removeRecent(song.data);
-                                                  await _loadRecents();
-                                                },
-                                              ),
-                                            ],
-                                          );
-                                        },
-                                      ),
-                                    ),
-                                  );
-                                },
-                              );
-                            }
+                                }
+                              },
+                            );
                           },
                         );
                       },
@@ -2017,25 +2257,371 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                             ),
                           );
                         }
-                        return ListView.builder(
-                          itemCount: songsToShow.length,
-                          itemBuilder: (context, index) {
-                            final song = songsToShow[index];
-                            final isCurrent =
-                                audioHandler
-                                    ?.mediaItem
-                                    .value
-                                    ?.extras?['data'] ==
-                                song.data;
-                            final isAmoledTheme =
-                                colorSchemeNotifier.value ==
-                                AppColorScheme.amoled;
+                        return ValueListenableBuilder<MediaItem?>(
+                          valueListenable: _immediateMediaItemNotifier,
+                          builder: (context, immediateMediaItem, child) {
+                            return ListView.builder(
+                              itemCount: songsToShow.length,
+                              itemBuilder: (context, index) {
+                                final song = songsToShow[index];
+                                final path = song.data;
+                                final isCurrent =
+                                    (immediateMediaItem?.id != null &&
+                                    path.isNotEmpty &&
+                                    (immediateMediaItem!.id == path ||
+                                        immediateMediaItem.extras?['data'] ==
+                                            path));
+                                final isAmoledTheme =
+                                    colorSchemeNotifier.value ==
+                                    AppColorScheme.amoled;
 
-                            // Solo usar ValueListenableBuilder para la canción actual
-                            if (isCurrent) {
-                              return ValueListenableBuilder<bool>(
-                                valueListenable: _isPlayingNotifier,
-                                builder: (context, playing, child) {
+                                // Solo usar ValueListenableBuilder para la canción actual
+                                if (isCurrent) {
+                                  return ValueListenableBuilder<bool>(
+                                    valueListenable: _isPlayingNotifier,
+                                    builder: (context, playing, child) {
+                                      return ListTile(
+                                        onTap: () async {
+                                          if (_isSelectingPlaylistSongs) {
+                                            _onPlaylistSongSelected(song);
+                                          } else {
+                                            if (!mounted) return;
+                                            await _playSongAndOpenPlayer(
+                                              song,
+                                              songsToShow,
+                                            );
+                                          }
+                                        },
+                                        onLongPress: () async {
+                                          if (_isSelectingPlaylistSongs) {
+                                            setState(() {
+                                              if (_selectedPlaylistSongIds
+                                                  .contains(song.id)) {
+                                                _selectedPlaylistSongIds.remove(
+                                                  song.id,
+                                                );
+                                                if (_selectedPlaylistSongIds
+                                                    .isEmpty) {
+                                                  _isSelectingPlaylistSongs =
+                                                      false;
+                                                }
+                                              } else {
+                                                _selectedPlaylistSongIds.add(
+                                                  song.id,
+                                                );
+                                              }
+                                            });
+                                          } else {
+                                            final isPinned = await ShortcutsDB()
+                                                .isShortcut(song.data);
+                                            final isFav = await FavoritesDB()
+                                                .isFavorite(song.data);
+                                            if (!context.mounted) return;
+                                            showModalBottomSheet(
+                                              context: context,
+                                              builder: (context) => SafeArea(
+                                                child: Column(
+                                                  mainAxisSize:
+                                                      MainAxisSize.min,
+                                                  children: [
+                                                    ListTile(
+                                                      leading: const Icon(
+                                                        Icons.queue_music,
+                                                      ),
+                                                      title: TranslatedText(
+                                                        'add_to_queue',
+                                                      ),
+                                                      onTap: () async {
+                                                        if (!context.mounted) {
+                                                          return;
+                                                        }
+                                                        Navigator.of(
+                                                          context,
+                                                        ).pop();
+                                                        await (audioHandler
+                                                                as MyAudioHandler)
+                                                            .addSongsToQueueEnd(
+                                                              [song],
+                                                            );
+                                                      },
+                                                    ),
+                                                    ListTile(
+                                                      leading: Icon(
+                                                        isFav
+                                                            ? Icons
+                                                                  .delete_outline
+                                                            : Icons
+                                                                  .favorite_border,
+                                                      ),
+                                                      title: TranslatedText(
+                                                        isFav
+                                                            ? 'remove_from_favorites'
+                                                            : 'add_to_favorites',
+                                                      ),
+                                                      onTap: () async {
+                                                        if (!context.mounted) {
+                                                          return;
+                                                        }
+                                                        Navigator.of(
+                                                          context,
+                                                        ).pop();
+                                                        if (isFav) {
+                                                          await FavoritesDB()
+                                                              .removeFavorite(
+                                                                song.data,
+                                                              );
+                                                          favoritesShouldReload
+                                                                  .value =
+                                                              !favoritesShouldReload
+                                                                  .value;
+                                                        } else {
+                                                          await FavoritesDB()
+                                                              .addFavorite(
+                                                                song,
+                                                              );
+                                                          favoritesShouldReload
+                                                                  .value =
+                                                              !favoritesShouldReload
+                                                                  .value;
+                                                        }
+                                                      },
+                                                    ),
+                                                    ListTile(
+                                                      leading: const Icon(
+                                                        Icons.playlist_remove,
+                                                      ),
+                                                      title: TranslatedText(
+                                                        'remove_from_playlist',
+                                                      ),
+                                                      onTap: () async {
+                                                        if (!context.mounted) {
+                                                          return;
+                                                        }
+                                                        Navigator.of(
+                                                          context,
+                                                        ).pop();
+                                                        await PlaylistsDB()
+                                                            .removeSongFromPlaylist(
+                                                              _selectedPlaylist!['id'],
+                                                              song.data,
+                                                            );
+                                                        await _loadPlaylistSongs(
+                                                          _selectedPlaylist!,
+                                                        );
+                                                      },
+                                                    ),
+                                                    ListTile(
+                                                      leading: Icon(
+                                                        isPinned
+                                                            ? Icons.push_pin
+                                                            : Icons
+                                                                  .push_pin_outlined,
+                                                      ),
+                                                      title: TranslatedText(
+                                                        isPinned
+                                                            ? 'unpin_shortcut'
+                                                            : 'pin_shortcut',
+                                                      ),
+                                                      onTap: () async {
+                                                        if (!context.mounted) {
+                                                          return;
+                                                        }
+                                                        Navigator.of(
+                                                          context,
+                                                        ).pop();
+                                                        if (isPinned) {
+                                                          await ShortcutsDB()
+                                                              .removeShortcut(
+                                                                song.data,
+                                                              );
+                                                        } else {
+                                                          await ShortcutsDB()
+                                                              .addShortcut(
+                                                                song.data,
+                                                              );
+                                                        }
+                                                        shortcutsShouldReload
+                                                                .value =
+                                                            !shortcutsShouldReload
+                                                                .value;
+                                                      },
+                                                    ),
+                                                    ListTile(
+                                                      leading: const Icon(
+                                                        Icons
+                                                            .check_box_outlined,
+                                                      ),
+                                                      title: TranslatedText(
+                                                        'select',
+                                                      ),
+                                                      onTap: () {
+                                                        Navigator.of(
+                                                          context,
+                                                        ).pop();
+                                                        setState(() {
+                                                          _isSelectingPlaylistSongs =
+                                                              true;
+                                                          _selectedPlaylistSongIds
+                                                              .add(song.id);
+                                                        });
+                                                      },
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            );
+                                          }
+                                        },
+                                        leading: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            if (_isSelectingPlaylistSongs)
+                                              Checkbox(
+                                                value: _selectedPlaylistSongIds
+                                                    .contains(song.id),
+                                                onChanged: (checked) {
+                                                  setState(() {
+                                                    if (checked == true) {
+                                                      _selectedPlaylistSongIds
+                                                          .add(song.id);
+                                                    } else {
+                                                      _selectedPlaylistSongIds
+                                                          .remove(song.id);
+                                                      if (_selectedPlaylistSongIds
+                                                          .isEmpty) {
+                                                        _isSelectingPlaylistSongs =
+                                                            false;
+                                                      }
+                                                    }
+                                                  });
+                                                },
+                                              ),
+                                            ClipRRect(
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                              child: QueryArtworkWidget(
+                                                id: song.id,
+                                                type: ArtworkType.AUDIO,
+                                                artworkBorder:
+                                                    BorderRadius.circular(8),
+                                                artworkHeight: 50,
+                                                artworkWidth: 50,
+                                                keepOldArtwork: true,
+                                                nullArtworkWidget: Container(
+                                                  color: Theme.of(context)
+                                                      .colorScheme
+                                                      .surfaceContainer,
+                                                  width: 50,
+                                                  height: 50,
+                                                  child: Icon(
+                                                    Icons.music_note,
+                                                    color: Theme.of(
+                                                      context,
+                                                    ).colorScheme.onSurface,
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        title: Row(
+                                          children: [
+                                            if (isCurrent)
+                                              Padding(
+                                                padding: const EdgeInsets.only(
+                                                  right: 8.0,
+                                                ),
+                                                child: MiniMusicVisualizer(
+                                                  color: Theme.of(
+                                                    context,
+                                                  ).colorScheme.primary,
+                                                  width: 4,
+                                                  height: 15,
+                                                  radius: 4,
+                                                  animate: playing
+                                                      ? true
+                                                      : false,
+                                                ),
+                                              ),
+                                            Expanded(
+                                              child: Text(
+                                                song.title,
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: Theme.of(context)
+                                                    .textTheme
+                                                    .titleMedium
+                                                    ?.copyWith(
+                                                      fontWeight: isCurrent
+                                                          ? FontWeight.bold
+                                                          : FontWeight.normal,
+                                                      color: isCurrent
+                                                          ? (isAmoledTheme
+                                                                ? Colors.white
+                                                                : Theme.of(
+                                                                        context,
+                                                                      )
+                                                                      .colorScheme
+                                                                      .primary)
+                                                          : Theme.of(context)
+                                                                .colorScheme
+                                                                .onSurface,
+                                                    ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        subtitle: Text(
+                                          _formatArtistWithDuration(song),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        trailing: IconButton(
+                                          icon: Icon(
+                                            isCurrent && playing
+                                                ? Icons.pause
+                                                : Icons.play_arrow,
+                                          ),
+                                          onPressed: () {
+                                            if (isCurrent) {
+                                              playing
+                                                  ? (audioHandler
+                                                            as MyAudioHandler)
+                                                        .pause()
+                                                  : (audioHandler
+                                                            as MyAudioHandler)
+                                                        .play();
+                                            } else {
+                                              // Precargar la carátula antes de reproducir
+                                              unawaited(
+                                                _preloadArtworkForSong(song),
+                                              );
+                                              _playSongAndOpenPlayer(
+                                                song,
+                                                songsToShow,
+                                              );
+                                            }
+                                          },
+                                        ),
+                                        selected: isCurrent,
+                                        selectedTileColor: isAmoledTheme
+                                            ? Colors.white.withValues(
+                                                alpha: 0.1,
+                                              )
+                                            : Theme.of(
+                                                context,
+                                              ).colorScheme.primaryContainer,
+                                      );
+                                    },
+                                  );
+                                } else {
+                                  // Para canciones que no están reproduciéndose, no usar StreamBuilder
+                                  final playing =
+                                      audioHandler
+                                          ?.playbackState
+                                          .value
+                                          .playing ??
+                                      false;
                                   return ListTile(
                                     onTap: () async {
                                       if (_isSelectingPlaylistSongs) {
@@ -2280,7 +2866,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                               width: 4,
                                               height: 15,
                                               radius: 4,
-                                              animate: playing ? true : false,
+                                              animate: false, // No playing
                                             ),
                                           ),
                                         Expanded(
@@ -2346,297 +2932,9 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                             context,
                                           ).colorScheme.primaryContainer,
                                   );
-                                },
-                              );
-                            } else {
-                              // Para canciones que no están reproduciéndose, no usar StreamBuilder
-                              final playing =
-                                  audioHandler?.playbackState.value.playing ??
-                                  false;
-                              return ListTile(
-                                onTap: () async {
-                                  if (_isSelectingPlaylistSongs) {
-                                    _onPlaylistSongSelected(song);
-                                  } else {
-                                    if (!mounted) return;
-                                    await _playSongAndOpenPlayer(
-                                      song,
-                                      songsToShow,
-                                    );
-                                  }
-                                },
-                                onLongPress: () async {
-                                  if (_isSelectingPlaylistSongs) {
-                                    setState(() {
-                                      if (_selectedPlaylistSongIds.contains(
-                                        song.id,
-                                      )) {
-                                        _selectedPlaylistSongIds.remove(
-                                          song.id,
-                                        );
-                                        if (_selectedPlaylistSongIds.isEmpty) {
-                                          _isSelectingPlaylistSongs = false;
-                                        }
-                                      } else {
-                                        _selectedPlaylistSongIds.add(song.id);
-                                      }
-                                    });
-                                  } else {
-                                    final isPinned = await ShortcutsDB()
-                                        .isShortcut(song.data);
-                                    final isFav = await FavoritesDB()
-                                        .isFavorite(song.data);
-                                    if (!context.mounted) return;
-                                    showModalBottomSheet(
-                                      context: context,
-                                      builder: (context) => SafeArea(
-                                        child: Column(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            ListTile(
-                                              leading: const Icon(
-                                                Icons.queue_music,
-                                              ),
-                                              title: TranslatedText(
-                                                'add_to_queue',
-                                              ),
-                                              onTap: () async {
-                                                if (!context.mounted) return;
-                                                Navigator.of(context).pop();
-                                                await (audioHandler
-                                                        as MyAudioHandler)
-                                                    .addSongsToQueueEnd([song]);
-                                              },
-                                            ),
-                                            ListTile(
-                                              leading: Icon(
-                                                isFav
-                                                    ? Icons.delete_outline
-                                                    : Icons.favorite_border,
-                                              ),
-                                              title: TranslatedText(
-                                                isFav
-                                                    ? 'remove_from_favorites'
-                                                    : 'add_to_favorites',
-                                              ),
-                                              onTap: () async {
-                                                if (!context.mounted) return;
-                                                Navigator.of(context).pop();
-                                                if (isFav) {
-                                                  await FavoritesDB()
-                                                      .removeFavorite(
-                                                        song.data,
-                                                      );
-                                                  favoritesShouldReload.value =
-                                                      !favoritesShouldReload
-                                                          .value;
-                                                } else {
-                                                  await FavoritesDB()
-                                                      .addFavorite(song);
-                                                  favoritesShouldReload.value =
-                                                      !favoritesShouldReload
-                                                          .value;
-                                                }
-                                              },
-                                            ),
-                                            ListTile(
-                                              leading: const Icon(
-                                                Icons.playlist_remove,
-                                              ),
-                                              title: TranslatedText(
-                                                'remove_from_playlist',
-                                              ),
-                                              onTap: () async {
-                                                if (!context.mounted) return;
-                                                Navigator.of(context).pop();
-                                                await PlaylistsDB()
-                                                    .removeSongFromPlaylist(
-                                                      _selectedPlaylist!['id'],
-                                                      song.data,
-                                                    );
-                                                await _loadPlaylistSongs(
-                                                  _selectedPlaylist!,
-                                                );
-                                              },
-                                            ),
-                                            ListTile(
-                                              leading: Icon(
-                                                isPinned
-                                                    ? Icons.push_pin
-                                                    : Icons.push_pin_outlined,
-                                              ),
-                                              title: TranslatedText(
-                                                isPinned
-                                                    ? 'unpin_shortcut'
-                                                    : 'pin_shortcut',
-                                              ),
-                                              onTap: () async {
-                                                if (!context.mounted) return;
-                                                Navigator.of(context).pop();
-                                                if (isPinned) {
-                                                  await ShortcutsDB()
-                                                      .removeShortcut(
-                                                        song.data,
-                                                      );
-                                                } else {
-                                                  await ShortcutsDB()
-                                                      .addShortcut(song.data);
-                                                }
-                                                shortcutsShouldReload.value =
-                                                    !shortcutsShouldReload
-                                                        .value;
-                                              },
-                                            ),
-                                            ListTile(
-                                              leading: const Icon(
-                                                Icons.check_box_outlined,
-                                              ),
-                                              title: TranslatedText('select'),
-                                              onTap: () {
-                                                Navigator.of(context).pop();
-                                                setState(() {
-                                                  _isSelectingPlaylistSongs =
-                                                      true;
-                                                  _selectedPlaylistSongIds.add(
-                                                    song.id,
-                                                  );
-                                                });
-                                              },
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    );
-                                  }
-                                },
-                                leading: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    if (_isSelectingPlaylistSongs)
-                                      Checkbox(
-                                        value: _selectedPlaylistSongIds
-                                            .contains(song.id),
-                                        onChanged: (checked) {
-                                          setState(() {
-                                            if (checked == true) {
-                                              _selectedPlaylistSongIds.add(
-                                                song.id,
-                                              );
-                                            } else {
-                                              _selectedPlaylistSongIds.remove(
-                                                song.id,
-                                              );
-                                              if (_selectedPlaylistSongIds
-                                                  .isEmpty) {
-                                                _isSelectingPlaylistSongs =
-                                                    false;
-                                              }
-                                            }
-                                          });
-                                        },
-                                      ),
-                                    ClipRRect(
-                                      borderRadius: BorderRadius.circular(8),
-                                      child: QueryArtworkWidget(
-                                        id: song.id,
-                                        type: ArtworkType.AUDIO,
-                                        artworkBorder: BorderRadius.circular(8),
-                                        artworkHeight: 50,
-                                        artworkWidth: 50,
-                                        keepOldArtwork: true,
-                                        nullArtworkWidget: Container(
-                                          color: Theme.of(
-                                            context,
-                                          ).colorScheme.surfaceContainer,
-                                          width: 50,
-                                          height: 50,
-                                          child: Icon(
-                                            Icons.music_note,
-                                            color: Theme.of(
-                                              context,
-                                            ).colorScheme.onSurface,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                title: Row(
-                                  children: [
-                                    if (isCurrent)
-                                      Padding(
-                                        padding: const EdgeInsets.only(
-                                          right: 8.0,
-                                        ),
-                                        child: MiniMusicVisualizer(
-                                          color: Theme.of(
-                                            context,
-                                          ).colorScheme.primary,
-                                          width: 4,
-                                          height: 15,
-                                          radius: 4,
-                                          animate: false, // No playing
-                                        ),
-                                      ),
-                                    Expanded(
-                                      child: Text(
-                                        song.title,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .titleMedium
-                                            ?.copyWith(
-                                              fontWeight: isCurrent
-                                                  ? FontWeight.bold
-                                                  : FontWeight.normal,
-                                              color: isCurrent
-                                                  ? (isAmoledTheme
-                                                        ? Colors.white
-                                                        : Theme.of(
-                                                            context,
-                                                          ).colorScheme.primary)
-                                                  : Theme.of(
-                                                      context,
-                                                    ).colorScheme.onSurface,
-                                            ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                subtitle: Text(
-                                  _formatArtistWithDuration(song),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                trailing: IconButton(
-                                  icon: Icon(
-                                    isCurrent && playing
-                                        ? Icons.pause
-                                        : Icons.play_arrow,
-                                  ),
-                                  onPressed: () {
-                                    if (isCurrent) {
-                                      playing
-                                          ? (audioHandler as MyAudioHandler)
-                                                .pause()
-                                          : (audioHandler as MyAudioHandler)
-                                                .play();
-                                    } else {
-                                      // Precargar la carátula antes de reproducir
-                                      unawaited(_preloadArtworkForSong(song));
-                                      _playSongAndOpenPlayer(song, songsToShow);
-                                    }
-                                  },
-                                ),
-                                selected: isCurrent,
-                                selectedTileColor: isAmoledTheme
-                                    ? Colors.white.withValues(alpha: 0.1)
-                                    : Theme.of(
-                                        context,
-                                      ).colorScheme.primaryContainer,
-                              );
-                            }
+                                }
+                              },
+                            );
                           },
                         );
                       },
@@ -2776,72 +3074,91 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 0,
                               ),
-                              child: SizedBox(
-                                height: is16by9
-                                    ? screenHeight * 0.38
-                                    : isSmallScreen
-                                    ? screenHeight * 0.32
-                                    : screenHeight * 0.30,
-                                child: PageView(
-                                  controller: _pageController,
-                                  onPageChanged: (_) {},
-                                  children: List.generate(3, (pageIndex) {
-                                    final items = _accessDirectSongs
-                                        .skip(pageIndex * 6)
-                                        .take(6)
-                                        .toList();
-                                    return Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 8,
-                                      ),
-                                      child: GridView.builder(
-                                        padding: const EdgeInsets.only(
-                                          top: 8,
-                                          bottom: 8,
-                                        ),
-                                        shrinkWrap: true,
-                                        physics:
-                                            const NeverScrollableScrollPhysics(),
-                                        itemCount: 6,
-                                        gridDelegate:
-                                            const SliverGridDelegateWithFixedCrossAxisCount(
-                                              crossAxisCount: 3,
-                                              mainAxisSpacing: 12,
-                                              crossAxisSpacing: 12,
-                                              childAspectRatio: 1,
+                              child: LayoutBuilder(
+                                builder: (context, constraints) {
+                                  // Calcular el ancho disponible para cada elemento
+                                  final availableWidth =
+                                      constraints.maxWidth -
+                                      16; // Padding horizontal
+                                  final itemWidth =
+                                      (availableWidth - 24) /
+                                      3; // 3 columnas con spacing
+                                  final itemHeight =
+                                      itemWidth; // Mantener aspecto cuadrado
+                                  final gridHeight =
+                                      (itemHeight * 2) +
+                                      12 +
+                                      16; // 2 filas + spacing + padding
+
+                                  return SizedBox(
+                                    height: gridHeight,
+                                    child: PageView(
+                                      controller: _pageController,
+                                      onPageChanged: (_) {},
+                                      children: List.generate(3, (pageIndex) {
+                                        final items = _accessDirectSongs
+                                            .skip(pageIndex * 6)
+                                            .take(6)
+                                            .toList();
+                                        return Padding(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 8,
+                                          ),
+                                          child: GridView.builder(
+                                            padding: const EdgeInsets.only(
+                                              top: 8,
+                                              bottom: 8,
                                             ),
-                                        itemBuilder: (context, index) {
-                                          if (index < items.length) {
-                                            final song = items[index];
-                                            // Usar el método optimizado que cachea los widgets
-                                            return _buildShortcutWidget(
-                                              song,
-                                              context,
-                                            );
-                                          } else {
-                                            return Container(
-                                              decoration: BoxDecoration(
-                                                color: Theme.of(
+                                            shrinkWrap: true,
+                                            physics:
+                                                const NeverScrollableScrollPhysics(),
+                                            itemCount: 6,
+                                            gridDelegate:
+                                                SliverGridDelegateWithFixedCrossAxisCount(
+                                                  crossAxisCount: 3,
+                                                  mainAxisSpacing: 12,
+                                                  crossAxisSpacing: 12,
+                                                  childAspectRatio:
+                                                      itemWidth / itemHeight,
+                                                ),
+                                            itemBuilder: (context, index) {
+                                              if (index < items.length) {
+                                                final song = items[index];
+                                                // Usar el método optimizado que cachea los widgets
+                                                return _buildShortcutWidget(
+                                                  song,
                                                   context,
-                                                ).colorScheme.surfaceContainer,
-                                                borderRadius:
-                                                    BorderRadius.circular(12),
-                                              ),
-                                              child: Icon(
-                                                Icons.music_note,
-                                                color: Theme.of(context)
-                                                    .colorScheme
-                                                    .onSurface
-                                                    .withValues(alpha: 0.6),
-                                                size: 36,
-                                              ),
-                                            );
-                                          }
-                                        },
-                                      ),
-                                    );
-                                  }),
-                                ),
+                                                );
+                                              } else {
+                                                return Container(
+                                                  decoration: BoxDecoration(
+                                                    color: Theme.of(context)
+                                                        .colorScheme
+                                                        .surfaceContainer,
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          12,
+                                                        ),
+                                                  ),
+                                                  child: Icon(
+                                                    Icons.music_note,
+                                                    color: Theme.of(context)
+                                                        .colorScheme
+                                                        .onSurface
+                                                        .withValues(alpha: 0.6),
+                                                    size:
+                                                        itemWidth *
+                                                        0.3, // Tamaño del ícono adaptativo
+                                                  ),
+                                                );
+                                              }
+                                            },
+                                          ),
+                                        );
+                                      }),
+                                    ),
+                                  );
+                                },
                               ),
                             ),
                             const SizedBox(height: 10),
@@ -3081,9 +3398,10 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                               result,
                                             );
                                             await _loadPlaylists();
-                                            
+
                                             // Notificar a otras pantallas que deben actualizar las playlists
-                                            playlistsShouldReload.value = !playlistsShouldReload.value;
+                                            playlistsShouldReload.value =
+                                                !playlistsShouldReload.value;
                                           }
                                         },
                                       ),

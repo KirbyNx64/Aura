@@ -45,7 +45,12 @@ class _FavoritesScreenState extends State<FavoritesScreen>
 
   Timer? _debounce;
   Timer? _playingDebounce;
+  Timer? _mediaItemDebounce;
   final ValueNotifier<bool> _isPlayingNotifier = ValueNotifier<bool>(false);
+  final ValueNotifier<MediaItem?> _currentMediaItemNotifier =
+      ValueNotifier<MediaItem?>(null);
+  final ValueNotifier<MediaItem?> _immediateMediaItemNotifier =
+      ValueNotifier<MediaItem?>(null);
 
   @override
   void initState() {
@@ -63,13 +68,42 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     favoritesShouldReload.addListener(() {
       _loadFavorites();
     });
-    
+
+    // Inicializar con el valor actual si ya hay algo reproduciéndose
+    if (audioHandler?.mediaItem.valueOrNull != null) {
+      _immediateMediaItemNotifier.value = audioHandler!.mediaItem.valueOrNull;
+      _currentMediaItemNotifier.value = audioHandler!.mediaItem.valueOrNull;
+    }
+
+    // Inicializar el estado de reproducción actual
+    if (audioHandler?.playbackState.valueOrNull != null) {
+      _isPlayingNotifier.value =
+          audioHandler!.playbackState.valueOrNull!.playing;
+    }
+
     // Escuchar cambios en el estado de reproducción con debounce
     audioHandler?.playbackState.listen((state) {
       _playingDebounce?.cancel();
       _playingDebounce = Timer(const Duration(milliseconds: 400), () {
         if (mounted) {
           _isPlayingNotifier.value = state.playing;
+        }
+      });
+    });
+
+    // Escuchar cambios en el MediaItem inmediatamente (para detección de canción actual)
+    audioHandler?.mediaItem.listen((mediaItem) {
+      if (mounted) {
+        _immediateMediaItemNotifier.value = mediaItem;
+      }
+    });
+
+    // Escuchar cambios en el MediaItem con debounce (para espaciado y elementos no críticos)
+    audioHandler?.mediaItem.listen((mediaItem) {
+      _mediaItemDebounce?.cancel();
+      _mediaItemDebounce = Timer(const Duration(milliseconds: 400), () {
+        if (mounted) {
+          _currentMediaItemNotifier.value = mediaItem;
         }
       });
     });
@@ -86,7 +120,10 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     });
     _debounce?.cancel();
     _playingDebounce?.cancel();
+    _mediaItemDebounce?.cancel();
     _isPlayingNotifier.dispose();
+    _currentMediaItemNotifier.dispose();
+    _immediateMediaItemNotifier.dispose();
     super.dispose();
   }
 
@@ -99,6 +136,17 @@ class _FavoritesScreenState extends State<FavoritesScreen>
         _refreshController.repeat();
       });
     }
+
+    // Actualizar los notifiers con los valores actuales del audioHandler
+    if (audioHandler?.mediaItem.valueOrNull != null) {
+      _immediateMediaItemNotifier.value = audioHandler!.mediaItem.valueOrNull;
+      _currentMediaItemNotifier.value = audioHandler!.mediaItem.valueOrNull;
+    }
+    if (audioHandler?.playbackState.valueOrNull != null) {
+      _isPlayingNotifier.value =
+          audioHandler!.playbackState.valueOrNull!.playing;
+    }
+
     final favs = await FavoritesDB().getFavorites();
     if (!initial) {
       // Espera un poco para que la animación sea visible
@@ -115,7 +163,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     if (_orden != OrdenFavoritos.normal) {
       _ordenarFavoritos();
     }
-    
+
     // Precargar carátulas de favoritos
     unawaited(_preloadArtworksForSongs(favs));
   }
@@ -158,7 +206,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     // Limpiar la cola y el MediaItem antes de mostrar la nueva canción
     (audioHandler as MyAudioHandler).queue.add([]);
     (audioHandler as MyAudioHandler).mediaItem.add(null);
-    
+
     // Precargar la carátula antes de crear el MediaItem temporal
     Uri? cachedArtUri;
     try {
@@ -166,7 +214,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     } catch (e) {
       // Si falla, continuar sin carátula
     }
-    
+
     // Crear MediaItem temporal para mostrar el overlay inmediatamente
     final tempMediaItem = MediaItem(
       id: song.data,
@@ -187,7 +235,10 @@ class _FavoritesScreenState extends State<FavoritesScreen>
 
     // Solo guardar el origen si se va a cambiar la cola
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('last_queue_source', LocaleProvider.tr('favorites_title'));
+    await prefs.setString(
+      'last_queue_source',
+      LocaleProvider.tr('favorites_title'),
+    );
 
     int before = (maxQueueSongs / 2).floor();
     int after = maxQueueSongs - before;
@@ -196,10 +247,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     List<SongModel> limitedQueue = _favorites.sublist(start, end);
     int newIndex = index - start;
 
-    await handler.setQueueFromSongs(
-      limitedQueue,
-      initialIndex: newIndex,
-    );
+    await handler.setQueueFromSongs(limitedQueue, initialIndex: newIndex);
     await handler.play();
   }
 
@@ -228,7 +276,9 @@ class _FavoritesScreenState extends State<FavoritesScreen>
   Future<void> _loadOrderFilter() async {
     final prefs = await SharedPreferences.getInstance();
     final int? savedIndex = prefs.getInt(_orderPrefsKey);
-    if (savedIndex != null && savedIndex >= 0 && savedIndex < OrdenFavoritos.values.length) {
+    if (savedIndex != null &&
+        savedIndex >= 0 &&
+        savedIndex < OrdenFavoritos.values.length) {
       setState(() {
         _orden = OrdenFavoritos.values[savedIndex];
       });
@@ -294,23 +344,24 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     final artist = (song.artist == null || song.artist!.trim().isEmpty)
         ? LocaleProvider.tr('unknown_artist')
         : song.artist!;
-    
+
     if (song.duration != null && song.duration! > 0) {
       final duration = Duration(milliseconds: song.duration!);
       final hours = duration.inHours;
       final minutes = duration.inMinutes % 60;
       final seconds = (duration.inSeconds % 60).toString().padLeft(2, '0');
-      
+
       String durationString;
       if (hours > 0) {
-        durationString = '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:$seconds';
+        durationString =
+            '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:$seconds';
       } else {
         durationString = '$minutes:$seconds';
       }
-      
+
       return '$artist • $durationString';
     }
-    
+
     return artist;
   }
 
@@ -331,12 +382,12 @@ class _FavoritesScreenState extends State<FavoritesScreen>
       });
       return;
     }
-    
+
     // Obtener la carátula para la pantalla del reproductor
     final songId = song.id;
     final songPath = song.data;
     final artUri = await getOrCacheArtwork(songId, songPath);
-    
+
     // Crear el MediaItem para la pantalla del reproductor
     final mediaItem = MediaItem(
       id: song.data,
@@ -346,40 +397,34 @@ class _FavoritesScreenState extends State<FavoritesScreen>
           ? Duration(milliseconds: song.duration!)
           : null,
       artUri: artUri,
-      extras: {
-        'songId': song.id,
-        'albumId': song.albumId,
-        'data': song.data,
-      },
+      extras: {'songId': song.id, 'albumId': song.albumId, 'data': song.data},
     );
-    
+
     // Navegar a la pantalla del reproductor primero
     if (!mounted) return;
     Navigator.of(context).push(
       PageRouteBuilder(
         pageBuilder: (context, animation, secondaryAnimation) =>
-          FullPlayerScreen(
-            initialMediaItem: mediaItem,
-          ),
+            FullPlayerScreen(initialMediaItem: mediaItem),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           return SlideTransition(
-            position: Tween<Offset>(
-              begin: const Offset(0, 1),
-              end: Offset.zero,
-            ).animate(CurvedAnimation(
-              parent: animation,
-              curve: Curves.easeOutCubic,
-            )),
+            position: Tween<Offset>(begin: const Offset(0, 1), end: Offset.zero)
+                .animate(
+                  CurvedAnimation(
+                    parent: animation,
+                    curve: Curves.easeOutCubic,
+                  ),
+                ),
             child: child,
           );
         },
         transitionDuration: const Duration(milliseconds: 350),
       ),
     );
-    
+
     // Activar indicador de carga
     playLoadingNotifier.value = true;
-    
+
     // Reproducir la canción después de un breve delay para que se abra la pantalla
     Future.delayed(const Duration(milliseconds: 400), () {
       if (mounted) {
@@ -402,13 +447,15 @@ class _FavoritesScreenState extends State<FavoritesScreen>
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
-                leading: const Icon(Icons.queue_music),
-                title: TranslatedText('add_to_queue'),
-                onTap: () async {
-                  Navigator.of(context).pop();
-                  await (audioHandler as MyAudioHandler).addSongsToQueueEnd([song]);
-                },
-              ),
+              leading: const Icon(Icons.queue_music),
+              title: TranslatedText('add_to_queue'),
+              onTap: () async {
+                Navigator.of(context).pop();
+                await (audioHandler as MyAudioHandler).addSongsToQueueEnd([
+                  song,
+                ]);
+              },
+            ),
             ListTile(
               leading: const Icon(Icons.delete_outline),
               title: TranslatedText('remove_from_favorites'),
@@ -427,8 +474,12 @@ class _FavoritesScreenState extends State<FavoritesScreen>
               },
             ),
             ListTile(
-              leading: Icon(isPinned ? Icons.push_pin : Icons.push_pin_outlined),
-              title: TranslatedText(isPinned ? 'unpin_shortcut' : 'pin_shortcut'),
+              leading: Icon(
+                isPinned ? Icons.push_pin : Icons.push_pin_outlined,
+              ),
+              title: TranslatedText(
+                isPinned ? 'unpin_shortcut' : 'pin_shortcut',
+              ),
               onTap: () async {
                 Navigator.of(context).pop();
                 if (isPinned) {
@@ -456,10 +507,15 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     );
   }
 
-  Future<void> _handleAddToPlaylistSingle(BuildContext context, SongModel song) async {
-    final playlists = await PlaylistsDB().getAllPlaylists(); // List<PlaylistModel>
+  Future<void> _handleAddToPlaylistSingle(
+    BuildContext context,
+    SongModel song,
+  ) async {
+    final playlists = await PlaylistsDB()
+        .getAllPlaylists(); // List<PlaylistModel>
     if (!context.mounted) return;
-    final TextEditingController playlistNameController = TextEditingController();
+    final TextEditingController playlistNameController =
+        TextEditingController();
     final selectedPlaylistId = await showDialog<String>(
       context: context,
       builder: (context) {
@@ -467,19 +523,21 @@ class _FavoritesScreenState extends State<FavoritesScreen>
           builder: (context, setStateDialog) => SimpleDialog(
             title: TranslatedText('select_playlist'),
             children: [
-              if (playlists.isNotEmpty)
-                ...[
-                  for (final playlist in playlists)
-                    SimpleDialogOption(
-                      onPressed: () {
-                        Navigator.of(context).pop(playlist.id);
-                      },
-                      child: Text(playlist.name),
-                    ),
-                  const Divider(),
-                ],
+              if (playlists.isNotEmpty) ...[
+                for (final playlist in playlists)
+                  SimpleDialogOption(
+                    onPressed: () {
+                      Navigator.of(context).pop(playlist.id);
+                    },
+                    child: Text(playlist.name),
+                  ),
+                const Divider(),
+              ],
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 4,
+                ),
                 child: TextField(
                   controller: playlistNameController,
                   decoration: InputDecoration(
@@ -496,13 +554,20 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                   if (name.isEmpty) return;
                   final id = await PlaylistsDB().createPlaylist(name);
                   setStateDialog(() {
-                    playlists.insert(0, hive_model.PlaylistModel(id: id, name: name, songPaths: []));
+                    playlists.insert(
+                      0,
+                      hive_model.PlaylistModel(
+                        id: id,
+                        name: name,
+                        songPaths: [],
+                      ),
+                    );
                   });
                   playlistNameController.clear();
-                  
+
                   // Notificar a la pantalla de inicio que debe actualizar las playlists
                   playlistsShouldReload.value = !playlistsShouldReload.value;
-                  
+
                   if (context.mounted) {
                     Navigator.of(context).pop(id);
                   }
@@ -515,16 +580,18 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     );
     if (selectedPlaylistId != null) {
       await PlaylistsDB().addSongToPlaylist(selectedPlaylistId, song);
-      
+
       // Notificar a la pantalla de inicio que debe actualizar las playlists
       playlistsShouldReload.value = !playlistsShouldReload.value;
     }
   }
 
   Future<void> _handleAddToPlaylistMassive(BuildContext context) async {
-    final playlists = await PlaylistsDB().getAllPlaylists(); // List<PlaylistModel>
+    final playlists = await PlaylistsDB()
+        .getAllPlaylists(); // List<PlaylistModel>
     if (!context.mounted) return;
-    final TextEditingController playlistNameController = TextEditingController();
+    final TextEditingController playlistNameController =
+        TextEditingController();
     final selectedPlaylistId = await showDialog<String>(
       context: context,
       builder: (context) {
@@ -532,19 +599,21 @@ class _FavoritesScreenState extends State<FavoritesScreen>
           builder: (context, setStateDialog) => SimpleDialog(
             title: TranslatedText('select_playlist'),
             children: [
-              if (playlists.isNotEmpty)
-                ...[
-                  for (final playlist in playlists)
-                    SimpleDialogOption(
-                      onPressed: () {
-                        Navigator.of(context).pop(playlist.id);
-                      },
-                      child: Text(playlist.name),
-                    ),
-                  const Divider(),
-                ],
+              if (playlists.isNotEmpty) ...[
+                for (final playlist in playlists)
+                  SimpleDialogOption(
+                    onPressed: () {
+                      Navigator.of(context).pop(playlist.id);
+                    },
+                    child: Text(playlist.name),
+                  ),
+                const Divider(),
+              ],
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 4,
+                ),
                 child: TextField(
                   controller: playlistNameController,
                   decoration: InputDecoration(
@@ -562,7 +631,14 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                   final id = await PlaylistsDB().createPlaylist(name);
                   playlistsShouldReload.value = !playlistsShouldReload.value;
                   setStateDialog(() {
-                    playlists.insert(0, hive_model.PlaylistModel(id: id, name: name, songPaths: []));
+                    playlists.insert(
+                      0,
+                      hive_model.PlaylistModel(
+                        id: id,
+                        name: name,
+                        songPaths: [],
+                      ),
+                    );
                   });
                   playlistNameController.clear();
                   if (context.mounted) {
@@ -576,8 +652,9 @@ class _FavoritesScreenState extends State<FavoritesScreen>
       },
     );
     if (selectedPlaylistId != null) {
-      final selectedSongs = (_searchController.text.isNotEmpty ? _filteredFavorites : _favorites)
-          .where((s) => _selectedSongIds.contains(s.id));
+      final selectedSongs =
+          (_searchController.text.isNotEmpty ? _filteredFavorites : _favorites)
+              .where((s) => _selectedSongIds.contains(s.id));
       for (final song in selectedSongs) {
         await PlaylistsDB().addSongToPlaylist(selectedPlaylistId, song);
       }
@@ -585,23 +662,26 @@ class _FavoritesScreenState extends State<FavoritesScreen>
         _isSelecting = false;
         _selectedSongIds.clear();
       });
-      
+
       // Notificar a la pantalla de inicio que debe actualizar las playlists
       playlistsShouldReload.value = !playlistsShouldReload.value;
     }
   }
 
   Future<void> _removeFromFavoritesMassive() async {
-    final selectedSongs = (_searchController.text.isNotEmpty ? _filteredFavorites : _favorites)
-        .where((s) => _selectedSongIds.contains(s.id));
+    final selectedSongs =
+        (_searchController.text.isNotEmpty ? _filteredFavorites : _favorites)
+            .where((s) => _selectedSongIds.contains(s.id));
     final count = _selectedSongIds.length;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: TranslatedText('remove_from_favorites'),
-        content: Text(count == 1
-            ? LocaleProvider.tr('confirm_remove_favorite')
-            : "${LocaleProvider.tr('confirm_remove_favorites')} ($count)"),
+        content: Text(
+          count == 1
+              ? LocaleProvider.tr('confirm_remove_favorite')
+              : "${LocaleProvider.tr('confirm_remove_favorites')} ($count)",
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -681,20 +761,33 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                                     artworkWidth: 40,
                                     keepOldArtwork: true,
                                     nullArtworkWidget: Container(
-                                      color: Theme.of(context).colorScheme.surfaceContainer,
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.surfaceContainer,
                                       width: 40,
                                       height: 40,
                                       child: Icon(
                                         Icons.music_note,
-                                        color: Theme.of(context).colorScheme.onSurface,
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.onSurface,
                                       ),
                                     ),
                                   ),
                                 ),
                               ],
                             ),
-                            title: Text(song.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-                            subtitle: Text(song.artist ?? LocaleProvider.tr('unknown_artist'), maxLines: 1, overflow: TextOverflow.ellipsis),
+                            title: Text(
+                              song.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            subtitle: Text(
+                              song.artist ??
+                                  LocaleProvider.tr('unknown_artist'),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           );
                         },
                       ),
@@ -708,7 +801,9 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                   onPressed: selectedIds.isEmpty
                       ? null
                       : () async {
-                          final toAdd = recents.where((s) => selectedIds.contains(s.id));
+                          final toAdd = recents.where(
+                            (s) => selectedIds.contains(s.id),
+                          );
                           for (final song in toAdd) {
                             await FavoritesDB().addFavorite(song);
                           }
@@ -780,9 +875,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
               artworkWidth: 50,
               keepOldArtwork: true,
               nullArtworkWidget: Container(
-                color: Theme.of(
-                  context,
-                ).colorScheme.surfaceContainer,
+                color: Theme.of(context).colorScheme.surfaceContainer,
                 width: 50,
                 height: 50,
                 child: Icon(
@@ -830,11 +923,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
         overflow: TextOverflow.ellipsis,
       ),
       trailing: IconButton(
-        icon: Icon(
-          isCurrent && playing
-              ? Icons.pause
-              : Icons.play_arrow,
-        ),
+        icon: Icon(isCurrent && playing ? Icons.pause : Icons.play_arrow),
         onPressed: () {
           if (isCurrent) {
             playing
@@ -859,7 +948,9 @@ class _FavoritesScreenState extends State<FavoritesScreen>
       resizeToAvoidBottomInset: true,
       appBar: AppBar(
         title: _isSelecting
-            ? Text('${_selectedSongIds.length} ${LocaleProvider.tr('selected')}')
+            ? Text(
+                '${_selectedSongIds.length} ${LocaleProvider.tr('selected')}',
+              )
             : Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -873,7 +964,9 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                 IconButton(
                   icon: const Icon(Icons.delete_outline),
                   tooltip: LocaleProvider.tr('remove_from_favorites'),
-                  onPressed: _selectedSongIds.isEmpty ? null : _removeFromFavoritesMassive,
+                  onPressed: _selectedSongIds.isEmpty
+                      ? null
+                      : _removeFromFavoritesMassive,
                 ),
                 IconButton(
                   icon: const Icon(Icons.playlist_add),
@@ -915,54 +1008,54 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                 ),
               ]
             : [
-                  IconButton(
-                    icon: const Icon(Icons.shuffle, size: 28),
-                    tooltip: 'Aleatorio',
-                    onPressed: () {
-                      final List<SongModel> songsToShow =
-                          _searchController.text.isNotEmpty
-                              ? _filteredFavorites
-                              : _favorites;
-                      if (songsToShow.isNotEmpty) {
-                        final random = (songsToShow.toList()..shuffle()).first;
-                        _onSongSelected(random);
-                      }
-                    },
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.add, size: 28),
-                    tooltip: LocaleProvider.tr('add_from_recents'),
-                    onPressed: _showAddFromRecentsDialog,
-                  ),
-                  PopupMenuButton<OrdenFavoritos>(
-                    icon: const Icon(Icons.sort, size: 28),
-                    onSelected: (orden) {
-                      setState(() {
-                        _orden = orden;
-                        _ordenarFavoritos();
-                      });
-                      _saveOrderFilter();
-                    },
-                    itemBuilder: (context) => [
-                      PopupMenuItem(
-                        value: OrdenFavoritos.normal,
-                        child: TranslatedText('last_added'),
-                      ),
-                      PopupMenuItem(
-                        value: OrdenFavoritos.ultimoAgregado,
-                        child: TranslatedText('invert_order'),
-                      ),
-                      PopupMenuItem(
-                        value: OrdenFavoritos.alfabetico,
-                        child: TranslatedText('alphabetical_az'),
-                      ),
-                      PopupMenuItem(
-                        value: OrdenFavoritos.invertido,
-                        child: TranslatedText('alphabetical_za'),
-                      ),
-                    ],
-                  ),
-                ],
+                IconButton(
+                  icon: const Icon(Icons.shuffle, size: 28),
+                  tooltip: 'Aleatorio',
+                  onPressed: () {
+                    final List<SongModel> songsToShow =
+                        _searchController.text.isNotEmpty
+                        ? _filteredFavorites
+                        : _favorites;
+                    if (songsToShow.isNotEmpty) {
+                      final random = (songsToShow.toList()..shuffle()).first;
+                      _onSongSelected(random);
+                    }
+                  },
+                ),
+                IconButton(
+                  icon: const Icon(Icons.add, size: 28),
+                  tooltip: LocaleProvider.tr('add_from_recents'),
+                  onPressed: _showAddFromRecentsDialog,
+                ),
+                PopupMenuButton<OrdenFavoritos>(
+                  icon: const Icon(Icons.sort, size: 28),
+                  onSelected: (orden) {
+                    setState(() {
+                      _orden = orden;
+                      _ordenarFavoritos();
+                    });
+                    _saveOrderFilter();
+                  },
+                  itemBuilder: (context) => [
+                    PopupMenuItem(
+                      value: OrdenFavoritos.normal,
+                      child: TranslatedText('last_added'),
+                    ),
+                    PopupMenuItem(
+                      value: OrdenFavoritos.ultimoAgregado,
+                      child: TranslatedText('invert_order'),
+                    ),
+                    PopupMenuItem(
+                      value: OrdenFavoritos.alfabetico,
+                      child: TranslatedText('alphabetical_az'),
+                    ),
+                    PopupMenuItem(
+                      value: OrdenFavoritos.invertido,
+                      child: TranslatedText('alphabetical_za'),
+                    ),
+                  ],
+                ),
+              ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(56),
           child: Padding(
@@ -1016,53 +1109,74 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                           Icon(
                             Icons.favorite_border,
                             size: 48,
-                            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onSurface.withValues(alpha: 0.6),
                           ),
                           const SizedBox(height: 16),
-                          TranslatedText('no_songs', style: TextStyle(fontSize: 14, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6))),
+                          TranslatedText(
+                            'no_songs',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSurface.withValues(alpha: 0.6),
+                            ),
+                          ),
                         ],
                       ),
                     );
                   }
-                  return StreamBuilder<MediaItem?>(
-                    stream: audioHandler?.mediaItem,
-                    builder: (context, currentSnapshot) {
-                      final current = currentSnapshot.data;
-                      final space = current != null ? 100.0 : 0.0;
+                  return ValueListenableBuilder<MediaItem?>(
+                    valueListenable: _currentMediaItemNotifier,
+                    builder: (context, debouncedMediaItem, child) {
+                      final space = debouncedMediaItem != null ? 100.0 : 0.0;
                       return Padding(
                         padding: EdgeInsets.only(bottom: space),
-                        child: ListView.builder(
-                          itemCount: songsToShow.length,
-                          itemBuilder: (context, index) {
-                            final song = songsToShow[index];
-                            final isCurrent =
-                                current?.extras?['data'] == song.data;
-                            final isAmoledTheme = colorSchemeNotifier.value == AppColorScheme.amoled;
-                            
-                            // Solo usar ValueListenableBuilder para la canción actual
-                            if (isCurrent) {
-                              return ValueListenableBuilder<bool>(
-                                valueListenable: _isPlayingNotifier,
-                                builder: (context, playing, child) {
+                        child: ValueListenableBuilder<MediaItem?>(
+                          valueListenable: _immediateMediaItemNotifier,
+                          builder: (context, immediateMediaItem, child) {
+                            return ListView.builder(
+                              itemCount: songsToShow.length,
+                              itemBuilder: (context, index) {
+                                final song = songsToShow[index];
+                                final path = song.data;
+                                final isCurrent =
+                                    (immediateMediaItem?.id != null &&
+                                    path.isNotEmpty &&
+                                    (immediateMediaItem!.id == path ||
+                                        immediateMediaItem.extras?['data'] ==
+                                            path));
+                                final isAmoledTheme =
+                                    colorSchemeNotifier.value ==
+                                    AppColorScheme.amoled;
+
+                                // Solo usar ValueListenableBuilder para la canción actual
+                                if (isCurrent) {
+                                  return ValueListenableBuilder<bool>(
+                                    valueListenable: _isPlayingNotifier,
+                                    builder: (context, playing, child) {
+                                      return _buildOptimizedListTile(
+                                        context,
+                                        song,
+                                        isCurrent,
+                                        playing,
+                                        isAmoledTheme,
+                                      );
+                                    },
+                                  );
+                                } else {
+                                  // Para canciones que no están reproduciéndose, no usar StreamBuilder
                                   return _buildOptimizedListTile(
                                     context,
                                     song,
                                     isCurrent,
-                                    playing,
+                                    false, // No playing
                                     isAmoledTheme,
                                   );
-                                },
-                              );
-                            } else {
-                              // Para canciones que no están reproduciéndose, no usar StreamBuilder
-                              return _buildOptimizedListTile(
-                                context,
-                                song,
-                                isCurrent,
-                                false, // No playing
-                                isAmoledTheme,
-                              );
-                            }
+                                }
+                              },
+                            );
                           },
                         ),
                       );

@@ -23,7 +23,7 @@ import 'package:music/utils/db/playlist_model.dart' as hive_model;
 class SettingsScreen extends StatefulWidget {
   final void Function(AppThemeMode)? setThemeMode;
   final void Function(AppColorScheme)? setColorScheme;
-  
+
   const SettingsScreen({super.key, this.setThemeMode, this.setColorScheme});
 
   @override
@@ -62,7 +62,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _loadArtworkQuality() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
-      _artworkQuality = prefs.getInt('artwork_quality') ?? 410; // 80% por defecto
+      _artworkQuality =
+          prefs.getInt('artwork_quality') ?? 410; // 80% por defecto
     });
   }
 
@@ -82,9 +83,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _artworkQualityOption(1024, LocaleProvider.tr('100_percent_maximum')),
-            _artworkQualityOption(410, LocaleProvider.tr('80_percent_recommended')),
-            _artworkQualityOption(307, LocaleProvider.tr('60_percent_performance')),
+            _artworkQualityOption(
+              1024,
+              LocaleProvider.tr('100_percent_maximum'),
+            ),
+            _artworkQualityOption(
+              410,
+              LocaleProvider.tr('80_percent_recommended'),
+            ),
+            _artworkQualityOption(
+              307,
+              LocaleProvider.tr('60_percent_performance'),
+            ),
             _artworkQualityOption(205, LocaleProvider.tr('40_percent_low')),
             _artworkQualityOption(102, LocaleProvider.tr('20_percent_minimum')),
           ],
@@ -181,7 +191,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     });
   }
 
-  Future<void> _solicitarIgnorarOptimizacionDeBateria(BuildContext context) async {
+  Future<void> _solicitarIgnorarOptimizacionDeBateria(
+    BuildContext context,
+  ) async {
     if (Platform.isAndroid) {
       final status = await Permission.ignoreBatteryOptimizations.status;
       if (!status.isGranted) {
@@ -195,7 +207,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _checkBatteryOptimization();
       } else {
         if (context.mounted) {
-        showDialog(
+          showDialog(
             context: context,
             builder: (context) => AlertDialog(
               title: Text(LocaleProvider.tr('information')),
@@ -287,12 +299,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
       // Check Android version
       final androidInfo = await DeviceInfoPlugin().androidInfo;
       final sdkInt = androidInfo.version.sdkInt;
-      
+
       // If Android 9 (API 28) or lower, use default Music folder
       if (sdkInt <= 28) {
         const defaultPath = '/storage/emulated/0/Music';
         await _setDownloadDirectory(defaultPath);
-        
+
         if (mounted) {
           showDialog(
             context: context,
@@ -311,7 +323,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         return;
       }
     }
-    
+
     // For Android 10+ and other platforms, use file selector
     try {
       final String? path = await getDirectoryPath();
@@ -323,7 +335,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (Platform.isAndroid) {
         const defaultPath = '/storage/emulated/0/Music';
         await _setDownloadDirectory(defaultPath);
-        
+
         if (mounted) {
           showDialog(
             context: context,
@@ -362,7 +374,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _loadDownloadType() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
-      _downloadTypeExplode = prefs.getBool('download_type_explode') ?? true; // Changed default to true
+      _downloadTypeExplode =
+          prefs.getBool('download_type_explode') ??
+          true; // Changed default to true
     });
     downloadTypeNotifier.value = _downloadTypeExplode;
   }
@@ -371,23 +385,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
     try {
       if (Platform.isAndroid) {
         const channel = MethodChannel('com.kirby.aura/storage');
-        final stats = await channel.invokeMethod<Map<dynamic, dynamic>>('getStorageStats', {
-          'path': _downloadDirectory ?? '/storage/emulated/0',
-        });
+        final stats = await channel.invokeMethod<Map<dynamic, dynamic>>(
+          'getStorageStats',
+          {'path': _downloadDirectory ?? '/storage/emulated/0'},
+        );
         if (mounted) {
           setState(() {
-            _availableBytesAtDownloadDir = (stats?['availableBytes'] as num?)?.toInt();
+            _availableBytesAtDownloadDir = (stats?['availableBytes'] as num?)
+                ?.toInt();
             _totalBytesAtDownloadDir = (stats?['totalBytes'] as num?)?.toInt();
           });
         }
       } else {
         if (mounted) {
-          setState(() { _availableBytesAtDownloadDir = null; _totalBytesAtDownloadDir = null; });
+          setState(() {
+            _availableBytesAtDownloadDir = null;
+            _totalBytesAtDownloadDir = null;
+          });
         }
       }
     } catch (_) {
       if (mounted) {
-        setState(() { _availableBytesAtDownloadDir = null; _totalBytesAtDownloadDir = null; });
+        setState(() {
+          _availableBytesAtDownloadDir = null;
+          _totalBytesAtDownloadDir = null;
+        });
       }
     }
   }
@@ -436,13 +458,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
               mainAxisSpacing: 8,
               childAspectRatio: 1,
             ),
-            itemCount: AppColorScheme.values.where((e) => e.toString() != 'AppColorScheme.grey').length,
+            itemCount: AppColorScheme.values
+                .where((e) => e.toString() != 'AppColorScheme.grey')
+                .length,
             itemBuilder: (context, index) {
-              final filteredSchemes = AppColorScheme.values.where((e) => e.toString() != 'AppColorScheme.grey').toList();
+              final filteredSchemes = AppColorScheme.values
+                  .where((e) => e.toString() != 'AppColorScheme.grey')
+                  .toList();
               final colorScheme = filteredSchemes[index];
               final color = ThemePreferences.getColorFromScheme(colorScheme);
               final isSelected = colorScheme == _currentColorScheme;
-              
+
               return GestureDetector(
                 onTap: () {
                   setState(() {
@@ -461,11 +487,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                   ),
                   child: isSelected
-                      ? const Icon(
-                          Icons.check,
-                          color: Colors.white,
-                          size: 24,
-                        )
+                      ? const Icon(Icons.check, color: Colors.white, size: 24)
                       : null,
                 ),
               );
@@ -498,10 +520,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           // Preferencias
           TranslatedText(
             'preferences',
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 8),
           Card(
@@ -509,26 +528,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
               children: [
                 ListTile(
                   leading: Icon(
-                    Theme.of(context).brightness == Brightness.dark 
-                        ? Icons.dark_mode 
+                    Theme.of(context).brightness == Brightness.dark
+                        ? Icons.dark_mode
                         : Icons.light_mode,
                   ),
                   title: TranslatedText('select_theme'),
-                  subtitle: TranslatedText(_getCurrentThemeText(context), style: const TextStyle(fontSize: 12)),
+                  subtitle: TranslatedText(
+                    _getCurrentThemeText(context),
+                    style: const TextStyle(fontSize: 12),
+                  ),
                   onTap: () => _showThemeSelectionDialog(context),
                 ),
                 const Divider(height: 1),
                 ListTile(
                   leading: const Icon(Icons.palette),
                   title: Text(LocaleProvider.tr('select_color')),
-                  subtitle: Text(ThemePreferences.getColorName(_currentColorScheme), style: const TextStyle(fontSize: 12)),
+                  subtitle: Text(
+                    ThemePreferences.getColorName(_currentColorScheme),
+                    style: const TextStyle(fontSize: 12),
+                  ),
                   onTap: () => _showColorSelectionDialog(context),
                 ),
                 const Divider(height: 1),
                 ListTile(
                   leading: const Icon(Icons.language),
                   title: TranslatedText('change_language'),
-                  subtitle: TranslatedText(_currentLanguage == 'es' ? 'spanish' : 'english', style: const TextStyle(fontSize: 12)),
+                  subtitle: TranslatedText(
+                    _currentLanguage == 'es' ? 'spanish' : 'english',
+                    style: const TextStyle(fontSize: 12),
+                  ),
                   onTap: () => _showLanguageDialog(context),
                 ),
               ],
@@ -539,10 +567,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           // Descargas
           TranslatedText(
             'downloads',
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 8),
           Card(
@@ -551,11 +576,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ListTile(
                   leading: const Icon(Icons.sd_storage),
                   title: Text(
-                    _availableBytesAtDownloadDir != null && _totalBytesAtDownloadDir != null
+                    _availableBytesAtDownloadDir != null &&
+                            _totalBytesAtDownloadDir != null
                         ? '${_formatBytes(_availableBytesAtDownloadDir!)} ${LocaleProvider.tr('free_of')} ${_formatBytes(_totalBytesAtDownloadDir!)}'
                         : LocaleProvider.tr('calculating'),
                   ),
-                  subtitle: (_availableBytesAtDownloadDir != null && _totalBytesAtDownloadDir != null)
+                  subtitle:
+                      (_availableBytesAtDownloadDir != null &&
+                          _totalBytesAtDownloadDir != null)
                       ? Padding(
                           padding: const EdgeInsets.only(top: 8, right: 0),
                           child: ClipRRect(
@@ -563,7 +591,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             child: LinearProgressIndicator(
                               year2023: false,
                               value: (_totalBytesAtDownloadDir! > 0)
-                                  ? (1 - (_availableBytesAtDownloadDir! / _totalBytesAtDownloadDir!))
+                                  ? (1 -
+                                        (_availableBytesAtDownloadDir! /
+                                            _totalBytesAtDownloadDir!))
                                   : null,
                               minHeight: 6,
                             ),
@@ -575,15 +605,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ListTile(
                   leading: const Icon(Icons.folder),
                   title: TranslatedText('save_path'),
-                  subtitle: _downloadDirectory != null && _downloadDirectory!.isNotEmpty
+                  subtitle:
+                      _downloadDirectory != null &&
+                          _downloadDirectory!.isNotEmpty
                       ? Text(
                           _downloadDirectory!.startsWith('/storage/emulated/0')
-                              ? _downloadDirectory!.replaceFirst('/storage/emulated/0', '')
+                              ? _downloadDirectory!.replaceFirst(
+                                  '/storage/emulated/0',
+                                  '',
+                                )
                               : _downloadDirectory!,
                           style: const TextStyle(fontSize: 12),
                           overflow: TextOverflow.ellipsis,
                         )
-                      : TranslatedText('not_selected', style: const TextStyle(fontSize: 12)),
+                      : TranslatedText(
+                          'not_selected',
+                          style: const TextStyle(fontSize: 12),
+                        ),
                   trailing: const Icon(Icons.edit),
                   onTap: _pickDownloadDirectory,
                 ),
@@ -591,7 +629,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ListTile(
                   leading: const Icon(Icons.download),
                   title: TranslatedText('download_type'),
-                  subtitle: TranslatedText('download_type_desc', style: const TextStyle(fontSize: 12)),
+                  subtitle: TranslatedText(
+                    'download_type_desc',
+                    style: const TextStyle(fontSize: 12),
+                  ),
                   trailing: DropdownButton<bool>(
                     value: _downloadTypeExplode,
                     items: [
@@ -613,17 +654,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ListTile(
                   leading: const Icon(Icons.security),
                   title: Text(LocaleProvider.tr('grant_all_files_permission')),
-                  subtitle: Text(LocaleProvider.tr('grant_all_files_permission_desc'), style: const TextStyle(fontSize: 12)),
+                  subtitle: Text(
+                    LocaleProvider.tr('grant_all_files_permission_desc'),
+                    style: const TextStyle(fontSize: 12),
+                  ),
                   onTap: () async {
-                    final status = await Permission.manageExternalStorage.request();
+                    final status = await Permission.manageExternalStorage
+                        .request();
                     if (context.mounted) {
                       showDialog(
                         context: context,
                         builder: (context) => AlertDialog(
-                          title: Text(status.isGranted ? LocaleProvider.tr('permission_granted') : LocaleProvider.tr('permission_denied')),
-                          content: Text(status.isGranted
-                              ? LocaleProvider.tr('permission_granted_desc')
-                              : LocaleProvider.tr('permission_denied_desc')),
+                          title: Text(
+                            status.isGranted
+                                ? LocaleProvider.tr('permission_granted')
+                                : LocaleProvider.tr('permission_denied'),
+                          ),
+                          content: Text(
+                            status.isGranted
+                                ? LocaleProvider.tr('permission_granted_desc')
+                                : LocaleProvider.tr('permission_denied_desc'),
+                          ),
                         ),
                       );
                     }
@@ -637,10 +688,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           // Música y reproducción
           Text(
             LocaleProvider.tr('music_and_playback'),
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 8),
           Card(
@@ -656,17 +704,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         _artworkQuality == 1024
                             ? LocaleProvider.tr('100_percent_maximum')
                             : _artworkQuality == 410
-                                ? LocaleProvider.tr('80_percent_recommended')
-                                : _artworkQuality == 307
-                                    ? LocaleProvider.tr('60_percent_performance')
-                                    : _artworkQuality == 205
-                                        ? LocaleProvider.tr('40_percent_low')
-                                        : LocaleProvider.tr('20_percent_minimum'),
+                            ? LocaleProvider.tr('80_percent_recommended')
+                            : _artworkQuality == 307
+                            ? LocaleProvider.tr('60_percent_performance')
+                            : _artworkQuality == 205
+                            ? LocaleProvider.tr('40_percent_low')
+                            : LocaleProvider.tr('20_percent_minimum'),
                         style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        LocaleProvider.tr('artwork_quality_description'), // Agrega esta key en tus traducciones
+                        LocaleProvider.tr(
+                          'artwork_quality_description',
+                        ), // Agrega esta key en tus traducciones
                         style: const TextStyle(fontSize: 12),
                       ),
                     ],
@@ -679,7 +729,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   builder: (context, snapshot) {
                     if (!snapshot.hasData) return SizedBox.shrink();
                     final prefs = snapshot.data!;
-                    final value = prefs.getBool('index_songs_on_startup') ?? true;
+                    final value =
+                        prefs.getBool('index_songs_on_startup') ?? true;
                     return SwitchListTile(
                       value: value,
                       onChanged: (v) async {
@@ -687,7 +738,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         setState(() {});
                       },
                       title: Text(LocaleProvider.tr('index_songs_on_startup')),
-                      subtitle: Text(LocaleProvider.tr('index_songs_on_startup_desc'), style: const TextStyle(fontSize: 12)),
+                      subtitle: Text(
+                        LocaleProvider.tr('index_songs_on_startup_desc'),
+                        style: const TextStyle(fontSize: 12),
+                      ),
                       secondary: const Icon(Icons.library_music),
                     );
                   },
@@ -696,13 +750,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ListTile(
                   leading: const Icon(Icons.lyrics),
                   title: Text(LocaleProvider.tr('delete_lyrics')),
-                  subtitle: Text(LocaleProvider.tr('delete_lyrics_desc'), style: const TextStyle(fontSize: 12)),
+                  subtitle: Text(
+                    LocaleProvider.tr('delete_lyrics_desc'),
+                    style: const TextStyle(fontSize: 12),
+                  ),
                   onTap: () async {
                     final confirmed = await showDialog<bool>(
                       context: context,
                       builder: (context) => AlertDialog(
                         title: Text(LocaleProvider.tr('delete_lyrics')),
-                        content: Text(LocaleProvider.tr('delete_lyrics_confirm')),
+                        content: Text(
+                          LocaleProvider.tr('delete_lyrics_confirm'),
+                        ),
                         actions: [
                           TextButton(
                             onPressed: () => Navigator.of(context).pop(false),
@@ -722,7 +781,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           context: context,
                           builder: (context) => AlertDialog(
                             title: Text(LocaleProvider.tr('lyrics_deleted')),
-                            content: Text(LocaleProvider.tr('lyrics_deleted_desc')),
+                            content: Text(
+                              LocaleProvider.tr('lyrics_deleted_desc'),
+                            ),
                           ),
                         );
                       }
@@ -775,8 +836,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     children: [
                       Text(
                         _checkingBatteryOpt
-                          ? LocaleProvider.tr('status_checking')
-                          : _batteryOptDisabled
+                            ? LocaleProvider.tr('status_checking')
+                            : _batteryOptDisabled
                             ? LocaleProvider.tr('status_enabled')
                             : LocaleProvider.tr('status_disabled'),
                         style: const TextStyle(fontWeight: FontWeight.bold),
@@ -794,14 +855,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ),
           const SizedBox(height: 24),
-          
+
           // Apartado de Respaldo
           Text(
             LocaleProvider.tr('backup'),
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 8),
           Card(
@@ -810,14 +868,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ListTile(
                   leading: const Icon(Icons.save_alt),
                   title: Text(LocaleProvider.tr('export_backup')),
-                  subtitle: Text(LocaleProvider.tr('export_backup_desc'), style: const TextStyle(fontSize: 12)),
+                  subtitle: Text(
+                    LocaleProvider.tr('export_backup_desc'),
+                    style: const TextStyle(fontSize: 12),
+                  ),
                   onTap: _exportBackup,
                 ),
                 const Divider(height: 1),
                 ListTile(
                   leading: const Icon(Icons.upload_file),
                   title: Text(LocaleProvider.tr('import_backup')),
-                  subtitle: Text(LocaleProvider.tr('import_backup_desc'), style: const TextStyle(fontSize: 12)),
+                  subtitle: Text(
+                    LocaleProvider.tr('import_backup_desc'),
+                    style: const TextStyle(fontSize: 12),
+                  ),
                   onTap: _importBackup,
                 ),
               ],
@@ -828,10 +892,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           // Ajustes de la app
           Text(
             LocaleProvider.tr('app_settings'),
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 8),
           Card(
@@ -840,7 +901,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ListTile(
                   leading: const Icon(Icons.system_update_alt),
                   title: Text(LocaleProvider.tr('app_updates')),
-                  subtitle: Text(LocaleProvider.tr('check_for_updates'), style: const TextStyle(fontSize: 12)),
+                  subtitle: Text(
+                    LocaleProvider.tr('check_for_updates'),
+                    style: const TextStyle(fontSize: 12),
+                  ),
                   onTap: () {
                     Navigator.push(
                       context,
@@ -852,7 +916,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ListTile(
                   leading: const Icon(Icons.info_outline),
                   title: Text(LocaleProvider.tr('about')),
-                  subtitle: Text(LocaleProvider.tr('app_info'), style: const TextStyle(fontSize: 12)),
+                  subtitle: Text(
+                    LocaleProvider.tr('app_info'),
+                    style: const TextStyle(fontSize: 12),
+                  ),
                   onTap: () {
                     showDialog(
                       context: context,
@@ -886,9 +953,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             const SizedBox(height: 4),
                             Text(
                               '${LocaleProvider.tr('version')}: v1.4.8',
-                              style: const TextStyle(
-                                fontSize: 15,
-                              ),
+                              style: const TextStyle(fontSize: 15),
                               textAlign: TextAlign.center,
                             ),
                             const SizedBox(height: 12),
@@ -1027,21 +1092,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
       // Restaurar playlists
       if (data['playlists'] is List) {
         for (final pl in data['playlists']) {
-          final id = pl['id']?.toString() ?? DateTime.now().millisecondsSinceEpoch.toString();
+          final id =
+              pl['id']?.toString() ??
+              DateTime.now().millisecondsSinceEpoch.toString();
           final name = pl['name'] as String;
-          final songPaths = (pl['songs'] as List).map((e) => e.toString()).toList();
-          final playlist = hive_model.PlaylistModel(id: id, name: name, songPaths: songPaths);
+          final songPaths = (pl['songs'] as List)
+              .map((e) => e.toString())
+              .toList();
+          final playlist = hive_model.PlaylistModel(
+            id: id,
+            name: name,
+            songPaths: songPaths,
+          );
           await boxPl.put(id, playlist);
         }
       }
       if (!mounted) return;
-      
+
       // Activar notifiers para recargar datos sin reiniciar la app
       favoritesShouldReload.value = !favoritesShouldReload.value;
       playlistsShouldReload.value = !playlistsShouldReload.value;
       shortcutsShouldReload.value = !shortcutsShouldReload.value;
       mostPlayedShouldReload.value = !mostPlayedShouldReload.value;
-      
+
       showDialog(
         context: context,
         builder: (context) => AlertDialog(

@@ -966,11 +966,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                               : height * 0.03,
                         ),
                         SizedBox(
-                          width: is16by9
-                              ? 310
-                              : isSmallScreen
-                              ? 300
-                              : artworkSize,
+                          width: width * 0.85,
                           child: Row(
                             children: [
                               Expanded(
@@ -1071,11 +1067,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                         ),
                         SizedBox(height: height * 0.01),
                         SizedBox(
-                          width: is16by9
-                              ? 310
-                              : isSmallScreen
-                              ? 300
-                              : artworkSize,
+                          width: width * 0.85,
                           child: Text(
                             (currentMediaItem.artist == null ||
                                     currentMediaItem.artist!.trim().isEmpty)
@@ -1817,10 +1809,9 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                             child: LayoutBuilder(
                               builder: (context, constraints) {
                                 final isSmall = constraints.maxWidth < 380;
-
                                 return SizedBox(
-                                  child: SingleChildScrollView(
-                                    scrollDirection: Axis.horizontal,
+                                  width: width * 0.85,
+                                  child: HorizontalScrollWithFade(
                                     child: Row(
                                       mainAxisAlignment:
                                           MainAxisAlignment.spaceEvenly,
@@ -2225,6 +2216,116 @@ class _TitleMarqueeState extends State<TitleMarquee> {
   }
 }
 
+class HorizontalScrollWithFade extends StatefulWidget {
+  final Widget child;
+
+  const HorizontalScrollWithFade({super.key, required this.child});
+
+  @override
+  State<HorizontalScrollWithFade> createState() =>
+      _HorizontalScrollWithFadeState();
+}
+
+class _HorizontalScrollWithFadeState extends State<HorizontalScrollWithFade> {
+  final ScrollController _scrollController = ScrollController();
+  bool _showLeftFade = false;
+  bool _showRightFade = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_onScroll);
+
+    // Verificar si se puede hacer scroll después de que se construya el widget
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _updateFadeStates();
+    });
+  }
+
+  @override
+  void dispose() {
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    _updateFadeStates();
+  }
+
+  void _updateFadeStates() {
+    if (!_scrollController.hasClients) return;
+
+    final maxScroll = _scrollController.position.maxScrollExtent;
+    final currentScroll = _scrollController.offset;
+
+    setState(() {
+      _showLeftFade = currentScroll > 0;
+      _showRightFade = maxScroll > 0 && currentScroll < maxScroll;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        // Contenido principal con scroll
+        SingleChildScrollView(
+          controller: _scrollController,
+          scrollDirection: Axis.horizontal,
+          child: widget.child,
+        ),
+
+        // Gradiente izquierdo (solo si hay scroll hacia la izquierda)
+        if (_showLeftFade)
+          Positioned(
+            left: 0,
+            top: 0,
+            bottom: 0,
+            child: Container(
+              width: 20,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
+                  colors: [
+                    Theme.of(context).scaffoldBackgroundColor,
+                    Theme.of(
+                      context,
+                    ).scaffoldBackgroundColor.withValues(alpha: 0),
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+        // Gradiente derecho (si hay más contenido hacia la derecha)
+        if (_showRightFade)
+          Positioned(
+            right: 0,
+            top: 0,
+            bottom: 0,
+            child: Container(
+              width: 20,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
+                  colors: [
+                    Theme.of(
+                      context,
+                    ).scaffoldBackgroundColor.withValues(alpha: 0),
+                    Theme.of(context).scaffoldBackgroundColor,
+                  ],
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
 class AnimatedTapButton extends StatefulWidget {
   final Widget child;
   final VoidCallback onTap;
@@ -2404,9 +2505,13 @@ class _VerticalMarqueeLyricsState extends State<VerticalMarqueeLyrics>
                 itemCount: lines.length,
                 itemBuilder: (context, index) {
                   final isCurrent = index == idx;
+                  final isDarkMode =
+                      Theme.of(context).brightness == Brightness.dark;
                   final textStyle = TextStyle(
                     color: isCurrent
-                        ? Theme.of(context).colorScheme.primary
+                        ? (isDarkMode
+                              ? Theme.of(context).colorScheme.primary
+                              : Theme.of(context).colorScheme.primaryContainer)
                         : Colors.white70,
                     fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
                     fontSize: isCurrent ? 18 : 15,

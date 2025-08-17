@@ -1,11 +1,7 @@
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/material.dart';
 
-enum AppThemeMode {
-  system,
-  light,
-  dark,
-}
+enum AppThemeMode { system, light, dark }
 
 enum AppColorScheme {
   deepPurple,
@@ -28,17 +24,17 @@ enum AppColorScheme {
 class ThemePreferences {
   static const String _themeKey = 'theme_mode';
   static const String _colorKey = 'color_scheme';
-  
+
   // Guardar la preferencia del tema
   static Future<void> setThemeMode(AppThemeMode themeMode) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(_themeKey, themeMode.index);
   }
-  
+
   // Obtener la preferencia del tema guardada
   static Future<AppThemeMode> getThemeMode() async {
     final prefs = await SharedPreferences.getInstance();
-    
+
     try {
       // First try to get as integer (new format)
       final index = prefs.getInt(_themeKey);
@@ -48,13 +44,15 @@ class ThemePreferences {
     } catch (e) {
       // If there's an error reading as int, it might be the old boolean format
     }
-    
+
     try {
       // Migration: Check for old boolean value with same key
       final oldIsDarkMode = prefs.getBool(_themeKey);
       if (oldIsDarkMode != null) {
         // Convert old boolean to new enum
-        final newThemeMode = oldIsDarkMode ? AppThemeMode.dark : AppThemeMode.light;
+        final newThemeMode = oldIsDarkMode
+            ? AppThemeMode.dark
+            : AppThemeMode.light;
         // Save in new format
         await prefs.setInt(_themeKey, newThemeMode.index);
         return newThemeMode;
@@ -62,7 +60,7 @@ class ThemePreferences {
     } catch (e) {
       // If there's an error reading as bool, continue to default
     }
-    
+
     // Default to system theme
     return AppThemeMode.system;
   }
@@ -72,7 +70,7 @@ class ThemePreferences {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(_colorKey, colorScheme.index);
   }
-  
+
   // Obtener la preferencia del color guardada
   static Future<AppColorScheme> getColorScheme() async {
     final prefs = await SharedPreferences.getInstance();
@@ -83,7 +81,7 @@ class ThemePreferences {
     // Default to deepPurple
     return AppColorScheme.deepPurple;
   }
-  
+
   // Limpiar la preferencia del tema (resetear a valores por defecto)
   static Future<void> clearThemeMode() async {
     final prefs = await SharedPreferences.getInstance();
@@ -167,4 +165,4 @@ class ThemePreferences {
         return 'AMOLED Black';
     }
   }
-} 
+}

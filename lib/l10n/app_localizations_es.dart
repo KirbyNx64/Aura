@@ -40,29 +40,40 @@ const Map<String, String> appLocalizationsEs = {
   'ffmpeg': 'FFmpeg',
   'audiotags': 'AudioTags',
   'grant_all_files_permission': 'Permiso a todos los archivos',
-  'grant_all_files_permission_desc': 'Otorga acceso completo a los archivos del dispositivo (solo Android 11+)',
+  'grant_all_files_permission_desc':
+      'Otorga acceso completo a los archivos del dispositivo (solo Android 11+)',
   'permission_granted': 'Permiso concedido',
   'permission_denied': 'Permiso denegado',
   'permission_granted_desc': 'Ahora tienes acceso a todos los archivos.',
-  'permission_denied_desc': 'No se concedió el permiso. Ve a ajustes para otorgarlo manualmente.',
-  'default_path_set': 'Ruta predeterminada establecida en la carpeta Música debido a la compatibilidad con Android 9.',
+  'permission_denied_desc':
+      'No se concedió el permiso. Ve a ajustes para otorgarlo manualmente.',
+  'default_path_set':
+      'Ruta predeterminada establecida en la carpeta Música debido a la compatibilidad con Android 9.',
 
   // Music and playback
   'music_and_playback': 'Música y reproducción',
   'index_songs_on_startup': 'Indexar archivos de canciones',
-  'index_songs_on_startup_desc': 'Sincroniza automáticamente la base de datos con los archivos del dispositivo',
+  'index_songs_on_startup_desc':
+      'Sincroniza automáticamente la base de datos con los archivos del dispositivo',
   'delete_lyrics': 'Eliminar letra de canciones',
-  'delete_lyrics_desc': 'Elimina todas las letras sincronizadas almacenadas en caché',
-  'delete_lyrics_confirm': '¿Estás seguro de que deseas eliminar todas las letras almacenadas? Esta acción no se puede deshacer.',
+  'delete_lyrics_desc':
+      'Elimina todas las letras sincronizadas almacenadas en caché',
+  'delete_lyrics_confirm':
+      '¿Estás seguro de que deseas eliminar todas las letras almacenadas? Esta acción no se puede deshacer.',
   'lyrics_deleted': 'Letras eliminadas',
-  'lyrics_deleted_desc': 'Las letras de canciones se han eliminado correctamente.',
+  'lyrics_deleted_desc':
+      'Las letras de canciones se han eliminado correctamente.',
   'clear_artwork_cache': 'Limpiar caché de carátulas',
-  'clear_artwork_cache_desc': 'Elimina las imágenes de carátulas almacenadas en caché',
-  'clear_artwork_cache_confirm': '¿Estás seguro de que deseas eliminar todas las carátulas almacenadas en caché? Esta acción no se puede deshacer.',
+  'clear_artwork_cache_desc':
+      'Elimina las imágenes de carátulas almacenadas en caché',
+  'clear_artwork_cache_confirm':
+      '¿Estás seguro de que deseas eliminar todas las carátulas almacenadas en caché? Esta acción no se puede deshacer.',
   'artwork_cache_cleared': 'Caché limpiada',
-  'artwork_cache_cleared_desc': 'La caché de carátulas se ha limpiado correctamente.',
+  'artwork_cache_cleared_desc':
+      'La caché de carátulas se ha limpiado correctamente.',
   'ignore_battery_optimization': 'Ignorar la optimización de la batería',
-  'ignore_battery_optimization_desc': 'Si tienes problemas con la reproducción en segundo plano por la optimización del sistema, por favor activa esta opción',
+  'ignore_battery_optimization_desc':
+      'Si tienes problemas con la reproducción en segundo plano por la optimización del sistema, por favor activa esta opción',
   'status_checking': 'Estado: comprobando...',
   'status_enabled': 'Estado: Activado',
   'status_disabled': 'Estado: Desactivado',
@@ -72,8 +83,10 @@ const Map<String, String> appLocalizationsEs = {
   'app_settings': 'Ajustes de la app',
   'artwork_quality': 'Calidad de carátula al reproducir',
   'hero_animation': 'Animación Hero',
-  'hero_animation_desc': 'Activa la animación Hero entre overlay y reproductor.',
-  'artwork_quality_description': 'Selecciona la calidad de las carátulas al reproducir música',
+  'hero_animation_desc':
+      'Activa la animación Hero entre overlay y reproductor.',
+  'artwork_quality_description':
+      'Selecciona la calidad de las carátulas al reproducir música',
   '100_percent_maximum': '100% (Máximo)',
   '80_percent_recommended': '80% (Recomendado)',
   '60_percent_performance': '60% (Rendimiento)',
@@ -84,7 +97,8 @@ const Map<String, String> appLocalizationsEs = {
   'about': 'Acerca de',
   'app_info': 'Información de la aplicación',
   'version': 'Versión',
-  'app_description': 'Aura Music es una app para reproducir tu música local de forma rápida y sencilla. Disfruta de tus canciones favoritas, crea listas de reproducción y más.',
+  'app_description':
+      'Aura Music es una app para reproducir tu música local de forma rápida y sencilla. Disfruta de tus canciones favoritas, crea listas de reproducción y más.',
 
   // Dialogs
   'confirm_clear_lyrics': '¿Eliminar letras de canciones?',
@@ -98,12 +112,15 @@ const Map<String, String> appLocalizationsEs = {
   // Respaldo
   'backup': 'Respaldo',
   'export_backup': 'Exportar respaldo',
-  'export_backup_desc': 'Exporta tus listas de me gusta, listas de reproducción, recientes y canciones más escuchadas a un archivo JSON',
+  'export_backup_desc':
+      'Exporta tus listas de me gusta, listas de reproducción, recientes y canciones más escuchadas a un archivo JSON',
   'import_backup': 'Importar respaldo',
-  'import_backup_desc': 'Importa un respaldo y reemplaza todos los datos actuales',
+  'import_backup_desc':
+      'Importa un respaldo y reemplaza todos los datos actuales',
   'backup_exported': '¡Respaldo exportado exitosamente!',
   'backup_imported': '¡Respaldo importado exitosamente!',
-  'import_confirm': 'Esto borrará todos los datos actuales y los reemplazará con el respaldo. ¿Continuar?',
+  'import_confirm':
+      'Esto borrará todos los datos actuales y los reemplazará con el respaldo. ¿Continuar?',
   'import': 'Importar',
   'restart_app': 'Cerrar aplicación',
 
@@ -138,8 +155,10 @@ const Map<String, String> appLocalizationsEs = {
   'alphabetical_za': 'Alfabético (Z-A)',
   'default': 'Por defecto',
   'select_songs': 'Seleccionar canciones',
-  'confirm_remove_favorites': '¿Estás seguro de que deseas eliminar estas canciones de tus favoritos?',
-  'confirm_remove_favorite': '¿Estás seguro de que deseas eliminar esta canción de tus favoritos?',
+  'confirm_remove_favorites':
+      '¿Estás seguro de que deseas eliminar estas canciones de tus favoritos?',
+  'confirm_remove_favorite':
+      '¿Estás seguro de que deseas eliminar esta canción de tus favoritos?',
   'remove_from_recents': 'Eliminar de recientes',
 
   // Bottom Navigation
@@ -153,14 +172,18 @@ const Map<String, String> appLocalizationsEs = {
   'folders_title': 'Carpetas',
   'reload': 'Recargar',
   'select': 'Seleccionar',
+  'reorder_manually': 'Reordenar',
   'no_folders': 'No hay carpetas',
   'delete_from_device': 'Eliminar del dispositivo',
   'edit_date_newest_first': 'Fecha de edición (ascendente)',
   'edit_date_oldest_first': 'Fecha de edición (descendente)',
-  'could_not_delete_song': 'No se pudo eliminar la canción del dispositivo. \n\nSi tienes problemas, intenta otorgar permisos a todos los archivos.',
+  'could_not_delete_song':
+      'No se pudo eliminar la canción del dispositivo. \n\nSi tienes problemas, intenta otorgar permisos a todos los archivos.',
   'delete_folder': 'Eliminar carpeta',
-  'delete_folder_confirm': '¿Seguro que deseas eliminar esta carpeta y todas sus canciones del dispositivo?',
-  'could_not_delete_folder': 'No se pudieron eliminar todas las canciones de la carpeta. \n\nSi tienes problemas, intenta otorgar permisos a todos los archivos.',
+  'delete_folder_confirm':
+      '¿Seguro que deseas eliminar esta carpeta y todas sus canciones del dispositivo?',
+  'could_not_delete_folder':
+      'No se pudieron eliminar todas las canciones de la carpeta. \n\nSi tienes problemas, intenta otorgar permisos a todos los archivos.',
   'select_playlist': 'Seleccionar lista de reproducción',
   'create_playlist': 'Crear lista de reproducción',
   'new_playlist_name': 'Nombre de la nueva lista de reproducción',
@@ -184,13 +207,16 @@ const Map<String, String> appLocalizationsEs = {
   'youtube_link': 'Enlace de YouTube',
   'paste_link': 'Pegar enlace',
   'large_playlist_detected': 'Lista de reproducción muy grande detectada',
-  'fetching_playlist_info': 'Obteniendo información de la lista de reproducción... (Sin descargar aún)',
+  'fetching_playlist_info':
+      'Obteniendo información de la lista de reproducción... (Sin descargar aún)',
   'videos_found_so_far': 'Videos encontrados hasta ahora',
   'total_videos': 'Total de videos',
   'playlist_partial_fetch': 'Lista de reproducción parcialmente obtenida',
-  'will_download_available': 'Se descargarán los videos encontrados hasta ahora.',
+  'will_download_available':
+      'Se descargarán los videos encontrados hasta ahora.',
   'continue_anyway': 'Continuar de todas formas',
-  'playlist_partial_fetch_desc': 'La lista de reproducción es muy grande, se descargarán los videos encontrados hasta ahora.',
+  'playlist_partial_fetch_desc':
+      'La lista de reproducción es muy grande, se descargarán los videos encontrados hasta ahora.',
   'download_audio': 'Descargar Audio',
   'processing_audio': 'Procesando audio...',
   'downloading': 'Descargando...',
@@ -204,7 +230,8 @@ const Map<String, String> appLocalizationsEs = {
   'videos_found': 'videos encontrados',
   'download_complete_playlist': 'Descargar',
   'large_playlist_confirmation': 'Lista de reproducción muy grande detectada',
-  'large_playlist_confirmation_desc': 'La lista de reproducción es muy grande, se descargarán los siguientes videos',
+  'large_playlist_confirmation_desc':
+      'La lista de reproducción es muy grande, se descargarán los siguientes videos',
   'video_of': 'Video',
   'of': 'de',
   'downloaded': 'Descargados',
@@ -213,49 +240,64 @@ const Map<String, String> appLocalizationsEs = {
   'download_method': 'Descarga:',
   'audio_processing': 'Procesar audio:',
   'folder_not_selected': 'Carpeta no seleccionada',
-  'folder_not_selected_desc': 'Debes seleccionar una carpeta antes de descargar el audio.',
+  'folder_not_selected_desc':
+      'Debes seleccionar una carpeta antes de descargar el audio.',
   'download_accept': 'Aceptar',
   'video_unavailable': 'Video no disponible',
-  'video_unavailable_desc': 'El video no está disponible. Puede haber sido eliminado, es privado o está restringido por YouTube.',
+  'video_unavailable_desc':
+      'El video no está disponible. Puede haber sido eliminado, es privado o está restringido por YouTube.',
   'download_failed_title': 'Descarga fallida',
   'download_failed_desc': 'Ocurrió un error, intentalo de nuevo.',
-  'download_failed_desc_2': 'Ocurrió un error, intentalo de nuevo. Si el problema persiste, es posible que el video no esté disponible por restricciones de YouTube.',
+  'download_failed_desc_2':
+      'Ocurrió un error, intentalo de nuevo. Si el problema persiste, es posible que el video no esté disponible por restricciones de YouTube.',
   'playlist_error': 'Error al obtener lista de reproducción',
-  'playlist_error_desc': 'No se pudo obtener la información de la lista de reproducción',
+  'playlist_error_desc':
+      'No se pudo obtener la información de la lista de reproducción',
   'playlist_completed': 'Lista de reproducción completada',
   'playlist_completed_desc': 'Se descargaron',
   'playlist_error_download': 'Error en lista de reproducción',
   'playlist_error_download_desc': 'Error al descargar la lista de reproducción',
   'recommend_seal': '¿Quieres más opciones?',
-  'recommend_seal_desc': 'Te recomendamos la app gratuita Seal para descargar música y videos de muchas fuentes.',
+  'recommend_seal_desc':
+      'Te recomendamos la app gratuita Seal para descargar música y videos de muchas fuentes.',
   'seal_github': '¿Quieres el repositorio de GitHub de Seal?',
   'open': 'Abrir',
   'could_not_open_browser': 'No se pudo abrir el navegador',
   'what_means_each_option': '¿Qué significa cada opción?',
   'download_method_title': 'Método de descarga:',
-  'download_method_desc': '• Explode: Usa la librería youtube_explode_dart para obtener streams y descargar el audio de YouTube.\n• Directo: Descarga el audio directamente desde el streams proporcionado por youtube_explode_dart.\n\nAmbos métodos funcionan para videos individuales y listas de reproducción.',
+  'download_method_desc':
+      '• Explode: Usa la librería youtube_explode_dart para obtener streams y descargar el audio de YouTube.\n• Directo: Descarga el audio directamente desde el streams proporcionado por youtube_explode_dart.\n\nAmbos métodos funcionan para videos individuales y listas de reproducción.',
   'audio_processing_title': 'Procesar audio:',
-  'audio_processing_desc': '• FFmpeg: Convierte y agrega metadatos usando FFmpeg. Permite mayor compatibilidad y calidad, pero requiere más recursos.\n• AudioTags: Solo agrega metadatos usando la librería audiotags. Más rápido, pero menos flexible.',
+  'audio_processing_desc':
+      '• FFmpeg: Convierte y agrega metadatos usando FFmpeg. Permite mayor compatibilidad y calidad, pero requiere más recursos.\n• AudioTags: Solo agrega metadatos usando la librería audiotags. Más rápido, pero menos flexible.',
   'download_understood_2': 'Entendido',
   'download_info_title': 'Información',
-  'download_info_desc': 'Esta función descarga el audio de videos individuales y listas de reproducción completas de YouTube o YouTube Music.',
-  'download_works_with': 'Funciona con:\n• Videos individuales\n• Listas de reproducción públicas (Podría ser lento)',
-  'download_not_works_with': 'No funciona con videos privados ni contenido protegido por derechos de autor.',
+  'download_info_desc':
+      'Esta función descarga el audio de videos individuales y listas de reproducción completas de YouTube o YouTube Music.',
+  'download_works_with':
+      'Funciona con:\n• Videos individuales\n• Listas de reproducción públicas (Podría ser lento)',
+  'download_not_works_with':
+      'No funciona con videos privados ni contenido protegido por derechos de autor.',
   'download_may_fail': 'La descarga puede fallar por bloqueos de YouTube.',
   'grant_file_permissions': '¿Otorgar permisos de archivos?',
-  'grant_file_permissions_desc': 'Esta función NO es necesaria para la mayoría de usuarios.\n\nÚsala solo si tienes problemas al procesar el audio o guardar archivos.\n\n¿Quieres continuar y otorgar permisos de acceso a todos los archivos?',
+  'grant_file_permissions_desc':
+      'Esta función NO es necesaria para la mayoría de usuarios.\n\nÚsala solo si tienes problemas al procesar el audio o guardar archivos.\n\n¿Quieres continuar y otorgar permisos de acceso a todos los archivos?',
   'grant_permissions': 'Otorgar permisos',
   'permission_granted_already': 'Permiso concedido',
   'permission_granted_already_desc': 'Ya tienes acceso a todos los archivos.',
   'not_necessary': 'No necesario',
-  'not_necessary_desc': 'No necesitas otorgar este permiso en tu versión de Android.',
+  'not_necessary_desc':
+      'No necesitas otorgar este permiso en tu versión de Android.',
   'android_only': 'Solo Android',
   'android_only_desc': 'Esta función solo aplica para Android.',
-  'android_9_or_lower': 'En Android 9 o inferior se usará la carpeta Música por defecto.',
+  'android_9_or_lower':
+      'En Android 9 o inferior se usará la carpeta Música por defecto.',
   'file_in_use': 'Archivo en reproducción',
-  'file_in_use_desc': 'No se puede sobrescribir el archivo porque está en reproducción. Por favor, detén la reproducción antes de descargar de nuevo.',
+  'file_in_use_desc':
+      'No se puede sobrescribir el archivo porque está en reproducción. Por favor, detén la reproducción antes de descargar de nuevo.',
   'audio_processing_error': 'Error al procesar audio',
-  'audio_processing_error_desc': 'Error al procesar el audio, intenta usar otra carpeta.',
+  'audio_processing_error_desc':
+      'Error al procesar el audio, intenta usar otra carpeta.',
   'metadata_error': 'Error al escribir metadatos en el auido',
   'mp3_exists_error': 'El archivo MP3 ya existe y no se pudo eliminar.',
   'metadata_write_error': 'Error al escribir metadatos',
@@ -268,9 +310,10 @@ const Map<String, String> appLocalizationsEs = {
   'no_audio_available_desc': 'No se pudo obtener el stream de audio.',
   'invalid_url': 'URL inválida',
   'want_more_options': '¿Quieres más opciones?',
-  'seal_recommendation': 'Te recomendamos la app gratuita Seal para descargar música y videos de muchas fuentes.\n\n¿Quieres el repositorio de GitHub de Seal?',
+  'seal_recommendation':
+      'Te recomendamos la app gratuita Seal para descargar música y videos de muchas fuentes.\n\n¿Quieres el repositorio de GitHub de Seal?',
   'browser_open_error': 'No se pudo abrir el navegador',
-  
+
   // Home screen
   'recent': 'Recientes',
   'playlists': 'Listas de reproducción',
@@ -280,7 +323,8 @@ const Map<String, String> appLocalizationsEs = {
   'quick_access_songs': 'acceso directos',
   'recent_songs_title': 'canciones recientes',
   'favorites_title': 'me gusta',
-  'confirm_remove_from_playlist': '¿Estás seguro de que deseas eliminar esta canción de la lista de reproducción?',
+  'confirm_remove_from_playlist':
+      '¿Estás seguro de que deseas eliminar esta canción de la lista de reproducción?',
   'recent_songs': 'Canciones recientes',
   'no_recent_songs': 'No hay canciones recientes.',
   'new_version_available': '¡Nueva versión',
@@ -301,10 +345,13 @@ const Map<String, String> appLocalizationsEs = {
   'save': 'Guardar',
   'delete_playlist': 'Eliminar lista de reproducción',
   'no_songs_in_playlist': 'No hay canciones en esta lista de reproducción',
-  'delete_playlist_confirm': '¿Seguro que deseas eliminar esta lista de reproducción?',
+  'delete_playlist_confirm':
+      '¿Seguro que deseas eliminar esta lista de reproducción?',
   'could_not_get_video': 'No se pudo obtener el video.',
-  'no_videos_in_playlist': 'No se encontraron videos en la lista de reproducción',
-  'could_not_extract_playlist': 'No se pudo extraer el ID de la lista de reproducción',
+  'no_videos_in_playlist':
+      'No se encontraron videos en la lista de reproducción',
+  'could_not_extract_playlist':
+      'No se pudo extraer el ID de la lista de reproducción',
 
   // Player screen
   'share_audio_file': 'Compartir archivo de audio',
@@ -336,8 +383,9 @@ const Map<String, String> appLocalizationsEs = {
   'repeat': 'Repetir',
   'song_not_found': 'No se encontró la canción original',
   'save_to_playlist': 'Guardar en lista de reproducción',
-  'no_playlists_yet': 'No tienes listas de reproducción aún.\nCrea una nueva abajo.',
-  
+  'no_playlists_yet':
+      'No tienes listas de reproducción aún.\nCrea una nueva abajo.',
+
   // OTA Update screen
   'checking_update': 'Buscando actualización...',
   'no_updates_available': 'No hay actualizaciones disponibles.',
@@ -351,7 +399,7 @@ const Map<String, String> appLocalizationsEs = {
   'check_for_update': 'Buscar actualización',
   'new_update_available': '¡Nueva actualización disponible!',
   'status': 'Estado',
-  
+
   // Search suggestions
   'suggestions': 'Sugerencias',
   'recent_searches': 'Búsquedas recientes',
@@ -359,12 +407,14 @@ const Map<String, String> appLocalizationsEs = {
   'clear_history': 'Limpiar historial',
   'no_recent_searches': 'No hay búsquedas recientes',
   'no_folders_with_songs': 'No se encontraron carpetas con canciones.',
-  'no_internet_connection': 'Sin conexión a internet. Por favor, verifica tu conexión e inténtalo de nuevo.',
-  'no_internet_retry': 'No hay conexión a internet, por favor, verifica tu conexión y vuelve a intentarlo.',
+  'no_internet_connection':
+      'Sin conexión a internet. Por favor, verifica tu conexión e inténtalo de nuevo.',
+  'no_internet_retry':
+      'No hay conexión a internet, por favor, verifica tu conexión y vuelve a intentarlo.',
   'pause_preview': 'Pausar preview',
   'play_preview': 'Escuchar preview',
   'download_selected': 'Descargar seleccionados',
   'selected': 'seleccionados',
   'ignore_file': 'Ignorar archivo',
   'unignore_file': 'Dejar de ignorar archivo',
-}; 
+};

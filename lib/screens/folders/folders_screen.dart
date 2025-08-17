@@ -24,8 +24,9 @@ enum OrdenCarpetas {
   invertido,
   ultimoAgregado,
   fechaEdicionAsc, // Más antiguas primero
-  fechaEdicionDesc // Más recientes primero
+  fechaEdicionDesc, // Más recientes primero
 }
+
 OrdenCarpetas _orden = OrdenCarpetas.normal;
 
 class FoldersScreen extends StatefulWidget {
@@ -48,18 +49,25 @@ class _FoldersScreenState extends State<FoldersScreen>
   Map<String, String> folderDisplayNames = {};
   String? carpetaSeleccionada;
   List<SongModel> _filteredSongs = [];
-  List<SongModel> _displaySongs = []; // Canciones que se muestran en la UI (filtradas por búsqueda)
+  List<SongModel> _displaySongs =
+      []; // Canciones que se muestran en la UI (filtradas por búsqueda)
   List<SongModel> _originalSongs = []; // Lista original para restaurar orden
 
   Timer? _debounce;
   Timer? _playingDebounce;
+  Timer? _mediaItemDebounce;
   final ValueNotifier<bool> _isPlayingNotifier = ValueNotifier<bool>(false);
+  final ValueNotifier<MediaItem?> _currentMediaItemNotifier =
+      ValueNotifier<MediaItem?>(null);
+  final ValueNotifier<MediaItem?> _immediateMediaItemNotifier =
+      ValueNotifier<MediaItem?>(null);
 
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
+  final ScrollController _scrollController = ScrollController();
 
   double _lastBottomInset = 0.0;
-  
+
   bool _isLoading = true;
 
   static const String _orderPrefsKey = 'folders_screen_order_filter';
@@ -123,8 +131,136 @@ class _FoldersScreenState extends State<FoldersScreen>
     return current.contains(songPath);
   }
 
-  void _onFoldersShouldReload() {
-    cargarCanciones(forceIndex: false);
+  void _onFoldersShouldReload() async {
+    // Siempre sincronizar el índice de carpetas en background
+    await _sincronizarMapaCarpetas();
+
+    // Si estamos dentro de una carpeta, actualizar solo esa carpeta sin salir
+    if (carpetaSeleccionada != null) {
+      await _actualizarCarpetaActual();
+    } else {
+      // Si estamos en la vista general, recargar para mostrar cambios
+      cargarCanciones(forceIndex: false);
+    }
+  }
+
+  /// Sincroniza el mapa de carpetas con archivos nuevos/eliminados en background
+  Future<void> _sincronizarMapaCarpetas() async {
+    try {
+      // Sincronizar base de datos con archivos nuevos/eliminados
+      await SongsIndexDB().syncDatabase();
+
+      // Obtener todas las carpetas actualizadas
+      final folders = await SongsIndexDB().getFolders();
+      final Map<String, List<String>> nuevoMapa = {};
+      final Map<String, String> nuevosDisplayNames = {};
+
+      for (final folder in folders) {
+        final paths = await SongsIndexDB().getSongsFromFolder(folder);
+        if (paths.isNotEmpty) {
+          nuevoMapa[folder] = paths;
+          // Obtener el nombre original de la carpeta sin normalizar
+          final originalFolderName = _getOriginalFolderName(folder);
+          nuevosDisplayNames[folder] = originalFolderName;
+        }
+      }
+
+      // Actualizar los mapas sin setState (background update)
+      songPathsByFolder = nuevoMapa;
+      folderDisplayNames = nuevosDisplayNames;
+    } catch (e) {
+      // Si hay error en la sincronización, no hacer nada crítico
+      // El método que llame a este puede hacer fallback
+    }
+  }
+
+  /// Actualiza solo la carpeta actual sin salir de ella manteniendo la posición
+  Future<void> _actualizarCarpetaActual() async {
+    if (carpetaSeleccionada == null) return;
+
+    // Guardar el estado actual incluyendo posición de scroll
+    final searchQuery = _searchController.text;
+    final wasSelecting = _isSelecting;
+    final selectedPaths = Set<String>.from(_selectedSongPaths);
+    final scrollPosition = _scrollController.hasClients
+        ? _scrollController.offset
+        : 0.0;
+
+    // Mostrar loading solo si no hay canciones (evita parpadeo)
+    if (_displaySongs.isEmpty) {
+      setState(() {
+        _isLoading = true;
+      });
+    }
+
+    try {
+      // Usar las rutas ya actualizadas del mapa (sincronizado previamente)
+      final updatedPaths = songPathsByFolder[carpetaSeleccionada!] ?? [];
+
+      // Cargar los objetos SongModel completos para la carpeta actual
+      final allSongs = await _audioQuery.querySongs();
+      final songsInFolder = allSongs
+          .where((s) => updatedPaths.contains(s.data))
+          .toList();
+
+      // Actualizar las listas de canciones sin setState para evitar rebuild
+      _originalSongs = songsInFolder;
+
+      // Aplicar ordenamiento actual
+      await _aplicarOrdenamiento(_originalSongs);
+      _filteredSongs = List<SongModel>.from(_originalSongs);
+
+      // Restaurar el estado de búsqueda si había texto
+      if (searchQuery.isNotEmpty) {
+        _searchController.text = searchQuery;
+        await _onSearchChanged();
+      } else {
+        _displaySongs = List<SongModel>.from(_filteredSongs);
+      }
+
+      // Restaurar selección múltiple si estaba activa
+      if (wasSelecting) {
+        _isSelecting = true;
+        // Mantener solo las canciones seleccionadas que aún existen
+        _selectedSongPaths.clear();
+        _selectedSongPaths.addAll(
+          selectedPaths.where(
+            (path) => _displaySongs.any((song) => song.data == path),
+          ),
+        );
+        // Si no queda ninguna canción seleccionada, salir del modo selección
+        if (_selectedSongPaths.isEmpty) {
+          _isSelecting = false;
+        }
+      }
+
+      // Actualizar UI con setState mínimo
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+
+        // Restaurar posición de scroll después del rebuild
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (_scrollController.hasClients && scrollPosition > 0.0) {
+            _scrollController.animateTo(
+              scrollPosition,
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeOut,
+            );
+          }
+        });
+      }
+
+      // Precargar carátulas de las canciones
+      unawaited(_preloadArtworksForSongs(songsInFolder));
+    } catch (e) {
+      // En caso de error, fallback al comportamiento original
+      if (mounted) {
+        cargarCanciones(forceIndex: false);
+      }
+      return;
+    }
   }
 
   @override
@@ -133,7 +269,7 @@ class _FoldersScreenState extends State<FoldersScreen>
     WidgetsBinding.instance.addObserver(this);
     _loadOrderFilter().then((_) => cargarCanciones());
     foldersShouldReload.addListener(_onFoldersShouldReload);
-    
+
     // Escuchar cambios en el estado de reproducción con debounce
     audioHandler?.playbackState.listen((state) {
       _playingDebounce?.cancel();
@@ -143,12 +279,43 @@ class _FoldersScreenState extends State<FoldersScreen>
         }
       });
     });
+
+    // Inicializar con el valor actual si ya hay algo reproduciéndose
+    if (audioHandler?.mediaItem.valueOrNull != null) {
+      _immediateMediaItemNotifier.value = audioHandler!.mediaItem.valueOrNull;
+      _currentMediaItemNotifier.value = audioHandler!.mediaItem.valueOrNull;
+    }
+
+    // Inicializar el estado de reproducción actual
+    if (audioHandler?.playbackState.valueOrNull != null) {
+      _isPlayingNotifier.value =
+          audioHandler!.playbackState.valueOrNull!.playing;
+    }
+
+    // Escuchar cambios en el MediaItem inmediatamente (para detección de canción actual)
+    audioHandler?.mediaItem.listen((mediaItem) {
+      if (mounted) {
+        _immediateMediaItemNotifier.value = mediaItem;
+      }
+    });
+
+    // Escuchar cambios en el MediaItem con debounce (para espaciado y elementos no críticos)
+    audioHandler?.mediaItem.listen((mediaItem) {
+      _mediaItemDebounce?.cancel();
+      _mediaItemDebounce = Timer(const Duration(milliseconds: 400), () {
+        if (mounted) {
+          _currentMediaItemNotifier.value = mediaItem;
+        }
+      });
+    });
   }
 
   Future<void> _loadOrderFilter() async {
     final prefs = await SharedPreferences.getInstance();
     final int? savedIndex = prefs.getInt(_orderPrefsKey);
-    if (savedIndex != null && savedIndex >= 0 && savedIndex < OrdenCarpetas.values.length) {
+    if (savedIndex != null &&
+        savedIndex >= 0 &&
+        savedIndex < OrdenCarpetas.values.length) {
       setState(() {
         _orden = OrdenCarpetas.values[savedIndex];
       });
@@ -166,7 +333,8 @@ class _FoldersScreenState extends State<FoldersScreen>
       _isLoading = true;
     });
     final prefs = await SharedPreferences.getInstance();
-    final shouldIndex = forceIndex || (prefs.getBool('index_songs_on_startup') ?? true);
+    final shouldIndex =
+        forceIndex || (prefs.getBool('index_songs_on_startup') ?? true);
     if (shouldIndex) {
       await SongsIndexDB().indexAllSongs();
     }
@@ -198,16 +366,16 @@ class _FoldersScreenState extends State<FoldersScreen>
   String _getOriginalFolderName(String normalizedFolderPath) {
     // Revertir la normalización para obtener el nombre original
     var originalPath = normalizedFolderPath;
-    
+
     // Convertir de vuelta a la ruta original (sin minúsculas)
     final segments = originalPath.split(RegExp(r'[\\/]'));
     final folderName = segments.last;
-    
+
     // Capitalizar la primera letra para que se vea mejor
     if (folderName.isNotEmpty) {
       return folderName[0].toUpperCase() + folderName.substring(1);
     }
-    
+
     return folderName;
   }
 
@@ -229,7 +397,9 @@ class _FoldersScreenState extends State<FoldersScreen>
               title: TranslatedText('add_to_queue'),
               onTap: () async {
                 Navigator.of(context).pop();
-                await (audioHandler as MyAudioHandler).addSongsToQueueEnd([song]);
+                await (audioHandler as MyAudioHandler).addSongsToQueueEnd([
+                  song,
+                ]);
               },
             ),
             ListTile(
@@ -260,8 +430,12 @@ class _FoldersScreenState extends State<FoldersScreen>
               },
             ),
             ListTile(
-              leading: Icon(isPinned ? Icons.push_pin : Icons.push_pin_outlined),
-              title: TranslatedText(isPinned ? 'unpin_shortcut' : 'pin_shortcut'),
+              leading: Icon(
+                isPinned ? Icons.push_pin : Icons.push_pin_outlined,
+              ),
+              title: TranslatedText(
+                isPinned ? 'unpin_shortcut' : 'pin_shortcut',
+              ),
               onTap: () async {
                 Navigator.of(context).pop();
                 if (isPinned) {
@@ -274,8 +448,12 @@ class _FoldersScreenState extends State<FoldersScreen>
               },
             ),
             ListTile(
-              leading: Icon(isIgnored ? Icons.visibility : Icons.visibility_off),
-              title: TranslatedText(isIgnored ? 'unignore_file' : 'ignore_file'),
+              leading: Icon(
+                isIgnored ? Icons.visibility : Icons.visibility_off,
+              ),
+              title: TranslatedText(
+                isIgnored ? 'unignore_file' : 'ignore_file',
+              ),
               onTap: () async {
                 Navigator.of(context).pop();
                 if (isIgnored) {
@@ -339,18 +517,19 @@ class _FoldersScreenState extends State<FoldersScreen>
 
   // Para reproducir y abrir PlayerScreen:
   Future<void> _playSongAndOpenPlayer(String path) async {
-    
     final ignored = await getIgnoredSongs();
-    final filtered = _filteredSongs.where((s) => !ignored.contains(s.data)).toList();
+    final filtered = _filteredSongs
+        .where((s) => !ignored.contains(s.data))
+        .toList();
     final index = filtered.indexWhere((s) => s.data == path);
     if (index != -1) {
       final song = filtered[index];
-      
+
       // Obtener la carátula para la pantalla del reproductor
       final songId = song.id;
       final songPath = song.data;
       final artUri = await getOrCacheArtwork(songId, songPath);
-      
+
       // Crear el MediaItem para la pantalla del reproductor
       final mediaItem = MediaItem(
         id: song.data,
@@ -360,40 +539,37 @@ class _FoldersScreenState extends State<FoldersScreen>
             ? Duration(milliseconds: song.duration!)
             : null,
         artUri: artUri,
-        extras: {
-          'songId': song.id,
-          'albumId': song.albumId,
-          'data': song.data,
-        },
+        extras: {'songId': song.id, 'albumId': song.albumId, 'data': song.data},
       );
-      
+
       // Navegar a la pantalla del reproductor primero
       if (!mounted) return;
       Navigator.of(context).push(
         PageRouteBuilder(
           pageBuilder: (context, animation, secondaryAnimation) =>
-            FullPlayerScreen(
-              initialMediaItem: mediaItem,
-            ),
+              FullPlayerScreen(initialMediaItem: mediaItem),
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
             return SlideTransition(
-              position: Tween<Offset>(
-                begin: const Offset(0, 1),
-                end: Offset.zero,
-              ).animate(CurvedAnimation(
-                parent: animation,
-                curve: Curves.easeOutCubic,
-              )),
+              position:
+                  Tween<Offset>(
+                    begin: const Offset(0, 1),
+                    end: Offset.zero,
+                  ).animate(
+                    CurvedAnimation(
+                      parent: animation,
+                      curve: Curves.easeOutCubic,
+                    ),
+                  ),
               child: child,
             );
           },
           transitionDuration: const Duration(milliseconds: 350),
         ),
       );
-      
+
       // Activar indicador de carga
       playLoadingNotifier.value = true;
-      
+
       // Reproducir la canción después de un breve delay para que se abra la pantalla
       Future.delayed(const Duration(milliseconds: 400), () {
         if (mounted) {
@@ -410,7 +586,9 @@ class _FoldersScreenState extends State<FoldersScreen>
   // Para reproducir:
   Future<void> _playSong(String path) async {
     final ignored = await getIgnoredSongs();
-    final filtered = _filteredSongs.where((s) => !ignored.contains(s.data)).toList();
+    final filtered = _filteredSongs
+        .where((s) => !ignored.contains(s.data))
+        .toList();
     final index = filtered.indexWhere((s) => s.data == path);
     if (index != -1) {
       final handler = audioHandler as MyAudioHandler;
@@ -426,8 +604,12 @@ class _FoldersScreenState extends State<FoldersScreen>
       await prefs.setString('last_queue_source', origen);
       // Comprobar si la cola actual es igual a la nueva (por ids y orden)
       final currentQueue = handler.queue.value;
-      final isSameQueue = currentQueue.length == filtered.length &&
-        List.generate(filtered.length, (i) => currentQueue[i].id == filtered[i].data).every((x) => x);
+      final isSameQueue =
+          currentQueue.length == filtered.length &&
+          List.generate(
+            filtered.length,
+            (i) => currentQueue[i].id == filtered[i].data,
+          ).every((x) => x);
 
       if (isSameQueue) {
         await handler.skipToQueueItem(index);
@@ -438,10 +620,10 @@ class _FoldersScreenState extends State<FoldersScreen>
       // Limpiar la cola y el MediaItem antes de mostrar la nueva canción
       handler.queue.add([]);
       handler.mediaItem.add(null);
-      
+
       // Crear MediaItem temporal para mostrar el overlay inmediatamente
       final song = filtered[index];
-      
+
       // Precargar la carátula antes de crear el MediaItem temporal
       Uri? cachedArtUri;
       try {
@@ -449,7 +631,7 @@ class _FoldersScreenState extends State<FoldersScreen>
       } catch (e) {
         // Si falla, continuar sin carátula
       }
-      
+
       final tempMediaItem = MediaItem(
         id: song.data,
         album: song.album ?? '',
@@ -468,10 +650,7 @@ class _FoldersScreenState extends State<FoldersScreen>
       );
       handler.mediaItem.add(tempMediaItem);
 
-      await handler.setQueueFromSongs(
-        filtered,
-        initialIndex: index,
-      );
+      await handler.setQueueFromSongs(filtered, initialIndex: index);
       await handler.play();
     }
   }
@@ -484,7 +663,8 @@ class _FoldersScreenState extends State<FoldersScreen>
         try {
           final handler = audioHandler as MyAudioHandler;
           final current = handler.mediaItem.valueOrNull;
-          final isCurrent = current?.id == song.data || current?.extras?['data'] == song.data;
+          final isCurrent =
+              current?.id == song.data || current?.extras?['data'] == song.data;
           if (isCurrent) {
             // Quitar de la cola priorizando saltar a la siguiente
             await handler.removeSongByPath(song.data);
@@ -533,8 +713,9 @@ class _FoldersScreenState extends State<FoldersScreen>
             _filteredSongs.removeWhere((s) => s.data == song.data);
             _displaySongs.removeWhere((s) => s.data == song.data);
             // También actualiza el mapa de paths
-            songPathsByFolder[carpetaSeleccionada!]
-                ?.removeWhere((path) => path == song.data);
+            songPathsByFolder[carpetaSeleccionada!]?.removeWhere(
+              (path) => path == song.data,
+            );
           });
         }
 
@@ -568,23 +749,24 @@ class _FoldersScreenState extends State<FoldersScreen>
     final artist = (song.artist == null || song.artist!.trim().isEmpty)
         ? LocaleProvider.tr('unknown_artist')
         : song.artist!;
-    
+
     if (song.duration != null && song.duration! > 0) {
       final duration = Duration(milliseconds: song.duration!);
       final hours = duration.inHours;
       final minutes = duration.inMinutes % 60;
       final seconds = (duration.inSeconds % 60).toString().padLeft(2, '0');
-      
+
       String durationString;
       if (hours > 0) {
-        durationString = '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:$seconds';
+        durationString =
+            '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:$seconds';
       } else {
         durationString = '$minutes:$seconds';
       }
-      
+
       return '$artist • $durationString';
     }
-    
+
     return artist;
   }
 
@@ -616,7 +798,7 @@ class _FoldersScreenState extends State<FoldersScreen>
       });
       return;
     }
-    
+
     // Precargar la carátula antes de mostrar el overlay
     unawaited(_preloadArtworkForSong(song));
     _playSongAndOpenPlayer(song.data);
@@ -636,7 +818,10 @@ class _FoldersScreenState extends State<FoldersScreen>
   }
 
   // Añadir función auxiliar para ordenar por fecha de edición
-  Future<void> _sortByFileDate(List<SongModel> lista, {required bool ascending}) async {
+  Future<void> _sortByFileDate(
+    List<SongModel> lista, {
+    required bool ascending,
+  }) async {
     final dates = <String, DateTime>{};
     for (final song in lista) {
       try {
@@ -713,9 +898,13 @@ class _FoldersScreenState extends State<FoldersScreen>
     WidgetsBinding.instance.removeObserver(this);
     _debounce?.cancel();
     _playingDebounce?.cancel();
+    _mediaItemDebounce?.cancel();
     _isPlayingNotifier.dispose();
+    _currentMediaItemNotifier.dispose();
+    _immediateMediaItemNotifier.dispose();
     _searchController.dispose();
     _searchFocusNode.dispose();
+    _scrollController.dispose();
     foldersShouldReload.removeListener(_onFoldersShouldReload);
     super.dispose();
   }
@@ -743,13 +932,22 @@ class _FoldersScreenState extends State<FoldersScreen>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.folder_off, 
-              size: 48, 
-              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6)),
+              Icon(
+                Icons.folder_off,
+                size: 48,
+                color: Theme.of(
+                  context,
+                ).colorScheme.onSurface.withValues(alpha: 0.6),
+              ),
               const SizedBox(height: 16),
               TranslatedText(
                 'no_folders_with_songs',
-                style: TextStyle(fontSize: 14, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6)),
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withValues(alpha: 0.6),
+                ),
               ),
             ],
           ),
@@ -779,10 +977,9 @@ class _FoldersScreenState extends State<FoldersScreen>
               ),
             ],
           ),
-          body: StreamBuilder<MediaItem?>(
-            stream: audioHandler?.mediaItem,
-            builder: (context, currentSnapshot) {
-              final current = currentSnapshot.data;
+          body: ValueListenableBuilder<MediaItem?>(
+            valueListenable: _currentMediaItemNotifier,
+            builder: (context, current, child) {
               final space = current != null ? 100.0 : 0.0;
               return Padding(
                 padding: EdgeInsets.only(bottom: space),
@@ -791,9 +988,10 @@ class _FoldersScreenState extends State<FoldersScreen>
                   itemBuilder: (context, i) {
                     final sortedEntries = songPathsByFolder.entries.toList()
                       ..sort(
-                        (a, b) => folderDisplayNames[a.key]!
-                            .toLowerCase()
-                            .compareTo(folderDisplayNames[b.key]!.toLowerCase()),
+                        (a, b) =>
+                            folderDisplayNames[a.key]!.toLowerCase().compareTo(
+                              folderDisplayNames[b.key]!.toLowerCase(),
+                            ),
                       );
                     final entry = sortedEntries[i];
                     final nombre = folderDisplayNames[entry.key]!;
@@ -806,7 +1004,9 @@ class _FoldersScreenState extends State<FoldersScreen>
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      subtitle: Text('${canciones.length} ${LocaleProvider.tr('songs')}'),
+                      subtitle: Text(
+                        '${canciones.length} ${LocaleProvider.tr('songs')}',
+                      ),
                       onTap: () async {
                         await _loadSongsForFolder(entry);
                       },
@@ -817,30 +1017,39 @@ class _FoldersScreenState extends State<FoldersScreen>
                               context: context,
                               builder: (context) => AlertDialog(
                                 title: TranslatedText('delete_folder'),
-                                content: TranslatedText('delete_folder_confirm'),
+                                content: TranslatedText(
+                                  'delete_folder_confirm',
+                                ),
                                 actions: [
                                   TextButton(
-                                    onPressed: () => Navigator.of(context).pop(false),
+                                    onPressed: () =>
+                                        Navigator.of(context).pop(false),
                                     child: TranslatedText('cancel'),
                                   ),
                                   TextButton(
-                                    onPressed: () => Navigator.of(context).pop(true),
+                                    onPressed: () =>
+                                        Navigator.of(context).pop(true),
                                     child: TranslatedText('delete'),
                                   ),
                                 ],
                               ),
                             );
                             if (confirmed == true) {
-                              final success = await _deleteFolderAndSongs(entry.key);
+                              final success = await _deleteFolderAndSongs(
+                                entry.key,
+                              );
                               if (!success && context.mounted) {
                                 showDialog(
                                   context: context,
                                   builder: (context) => AlertDialog(
                                     title: TranslatedText('error'),
-                                    content: TranslatedText('could_not_delete_folder'),
+                                    content: TranslatedText(
+                                      'could_not_delete_folder',
+                                    ),
                                     actions: [
                                       TextButton(
-                                        onPressed: () => Navigator.of(context).pop(),
+                                        onPressed: () =>
+                                            Navigator.of(context).pop(),
                                         child: TranslatedText('ok'),
                                       ),
                                     ],
@@ -912,32 +1121,44 @@ class _FoldersScreenState extends State<FoldersScreen>
                     },
                   ),
             title: _isSelecting
-                ? Text('${_selectedSongPaths.length} ${LocaleProvider.tr('selected')}')
-                : Text(folderDisplayNames[carpetaSeleccionada] ?? LocaleProvider.tr('folders')),
+                ? Text(
+                    '${_selectedSongPaths.length} ${LocaleProvider.tr('selected')}',
+                  )
+                : Text(
+                    folderDisplayNames[carpetaSeleccionada] ??
+                        LocaleProvider.tr('folders'),
+                  ),
             actions: [
               if (_isSelecting) ...[
                 IconButton(
                   icon: const Icon(Icons.favorite_outline),
                   tooltip: LocaleProvider.tr('add_to_favorites'),
-                  onPressed: _selectedSongPaths.isEmpty ? null : () async {
-                    // Acción masiva: añadir a favoritos
-                    final selectedSongs = _displaySongs.where((s) => _selectedSongPaths.contains(s.data));
-                    for (final song in selectedSongs) {
-                      await _addToFavorites(song);
-                    }
-                    favoritesShouldReload.value = !favoritesShouldReload.value;
-                    setState(() {
-                      _isSelecting = false;
-                      _selectedSongPaths.clear();
-                    });
-                  },
+                  onPressed: _selectedSongPaths.isEmpty
+                      ? null
+                      : () async {
+                          // Acción masiva: añadir a favoritos
+                          final selectedSongs = _displaySongs.where(
+                            (s) => _selectedSongPaths.contains(s.data),
+                          );
+                          for (final song in selectedSongs) {
+                            await _addToFavorites(song);
+                          }
+                          favoritesShouldReload.value =
+                              !favoritesShouldReload.value;
+                          setState(() {
+                            _isSelecting = false;
+                            _selectedSongPaths.clear();
+                          });
+                        },
                 ),
                 IconButton(
                   icon: const Icon(Icons.playlist_add),
                   tooltip: LocaleProvider.tr('add_to_playlist'),
-                  onPressed: _selectedSongPaths.isEmpty ? null : () async {
-                    await _handleAddToPlaylistMassive(context);
-                  },
+                  onPressed: _selectedSongPaths.isEmpty
+                      ? null
+                      : () async {
+                          await _handleAddToPlaylistMassive(context);
+                        },
                 ),
                 IconButton(
                   icon: const Icon(Icons.select_all),
@@ -952,7 +1173,9 @@ class _FoldersScreenState extends State<FoldersScreen>
                         }
                       } else {
                         // Seleccionar todos
-                        _selectedSongPaths.addAll(_displaySongs.map((s) => s.data));
+                        _selectedSongPaths.addAll(
+                          _displaySongs.map((s) => s.data),
+                        );
                       }
                     });
                   },
@@ -1035,7 +1258,9 @@ class _FoldersScreenState extends State<FoldersScreen>
                         _searchFocusNode.unfocus();
                       },
                       decoration: InputDecoration(
-                        hintText: LocaleProvider.tr('search_by_title_or_artist'),
+                        hintText: LocaleProvider.tr(
+                          'search_by_title_or_artist',
+                        ),
                         prefixIcon: const Icon(Icons.search),
                         suffixIcon: _searchController.text.isNotEmpty
                             ? IconButton(
@@ -1058,13 +1283,13 @@ class _FoldersScreenState extends State<FoldersScreen>
               ),
             ),
           ),
-          body: StreamBuilder<MediaItem?>(
-            stream: audioHandler?.mediaItem,
-            builder: (context, currentSnapshot) {
+          body: ValueListenableBuilder<MediaItem?>(
+            valueListenable: _currentMediaItemNotifier,
+            builder: (context, debouncedMediaItem, child) {
               // Detectar si el tema AMOLED está activo
-              final isAmoledTheme = colorSchemeNotifier.value == AppColorScheme.amoled;
-              final current = currentSnapshot.data;
-              final space = current != null ? 100.0 : 0.0;
+              final isAmoledTheme =
+                  colorSchemeNotifier.value == AppColorScheme.amoled;
+              final space = debouncedMediaItem != null ? 100.0 : 0.0;
 
               return Padding(
                 padding: EdgeInsets.only(bottom: space),
@@ -1073,58 +1298,80 @@ class _FoldersScreenState extends State<FoldersScreen>
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.folder_off, 
-                            size: 48, 
-                            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6)),
+                            Icon(
+                              Icons.folder_off,
+                              size: 48,
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSurface.withValues(alpha: 0.6),
+                            ),
                             const SizedBox(height: 16),
                             TranslatedText(
                               'no_songs_in_folder',
-                              style: TextStyle(fontSize: 14, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6)),
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurface.withValues(alpha: 0.6),
+                              ),
                             ),
                           ],
                         ),
                       )
-                    : ListView.builder(
-                        itemCount: _displaySongs.length,
-                        itemBuilder: (context, i) {
-                          final song = _displaySongs[i];
-                          final path = song.data;
-                          final isCurrent = (current?.id != null && path.isNotEmpty && current!.id == path);
-                          final isSelected = _selectedSongPaths.contains(path);
-                          final isIgnoredFuture = isSongIgnored(path);
-                          return FutureBuilder<bool>(
-                            future: isIgnoredFuture,
-                            builder: (context, snapshot) {
-                              final isIgnored = snapshot.data ?? false;
-                              
-                              // Solo usar ValueListenableBuilder para la canción actual
-                              if (isCurrent) {
-                                return ValueListenableBuilder<bool>(
-                                  valueListenable: _isPlayingNotifier,
-                                  builder: (context, playing, child) {
+                    : ValueListenableBuilder<MediaItem?>(
+                        valueListenable: _immediateMediaItemNotifier,
+                        builder: (context, immediateMediaItem, child) {
+                          return ListView.builder(
+                            controller: _scrollController,
+                            itemCount: _displaySongs.length,
+                            itemBuilder: (context, i) {
+                              final song = _displaySongs[i];
+                              final path = song.data;
+                              final isCurrent =
+                                  (immediateMediaItem?.id != null &&
+                                  path.isNotEmpty &&
+                                  (immediateMediaItem!.id == path ||
+                                      immediateMediaItem.extras?['data'] ==
+                                          path));
+                              final isSelected = _selectedSongPaths.contains(
+                                path,
+                              );
+                              final isIgnoredFuture = isSongIgnored(path);
+                              return FutureBuilder<bool>(
+                                future: isIgnoredFuture,
+                                builder: (context, snapshot) {
+                                  final isIgnored = snapshot.data ?? false;
+
+                                  // Solo usar ValueListenableBuilder para la canción actual
+                                  if (isCurrent) {
+                                    return ValueListenableBuilder<bool>(
+                                      valueListenable: _isPlayingNotifier,
+                                      builder: (context, playing, child) {
+                                        return _buildOptimizedListTile(
+                                          context,
+                                          song,
+                                          isCurrent,
+                                          playing,
+                                          isAmoledTheme,
+                                          isIgnored,
+                                          isSelected,
+                                        );
+                                      },
+                                    );
+                                  } else {
+                                    // Para canciones que no están reproduciéndose, no usar StreamBuilder
                                     return _buildOptimizedListTile(
                                       context,
                                       song,
                                       isCurrent,
-                                      playing,
+                                      false, // No playing
                                       isAmoledTheme,
                                       isIgnored,
                                       isSelected,
                                     );
-                                  },
-                                );
-                              } else {
-                                // Para canciones que no están reproduciéndose, no usar StreamBuilder
-                                return _buildOptimizedListTile(
-                                  context,
-                                  song,
-                                  isCurrent,
-                                  false, // No playing
-                                  isAmoledTheme,
-                                  isIgnored,
-                                  isSelected,
-                                );
-                              }
+                                  }
+                                },
+                              );
                             },
                           );
                         },
@@ -1148,7 +1395,7 @@ class _FoldersScreenState extends State<FoldersScreen>
   ) {
     final path = song.data;
     final opacity = isIgnored ? 0.4 : 1.0;
-    
+
     return Opacity(
       opacity: opacity,
       child: ListTile(
@@ -1200,9 +1447,7 @@ class _FoldersScreenState extends State<FoldersScreen>
                   artworkWidth: 50,
                   keepOldArtwork: true,
                   nullArtworkWidget: Container(
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.surfaceContainer,
+                    color: Theme.of(context).colorScheme.surfaceContainer,
                     width: 50,
                     height: 50,
                     child: Icon(
@@ -1260,9 +1505,7 @@ class _FoldersScreenState extends State<FoldersScreen>
             ? IconButton(
                 icon: Icon(
                   isCurrent
-                      ? (playing
-                            ? Icons.pause
-                            : Icons.play_arrow)
+                      ? (playing ? Icons.pause : Icons.play_arrow)
                       : Icons.play_arrow,
                   color: isCurrent
                       ? Theme.of(context).colorScheme.primary
@@ -1283,16 +1526,18 @@ class _FoldersScreenState extends State<FoldersScreen>
             : null,
         selected: isCurrent,
         selectedTileColor: isAmoledTheme
-          ? Colors.white.withValues(alpha: 0.1)
-          : Theme.of(context).colorScheme.primaryContainer,
+            ? Colors.white.withValues(alpha: 0.1)
+            : Theme.of(context).colorScheme.primaryContainer,
       ),
     );
   }
 
   Future<void> _handleAddToPlaylistMassive(BuildContext context) async {
-    final playlists = await PlaylistsDB().getAllPlaylists(); // List<PlaylistModel>
+    final playlists = await PlaylistsDB()
+        .getAllPlaylists(); // List<PlaylistModel>
     if (!context.mounted) return;
-    final TextEditingController playlistNameController = TextEditingController();
+    final TextEditingController playlistNameController =
+        TextEditingController();
     final selectedPlaylistId = await showDialog<String>(
       context: context,
       builder: (context) {
@@ -1300,19 +1545,21 @@ class _FoldersScreenState extends State<FoldersScreen>
           builder: (context, setStateDialog) => SimpleDialog(
             title: TranslatedText('select_playlist'),
             children: [
-              if (playlists.isNotEmpty)
-                ...[
-                  for (final playlist in playlists)
-                    SimpleDialogOption(
-                      onPressed: () {
-                        Navigator.of(context).pop(playlist.id);
-                      },
-                      child: Text(playlist.name),
-                    ),
-                  const Divider(),
-                ],
+              if (playlists.isNotEmpty) ...[
+                for (final playlist in playlists)
+                  SimpleDialogOption(
+                    onPressed: () {
+                      Navigator.of(context).pop(playlist.id);
+                    },
+                    child: Text(playlist.name),
+                  ),
+                const Divider(),
+              ],
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 4,
+                ),
                 child: TextField(
                   controller: playlistNameController,
                   decoration: InputDecoration(
@@ -1329,13 +1576,20 @@ class _FoldersScreenState extends State<FoldersScreen>
                   if (name.isEmpty) return;
                   final id = await PlaylistsDB().createPlaylist(name);
                   setStateDialog(() {
-                    playlists.insert(0, hive_model.PlaylistModel(id: id, name: name, songPaths: []));
+                    playlists.insert(
+                      0,
+                      hive_model.PlaylistModel(
+                        id: id,
+                        name: name,
+                        songPaths: [],
+                      ),
+                    );
                   });
                   playlistNameController.clear();
-                  
+
                   // Notificar a la pantalla de inicio que debe actualizar las playlists
                   playlistsShouldReload.value = !playlistsShouldReload.value;
-                  
+
                   if (context.mounted) {
                     Navigator.of(context).pop(id);
                   }
@@ -1347,7 +1601,9 @@ class _FoldersScreenState extends State<FoldersScreen>
       },
     );
     if (selectedPlaylistId != null) {
-      final selectedSongs = _displaySongs.where((s) => _selectedSongPaths.contains(s.data));
+      final selectedSongs = _displaySongs.where(
+        (s) => _selectedSongPaths.contains(s.data),
+      );
       for (final song in selectedSongs) {
         await PlaylistsDB().addSongToPlaylist(selectedPlaylistId, song);
       }
@@ -1355,16 +1611,21 @@ class _FoldersScreenState extends State<FoldersScreen>
         _isSelecting = false;
         _selectedSongPaths.clear();
       });
-      
+
       // Notificar a la pantalla de inicio que debe actualizar las playlists
       playlistsShouldReload.value = !playlistsShouldReload.value;
     }
   }
 
-  Future<void> _handleAddToPlaylistSingle(BuildContext context, SongModel song) async {
-    final playlists = await PlaylistsDB().getAllPlaylists(); // List<PlaylistModel>
+  Future<void> _handleAddToPlaylistSingle(
+    BuildContext context,
+    SongModel song,
+  ) async {
+    final playlists = await PlaylistsDB()
+        .getAllPlaylists(); // List<PlaylistModel>
     if (!context.mounted) return;
-    final TextEditingController playlistNameController = TextEditingController();
+    final TextEditingController playlistNameController =
+        TextEditingController();
     final selectedPlaylistId = await showDialog<String>(
       context: context,
       builder: (context) {
@@ -1372,19 +1633,21 @@ class _FoldersScreenState extends State<FoldersScreen>
           builder: (context, setStateDialog) => SimpleDialog(
             title: TranslatedText('select_playlist'),
             children: [
-              if (playlists.isNotEmpty)
-                ...[
-                  for (final playlist in playlists)
-                    SimpleDialogOption(
-                      onPressed: () {
-                        Navigator.of(context).pop(playlist.id);
-                      },
-                      child: Text(playlist.name),
-                    ),
-                  const Divider(),
-                ],
+              if (playlists.isNotEmpty) ...[
+                for (final playlist in playlists)
+                  SimpleDialogOption(
+                    onPressed: () {
+                      Navigator.of(context).pop(playlist.id);
+                    },
+                    child: Text(playlist.name),
+                  ),
+                const Divider(),
+              ],
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 4,
+                ),
                 child: TextField(
                   controller: playlistNameController,
                   decoration: InputDecoration(
@@ -1401,13 +1664,20 @@ class _FoldersScreenState extends State<FoldersScreen>
                   if (name.isEmpty) return;
                   final id = await PlaylistsDB().createPlaylist(name);
                   setStateDialog(() {
-                    playlists.insert(0, hive_model.PlaylistModel(id: id, name: name, songPaths: []));
+                    playlists.insert(
+                      0,
+                      hive_model.PlaylistModel(
+                        id: id,
+                        name: name,
+                        songPaths: [],
+                      ),
+                    );
                   });
                   playlistNameController.clear();
-                  
+
                   // Notificar a la pantalla de inicio que debe actualizar las playlists
                   playlistsShouldReload.value = !playlistsShouldReload.value;
-                  
+
                   if (context.mounted) {
                     Navigator.of(context).pop(id);
                   }
@@ -1420,7 +1690,7 @@ class _FoldersScreenState extends State<FoldersScreen>
     );
     if (selectedPlaylistId != null) {
       await PlaylistsDB().addSongToPlaylist(selectedPlaylistId, song);
-      
+
       // Notificar a la pantalla de inicio que debe actualizar las playlists
       playlistsShouldReload.value = !playlistsShouldReload.value;
     }
@@ -1446,9 +1716,15 @@ class _FoldersScreenState extends State<FoldersScreen>
           }
         }
         // Limpiar por cada path
-        try { removeArtworkFromCache(path); } catch (_) {}
-        try { await FavoritesDB().removeFavorite(path); } catch (_) {}
-        try { await RecentsDB().removeRecent(path); } catch (_) {}
+        try {
+          removeArtworkFromCache(path);
+        } catch (_) {}
+        try {
+          await FavoritesDB().removeFavorite(path);
+        } catch (_) {}
+        try {
+          await RecentsDB().removeRecent(path);
+        } catch (_) {}
         try {
           if (await ShortcutsDB().isShortcut(path)) {
             await ShortcutsDB().removeShortcut(path);
@@ -1459,14 +1735,18 @@ class _FoldersScreenState extends State<FoldersScreen>
       try {
         final playlists = await PlaylistsDB().getAllPlaylists();
         for (final p in playlists) {
-          final toRemove = p.songPaths.where((sp) => songPaths.contains(sp)).toList();
+          final toRemove = p.songPaths
+              .where((sp) => songPaths.contains(sp))
+              .toList();
           for (final sp in toRemove) {
             await PlaylistsDB().removeSongFromPlaylist(p.id, sp);
           }
         }
       } catch (_) {}
       // Sincronizar índice
-      try { await SongsIndexDB().cleanNonExistentFiles(); } catch (_) {}
+      try {
+        await SongsIndexDB().cleanNonExistentFiles();
+      } catch (_) {}
       setState(() {
         songPathsByFolder.remove(folderKey);
         folderDisplayNames.remove(folderKey);
@@ -1497,9 +1777,28 @@ class _FoldersScreenState extends State<FoldersScreen>
       _displaySongs = [];
       _isLoading = true;
     });
-    // Cargar los objetos SongModel completos
+
+    // Sincronizar mapa de carpetas antes de cargar (por si hay canciones nuevas)
+    await _sincronizarMapaCarpetas();
+
+    // Usar las rutas actualizadas después de la sincronización
+    final updatedPaths = songPathsByFolder[entry.key] ?? entry.value;
+
+    // Actualizar los notifiers con los valores actuales del audioHandler
+    if (audioHandler?.mediaItem.valueOrNull != null) {
+      _immediateMediaItemNotifier.value = audioHandler!.mediaItem.valueOrNull;
+      _currentMediaItemNotifier.value = audioHandler!.mediaItem.valueOrNull;
+    }
+    if (audioHandler?.playbackState.valueOrNull != null) {
+      _isPlayingNotifier.value =
+          audioHandler!.playbackState.valueOrNull!.playing;
+    }
+
+    // Cargar los objetos SongModel completos con las rutas actualizadas
     final allSongs = await _audioQuery.querySongs();
-    final songsInFolder = allSongs.where((s) => entry.value.contains(s.data)).toList();
+    final songsInFolder = allSongs
+        .where((s) => updatedPaths.contains(s.data))
+        .toList();
     setState(() {
       _originalSongs = songsInFolder;
     });
@@ -1515,6 +1814,7 @@ class _FoldersScreenState extends State<FoldersScreen>
   bool canPopInternally() {
     return carpetaSeleccionada != null;
   }
+
   void handleInternalPop() {
     setState(() {
       carpetaSeleccionada = null;
