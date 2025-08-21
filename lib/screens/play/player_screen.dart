@@ -12,7 +12,9 @@ import 'package:music/utils/db/favorites_db.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 import 'package:music/utils/notifiers.dart';
 import 'package:music/utils/db/playlists_db.dart';
+import 'package:music/utils/db/shortcuts_db.dart';
 import 'package:music/utils/audio/synced_lyrics_service.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'dart:async';
 import 'package:scroll_to_index/scroll_to_index.dart';
@@ -74,6 +76,12 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
   DateTime _lastSeekTime = DateTime.fromMillisecondsSinceEpoch(0);
   final int _seekThrottleMs = 300;
   Duration? _lastKnownPosition;
+
+  // Estado para rastrear si la carátula se está cargando
+  final ValueNotifier<bool> _artworkLoadingNotifier = ValueNotifier<bool>(
+    false,
+  );
+  String? _lastArtworkSongId;
 
   late AnimationController _favController;
   late Animation<double> _favAnimation;
@@ -159,6 +167,94 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     );
   }
 
+  Widget _buildModalArtwork(MediaItem mediaItem) {
+    final artUri = mediaItem.artUri;
+    if (artUri != null) {
+      final scheme = artUri.scheme.toLowerCase();
+
+      // Si es un archivo local
+      if (scheme == 'file' || scheme == 'content') {
+        try {
+          return Image.file(
+            File(artUri.toFilePath()),
+            width: 60,
+            height: 60,
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) =>
+                _buildModalPlaceholder(),
+          );
+        } catch (e) {
+          return _buildModalPlaceholder();
+        }
+      }
+
+      // Si es una URL de red
+      if (scheme == 'http' || scheme == 'https') {
+        return Image.network(
+          artUri.toString(),
+          width: 60,
+          height: 60,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) =>
+              _buildModalPlaceholder(),
+          loadingBuilder: (context, child, loadingProgress) =>
+              loadingProgress == null
+              ? child
+              : Container(
+                  width: 60,
+                  height: 60,
+                  alignment: Alignment.center,
+                  child: const CircularProgressIndicator(),
+                ),
+        );
+      }
+    }
+
+    // Fallback si no hay carátula o no se puede cargar
+    return _buildModalPlaceholder();
+  }
+
+  Widget _buildModalPlaceholder() {
+    return Container(
+      width: 60,
+      height: 60,
+      decoration: BoxDecoration(
+        color: Colors.grey[800],
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Icon(Icons.music_note, color: Colors.grey[400], size: 30),
+    );
+  }
+
+  Future<void> _searchSongOnYouTube(MediaItem mediaItem) async {
+    try {
+      final title = mediaItem.title;
+      final artist = mediaItem.artist ?? '';
+
+      // Crear la consulta de búsqueda
+      String searchQuery = title;
+      if (artist.isNotEmpty) {
+        searchQuery = '$artist $title';
+      }
+
+      // Codificar la consulta para la URL
+      final encodedQuery = Uri.encodeComponent(searchQuery);
+      final youtubeSearchUrl =
+          'https://www.youtube.com/results?search_query=$encodedQuery';
+
+      // Intentar abrir YouTube en el navegador o en la app
+      final url = Uri.parse(youtubeSearchUrl);
+
+      if (await canLaunchUrl(url)) {
+        await launchUrl(url, mode: LaunchMode.externalApplication);
+      } else {
+        // ignore: use_build_context_synchronously
+      }
+    } catch (e) {
+      // ignore: avoid_print
+    }
+  }
+
   Future<void> _loadLyrics(MediaItem mediaItem) async {
     if (!mounted) return;
     setState(() {
@@ -226,6 +322,50 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     // Eliminado: (audioHandler as MyAudioHandler).queueSourceNotifier.addListener(_onQueueSourceChanged);
   }
 
+  /// Maneja el cambio de carátula cuando cambia la canción
+  void _handleArtworkChange(MediaItem? newMediaItem) {
+    final newSongId =
+        newMediaItem?.extras?['songId']?.toString() ?? newMediaItem?.id;
+
+    if (_lastArtworkSongId != newSongId) {
+      final previousSongId = _lastArtworkSongId;
+      _lastArtworkSongId = newSongId;
+
+      // Si es una nueva canción (no el primer load)
+      if (previousSongId != null && newMediaItem != null) {
+        // Si no hay carátula en caché, marcar como loading brevemente
+        if (newMediaItem.artUri == null) {
+          _artworkLoadingNotifier.value = true;
+
+          // Dar tiempo breve para que el audio handler cargue la carátula
+          Timer(const Duration(milliseconds: 200), () {
+            if (mounted && _lastArtworkSongId == newSongId) {
+              // Verificar si ya se cargó la carátula
+              final currentMediaItem = audioHandler?.mediaItem.valueOrNull;
+              if (currentMediaItem?.id == newSongId &&
+                  currentMediaItem?.artUri != null) {
+                // La carátula ya se cargó
+                _artworkLoadingNotifier.value = false;
+              } else {
+                // No hay carátula para esta canción - no mostrar loading
+                _artworkLoadingNotifier.value = false;
+              }
+            }
+          });
+        } else {
+          // Ya hay carátula - no está loading
+          _artworkLoadingNotifier.value = false;
+        }
+      } else {
+        // Primer load o no hay nueva canción - no mostrar loading
+        _artworkLoadingNotifier.value = false;
+      }
+    } else if (newMediaItem?.artUri != null && _artworkLoadingNotifier.value) {
+      // La carátula acaba de llegar para la canción actual
+      _artworkLoadingNotifier.value = false;
+    }
+  }
+
   @override
   void dispose() {
     _seekDebounceTimer?.cancel();
@@ -233,6 +373,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     _favController.dispose();
     _playPauseController.dispose();
     _dragValueSecondsNotifier.dispose();
+    _artworkLoadingNotifier.dispose();
     // Eliminado: (audioHandler as MyAudioHandler).queueSourceNotifier.removeListener(_onQueueSourceChanged);
     super.dispose();
   }
@@ -249,172 +390,306 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
 
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       builder: (context) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: Icon(
-                isFav ? Icons.delete_outline : Icons.favorite_border,
-              ),
-              title: Text(
-                isFav
-                    ? LocaleProvider.tr('remove_from_favorites')
-                    : LocaleProvider.tr('add_to_favorites'),
-              ),
-              onTap: () async {
-                Navigator.of(context).pop();
-
-                final path = mediaItem.extras?['data'] ?? '';
-
-                if (isFav) {
-                  await FavoritesDB().removeFavorite(path);
-                  favoritesShouldReload.value = !favoritesShouldReload.value;
-                } else {
-                  if (path.isEmpty) {
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text(
-                            'No se puede añadir: ruta no disponible',
-                          ),
-                        ),
-                      );
-                    }
-                    return;
-                  }
-
-                  final allSongs = await _audioQuery.querySongs();
-                  final songList = allSongs
-                      .where((s) => s.data == path)
-                      .toList();
-
-                  if (songList.isEmpty) {
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('No se encontró la canción original'),
-                        ),
-                      );
-                    }
-                    return;
-                  }
-
-                  final song = songList.first;
-                  await _addToFavorites(song);
-                }
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.queue_music),
-              title: Text(LocaleProvider.tr('add_to_playlist')),
-              onTap: () async {
-                if (!mounted) {
-                  return;
-                }
-                final safeContext = context;
-                Navigator.of(safeContext).pop();
-                await _showAddToPlaylistDialog(safeContext, mediaItem);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.lyrics),
-              title: Text(LocaleProvider.tr('show_lyrics')),
-              onTap: () async {
-                Navigator.of(context).pop();
-                if (!_showLyrics) {
-                  setState(() {
-                    _showLyrics = true;
-                  });
-                  await _loadLyrics(mediaItem);
-                } else {
-                  setState(() {
-                    _showLyrics = false;
-                  });
-                }
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.share),
-              title: Text(LocaleProvider.tr('share_audio_file')),
-              onTap: () async {
-                Navigator.of(context).pop();
-                final dataPath = mediaItem.extras?['data'] as String?;
-                if (dataPath != null && dataPath.isNotEmpty) {
-                  await SharePlus.instance.share(
-                    ShareParams(
-                      text: mediaItem.title,
-                      files: [XFile(dataPath)],
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Encabezado con información de la canción
+              Container(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    // Carátula de la canción
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: SizedBox(
+                        width: 60,
+                        height: 60,
+                        child: _buildModalArtwork(mediaItem),
+                      ),
                     ),
-                  );
-                }
-              },
-            ),
-            ListTile(
-              leading: () {
-                final isActive =
-                    (audioHandler as MyAudioHandler).sleepTimeRemaining != null;
-                return Icon(isActive ? Icons.timer : Icons.timer_outlined);
-              }(),
-              title: Text(() {
-                final remaining =
-                    (audioHandler as MyAudioHandler).sleepTimeRemaining;
-                if (remaining != null) {
-                  return '${LocaleProvider.tr('sleep_timer_remaining')}: ${_formatSleepTimerDuration(remaining)}';
-                } else {
-                  return LocaleProvider.tr('sleep_timer');
-                }
-              }()),
-              onTap: () {
-                Navigator.of(context).pop();
-                showModalBottomSheet(
-                  context: context,
-                  builder: (context) => const SleepTimerOptionsSheet(),
-                );
-              },
-            ),
+                    const SizedBox(width: 16),
+                    // Título y artista
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            mediaItem.title,
+                            maxLines: 1,
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            mediaItem.artist ??
+                                LocaleProvider.tr('unknown_artist'),
+                            style: TextStyle(fontSize: 14),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    // Botón de YouTube para buscar la canción
+                    ElevatedButton.icon(
+                      onPressed: () async {
+                        Navigator.of(context).pop();
+                        await _searchSongOnYouTube(mediaItem);
+                      },
+                      label: Text(
+                        'YouTube',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                        ),
+                      ),
+                      icon: const Icon(Icons.search, size: 20),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Theme.of(
+                          context,
+                        ).colorScheme.primaryContainer,
+                        foregroundColor: Theme.of(
+                          context,
+                        ).colorScheme.onPrimaryContainer,
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              ListTile(
+                leading: Icon(
+                  isFav ? Icons.delete_outline : Icons.favorite_border,
+                ),
+                title: Text(
+                  isFav
+                      ? LocaleProvider.tr('remove_from_favorites')
+                      : LocaleProvider.tr('add_to_favorites'),
+                ),
+                onTap: () async {
+                  Navigator.of(context).pop();
 
-            ListTile(
-              leading: const Icon(Icons.info_outline),
-              title: Text(LocaleProvider.tr('song_info')),
-              onTap: () {
-                Navigator.of(context).pop();
-                showDialog(
-                  context: context,
-                  builder: (context) => AlertDialog(
-                    title: Text(LocaleProvider.tr('song_info')),
-                    content: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          '${LocaleProvider.tr('title')}: ${mediaItem.title}\n',
-                        ),
-                        Text(
-                          '${LocaleProvider.tr('artist')}: ${mediaItem.artist ?? LocaleProvider.tr('unknown_artist')}\n',
-                        ),
-                        Text(
-                          '${LocaleProvider.tr('album')}: ${mediaItem.album ?? LocaleProvider.tr('unknown_artist')}\n',
-                        ),
-                        Text(
-                          '${LocaleProvider.tr('location')}: ${mediaItem.extras?['data'] ?? ""}\n',
-                        ),
-                        Text(
-                          '${LocaleProvider.tr('duration')}: ${mediaItem.duration != null ? Duration(milliseconds: mediaItem.duration!.inMilliseconds).toString().split('.').first : "?"}',
+                  final path = mediaItem.extras?['data'] ?? '';
+
+                  if (isFav) {
+                    await FavoritesDB().removeFavorite(path);
+                    favoritesShouldReload.value = !favoritesShouldReload.value;
+                  } else {
+                    if (path.isEmpty) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'No se puede añadir: ruta no disponible',
+                            ),
+                          ),
+                        );
+                      }
+                      return;
+                    }
+
+                    final allSongs = await _audioQuery.querySongs();
+                    final songList = allSongs
+                        .where((s) => s.data == path)
+                        .toList();
+
+                    if (songList.isEmpty) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('No se encontró la canción original'),
+                          ),
+                        );
+                      }
+                      return;
+                    }
+
+                    final song = songList.first;
+                    await _addToFavorites(song);
+                  }
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.queue_music),
+                title: Text(LocaleProvider.tr('add_to_playlist')),
+                onTap: () async {
+                  if (!mounted) {
+                    return;
+                  }
+                  final safeContext = context;
+                  Navigator.of(safeContext).pop();
+                  await _showAddToPlaylistDialog(safeContext, mediaItem);
+                },
+              ),
+              FutureBuilder<bool>(
+                future: ShortcutsDB().isShortcut(
+                  mediaItem.extras?['data'] ?? '',
+                ),
+                builder: (context, snapshot) {
+                  final isCurrentlyPinned = snapshot.data ?? false;
+                  final path = mediaItem.extras?['data'] ?? '';
+
+                  return ListTile(
+                    leading: Icon(
+                      isCurrentlyPinned
+                          ? Icons.push_pin
+                          : Icons.push_pin_outlined,
+                    ),
+                    title: Text(
+                      isCurrentlyPinned
+                          ? LocaleProvider.tr('unpin_shortcut')
+                          : LocaleProvider.tr('pin_shortcut'),
+                    ),
+                    onTap: () async {
+                      Navigator.of(context).pop();
+
+                      if (path.isEmpty) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'No se puede fijar: ruta no disponible',
+                              ),
+                            ),
+                          );
+                        }
+                        return;
+                      }
+
+                      final shortcutsDB = ShortcutsDB();
+
+                      if (isCurrentlyPinned) {
+                        // Desfijar de accesos directos
+                        await shortcutsDB.removeShortcut(path);
+                        // Notificar que los accesos directos han cambiado
+                        shortcutsShouldReload.value =
+                            !shortcutsShouldReload.value;
+                      } else {
+                        // Fijar en accesos directos
+                        await shortcutsDB.addShortcut(path);
+                        // Notificar que los accesos directos han cambiado
+                        shortcutsShouldReload.value =
+                            !shortcutsShouldReload.value;
+                      }
+                    },
+                  );
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.lyrics),
+                title: Text(LocaleProvider.tr('show_lyrics')),
+                onTap: () async {
+                  Navigator.of(context).pop();
+                  if (!_showLyrics) {
+                    setState(() {
+                      _showLyrics = true;
+                    });
+                    await _loadLyrics(mediaItem);
+                  } else {
+                    setState(() {
+                      _showLyrics = false;
+                    });
+                  }
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.share),
+                title: Text(LocaleProvider.tr('share_audio_file')),
+                onTap: () async {
+                  Navigator.of(context).pop();
+                  final dataPath = mediaItem.extras?['data'] as String?;
+                  if (dataPath != null && dataPath.isNotEmpty) {
+                    await SharePlus.instance.share(
+                      ShareParams(
+                        text: mediaItem.title,
+                        files: [XFile(dataPath)],
+                      ),
+                    );
+                  }
+                },
+              ),
+              ListTile(
+                leading: () {
+                  final isActive =
+                      (audioHandler as MyAudioHandler).sleepTimeRemaining !=
+                      null;
+                  return Icon(isActive ? Icons.timer : Icons.timer_outlined);
+                }(),
+                title: Text(() {
+                  final remaining =
+                      (audioHandler as MyAudioHandler).sleepTimeRemaining;
+                  if (remaining != null) {
+                    return '${LocaleProvider.tr('sleep_timer_remaining')}: ${_formatSleepTimerDuration(remaining)}';
+                  } else {
+                    return LocaleProvider.tr('sleep_timer');
+                  }
+                }()),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  showModalBottomSheet(
+                    context: context,
+                    builder: (context) => const SleepTimerOptionsSheet(),
+                  );
+                },
+              ),
+
+              ListTile(
+                leading: const Icon(Icons.info_outline),
+                title: Text(LocaleProvider.tr('song_info')),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  showDialog(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      title: Text(LocaleProvider.tr('song_info')),
+                      content: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '${LocaleProvider.tr('title')}: ${mediaItem.title}\n',
+                          ),
+                          Text(
+                            '${LocaleProvider.tr('artist')}: ${mediaItem.artist ?? LocaleProvider.tr('unknown_artist')}\n',
+                          ),
+                          Text(
+                            '${LocaleProvider.tr('album')}: ${mediaItem.album ?? LocaleProvider.tr('unknown_artist')}\n',
+                          ),
+                          Text(
+                            '${LocaleProvider.tr('location')}: ${mediaItem.extras?['data'] ?? ""}\n',
+                          ),
+                          Text(
+                            '${LocaleProvider.tr('duration')}: ${mediaItem.duration != null ? Duration(milliseconds: mediaItem.duration!.inMilliseconds).toString().split('.').first : "?"}',
+                          ),
+                        ],
+                      ),
+                      actions: [
+                        TextButton(
+                          child: Text(LocaleProvider.tr('close')),
+                          onPressed: () => Navigator.of(context).pop(),
                         ),
                       ],
                     ),
-                    actions: [
-                      TextButton(
-                        child: Text(LocaleProvider.tr('close')),
-                        onPressed: () => Navigator.of(context).pop(),
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
-          ],
+                  );
+                },
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -697,6 +972,11 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
         builder: (context, snapshot) {
           final mediaItem = snapshot.data;
 
+          // Manejar cambio de carátula cuando cambia la canción
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _handleArtworkChange(mediaItem);
+          });
+
           // Solo procesar si es una canción nueva
           if (mediaItem != null && mediaItem.id != _lastMediaItemId) {
             _lastMediaItemId = mediaItem.id;
@@ -854,20 +1134,28 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                     });
 
                                     // Always load lyrics when enabling, to ensure they match current song
-                                    if (_showLyrics && !_loadingLyrics) {
+                                    if (_showLyrics &&
+                                        !_loadingLyrics &&
+                                        currentMediaItem != null) {
                                       _loadLyrics(currentMediaItem);
                                     }
                                   },
                                   child: RepaintBoundary(
-                                    child: ArtworkHeroCached(
-                                      artUri: currentMediaItem!.artUri,
-                                      size: artworkSize,
-                                      borderRadius: BorderRadius.circular(
-                                        artworkSize * 0.06,
-                                      ),
-                                      heroTag:
-                                          'now_playing_artwork_${(currentMediaItem.extras?['songId'] ?? currentMediaItem.id).toString()}',
-                                      showPlaceholderIcon: !_showLyrics,
+                                    child: ValueListenableBuilder<bool>(
+                                      valueListenable: _artworkLoadingNotifier,
+                                      builder: (context, isArtworkLoading, child) {
+                                        return ArtworkHeroCached(
+                                          artUri: currentMediaItem!.artUri,
+                                          size: artworkSize,
+                                          borderRadius: BorderRadius.circular(
+                                            artworkSize * 0.06,
+                                          ),
+                                          heroTag:
+                                              'now_playing_artwork_${(currentMediaItem.extras?['songId'] ?? currentMediaItem.id).toString()}',
+                                          showPlaceholderIcon: !_showLyrics,
+                                          isLoading: isArtworkLoading,
+                                        );
+                                      },
                                     ),
                                   ),
                                 );

@@ -7,7 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart';
 
 /// Cache Manager optimizado para carátulas de álbumes
-/// 
+///
 /// Características:
 /// - Cache en memoria con límite configurable
 /// - Cache en disco para persistencia
@@ -16,7 +16,8 @@ import 'package:flutter/foundation.dart';
 /// - Gestión de memoria optimizada
 /// - Concurrencia segura
 class AlbumArtCacheManager {
-  static final AlbumArtCacheManager _instance = AlbumArtCacheManager._internal();
+  static final AlbumArtCacheManager _instance =
+      AlbumArtCacheManager._internal();
   factory AlbumArtCacheManager() => _instance;
   AlbumArtCacheManager._internal();
 
@@ -24,49 +25,53 @@ class AlbumArtCacheManager {
   final Map<String, Uint8List> _memoryCache = {};
   final Map<String, DateTime> _cacheTimestamps = {};
   final Map<String, Completer<Uint8List?>> _loadingCompleters = {};
-  
+
   // Configuración
   static const int _maxMemoryCacheSize = 200;
   static const Duration _cacheExpiry = Duration(hours: 24);
   static const int _maxConcurrentLoads = 20;
-  
+
   // Control de concurrencia
   int _activeLoads = 0;
   final List<Completer<void>> _waitingLoads = [];
 
   /// Obtiene la carátula del álbum con cache optimizado
-  Future<Uint8List?> getAlbumArt(int songId, String songPath, {int? size}) async {
+  Future<Uint8List?> getAlbumArt(
+    int songId,
+    String songPath, {
+    int? size,
+  }) async {
     final cacheKey = _generateCacheKey(songId, songPath, size);
-    
+
     // 1. Verificar cache en memoria
     final memoryResult = _getFromMemoryCache(cacheKey);
     if (memoryResult != null) {
       return memoryResult;
     }
-    
+
     // 2. Verificar si ya se está cargando
     if (_loadingCompleters.containsKey(cacheKey)) {
       return await _loadingCompleters[cacheKey]!.future;
     }
-    
+
     // 3. Control de concurrencia
     await _waitForSlot();
-    
+
     // 4. Crear completer para esta carga
     final completer = Completer<Uint8List?>();
     _loadingCompleters[cacheKey] = completer;
     _activeLoads++;
-    
+
     try {
       // 5. Cargar desde disco o generar
       final bytes = await _loadAlbumArtBytes(songId, songPath, size);
-      
+
       // 6. Guardar en cache si es válido
       if (bytes != null) {
         _addToMemoryCache(cacheKey, bytes);
         await _saveToDiskCache(cacheKey, bytes);
       }
-      
+
       completer.complete(bytes);
       return bytes;
     } catch (e) {
@@ -80,26 +85,32 @@ class AlbumArtCacheManager {
   }
 
   /// Precarga carátulas para una lista de canciones
-  Future<void> preloadAlbumArts(List<Map<String, dynamic>> songs, {int maxConcurrent = 3}) async {
-    final songsToLoad = songs.where((song) {
-      final songId = song['id'] as int;
-      final songPath = song['data'] as String;
-      final cacheKey = _generateCacheKey(songId, songPath, null);
-      return !_memoryCache.containsKey(cacheKey) && 
-             !_loadingCompleters.containsKey(cacheKey);
-    }).take(20).toList(); // Limitar a 20 canciones
-    
+  Future<void> preloadAlbumArts(
+    List<Map<String, dynamic>> songs, {
+    int maxConcurrent = 3,
+  }) async {
+    final songsToLoad = songs
+        .where((song) {
+          final songId = song['id'] as int;
+          final songPath = song['data'] as String;
+          final cacheKey = _generateCacheKey(songId, songPath, null);
+          return !_memoryCache.containsKey(cacheKey) &&
+              !_loadingCompleters.containsKey(cacheKey);
+        })
+        .take(20)
+        .toList(); // Limitar a 20 canciones
+
     if (songsToLoad.isEmpty) return;
-    
+
     // Cargar en paralelo con límite de concurrencia
     final semaphore = Completer<void>();
     int active = 0;
-    
+
     for (final song in songsToLoad) {
       while (active >= maxConcurrent) {
         await Future.delayed(const Duration(milliseconds: 10));
       }
-      
+
       active++;
       unawaited(() async {
         try {
@@ -114,7 +125,7 @@ class AlbumArtCacheManager {
         }
       }());
     }
-    
+
     await semaphore.future;
   }
 
@@ -122,13 +133,13 @@ class AlbumArtCacheManager {
   void _cleanupExpiredCache() {
     final now = DateTime.now();
     final expiredKeys = <String>[];
-    
+
     for (final entry in _cacheTimestamps.entries) {
       if (now.difference(entry.value) > _cacheExpiry) {
         expiredKeys.add(entry.key);
       }
     }
-    
+
     for (final key in expiredKeys) {
       _memoryCache.remove(key);
       _cacheTimestamps.remove(key);
@@ -138,10 +149,11 @@ class AlbumArtCacheManager {
   /// Obtiene desde cache en memoria
   Uint8List? _getFromMemoryCache(String key) {
     _cleanupExpiredCache();
-    
+
     if (_memoryCache.containsKey(key)) {
       final timestamp = _cacheTimestamps[key];
-      if (timestamp != null && DateTime.now().difference(timestamp) < _cacheExpiry) {
+      if (timestamp != null &&
+          DateTime.now().difference(timestamp) < _cacheExpiry) {
         return _memoryCache[key];
       } else {
         // Remover entrada expirada
@@ -158,7 +170,7 @@ class AlbumArtCacheManager {
     if (_memoryCache.length >= _maxMemoryCacheSize) {
       _evictOldestEntry();
     }
-    
+
     _memoryCache[key] = bytes;
     _cacheTimestamps[key] = DateTime.now();
   }
@@ -166,10 +178,11 @@ class AlbumArtCacheManager {
   /// Elimina la entrada más antigua del cache
   void _evictOldestEntry() {
     if (_cacheTimestamps.isEmpty) return;
-    
+
     final oldestKey = _cacheTimestamps.entries
-        .reduce((a, b) => a.value.isBefore(b.value) ? a : b).key;
-    
+        .reduce((a, b) => a.value.isBefore(b.value) ? a : b)
+        .key;
+
     _memoryCache.remove(oldestKey);
     _cacheTimestamps.remove(oldestKey);
   }
@@ -181,7 +194,11 @@ class AlbumArtCacheManager {
   }
 
   /// Carga bytes de carátula desde OnAudioQuery
-  Future<Uint8List?> _loadAlbumArtBytes(int songId, String songPath, int? size) async {
+  Future<Uint8List?> _loadAlbumArtBytes(
+    int songId,
+    String songPath,
+    int? size,
+  ) async {
     try {
       // Obtener tamaño desde preferencias
       int artworkSize = size ?? 410;
@@ -191,13 +208,13 @@ class AlbumArtCacheManager {
           artworkSize = prefs.getInt('artwork_quality') ?? 410;
         } catch (_) {}
       }
-      
+
       final albumArt = await OnAudioQuery().queryArtwork(
         songId,
         ArtworkType.AUDIO,
         size: artworkSize,
       );
-      
+
       return albumArt;
     } catch (e) {
       return null;
@@ -218,7 +235,7 @@ class AlbumArtCacheManager {
   /// Control de concurrencia - espera por un slot disponible
   Future<void> _waitForSlot() async {
     if (_activeLoads < _maxConcurrentLoads) return;
-    
+
     final completer = Completer<void>();
     _waitingLoads.add(completer);
     await completer.future;
@@ -257,7 +274,7 @@ class AlbumArtCacheManager {
     try {
       final cacheDir = await getTemporaryDirectory();
       final files = cacheDir.listSync();
-      
+
       for (final file in files) {
         if (file is File && file.path.contains('artwork_cache_')) {
           await file.delete();
@@ -284,4 +301,4 @@ class AlbumArtCacheManager {
     _cacheTimestamps.remove(cacheKey);
     _loadingCompleters.remove(cacheKey);
   }
-} 
+}

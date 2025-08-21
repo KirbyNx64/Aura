@@ -37,45 +37,46 @@ class CancellationToken {
 
 /// Cargador optimizado de carátulas con cancelación
 class OptimizedAlbumArtLoader {
-  static final OptimizedAlbumArtLoader _instance = OptimizedAlbumArtLoader._internal();
+  static final OptimizedAlbumArtLoader _instance =
+      OptimizedAlbumArtLoader._internal();
   factory OptimizedAlbumArtLoader() => _instance;
   OptimizedAlbumArtLoader._internal();
 
   final Map<String, CancellationToken> _loadingTokens = {};
   final AlbumArtCacheManager _cacheManager = AlbumArtCacheManager();
-  
+
   // Configuración
   static const int _maxConcurrentLoads = 3;
   static const Duration _loadTimeout = Duration(seconds: 10);
-  
+
   // Control de concurrencia
   int _activeLoads = 0;
   final List<Completer<void>> _waitingLoads = [];
 
   /// Carga carátula con cancelación y optimizaciones
   Future<Uint8List?> loadAlbumArt(
-    int songId, 
+    int songId,
     String songPath, {
     double? size,
     CancellationToken? token,
   }) async {
     // Cancelar carga anterior si existe
     _loadingTokens[songId.toString()]?.cancel();
-    
+
     final newToken = CancellationToken();
     _loadingTokens[songId.toString()] = newToken;
-    
+
     try {
       // Verificar cancelación inicial
       if (token?.isCancelled == true || newToken.isCancelled) return null;
-      
+
       // Control de concurrencia
       await _waitForSlot();
       _activeLoads++;
-      
+
       // Verificar cancelación después de esperar
       if (token?.isCancelled == true || newToken.isCancelled) return null;
-      
+
       // Usar cache primero
       final cachedBytes = await _cacheManager.getAlbumArt(songId, songPath);
       if (cachedBytes != null) {
@@ -84,18 +85,22 @@ class OptimizedAlbumArtLoader {
         }
         return cachedBytes;
       }
-      
+
       if (token?.isCancelled == true || newToken.isCancelled) return null;
-      
+
       // Cargar desde OnAudioQuery con timeout
-      final bytes = await _loadFromOnAudioQuery(songId, songPath, token ?? newToken);
+      final bytes = await _loadFromOnAudioQuery(
+        songId,
+        songPath,
+        token ?? newToken,
+      );
       if (bytes != null) {
         if (size != null) {
           return await _resizeImageBytes(bytes, size);
         }
         return bytes;
       }
-      
+
       return null;
     } catch (e) {
       // Error silencioso
@@ -115,16 +120,16 @@ class OptimizedAlbumArtLoader {
   }) async {
     final results = <Uint8List?>[];
     final futures = <Future<Uint8List?>>[];
-    
+
     for (final song in songs) {
       if (token?.isCancelled == true) break;
-      
+
       final songId = song['id'] as int;
       final songPath = song['data'] as String;
-      
+
       futures.add(loadAlbumArt(songId, songPath, size: size, token: token));
     }
-    
+
     // Esperar todas las cargas con cancelación
     for (final future in futures) {
       if (token?.isCancelled == true) break;
@@ -135,14 +140,14 @@ class OptimizedAlbumArtLoader {
         results.add(null);
       }
     }
-    
+
     return results;
   }
 
   /// Carga desde OnAudioQuery con timeout y cancelación
   Future<Uint8List?> _loadFromOnAudioQuery(
-    int songId, 
-    String songPath, 
+    int songId,
+    String songPath,
     CancellationToken token,
   ) async {
     try {
@@ -152,16 +157,16 @@ class OptimizedAlbumArtLoader {
         final prefs = await SharedPreferences.getInstance();
         artworkSize = prefs.getInt('artwork_quality') ?? 410;
       } catch (_) {}
-      
+
       // Cargar con timeout
       final bytes = await OnAudioQuery()
           .queryArtwork(songId, ArtworkType.AUDIO, size: artworkSize)
           .timeout(_loadTimeout)
           .catchError((_) => null);
-      
+
       // Verificar cancelación antes de retornar
       if (token.isCancelled) return null;
-      
+
       return bytes;
     } catch (e) {
       return null;
@@ -177,13 +182,15 @@ class OptimizedAlbumArtLoader {
         targetWidth: size.toInt(),
         targetHeight: size.toInt(),
       );
-      
+
       // Obtener frame
       final frame = await codec.getNextFrame();
-      
+
       // Convertir a bytes
-      final byteData = await frame.image.toByteData(format: ui.ImageByteFormat.png);
-      
+      final byteData = await frame.image.toByteData(
+        format: ui.ImageByteFormat.png,
+      );
+
       return byteData!.buffer.asUint8List();
     } catch (e) {
       // Si falla el redimensionamiento, retornar bytes originales
@@ -194,7 +201,7 @@ class OptimizedAlbumArtLoader {
   /// Control de concurrencia - espera por un slot disponible
   Future<void> _waitForSlot() async {
     if (_activeLoads < _maxConcurrentLoads) return;
-    
+
     final completer = Completer<void>();
     _waitingLoads.add(completer);
     await completer.future;
@@ -255,4 +262,4 @@ class CancellationTokenSource {
   void cancel() => _token.cancel();
 
   void dispose() => _token.dispose();
-} 
+}

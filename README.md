@@ -21,7 +21,6 @@
 - [`just_audio`](https://pub.dev/packages/just_audio)
 - [`audio_service`](https://pub.dev/packages/audio_service)
 - [`youtube_explode_dart`](https://pub.dev/packages/youtube_explode_dart)
-- [`ffmpeg_kit_flutter`](https://pub.dev/packages/ffmpeg_kit_flutter)
 - [`audiotags`](https://pub.dev/packages/audiotags)
 - [`path_provider`](https://pub.dev/packages/path_provider)
 - [`permission_handler`](https://pub.dev/packages/permission_handler)

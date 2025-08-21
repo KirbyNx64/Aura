@@ -67,22 +67,27 @@ class _UpdateScreenState extends State<UpdateScreen> {
 
     OtaUpdate()
         .execute(_apkUrl!, destinationFilename: 'aura_update.apk')
-        .listen((event) {
-      if (!mounted) return;
-      setState(() {
-        _status = event.status.toString().split('.').last;
-        if (event.value != null && event.value!.isNotEmpty) {
-          final val = event.value!.replaceAll('%', '');
-          _progress = double.tryParse(val) != null ? double.parse(val) / 100 : 0.0;
-        }
-      });
-    }, onError: (error) {
-      if (!mounted) return;
-      setState(() {
-        _status = '${LocaleProvider.tr('error')}: $error';
-        _isDownloading = false;
-      });
-    });
+        .listen(
+          (event) {
+            if (!mounted) return;
+            setState(() {
+              _status = event.status.toString().split('.').last;
+              if (event.value != null && event.value!.isNotEmpty) {
+                final val = event.value!.replaceAll('%', '');
+                _progress = double.tryParse(val) != null
+                    ? double.parse(val) / 100
+                    : 0.0;
+              }
+            });
+          },
+          onError: (error) {
+            if (!mounted) return;
+            setState(() {
+              _status = '${LocaleProvider.tr('error')}: $error';
+              _isDownloading = false;
+            });
+          },
+        );
   }
 
   Future<void> _borrarApkPrevio() async {
@@ -106,110 +111,25 @@ class _UpdateScreenState extends State<UpdateScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(LocaleProvider.tr('update')),
-        leading: _isDownloading
-            ? Container()
-            : null,
+        leading: _isDownloading ? Container() : null,
       ),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: _isDownloading
-      ? Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: SingleChildScrollView(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      LocaleProvider.tr('downloading_update'),
-                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      '${LocaleProvider.tr('version')}: $_version',
-                      style: const TextStyle(fontSize: 16),
-                    ),
-                    const SizedBox(height: 42),
-                    Text(
-                      LocaleProvider.tr('changes'),
-                      style: Theme.of(context).textTheme.titleMedium ??
-                          const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-                    ),
-                    const SizedBox(height: 8),
-                    SizedBox(
-                      height: is16by9 ? 240 : 360,
-                      child: Container(
-                        padding: const EdgeInsets.all(12),
-                        margin: const EdgeInsets.only(bottom: 16),
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).brightness == Brightness.light
-                              ? Theme.of(context).colorScheme.surfaceContainer
-                              : Colors.white10,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                            color: Theme.of(context).brightness == Brightness.light
-                                ? Theme.of(context).colorScheme.surfaceContainer
-                                : Colors.white24,
-                          ),
-                        ),
-                        child: SingleChildScrollView(
-                          child: Text(_changelog),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(LocaleProvider.tr('dont_exit_app')),
-            const SizedBox(height: 8),
-            LinearProgressIndicator(value: _progress),
-          ],
-            )
-            : _version.isEmpty && !_hasChecked
-                ? Stack(
-                    children: [
-                      Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.update,
-                              size: 100,
-                              color: Theme.of(context).brightness == Brightness.light
-                              ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7)
-                              : Theme.of(context).colorScheme.onSurface,
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              LocaleProvider.tr('press_button_to_check'),
-                              style: const TextStyle(fontSize: 18),
-                              textAlign: TextAlign.center,
-                            ),
-                          ],
-                        ),
-                      ),
-                      Positioned(
-                        bottom: 16,
-                        right: 16,
-                        child: TextButton(
-                          onPressed: _checkUpdate,
-                          child: Text(LocaleProvider.tr('check_for_update')),
-                        ),
-                      ),
-                    ],
-                  )
-                : _version.isEmpty && _hasChecked
-                    ? Center(child: Text(_status))
-                    : Column(
+            ? Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: SingleChildScrollView(
+                      child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            LocaleProvider.tr('new_update_available'),
+                            LocaleProvider.tr('downloading_update'),
                             style: const TextStyle(
-                                fontSize: 18, fontWeight: FontWeight.bold),
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                           const SizedBox(height: 8),
                           Text(
@@ -219,8 +139,12 @@ class _UpdateScreenState extends State<UpdateScreen> {
                           const SizedBox(height: 42),
                           Text(
                             LocaleProvider.tr('changes'),
-                            style: Theme.of(context).textTheme.titleMedium ??
-                                const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                            style:
+                                Theme.of(context).textTheme.titleMedium ??
+                                const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w600,
+                                ),
                           ),
                           const SizedBox(height: 8),
                           SizedBox(
@@ -229,13 +153,21 @@ class _UpdateScreenState extends State<UpdateScreen> {
                               padding: const EdgeInsets.all(12),
                               margin: const EdgeInsets.only(bottom: 16),
                               decoration: BoxDecoration(
-                                color: Theme.of(context).brightness == Brightness.light
-                                    ? Theme.of(context).colorScheme.surfaceContainer
+                                color:
+                                    Theme.of(context).brightness ==
+                                        Brightness.light
+                                    ? Theme.of(
+                                        context,
+                                      ).colorScheme.surfaceContainer
                                     : Colors.white10,
                                 borderRadius: BorderRadius.circular(8),
                                 border: Border.all(
-                                  color: Theme.of(context).brightness == Brightness.light
-                                      ? Theme.of(context).colorScheme.surfaceContainer
+                                  color:
+                                      Theme.of(context).brightness ==
+                                          Brightness.light
+                                      ? Theme.of(
+                                          context,
+                                        ).colorScheme.surfaceContainer
                                       : Colors.white24,
                                 ),
                               ),
@@ -243,27 +175,121 @@ class _UpdateScreenState extends State<UpdateScreen> {
                                 child: Text(_changelog),
                               ),
                             ),
-                          ),       
-                          const Spacer(),
-                          Text('${LocaleProvider.tr('status')}: $_status'),
-                          const SizedBox(height: 16),
-                          LinearProgressIndicator(value: _progress),
-                          const SizedBox(height: 16),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.end,
-                            children: [
-                              TextButton(
-                                onPressed: () => Navigator.pop(context),
-                                child: Text(LocaleProvider.tr('cancel')),
-                              ),
-                              TextButton(
-                                onPressed: _startDownload,
-                                child: Text(LocaleProvider.tr('update')),
-                              ),
-                            ],
                           ),
                         ],
                       ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(LocaleProvider.tr('dont_exit_app')),
+                  const SizedBox(height: 8),
+                  LinearProgressIndicator(value: _progress),
+                ],
+              )
+            : _version.isEmpty && !_hasChecked
+            ? Stack(
+                children: [
+                  Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.update,
+                          size: 100,
+                          color:
+                              Theme.of(context).brightness == Brightness.light
+                              ? Theme.of(
+                                  context,
+                                ).colorScheme.onSurface.withValues(alpha: 0.7)
+                              : Theme.of(context).colorScheme.onSurface,
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          LocaleProvider.tr('press_button_to_check'),
+                          style: const TextStyle(fontSize: 18),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  ),
+                  Positioned(
+                    bottom: 16,
+                    right: 16,
+                    child: TextButton(
+                      onPressed: _checkUpdate,
+                      child: Text(LocaleProvider.tr('check_for_update')),
+                    ),
+                  ),
+                ],
+              )
+            : _version.isEmpty && _hasChecked
+            ? Center(child: Text(_status))
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    LocaleProvider.tr('new_update_available'),
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '${LocaleProvider.tr('version')}: $_version',
+                    style: const TextStyle(fontSize: 16),
+                  ),
+                  const SizedBox(height: 42),
+                  Text(
+                    LocaleProvider.tr('changes'),
+                    style:
+                        Theme.of(context).textTheme.titleMedium ??
+                        const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                        ),
+                  ),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    height: is16by9 ? 240 : 360,
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      margin: const EdgeInsets.only(bottom: 16),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).brightness == Brightness.light
+                            ? Theme.of(context).colorScheme.surfaceContainer
+                            : Colors.white10,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color:
+                              Theme.of(context).brightness == Brightness.light
+                              ? Theme.of(context).colorScheme.surfaceContainer
+                              : Colors.white24,
+                        ),
+                      ),
+                      child: SingleChildScrollView(child: Text(_changelog)),
+                    ),
+                  ),
+                  const Spacer(),
+                  Text('${LocaleProvider.tr('status')}: $_status'),
+                  const SizedBox(height: 16),
+                  LinearProgressIndicator(value: _progress),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: Text(LocaleProvider.tr('cancel')),
+                      ),
+                      TextButton(
+                        onPressed: _startDownload,
+                        child: Text(LocaleProvider.tr('update')),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
       ),
     );
   }

@@ -25,7 +25,9 @@ bool _audioHandlerInitializing = false;
 
 /// Notifier para indicar cuando el AudioService está listo
 final ValueNotifier<bool> audioServiceReady = ValueNotifier<bool>(false);
-final ValueNotifier<bool> overlayVisibleNotifier = ValueNotifier<bool>(false); // Notificador global para el overlay
+final ValueNotifier<bool> overlayVisibleNotifier = ValueNotifier<bool>(
+  false,
+); // Notificador global para el overlay
 
 /// Verifica si el AudioService está inicializando
 bool get isAudioServiceInitializing => _audioHandlerInitializing;
@@ -36,7 +38,7 @@ Future<AudioHandler?> getAudioServiceSafely() async {
   if (audioHandler != null && _audioHandlerInitialized) {
     return audioHandler;
   }
-  
+
   // Si está inicializando, esperar
   if (_audioHandlerInitializing) {
     // ('⏳ Esperando a que AudioService termine de inicializar...');
@@ -45,7 +47,7 @@ Future<AudioHandler?> getAudioServiceSafely() async {
     }
     return audioHandler;
   }
-  
+
   // Si no está inicializado, intentar inicializarlo
   return await initializeAudioServiceSafely();
 }
@@ -55,7 +57,7 @@ Future<AudioHandler?> initializeAudioServiceSafely() async {
   if (_audioHandlerInitialized && audioHandler != null) {
     return audioHandler;
   }
-  
+
   if (_audioHandlerInitializing) {
     // Esperar si ya se está inicializando
     while (_audioHandlerInitializing) {
@@ -63,12 +65,12 @@ Future<AudioHandler?> initializeAudioServiceSafely() async {
     }
     return audioHandler;
   }
-  
+
   try {
     _audioHandlerInitializing = true;
-    
+
     audioHandler = await initAudioService();
-    
+
     _audioHandlerInitialized = true;
     audioServiceReady.value = true; // Notificar que está listo
     return audioHandler;
@@ -83,7 +85,6 @@ Future<AudioHandler?> initializeAudioServiceSafely() async {
 }
 
 class LifecycleHandler extends WidgetsBindingObserver {
-  
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) async {
     if (state == AppLifecycleState.detached) {
@@ -103,7 +104,11 @@ final GlobalKey<HomeScreenState> homeScreenKey = GlobalKey<HomeScreenState>();
 class MainNavRoot extends StatefulWidget {
   final void Function(AppThemeMode) setThemeMode;
   final void Function(AppColorScheme) setColorScheme;
-  const MainNavRoot({super.key, required this.setThemeMode, required this.setColorScheme});
+  const MainNavRoot({
+    super.key,
+    required this.setThemeMode,
+    required this.setColorScheme,
+  });
   @override
   State<MainNavRoot> createState() => _MainNavRootState();
 }
@@ -115,13 +120,15 @@ class _MainNavRootState extends State<MainNavRoot> {
 
   Future<bool> onWillPop() async {
     final tab = selectedTabIndex.value;
-    if (tab == 1) { // YT
+    if (tab == 1) {
+      // YT
       final state = ytScreenKey.currentState as dynamic;
       if (state?.canPopInternally() == true) {
         state.handleInternalPop();
         return false;
       }
-    } else if (tab == 3) { // Folders
+    } else if (tab == 3) {
+      // Folders
       final state = foldersScreenKey.currentState as dynamic;
       if (state?.canPopInternally() == true) {
         state.handleInternalPop();
@@ -137,7 +144,11 @@ class _MainNavRootState extends State<MainNavRoot> {
       onWillPop: onWillPop,
       child: Material3BottomNav(
         pageBuilders: [
-          (context, onTabChange) => HomeScreen(onTabChange: onTabChange, setThemeMode: widget.setThemeMode, setColorScheme: widget.setColorScheme),
+          (context, onTabChange) => HomeScreen(
+            onTabChange: onTabChange,
+            setThemeMode: widget.setThemeMode,
+            setColorScheme: widget.setColorScheme,
+          ),
           (context, onTabChange) => YtSearchTestScreen(key: ytScreenKey),
           (context, onTabChange) => FavoritesScreen(),
           (context, onTabChange) => FoldersScreen(key: foldersScreenKey),
@@ -149,7 +160,8 @@ class _MainNavRootState extends State<MainNavRoot> {
   }
 }
 
-final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
+final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+    FlutterLocalNotificationsPlugin();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -169,7 +181,9 @@ void main() async {
 
   // Solicitar permisos de notificación en Android 13+
   await flutterLocalNotificationsPlugin
-      .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+      .resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin
+      >()
       ?.requestNotificationsPermission();
 
   await LocaleProvider.loadLocale();
@@ -178,7 +192,7 @@ void main() async {
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
   ]);
-  
+
   // Configuración inicial de la barra de navegación del sistema
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
@@ -189,7 +203,7 @@ void main() async {
       systemNavigationBarDividerColor: Colors.transparent,
     ),
   );
-  
+
   if (!permisosOk) {
     runApp(
       MaterialApp(
@@ -212,9 +226,17 @@ void main() async {
     // La app seguirá, pero el audio podría no estar disponible hasta que se intente de nuevo
   }
 
+  // Precargar el SVG en memoria antes de mostrar la app
+  try {
+    // Cargar el SVG como string para precargarlo en memoria
+    await rootBundle.loadString('assets/icon/icon_foreground.svg');
+  } catch (e) {
+    // Si falla la precarga, continuar de todas formas
+  }
+
   // Ir directo a MainApp y dejar la inicialización en segundo plano como respaldo
   runApp(MyRootApp());
-  
+
   // (Opcional) Inicializar AudioService en segundo plano después de que la UI esté lista
   WidgetsBinding.instance.addPostFrameCallback((_) async {
     if (!_audioHandlerInitialized) {
@@ -256,17 +278,19 @@ class _PermisosScreenState extends State<PermisosScreen>
       final ok = await pedirPermisosMedia();
       if (ok) {
         if (!mounted) return;
-        
+
         // Solo inicializar audioHandler si no se ha inicializado antes
         if (!_audioHandlerInitialized) {
           audioHandler = await initAudioService();
           _audioHandlerInitialized = true;
         }
-        
+
         if (!mounted) return;
         // Usa pushAndRemoveUntil para limpiar el stack y evitar problemas de contexto
         Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => MainApp(currentLanguage: languageNotifier.value)),
+          MaterialPageRoute(
+            builder: (_) => MainApp(currentLanguage: languageNotifier.value),
+          ),
           (route) => false,
         );
       }
@@ -331,7 +355,7 @@ class _PermisosScreenState extends State<PermisosScreen>
 
 class MainApp extends StatefulWidget {
   final String currentLanguage;
-  
+
   const MainApp({super.key, required this.currentLanguage});
 
   @override
@@ -358,7 +382,7 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
-    
+
     // Reconfigurar la barra de navegación cuando la app regrese
     if (state == AppLifecycleState.resumed) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -370,26 +394,31 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
   // Método para actualizar la barra de navegación del sistema
   void _updateSystemNavigationBar() {
     if (!mounted) return;
-    
+
     try {
-      final isDark = _themeMode == AppThemeMode.dark || 
-                    (_themeMode == AppThemeMode.system && 
-                    MediaQuery.of(context).platformBrightness == Brightness.dark);
-      
+      final isDark =
+          _themeMode == AppThemeMode.dark ||
+          (_themeMode == AppThemeMode.system &&
+              MediaQuery.of(context).platformBrightness == Brightness.dark);
+
       // Crear un tema temporal para obtener los colores del sistema
-      final tempTheme = _buildTheme(isDark ? Brightness.dark : Brightness.light);
-      
+      final tempTheme = _buildTheme(
+        isDark ? Brightness.dark : Brightness.light,
+      );
+
       // Configurar la barra de navegación del sistema
       SystemChrome.setSystemUIOverlayStyle(
         SystemUiOverlayStyle(
           systemNavigationBarColor: tempTheme.colorScheme.surface,
-          systemNavigationBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+          systemNavigationBarIconBrightness: isDark
+              ? Brightness.light
+              : Brightness.dark,
           statusBarColor: Colors.transparent,
           statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
           systemNavigationBarDividerColor: Colors.transparent,
         ),
       );
-      
+
       // Configuración adicional para Android con retraso para asegurar que se aplique
       if (Theme.of(context).platform == TargetPlatform.android) {
         Future.delayed(const Duration(milliseconds: 100), () {
@@ -397,9 +426,13 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
             SystemChrome.setSystemUIOverlayStyle(
               SystemUiOverlayStyle(
                 systemNavigationBarColor: tempTheme.colorScheme.surface,
-                systemNavigationBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+                systemNavigationBarIconBrightness: isDark
+                    ? Brightness.light
+                    : Brightness.dark,
                 statusBarColor: Colors.transparent,
-                statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+                statusBarIconBrightness: isDark
+                    ? Brightness.light
+                    : Brightness.dark,
                 systemNavigationBarDividerColor: Colors.transparent,
               ),
             );
@@ -469,7 +502,10 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
         canvasColor: Colors.black,
         cardColor: Colors.black,
         // dialogBackgroundColor: Colors.black, // deprecated
-        appBarTheme: const AppBarTheme(backgroundColor: Colors.black, foregroundColor: Colors.white),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Colors.black,
+          foregroundColor: Colors.white,
+        ),
         dialogTheme: const DialogThemeData(backgroundColor: Colors.black),
         colorScheme: const ColorScheme.dark(
           primary: Colors.white,
@@ -494,7 +530,9 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
     }
     return ThemeData(
       useMaterial3: true,
-      colorSchemeSeed: ThemePreferences.getColorFromScheme(colorSchemeNotifier.value),
+      colorSchemeSeed: ThemePreferences.getColorFromScheme(
+        colorSchemeNotifier.value,
+      ),
       brightness: brightness,
     );
   }
@@ -506,11 +544,7 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
       return MaterialApp(
         debugShowCheckedModeBanner: false,
         theme: _buildTheme(Brightness.dark),
-        home: const Scaffold(
-          body: Center(
-            child: CircularProgressIndicator(),
-          ),
-        ),
+        home: const Scaffold(body: Center(child: CircularProgressIndicator())),
       );
     }
 
@@ -521,12 +555,15 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           _updateSystemNavigationBar();
         });
-        
+
         return MaterialApp(
           title: 'Mi App de Música',
           debugShowCheckedModeBanner: false,
-          themeMode: _themeMode == AppThemeMode.system ? ThemeMode.system : 
-                    _themeMode == AppThemeMode.dark ? ThemeMode.dark : ThemeMode.light,
+          themeMode: _themeMode == AppThemeMode.system
+              ? ThemeMode.system
+              : _themeMode == AppThemeMode.dark
+              ? ThemeMode.dark
+              : ThemeMode.light,
           theme: _buildTheme(Brightness.light),
           darkTheme: _buildTheme(Brightness.dark),
           home: MainNavRoot(

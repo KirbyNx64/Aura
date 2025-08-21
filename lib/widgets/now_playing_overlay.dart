@@ -1,29 +1,13 @@
 import 'dart:async';
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
-import 'package:music/main.dart' show audioHandler, audioServiceReady, overlayVisibleNotifier;
+import 'package:music/main.dart'
+    show audioHandler, audioServiceReady, overlayVisibleNotifier;
 import 'package:music/screens/play/player_screen.dart';
 import 'package:music/widgets/hero_cached.dart';
 import 'package:music/utils/audio/background_audio_handler.dart';
-import 'package:music/utils/db/recent_db.dart';
 import 'package:marquee/marquee.dart';
-import 'package:music/utils/db/mostplayer_db.dart';
-import 'package:on_audio_query/on_audio_query.dart';
 import 'package:music/utils/notifiers.dart';
-
-// Función optimizada para actualizar más reproducidas
-Future<void> _updateMostPlayedAsync(String path) async {
-  try {
-    final query = OnAudioQuery();
-    final allSongs = await query.querySongs();
-    final match = allSongs.where((s) => s.data == path);
-    if (match.isNotEmpty) {
-      await MostPlayedDB().incrementPlayCount(match.first);
-    }
-  } catch (e) {
-    // Ignorar errores de actualización
-  }
-}
 
 class NowPlayingOverlay extends StatefulWidget {
   final bool showBar;
@@ -34,20 +18,13 @@ class NowPlayingOverlay extends StatefulWidget {
   State<NowPlayingOverlay> createState() => _NowPlayingOverlayState();
 }
 
-class _NowPlayingOverlayState extends State<NowPlayingOverlay> with TickerProviderStateMixin {
-
+class _NowPlayingOverlayState extends State<NowPlayingOverlay>
+    with TickerProviderStateMixin {
   MediaItem? _lastKnownMediaItem;
   late AnimationController _playPauseController;
   Timer? _temporaryItemTimer;
   Timer? _playingDebounce;
   final ValueNotifier<bool> _isPlayingNotifier = ValueNotifier<bool>(false);
-  
-  // Variables para tracking de tiempo de escucha
-  String? _currentSongId;
-  DateTime? _songStartTime;
-  Timer? _listeningTimer;
-  bool _hasBeenSaved = false;
-  Duration _elapsedTime = Duration.zero;
 
   @override
   void initState() {
@@ -57,7 +34,7 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> with TickerProvid
       duration: const Duration(milliseconds: 350),
       value: 1.0,
     );
-    
+
     // Escuchar cambios en el estado de reproducción con debounce
     audioHandler?.playbackState.listen((state) {
       _playingDebounce?.cancel();
@@ -73,45 +50,11 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> with TickerProvid
   void dispose() {
     _playPauseController.dispose();
     _temporaryItemTimer?.cancel();
-    _listeningTimer?.cancel();
     _playingDebounce?.cancel();
     _isPlayingNotifier.dispose();
     super.dispose();
   }
 
-  // Función para guardar la canción después de 20 segundos
-  void _saveSongAfterDelay(String songId, String path) {
-    _listeningTimer?.cancel();
-    final remainingTime = const Duration(seconds: 20) - _elapsedTime;
-    if (remainingTime <= Duration.zero) {
-      // Ya pasó el tiempo, guardar inmediatamente
-      if (mounted && _currentSongId == songId && !_hasBeenSaved) {
-        _hasBeenSaved = true;
-        unawaited(RecentsDB().addRecentPath(path));
-        unawaited(_updateMostPlayedAsync(path));
-      }
-    } else {
-      _listeningTimer = Timer(remainingTime, () {
-        if (mounted && _currentSongId == songId && !_hasBeenSaved) {
-          _hasBeenSaved = true;
-          // Actualizar recientes de forma asíncrona
-          unawaited(RecentsDB().addRecentPath(path));
-          // Actualizar más reproducidas de forma asíncrona
-          unawaited(_updateMostPlayedAsync(path));
-        }
-      });
-    }
-  }
-
-  // Función para cancelar el timer cuando se pausa o cambia la canción
-  void _cancelListeningTimer() {
-    _listeningTimer?.cancel();
-    if (_songStartTime != null) {
-      _elapsedTime += DateTime.now().difference(_songStartTime!);
-    }
-    _hasBeenSaved = false;
-  }
-  
   @override
   Widget build(BuildContext context) {
     return ValueListenableBuilder<bool>(
@@ -124,40 +67,24 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> with TickerProvid
           stream: audioHandler?.mediaItem,
           builder: (context, snapshot) {
             final song = snapshot.data;
-            
+
             // Mantener el último MediaItem conocido
             if (song != null && song.id.isNotEmpty) {
               _lastKnownMediaItem = song;
             }
-            
+
             // Usar la canción actual o la última conocida
             final currentSong = song ?? _lastKnownMediaItem;
             final duration = currentSong?.duration;
 
-            if (!widget.showBar || currentSong == null || currentSong.id.isEmpty) {
-              // Cancelar timer si no hay canción
-              _cancelListeningTimer();
+            if (!widget.showBar ||
+                currentSong == null ||
+                currentSong.id.isEmpty) {
               return const SizedBox.shrink();
             }
 
-            // Tracking de tiempo de escucha: Solo guardar si se escucha más de 20 segundos
-            if (currentSong.id.isNotEmpty && currentSong.id != _currentSongId) {
-              // Nueva canción detectada - cancelar timer anterior si existe
-              _cancelListeningTimer();
-              
-              _currentSongId = currentSong.id;
-              _songStartTime = DateTime.now();
-              _hasBeenSaved = false;
-              _elapsedTime = Duration.zero;
-              
-              final path = currentSong.extras?['data'];
-              if (path != null) {
-                // Iniciar timer para guardar después de 20 segundos
-                _saveSongAfterDelay(currentSong.id, path);
-              }
-            }
-
-            final isLoading = (audioHandler as MyAudioHandler).initializingNotifier.value;
+            final isLoading =
+                (audioHandler as MyAudioHandler).initializingNotifier.value;
 
             return ValueListenableBuilder<bool>(
               valueListenable: overlayPlayerNavigationEnabled,
@@ -176,23 +103,27 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> with TickerProvid
                     Navigator.of(context).push(
                       PageRouteBuilder(
                         pageBuilder: (context, animation, secondaryAnimation) =>
-                          FullPlayerScreen(
-                            initialMediaItem: currentSong,
-                            initialArtworkUri: artUri,
-                          ),
-                        transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                          // El Hero se anima solo, solo animamos el resto del contenido
-                          return SlideTransition(
-                            position: Tween<Offset>(
-                              begin: const Offset(0, 1),
-                              end: Offset.zero,
-                            ).animate(CurvedAnimation(
-                              parent: animation,
-                              curve: Curves.easeOutCubic,
-                            )),
-                            child: child,
-                          );
-                        },
+                            FullPlayerScreen(
+                              initialMediaItem: currentSong,
+                              initialArtworkUri: artUri,
+                            ),
+                        transitionsBuilder:
+                            (context, animation, secondaryAnimation, child) {
+                              // El Hero se anima solo, solo animamos el resto del contenido
+                              return SlideTransition(
+                                position:
+                                    Tween<Offset>(
+                                      begin: const Offset(0, 1),
+                                      end: Offset.zero,
+                                    ).animate(
+                                      CurvedAnimation(
+                                        parent: animation,
+                                        curve: Curves.easeOutCubic,
+                                      ),
+                                    ),
+                                child: child,
+                              );
+                            },
                         transitionDuration: const Duration(milliseconds: 350),
                       ),
                     );
@@ -211,11 +142,12 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> with TickerProvid
                       if (!context.mounted) return;
                       Navigator.of(context).push(
                         PageRouteBuilder(
-                          pageBuilder: (context, animation, secondaryAnimation) =>
-                              FullPlayerScreen(
-                                initialMediaItem: currentSong,
-                                initialArtworkUri: artUri,
-                              ),
+                          pageBuilder:
+                              (context, animation, secondaryAnimation) =>
+                                  FullPlayerScreen(
+                                    initialMediaItem: currentSong,
+                                    initialArtworkUri: artUri,
+                                  ),
                           transitionsBuilder:
                               (context, animation, secondaryAnimation, child) {
                                 final offsetAnimation =
@@ -244,41 +176,52 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> with TickerProvid
                       color: Theme.of(context).colorScheme.surfaceContainer,
                       borderRadius: BorderRadius.circular(16),
                     ),
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 10,
+                    ),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Row(
                           children: [
                             ValueListenableBuilder<bool>(
-                              valueListenable: (audioHandler as MyAudioHandler).initializingNotifier,
+                              valueListenable: (audioHandler as MyAudioHandler)
+                                  .initializingNotifier,
                               builder: (context, isLoading, child) {
                                 if (isLoading) {
                                   return Container(
                                     width: 50,
                                     height: 50,
                                     decoration: BoxDecoration(
-                                      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.surfaceContainerHighest,
                                       borderRadius: BorderRadius.circular(8),
                                     ),
                                     child: const Center(
                                       child: SizedBox(
                                         width: 28,
                                         height: 28,
-                                        child: CircularProgressIndicator(strokeWidth: 3),
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 3,
+                                        ),
                                       ),
                                     ),
                                   );
                                 }
-                                
+
                                 final artUri = currentSong.artUri;
-                                
+
                                 return ArtworkHeroCached(
                                   artUri: artUri,
                                   size: 50,
                                   borderRadius: BorderRadius.circular(8),
-                                  heroTag: 'now_playing_artwork_${(currentSong.extras?['songId'] ?? currentSong.id).toString()}',
+                                  heroTag:
+                                      'now_playing_artwork_${(currentSong.extras?['songId'] ?? currentSong.id).toString()}',
                                   showPlaceholderIcon: true,
+                                  isLoading:
+                                      false, // El overlay maneja el loading externamente
                                 );
                               },
                             ),
@@ -293,15 +236,20 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> with TickerProvid
                                     maxWidth:
                                         MediaQuery.of(context).size.width -
                                         170, // Ajusta según tu layout
-                                    style: Theme.of(context).textTheme.titleMedium,
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.titleMedium,
                                   ),
                                   Text(
-                                    (currentSong.artist == null || currentSong.artist!.trim().isEmpty)
+                                    (currentSong.artist == null ||
+                                            currentSong.artist!.trim().isEmpty)
                                         ? 'Desconocido'
                                         : currentSong.artist!,
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
-                                    style: Theme.of(context).textTheme.bodyMedium,
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.bodyMedium,
                                   ),
                                 ],
                               ),
@@ -315,18 +263,8 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> with TickerProvid
                                   // Sincroniza la animación
                                   if (isPlaying) {
                                     _playPauseController.forward();
-                                    // Reanudar timer si la canción vuelve a reproducirse
-                                    if (_currentSongId != null && !_hasBeenSaved) {
-                                      _songStartTime = DateTime.now();
-                                      final path = currentSong.extras?['data'];
-                                      if (path != null) {
-                                        _saveSongAfterDelay(_currentSongId!, path);
-                                      }
-                                    }
                                   } else {
                                     _playPauseController.reverse();
-                                    // Cancelar timer si se pausa la reproducción
-                                    _cancelListeningTimer();
                                   }
                                   return IconButton(
                                     iconSize: 36,
@@ -352,23 +290,30 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> with TickerProvid
 
                         RepaintBoundary(
                           child: StreamBuilder<Duration>(
-                            stream: (audioHandler as MyAudioHandler).positionStream,
+                            stream:
+                                (audioHandler as MyAudioHandler).positionStream,
                             initialData: Duration.zero,
                             builder: (context, posSnapshot) {
-                              final position = posSnapshot.data ?? Duration.zero;
+                              final position =
+                                  posSnapshot.data ?? Duration.zero;
                               final hasDuration =
-                                  duration != null && duration.inMilliseconds > 0;
+                                  duration != null &&
+                                  duration.inMilliseconds > 0;
 
                               return StreamBuilder<Duration?>(
                                 stream: (audioHandler as MyAudioHandler)
                                     .player
                                     .durationStream,
                                 builder: (context, durationSnapshot) {
-                                  final fallbackDuration = durationSnapshot.data;
+                                  final fallbackDuration =
+                                      durationSnapshot.data;
                                   final total = hasDuration
                                       ? duration.inMilliseconds
                                       : (fallbackDuration?.inMilliseconds ?? 1);
-                                  final current = position.inMilliseconds.clamp(0, total);
+                                  final current = position.inMilliseconds.clamp(
+                                    0,
+                                    total,
+                                  );
 
                                   return Column(
                                     children: [
@@ -377,13 +322,19 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> with TickerProvid
                                         child: LinearProgressIndicator(
                                           year2023: false,
                                           key: ValueKey(total),
-                                          value: total > 0 ? current / total : 0,
+                                          value: total > 0
+                                              ? current / total
+                                              : 0,
                                           minHeight: 4,
-                                          borderRadius: BorderRadius.circular(8),
+                                          borderRadius: BorderRadius.circular(
+                                            8,
+                                          ),
                                           backgroundColor: Theme.of(
                                             context,
                                           ).colorScheme.onSurface.withAlpha(60),
-                                          color: Theme.of(context).colorScheme.primary,
+                                          color: Theme.of(
+                                            context,
+                                          ).colorScheme.primary,
                                         ),
                                       ),
                                     ],

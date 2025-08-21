@@ -10,6 +10,8 @@ import 'package:flutter/foundation.dart';
 import 'album_art_cache_manager.dart';
 import 'optimized_album_art_loader.dart';
 import 'package:music/utils/db/songs_index_db.dart';
+import 'package:music/utils/db/mostplayer_db.dart';
+import 'package:music/utils/db/recent_db.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 AudioHandler? _audioHandler;
@@ -210,6 +212,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   Duration? _sleepStartPosition;
   bool _isSkipping = false;
   bool _isInitialized = false;
+  bool _isManualChange = false;
   StreamSubscription<int?>? _currentIndexSubscription;
   StreamSubscription<PlaybackEvent>? _playbackEventSubscription;
   StreamSubscription<Duration?>? _durationSubscription;
@@ -217,10 +220,28 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   StreamSubscription<ProcessingState>? _processingStateSubscription;
   StreamSubscription<Duration>? _positionSubscription;
 
+  // Control de operaciones pendientes para evitar sobrecarga
+  String? _lastProcessedSongId;
+  final Map<String, bool> _pendingArtworkOperations = {};
+
+  // Debounce para actualizaciones de notificación
+  Timer? _notificationDebounceTimer;
+  static const Duration _notificationDebounceDelay = Duration(
+    milliseconds: 300,
+  );
+  MediaItem? _lastNotificationMediaItem;
+
   // Persistencia
   SharedPreferences? _prefs;
   bool _restoredSession = false;
   DateTime _lastPositionPersist = DateTime.fromMillisecondsSinceEpoch(0);
+
+  // Variables para tracking de tiempo de escucha en segundo plano
+  String? _currentTrackingId;
+  DateTime? _trackingStartTime;
+  Timer? _trackingTimer;
+  bool _hasBeenTracked = false;
+  Duration _elapsedTrackingTime = Duration.zero;
 
   // Claves de SharedPreferences
   static const String _kPrefQueuePaths = 'playback_queue_paths';
@@ -233,52 +254,6 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
   MyAudioHandler() {
     _init();
-  }
-
-  /// Salta hacia adelante hasta encontrar una canción cuyo archivo exista.
-  /// Si no hay ninguna válida, limpia la cola sin destruir el reproductor.
-  Future<void> _skipForwardPastMissing(int fromIndex) async {
-    final bool wasPlaying = _player.playing;
-    int next = fromIndex;
-    while (true) {
-      next += 1;
-      if (next >= _mediaQueue.length) break;
-      final nextPath = _mediaQueue[next].id;
-      try {
-        if (await File(nextPath).exists()) {
-          try {
-            await _player.seek(Duration.zero, index: next);
-            if (wasPlaying && !_player.playing) {
-              await _player.play();
-            }
-          } catch (_) {}
-          forceUpdateCurrentMediaItem();
-          return;
-        }
-      } catch (_) {}
-    }
-
-    // No hay ninguna válida restante: limpiar estado, pero sin stop() total.
-    try {
-      await _player.stop();
-    } catch (_) {}
-    try {
-      await _disposeListeners();
-    } catch (_) {}
-    _mediaQueue.clear();
-    _currentSongList.clear();
-    _originalQueue = null;
-    _originalSongList = null;
-    queue.add([]);
-    mediaItem.add(null);
-    playbackState.add(
-      playbackState.value.copyWith(
-        processingState: AudioProcessingState.idle,
-        playing: false,
-        updatePosition: Duration.zero,
-      ),
-    );
-    _isInitialized = false;
   }
 
   int _initRetryCount = 0;
@@ -332,125 +307,97 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       _currentIndexSubscription = _player.currentIndexStream.listen((index) {
         if (_initializing) return;
         if (index != null && index < _mediaQueue.length) {
-          // Persistir índice actual
+          var currentMediaItem = _mediaQueue[index];
+          final songPath = currentMediaItem.extras?['data'] as String?;
+          final songId = currentMediaItem.extras?['songId'] as int?;
+          final currentSongId = currentMediaItem.id;
+
+          // Cancelar operaciones pendientes de canciones anteriores
+          if (_lastProcessedSongId != null &&
+              _lastProcessedSongId != currentSongId) {
+            _pendingArtworkOperations.clear();
+            cancelAllArtworkLoads(); // Cancelar cargas de carátulas activas
+          }
+          _lastProcessedSongId = currentSongId;
+
+          // Persistir índice actual (sin await para no bloquear)
           unawaited(() async {
             try {
               await _prefs?.setInt(_kPrefQueueIndex, index);
             } catch (_) {}
           }());
 
-          var currentMediaItem = _mediaQueue[index];
-          final songPath = currentMediaItem.extras?['data'] as String?;
-          final songId = currentMediaItem.extras?['songId'] as int?;
+          // Tracking de tiempo de escucha: resetear tracking al cambiar de canción
+          if (currentMediaItem.id.isNotEmpty &&
+              currentMediaItem.id != _currentTrackingId) {
+            _resetTracking();
+            _currentTrackingId = currentMediaItem.id;
+            _trackingStartTime = DateTime.now();
 
-          // Si el archivo ya no existe, saltar automáticamente a la siguiente canción
-          if (songPath != null) {
-            unawaited(() async {
-              try {
-                if (!await File(songPath).exists()) {
-                  // Buscar siguiente válida sin reconstruir la cola completa
-                  final currentIdx = _player.currentIndex ?? index;
-                  await _skipForwardPastMissing(currentIdx);
-                  return;
-                }
-              } catch (_) {}
-            }());
+            if (songPath != null) {
+              _startTrackingPlaytime(currentMediaItem.id, songPath);
+            }
           }
 
-          // Manejo inteligente de carátulas: intentar cargar primero antes de actualizar la notificación
-          unawaited(() async {
-            try {
-              Uri? artUri;
-              bool shouldUpdateImmediately = true;
+          // Preparar MediaItem final solo basándose en la nueva canción
+          MediaItem finalMediaItem = currentMediaItem;
 
-              if (songPath != null && songId != null) {
-                // Verificar si la carátula ya está en caché
-                if (_artworkCache.containsKey(songPath)) {
-                  artUri = _artworkCache[songPath];
-                } else {
-                  // Intentar cargar la carátula con timeout corto para no retrasar demasiado
-                  shouldUpdateImmediately = false;
+          if (songPath != null && songId != null) {
+            if (_artworkCache.containsKey(songPath)) {
+              // Carátula en caché - usar inmediatamente
+              final artUri = _artworkCache[songPath];
+              finalMediaItem = currentMediaItem.copyWith(artUri: artUri);
+              _mediaQueue[index] = finalMediaItem;
+            } else {
+              // No está en caché - cargar en background después de actualizar
+              if (!_pendingArtworkOperations.containsKey(currentSongId)) {
+                _pendingArtworkOperations[currentSongId] = true;
+                unawaited(() async {
                   try {
-                    artUri = await getOrCacheArtwork(
+                    final artUri = await getOrCacheArtwork(
                       songId,
                       songPath,
-                    ).timeout(const Duration(milliseconds: 150));
-                  } catch (_) {
-                    // Si no se puede cargar en el timeout, continúa sin carátula
-                    artUri = null;
-                  }
-                }
+                    ).timeout(const Duration(milliseconds: 500));
 
-                // Actualizar el MediaItem con carátula si está disponible
-                if (artUri != null && currentMediaItem.artUri != artUri) {
-                  currentMediaItem = currentMediaItem.copyWith(artUri: artUri);
-                  _mediaQueue[index] = currentMediaItem;
-                }
-              }
-
-              // Verificar que aún estamos en la misma canción antes de actualizar
-              final currentIndex = _player.currentIndex;
-              if (currentIndex == index && mounted) {
-                // Actualizar la notificación
-                mediaItem.add(currentMediaItem);
-                playbackState.add(
-                  playbackState.value.copyWith(queueIndex: index),
-                );
-
-                // Si no pudimos cargar la carátula en el timeout inicial, continuar intentando en segundo plano
-                if (songPath != null &&
-                    songId != null &&
-                    artUri == null &&
-                    !shouldUpdateImmediately) {
-                  unawaited(() async {
-                    try {
-                      final delayedArtUri = await getOrCacheArtwork(
-                        songId,
-                        songPath,
+                    // Verificar que aún estamos en la misma canción
+                    if (_lastProcessedSongId == currentSongId &&
+                        mounted &&
+                        _player.currentIndex == index) {
+                      final updatedMediaItem = _mediaQueue[index].copyWith(
+                        artUri: artUri,
                       );
-                      if (delayedArtUri != null && mounted) {
-                        final stillCurrentIndex = _player.currentIndex;
-                        if (stillCurrentIndex == index &&
-                            stillCurrentIndex != null &&
-                            stillCurrentIndex < _mediaQueue.length) {
-                          final updatedMediaItem = _mediaQueue[index].copyWith(
-                            artUri: delayedArtUri,
-                          );
-                          _mediaQueue[index] = updatedMediaItem;
-                          mediaItem.add(updatedMediaItem);
-                          // Forzar actualización completa de la notificación
-                          playbackState.add(
-                            playbackState.value.copyWith(
-                              queueIndex: index,
-                              updatePosition: _player.position,
-                            ),
-                          );
-                          // Pequeño delay adicional para asegurar el refresh
-                          await Future.delayed(
-                            const Duration(milliseconds: 50),
-                          );
-                          forceUpdateCurrentMediaItem();
-                        }
-                      }
-                    } catch (e) {
-                      // Error silencioso
+                      _mediaQueue[index] = updatedMediaItem;
+                      // Actualizar inmediatamente en la UI
+                      mediaItem.add(updatedMediaItem);
                     }
-                  }());
-                }
-              }
-            } catch (e) {
-              // Si hay cualquier error, actualizar al menos sin carátula
-              if (mounted && _player.currentIndex == index) {
-                mediaItem.add(currentMediaItem);
-                playbackState.add(
-                  playbackState.value.copyWith(queueIndex: index),
-                );
+                  } catch (e) {
+                    // Error silencioso - el widget ya sabe que no hay carátula
+                  } finally {
+                    _pendingArtworkOperations.remove(currentSongId);
+                  }
+                }());
               }
             }
-          }());
+          }
 
-          // Precargar carátulas de canciones próximas de forma más agresiva
-          _preloadNextArtworks(index);
+          // Actualizar inmediatamente para cambios automáticos, con debounce para manuales
+          mediaItem.add(finalMediaItem);
+
+          if (_isSkipping || _isManualChange) {
+            // Cambio manual (skipToNext, skipToPrevious, skipToQueueItem) - usar debounce
+            _updateNotificationWithDebounce(finalMediaItem, index);
+            // Resetear flag después de detectar
+            _isManualChange = false;
+          } else {
+            // Cambio automático (canción termina sola) - pequeño delay para cargar carátula
+            Timer(const Duration(milliseconds: 100), () {
+              if (mounted) {
+                playbackState.add(
+                  playbackState.value.copyWith(queueIndex: index),
+                );
+              }
+            });
+          }
         }
       });
 
@@ -459,6 +406,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         if (current != null &&
             duration != null &&
             current.duration != duration) {
+          // Actualizar inmediatamente en la UI
           mediaItem.add(current.copyWith(duration: duration));
           playbackState.add(
             playbackState.value.copyWith(
@@ -472,8 +420,18 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       _playingSubscription = _player.playingStream.listen((playing) {
         playbackState.add(playbackState.value.copyWith(playing: playing));
         if (playing) {
-          // Nudge extra para refrescar notificación cuando comienza a reproducir
-          forceUpdateCurrentMediaItem();
+          // Reanudar timer de tracking si hay una canción actual y no ha sido guardada
+          if (_currentTrackingId != null && !_hasBeenTracked) {
+            _trackingStartTime = DateTime.now();
+            final currentItem = mediaItem.value;
+            final songPath = currentItem?.extras?['data'] as String?;
+            if (songPath != null) {
+              _startTrackingPlaytime(_currentTrackingId!, songPath);
+            }
+          }
+        } else {
+          // Pausar timer cuando se pausa la reproducción (acumula tiempo transcurrido)
+          _cancelTrackingTimer();
         }
         // Guardar estado de reproducción actual
         unawaited(() async {
@@ -494,9 +452,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         if ((state == ProcessingState.ready ||
                 state == ProcessingState.buffering ||
                 state == ProcessingState.completed) &&
-            mounted) {
-          forceUpdateCurrentMediaItem();
-        }
+            mounted) {}
       });
 
       // Suscripción para persistir la posición cada ~2s
@@ -539,109 +495,126 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     await _processingStateSubscription?.cancel();
     await _positionSubscription?.cancel();
 
+    // Cancelar timer de debounce de notificaciones
+    _notificationDebounceTimer?.cancel();
+    _lastNotificationMediaItem = null;
+
     _currentIndexSubscription = null;
     _playbackEventSubscription = null;
     _durationSubscription = null;
     _playingSubscription = null;
     _processingStateSubscription = null;
     _positionSubscription = null;
+
+    // Resetear tracking completamente
+    _resetTracking();
+  }
+
+  /// Función para actualizar más reproducidas desde el background
+  Future<void> _updateMostPlayedAsync(String path) async {
+    try {
+      final query = OnAudioQuery();
+      final allSongs = await query.querySongs();
+      final match = allSongs.where((s) => s.data == path);
+      if (match.isNotEmpty) {
+        await MostPlayedDB().incrementPlayCount(match.first);
+      } else {
+        // Error de que la canción no se encontró en la base de datos
+      }
+    } catch (e) {
+      // Error de que la canción no se encontró en la base de datos
+    }
+  }
+
+  /// Función para guardar la canción después de 10 segundos
+  void _startTrackingPlaytime(String trackId, String path) {
+    _trackingTimer?.cancel();
+    final remainingTime = const Duration(seconds: 10) - _elapsedTrackingTime;
+
+    if (remainingTime <= Duration.zero) {
+      // Ya pasó el tiempo, guardar inmediatamente
+      if (_currentTrackingId == trackId && !_hasBeenTracked) {
+        _hasBeenTracked = true;
+        unawaited(RecentsDB().addRecentPath(path));
+        unawaited(_updateMostPlayedAsync(path));
+      }
+    } else {
+      _trackingTimer = Timer(remainingTime, () {
+        if (_currentTrackingId == trackId && !_hasBeenTracked) {
+          _hasBeenTracked = true;
+          // Actualizar recientes de forma asíncrona
+          unawaited(RecentsDB().addRecentPath(path));
+          // Actualizar más reproducidas de forma asíncrona
+          unawaited(_updateMostPlayedAsync(path));
+        }
+      });
+    }
+  }
+
+  /// Función para cancelar el timer cuando se pausa o cambia la canción
+  void _cancelTrackingTimer() {
+    _trackingTimer?.cancel();
+    // Solo acumular tiempo si no ha sido guardado aún
+    if (_trackingStartTime != null && !_hasBeenTracked) {
+      final timeToAdd = DateTime.now().difference(_trackingStartTime!);
+      _elapsedTrackingTime += timeToAdd;
+    }
+    _trackingStartTime = null;
+  }
+
+  /// Función para resetear completamente el tracking (usado al cambiar de canción)
+  void _resetTracking() {
+    _trackingTimer?.cancel();
+    _currentTrackingId = null;
+    _trackingStartTime = null;
+    _hasBeenTracked = false;
+    _elapsedTrackingTime = Duration.zero;
   }
 
   /// Verifica si el handler está montado (para evitar actualizaciones después de dispose)
   bool get mounted => _isInitialized && !_initializing;
 
-  /// Fuerza la actualización inmediata del MediaItem actual con mejor refresco de notificación
-  void forceUpdateCurrentMediaItem() {
-    if (!mounted) return;
+  /// Actualiza la notificación con debounce para evitar sobrecarga
+  void _updateNotificationWithDebounce(MediaItem mediaItem, int index) {
+    // Siempre cancelar timer anterior para evitar acumulación
+    _notificationDebounceTimer?.cancel();
 
-    final currentIndex = _player.currentIndex;
-    if (currentIndex != null &&
-        currentIndex >= 0 &&
-        currentIndex < _mediaQueue.length) {
-      final currentMediaItem = _mediaQueue[currentIndex];
-      final songPath = currentMediaItem.extras?['data'] as String?;
-      final songId = currentMediaItem.extras?['songId'] as int?;
+    // Almacenar la actualización más reciente
+    _lastNotificationMediaItem = mediaItem;
 
-      // Si hay carátula en caché, actualizar el MediaItem primero
-      MediaItem itemToUpdate = currentMediaItem;
-      if (songPath != null && _artworkCache.containsKey(songPath)) {
-        final artUri = _artworkCache[songPath];
-        if (artUri != null && currentMediaItem.artUri != artUri) {
-          itemToUpdate = currentMediaItem.copyWith(artUri: artUri);
-          _mediaQueue[currentIndex] = itemToUpdate;
+    _notificationDebounceTimer = Timer(_notificationDebounceDelay, () {
+      if (mounted && _lastNotificationMediaItem != null) {
+        // Solo actualizar si realmente cambió algo significativo
+        final current = this.mediaItem.value;
+        final pending = _lastNotificationMediaItem!;
+
+        bool shouldUpdate =
+            current == null ||
+            current.id != pending.id ||
+            current.duration != pending.duration ||
+            current.title != pending.title;
+
+        // Preservar carátula existente si la nueva no tiene carátula
+        MediaItem finalPending = pending;
+        if (current != null &&
+            current.id == pending.id &&
+            current.artUri != null &&
+            pending.artUri == null) {
+          finalPending = pending.copyWith(artUri: current.artUri);
         }
-      }
 
-      // Actualizar con múltiples pulsos para asegurar que la notificación refresque
-      mediaItem.add(itemToUpdate);
-
-      // Primer pulso: actualizar con nueva posición
-      playbackState.add(
-        playbackState.value.copyWith(
-          queueIndex: currentIndex,
-          updatePosition: _player.position,
-        ),
-      );
-
-      // Segundo pulso después de un pequeño delay para forzar refresco
-      unawaited(() async {
-        await Future.delayed(const Duration(milliseconds: 25));
-        if (mounted && _player.currentIndex == currentIndex) {
-          mediaItem.add(itemToUpdate);
-          playbackState.add(
-            playbackState.value.copyWith(
-              queueIndex: currentIndex,
-              updatePosition: _player.position,
-              // Alternar algunos valores para forzar cambio
-              playing: playbackState.value.playing,
-            ),
-          );
+        // Solo actualizar artUri si realmente cambió
+        if (current?.artUri != finalPending.artUri) {
+          shouldUpdate = true;
         }
-      }());
 
-      // Si no hay carátula en caché, intentar cargarla con timeout corto
-      if (songPath != null &&
-          songId != null &&
-          !_artworkCache.containsKey(songPath)) {
-        unawaited(() async {
-          try {
-            final artUri = await getOrCacheArtwork(
-              songId,
-              songPath,
-            ).timeout(const Duration(milliseconds: 100));
-            if (artUri != null && mounted) {
-              final currentIndexAfter = _player.currentIndex;
-              if (currentIndexAfter == currentIndex &&
-                  currentIndexAfter != null &&
-                  currentIndexAfter < _mediaQueue.length) {
-                final updatedMediaItem = _mediaQueue[currentIndexAfter]
-                    .copyWith(artUri: artUri);
-                _mediaQueue[currentIndexAfter] = updatedMediaItem;
-
-                // Triple actualización para asegurar que se tome la carátula
-                mediaItem.add(updatedMediaItem);
-                await Future.delayed(const Duration(milliseconds: 50));
-                if (mounted && _player.currentIndex == currentIndexAfter) {
-                  mediaItem.add(updatedMediaItem);
-                  playbackState.add(
-                    playbackState.value.copyWith(
-                      queueIndex: currentIndexAfter,
-                      updatePosition: _player.position,
-                    ),
-                  );
-                  await Future.delayed(const Duration(milliseconds: 50));
-                  if (mounted && _player.currentIndex == currentIndexAfter) {
-                    mediaItem.add(updatedMediaItem);
-                  }
-                }
-              }
-            }
-          } catch (e) {
-            // Error silencioso - continuar sin carátula
-          }
-        }());
+        if (shouldUpdate) {
+          this.mediaItem.add(finalPending);
+          playbackState.add(playbackState.value.copyWith(queueIndex: index));
+        }
+        _lastNotificationMediaItem = null;
       }
-    }
+    });
   }
 
   AudioProcessingState _transformState(ProcessingState state) {
@@ -828,7 +801,19 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
           final selectedMediaItem = _mediaQueue[initialIndex];
           // Solo emitir si la canción realmente cambia
           if (mediaItem.value?.id != selectedMediaItem.id) {
-            mediaItem.add(selectedMediaItem);
+            // Verificar si la carátula está en caché antes de actualizar
+            final songPath = selectedMediaItem.extras?['data'] as String?;
+            MediaItem finalSelectedItem = selectedMediaItem;
+
+            if (songPath != null && _artworkCache.containsKey(songPath)) {
+              final artUri = _artworkCache[songPath];
+              if (artUri != null) {
+                finalSelectedItem = selectedMediaItem.copyWith(artUri: artUri);
+                _mediaQueue[initialIndex] = finalSelectedItem;
+              }
+            }
+
+            mediaItem.add(finalSelectedItem);
             playbackState.add(
               playbackState.value.copyWith(queueIndex: initialIndex),
             );
@@ -844,7 +829,6 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
             }());
 
             // Si la carátula está en caché, actualizar inmediatamente
-            final songPath = selectedMediaItem.extras?['data'] as String?;
             if (songPath != null && _artworkCache.containsKey(songPath)) {
               final artUri = _artworkCache[songPath];
               if (artUri != null && selectedMediaItem.artUri != artUri) {
@@ -866,8 +850,6 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         if (autoPlay) {
           await play();
         }
-        // Forzar carga/actualización inmediata de la carátula de la canción actual
-        forceUpdateCurrentMediaItem();
         // Precargar próximas carátulas tras restaurar/establecer cola
         if (initialIndex >= 0) {
           _preloadNextArtworks(initialIndex);
@@ -986,6 +968,9 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       // Cancelar temporizador de sueño si está activo
       cancelSleepTimer();
 
+      // Cancelar timer de debounce de notificaciones
+      _notificationDebounceTimer?.cancel();
+
       // Detener y limpiar el reproductor completamente
       await _player.stop();
       await _player.dispose();
@@ -1030,11 +1015,14 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
     _isSkipping = true;
     try {
+      // Cancelar operaciones pendientes antes de cambiar
+      _pendingArtworkOperations.clear();
+      cancelAllArtworkLoads();
+
       await _player.seekToNext();
       _updateSleepTimer();
 
-      // Forzar actualización inmediata de la notificación
-      forceUpdateCurrentMediaItem();
+      // La nueva carátula se cargará automáticamente por el currentIndexStream listener
     } catch (e) {
       // Error silencioso
     } finally {
@@ -1048,6 +1036,10 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
     _isSkipping = true;
     try {
+      // Cancelar operaciones pendientes antes de cambiar
+      _pendingArtworkOperations.clear();
+      cancelAllArtworkLoads();
+
       if (_player.position.inMilliseconds > 5000) {
         await _player.seek(Duration.zero);
       } else {
@@ -1055,8 +1047,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       }
       _updateSleepTimer();
 
-      // Forzar actualización inmediata de la notificación
-      forceUpdateCurrentMediaItem();
+      // La nueva carátula se cargará automáticamente por el currentIndexStream listener
     } catch (e) {
       // Error silencioso
     } finally {
@@ -1068,65 +1059,21 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   Future<void> skipToQueueItem(int index) async {
     if (_initializing) return;
     if (index >= 0 && index < _mediaQueue.length) {
+      _isManualChange = true;
       try {
+        // Cancelar operaciones pendientes antes de cambiar
+        _pendingArtworkOperations.clear();
+        cancelAllArtworkLoads();
+
         final wasPlaying = _player.playing;
 
-        // Actualizar inmediatamente el MediaItem para la notificación
-        final newMediaItem = _mediaQueue[index];
-        mediaItem.add(newMediaItem);
-        // Refrescar estado con el nuevo índice (sin tocar la posición)
+        // El MediaItem se actualizará automáticamente por el currentIndexStream listener
         playbackState.add(playbackState.value.copyWith(queueIndex: index));
 
-        // Verificar si la carátula ya está en caché y actualizar inmediatamente
-        final songPath = newMediaItem.extras?['data'] as String?;
-        final songId = newMediaItem.extras?['songId'] as int?;
-
-        if (songPath != null &&
-            songId != null &&
-            _artworkCache.containsKey(songPath)) {
-          final artUri = _artworkCache[songPath];
-          if (artUri != null && newMediaItem.artUri != artUri) {
-            final updatedMediaItem = newMediaItem.copyWith(artUri: artUri);
-            _mediaQueue[index] = updatedMediaItem;
-            mediaItem.add(updatedMediaItem);
-            playbackState.add(playbackState.value.copyWith(queueIndex: index));
-          }
-        }
-
-        // Ejecutar el seek de forma completamente asíncrona
+        // Ejecutar el seek de forma asíncrona
         unawaited(() async {
           try {
             await _player.seek(Duration.zero, index: index);
-
-            // Cargar carátula de forma asíncrona si no está en caché
-            if (songPath != null &&
-                songId != null &&
-                !_artworkCache.containsKey(songPath)) {
-              unawaited(() async {
-                try {
-                  final artUri = await getOrCacheArtwork(songId, songPath);
-                  if (artUri != null && mounted) {
-                    // Verificar que aún estamos en la misma canción
-                    final currentIndex = _player.currentIndex;
-                    if (currentIndex == index &&
-                        currentIndex != null &&
-                        currentIndex < _mediaQueue.length) {
-                      final updatedMediaItem = _mediaQueue[index].copyWith(
-                        artUri: artUri,
-                      );
-                      _mediaQueue[index] = updatedMediaItem;
-                      mediaItem.add(updatedMediaItem);
-                    }
-                  }
-                } catch (e) {
-                  // Error silencioso
-                }
-              }());
-            }
-
-            // Precargar carátulas de canciones próximas
-            _preloadNextArtworks(index);
-
             _updateSleepTimer();
 
             if (wasPlaying && !_player.playing) {
@@ -1138,6 +1085,8 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         }());
       } catch (e) {
         // Error silencioso
+      } finally {
+        _isManualChange = false;
       }
     }
   }
@@ -1447,75 +1396,50 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
   bool get isSleepTimerActive => _sleepDuration != null;
 
-  /// Precarga carátulas de canciones próximas
+  /// Precarga carátulas de canciones próximas (simplificada para mejor rendimiento)
   Timer? _preloadDebounceTimer;
   void _preloadNextArtworks(int currentIndex) {
     if (_currentSongList.isEmpty) return;
 
     _preloadDebounceTimer?.cancel();
-    _preloadDebounceTimer = Timer(const Duration(milliseconds: 100), () {
-      // Precargar más canciones: siguientes 8 y anteriores 3 para mejor experiencia
+    _preloadDebounceTimer = Timer(const Duration(milliseconds: 500), () {
+      // Precargar solo las próximas 2 canciones para no sobrecargar
       final indicesToPreload = <int>[];
 
-      // Siguientes canciones (prioridad alta)
-      for (int i = 1; i <= 8; i++) {
+      // Solo siguientes 2 canciones (reducido drásticamente)
+      for (int i = 1; i <= 2; i++) {
         final nextIndex = currentIndex + i;
         if (nextIndex < _currentSongList.length) {
           indicesToPreload.add(nextIndex);
         }
       }
 
-      // Canciones anteriores (prioridad media)
-      for (int i = 1; i <= 3; i++) {
-        final prevIndex = currentIndex - i;
-        if (prevIndex >= 0) {
-          indicesToPreload.add(prevIndex);
-        }
-      }
-
-      // Precargar carátulas de forma asíncrona con control de concurrencia
-      unawaited(() async {
-        try {
-          // Procesar en lotes para evitar sobrecargar el sistema
-          const int batchSize = 3;
-          for (
-            int batchStart = 0;
-            batchStart < indicesToPreload.length;
-            batchStart += batchSize
-          ) {
-            final batchEnd = (batchStart + batchSize).clamp(
-              0,
-              indicesToPreload.length,
-            );
-            final batch = indicesToPreload.sublist(batchStart, batchEnd);
-
-            final futures = <Future>[];
-            for (final index in batch) {
+      // Precargar de forma muy simple sin lotes ni concurrencia excesiva
+      if (indicesToPreload.isNotEmpty) {
+        unawaited(() async {
+          try {
+            for (final index in indicesToPreload) {
               final song = _currentSongList[index];
               if (!_artworkCache.containsKey(song.data) &&
                   !_preloadCache.containsKey(song.data)) {
-                // Cargar con timeout para evitar bloqueos
-                futures.add(
-                  getOrCacheArtwork(
+                // Cargar con timeout muy corto
+                try {
+                  await getOrCacheArtwork(
                     song.id,
                     song.data,
-                  ).timeout(const Duration(seconds: 3)).catchError((_) => null),
-                );
+                  ).timeout(const Duration(milliseconds: 500));
+                } catch (e) {
+                  // Error silencioso - continuar con la siguiente
+                }
               }
+              // Pequeña pausa entre cargas
+              await Future.delayed(const Duration(milliseconds: 100));
             }
-
-            // Procesar batch y esperar un poco antes del siguiente
-            if (futures.isNotEmpty) {
-              await Future.wait(futures);
-              if (batchEnd < indicesToPreload.length) {
-                await Future.delayed(const Duration(milliseconds: 50));
-              }
-            }
+          } catch (e) {
+            // Error silencioso
           }
-        } catch (e) {
-          // Error silencioso
-        }
-      }());
+        }());
+      }
     });
   }
 
@@ -1615,9 +1539,6 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       if (shuffleEnabled) {
         unawaited(toggleShuffle(true));
       }
-
-      // Forzar actualización inmediata de MediaItem y carátula tras restaurar
-      forceUpdateCurrentMediaItem();
       _preloadNextArtworks(savedIndex);
     } catch (_) {
       // Ignorar errores de restauración

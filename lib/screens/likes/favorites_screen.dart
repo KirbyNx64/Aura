@@ -15,6 +15,7 @@ import 'package:music/utils/db/shortcuts_db.dart';
 import 'package:mini_music_visualizer/mini_music_visualizer.dart';
 import 'package:music/utils/db/playlist_model.dart' as hive_model;
 import 'package:music/screens/play/player_screen.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 enum OrdenFavoritos { normal, alfabetico, invertido, ultimoAgregado }
 
@@ -46,6 +47,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
   Timer? _debounce;
   Timer? _playingDebounce;
   Timer? _mediaItemDebounce;
+  Timer? _immediateMediaItemDebounce;
   final ValueNotifier<bool> _isPlayingNotifier = ValueNotifier<bool>(false);
   final ValueNotifier<MediaItem?> _currentMediaItemNotifier =
       ValueNotifier<MediaItem?>(null);
@@ -71,6 +73,9 @@ class _FavoritesScreenState extends State<FavoritesScreen>
 
     // Inicializar con el valor actual si ya hay algo reproduciéndose
     if (audioHandler?.mediaItem.valueOrNull != null) {
+      // Cancelar cualquier debounce pendiente
+      _immediateMediaItemDebounce?.cancel();
+      _mediaItemDebounce?.cancel();
       _immediateMediaItemNotifier.value = audioHandler!.mediaItem.valueOrNull;
       _currentMediaItemNotifier.value = audioHandler!.mediaItem.valueOrNull;
     }
@@ -91,11 +96,17 @@ class _FavoritesScreenState extends State<FavoritesScreen>
       });
     });
 
-    // Escuchar cambios en el MediaItem inmediatamente (para detección de canción actual)
+    // Escuchar cambios en el MediaItem con debounce (para detección de canción actual)
     audioHandler?.mediaItem.listen((mediaItem) {
-      if (mounted) {
-        _immediateMediaItemNotifier.value = mediaItem;
-      }
+      _immediateMediaItemDebounce?.cancel();
+      _immediateMediaItemDebounce = Timer(
+        const Duration(milliseconds: 500),
+        () {
+          if (mounted) {
+            _immediateMediaItemNotifier.value = mediaItem;
+          }
+        },
+      );
     });
 
     // Escuchar cambios en el MediaItem con debounce (para espaciado y elementos no críticos)
@@ -121,6 +132,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     _debounce?.cancel();
     _playingDebounce?.cancel();
     _mediaItemDebounce?.cancel();
+    _immediateMediaItemDebounce?.cancel();
     _isPlayingNotifier.dispose();
     _currentMediaItemNotifier.dispose();
     _immediateMediaItemNotifier.dispose();
@@ -139,6 +151,9 @@ class _FavoritesScreenState extends State<FavoritesScreen>
 
     // Actualizar los notifiers con los valores actuales del audioHandler
     if (audioHandler?.mediaItem.valueOrNull != null) {
+      // Cancelar el debounce para evitar conflictos
+      _immediateMediaItemDebounce?.cancel();
+      _mediaItemDebounce?.cancel();
       _immediateMediaItemNotifier.value = audioHandler!.mediaItem.valueOrNull;
       _currentMediaItemNotifier.value = audioHandler!.mediaItem.valueOrNull;
     }
@@ -442,66 +457,144 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     if (!context.mounted) return;
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       builder: (context) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.queue_music),
-              title: TranslatedText('add_to_queue'),
-              onTap: () async {
-                Navigator.of(context).pop();
-                await (audioHandler as MyAudioHandler).addSongsToQueueEnd([
-                  song,
-                ]);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.delete_outline),
-              title: TranslatedText('remove_from_favorites'),
-              onTap: () async {
-                Navigator.of(context).pop();
-                await _removeFromFavorites(song);
-                favoritesShouldReload.value = !favoritesShouldReload.value;
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.playlist_add),
-              title: TranslatedText('add_to_playlist'),
-              onTap: () async {
-                Navigator.of(context).pop();
-                await _handleAddToPlaylistSingle(context, song);
-              },
-            ),
-            ListTile(
-              leading: Icon(
-                isPinned ? Icons.push_pin : Icons.push_pin_outlined,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Encabezado con información de la canción
+              Container(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    // Carátula de la canción
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: SizedBox(
+                        width: 60,
+                        height: 60,
+                        child: _buildModalArtwork(song),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    // Título y artista
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            song.title,
+                            maxLines: 1,
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            song.artist ?? LocaleProvider.tr('unknown_artist'),
+                            style: TextStyle(fontSize: 14),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    // Botón de YouTube para buscar la canción
+                    ElevatedButton.icon(
+                      onPressed: () async {
+                        Navigator.of(context).pop();
+                        await _searchSongOnYouTube(song);
+                      },
+                      label: Text(
+                        'YouTube',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                        ),
+                      ),
+                      icon: const Icon(Icons.search, size: 20),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Theme.of(
+                          context,
+                        ).colorScheme.primaryContainer,
+                        foregroundColor: Theme.of(
+                          context,
+                        ).colorScheme.onPrimaryContainer,
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              title: TranslatedText(
-                isPinned ? 'unpin_shortcut' : 'pin_shortcut',
+              ListTile(
+                leading: const Icon(Icons.queue_music),
+                title: TranslatedText('add_to_queue'),
+                onTap: () async {
+                  Navigator.of(context).pop();
+                  await (audioHandler as MyAudioHandler).addSongsToQueueEnd([
+                    song,
+                  ]);
+                },
               ),
-              onTap: () async {
-                Navigator.of(context).pop();
-                if (isPinned) {
-                  await ShortcutsDB().removeShortcut(song.data);
-                } else {
-                  await ShortcutsDB().addShortcut(song.data);
-                }
-                shortcutsShouldReload.value = !shortcutsShouldReload.value;
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.check_box_outlined),
-              title: TranslatedText('select'),
-              onTap: () {
-                Navigator.of(context).pop();
-                setState(() {
-                  _isSelecting = true;
-                  _selectedSongIds.add(song.id);
-                });
-              },
-            ),
-          ],
+              ListTile(
+                leading: const Icon(Icons.delete_outline),
+                title: TranslatedText('remove_from_favorites'),
+                onTap: () async {
+                  Navigator.of(context).pop();
+                  await _removeFromFavorites(song);
+                  favoritesShouldReload.value = !favoritesShouldReload.value;
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.playlist_add),
+                title: TranslatedText('add_to_playlist'),
+                onTap: () async {
+                  Navigator.of(context).pop();
+                  await _handleAddToPlaylistSingle(context, song);
+                },
+              ),
+              ListTile(
+                leading: Icon(
+                  isPinned ? Icons.push_pin : Icons.push_pin_outlined,
+                ),
+                title: TranslatedText(
+                  isPinned ? 'unpin_shortcut' : 'pin_shortcut',
+                ),
+                onTap: () async {
+                  Navigator.of(context).pop();
+                  if (isPinned) {
+                    await ShortcutsDB().removeShortcut(song.data);
+                  } else {
+                    await ShortcutsDB().addShortcut(song.data);
+                  }
+                  shortcutsShouldReload.value = !shortcutsShouldReload.value;
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.check_box_outlined),
+                title: TranslatedText('select'),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  setState(() {
+                    _isSelecting = true;
+                    _selectedSongIds.add(song.id);
+                  });
+                },
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1189,5 +1282,56 @@ class _FavoritesScreenState extends State<FavoritesScreen>
         ),
       ),
     );
+  }
+
+  // Función para construir la carátula del modal
+  Widget _buildModalArtwork(SongModel song) {
+    return QueryArtworkWidget(
+      id: song.id,
+      type: ArtworkType.AUDIO,
+      artworkBorder: BorderRadius.circular(8),
+      artworkHeight: 60,
+      artworkWidth: 60,
+      keepOldArtwork: true,
+      nullArtworkWidget: Container(
+        width: 60,
+        height: 60,
+        decoration: BoxDecoration(
+          color: Colors.grey[800],
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Icon(Icons.music_note, color: Colors.grey[400], size: 30),
+      ),
+    );
+  }
+
+  // Función para buscar la canción en YouTube
+  Future<void> _searchSongOnYouTube(SongModel song) async {
+    try {
+      final title = song.title;
+      final artist = song.artist ?? '';
+
+      // Crear la consulta de búsqueda
+      String searchQuery = title;
+      if (artist.isNotEmpty) {
+        searchQuery = '$artist $title';
+      }
+
+      // Codificar la consulta para la URL
+      final encodedQuery = Uri.encodeComponent(searchQuery);
+      final youtubeSearchUrl =
+          'https://www.youtube.com/results?search_query=$encodedQuery';
+
+      // Intentar abrir YouTube en el navegador o en la app
+      final url = Uri.parse(youtubeSearchUrl);
+
+      if (await canLaunchUrl(url)) {
+        await launchUrl(url, mode: LaunchMode.externalApplication);
+      } else {
+        // ignore: use_build_context_synchronously
+      }
+    } catch (e) {
+      // ignore: avoid_print
+    }
   }
 }
