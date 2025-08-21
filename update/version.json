@@ -1,9 +1,9 @@
 {
-  "version": "1.4.8",
+  "version": "1.4.9",
   "apk_urls": {
-    "arm64-v8a": "https://github.com/KirbyNx64/Aura/releases/download/v1.4.8/AuraMusic-v1.4.8-arm64-v8a.apk",
-    "armeabi-v7a": "https://github.com/KirbyNx64/Aura/releases/download/v1.4.8/AuraMusic-v1.4.8-armeabi-v7a.apk",
-    "x86_64": "https://github.com/KirbyNx64/Aura/releases/download/v1.4.8/AuraMusic-v1.4.8-x86_64.apk"
+    "arm64-v8a": "https://github.com/KirbyNx64/Aura/releases/download/v1.4.9/AuraMusic-v1.4.9-arm64-v8a.apk",
+    "armeabi-v7a": "https://github.com/KirbyNx64/Aura/releases/download/v1.4.9/AuraMusic-v1.4.9-armeabi-v7a.apk",
+    "x86_64": "https://github.com/KirbyNx64/Aura/releases/download/v1.4.9/AuraMusic-v1.4.9-x86_64.apk"
   },
-  "changelog": "• Ahora el paquete de la app incluye firma digital. Es posible que no se actualice correctamente vía OTA. Descarga manual desde: https://github.com/KirbyNx64/Aura/releases/tag/v1.4.8\n\n• Mejoras visuales en la interfaz.\n\n• Correcciones de errores y optimizaciones internas para mejorar el rendimiento."
+  "changelog": "• Es posible que no se actualice correctamente vía OTA. Descarga manual desde: https://github.com/KirbyNx64/Aura/releases/tag/v1.4.9\n\n• Mejoras visuales en la interfaz.\n\n• Correcciones de errores y optimizaciones internas para mejorar el rendimiento."
 }

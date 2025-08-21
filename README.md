@@ -9,8 +9,8 @@
 ## ✨ Características
 
 - 🎶 **Reproductor completo** con notificación, lockscreen y soporte para controles de auriculares.
-- 📥 **Descarga desde YouTube**: convierte videos a MP3 usando `youtube_explode_dart` + `AudioTags`.
-- 🖼️ **Carátulas automáticas**: descarga y embebe la portada en el archivo MP3.
+- 📥 **Descarga desde YouTube**: Descarga canciones usando `youtube_explode_dart` + `AudioTags`.
+- 🖼️ **Carátulas automáticas**: descarga y embebe la portada en el archivo.
 - 📂 **Exploración por carpetas**: detecta solo directorios que contienen música.
 - 🔔 **Control multimedia total**: desde la app o el sistema.
 - ⚡ **Interfaz intuitiva**: diseño limpio y rendimiento optimizado.
