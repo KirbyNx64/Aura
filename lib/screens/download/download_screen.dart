@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 // import 'package:android_intent_plus/android_intent.dart';
 // import 'package:android_intent_plus/flag.dart';
 // import 'package:package_info_plus/package_info_plus.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:path_provider/path_provider.dart';
@@ -1328,70 +1327,6 @@ class _DownloadScreenState extends State<DownloadScreen>
       }
     }
   }
-
-  Future<void> _verificarPermisoArchivos() async {
-    // Solo mostrar en Android 11+ (SDK 30+)
-    if (Platform.isAndroid) {
-      final androidInfo = await DeviceInfoPlugin().androidInfo;
-      final sdkInt = androidInfo.version.sdkInt;
-      if (sdkInt < 30) {
-        _mostrarAlerta(
-          titulo: LocaleProvider.tr('not_necessary'),
-          mensaje: LocaleProvider.tr('not_necessary_desc'),
-        );
-        return;
-      }
-    } else {
-      _mostrarAlerta(
-        titulo: 'Solo Android',
-        mensaje: 'Esta función solo aplica para Android.',
-      );
-      return;
-    }
-
-    // Mostrar advertencia antes de solicitar el permiso
-    if (!mounted) return;
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(LocaleProvider.tr('grant_file_permissions')),
-        content: Text(LocaleProvider.tr('grant_file_permissions_desc')),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: Text(LocaleProvider.tr('cancel')),
-          ),
-          TextButton(
-            onPressed: () async {
-              Navigator.of(context).pop();
-              // Ahora sí solicita el permiso
-              if (await Permission.manageExternalStorage.isGranted) {
-                _mostrarAlerta(
-                  titulo: LocaleProvider.tr('permission_granted_already'),
-                  mensaje: LocaleProvider.tr('permission_granted_already_desc'),
-                );
-              } else {
-                final status = await Permission.manageExternalStorage.request();
-                if (status.isGranted) {
-                  _mostrarAlerta(
-                    titulo: LocaleProvider.tr('permission_granted'),
-                    mensaje: LocaleProvider.tr('permission_granted_desc'),
-                  );
-                } else {
-                  _mostrarAlerta(
-                    titulo: LocaleProvider.tr('permission_denied'),
-                    mensaje: LocaleProvider.tr('permission_denied_desc'),
-                  );
-                }
-              }
-            },
-            child: Text(LocaleProvider.tr('grant_permissions')),
-          ),
-        ],
-      ),
-    );
-  }
-
   // Future<void> _abrirPermisoArchivos() async {
   //   // Intento abrir la pantalla de "Acceso a todos los archivos"
   //   const url = 'package:com.android.settings/files_access_permission';
@@ -2033,30 +1968,7 @@ class _DownloadScreenState extends State<DownloadScreen>
                       ),
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  SizedBox(
-                    height: 56,
-                    width: 56,
-                    child: Material(
-                      borderRadius: BorderRadius.circular(8),
-                      color: (_isDownloading || _isPlaylistDownloading)
-                          ? Theme.of(context).colorScheme.surfaceContainer
-                          : Theme.of(context).colorScheme.secondaryContainer,
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(8),
-                        onTap: (_isDownloading || _isPlaylistDownloading) ? null : _verificarPermisoArchivos,
-                        child: Tooltip(
-                          message: LocaleProvider.tr('file_permissions'),
-                          child: Icon(
-                            Icons.security,
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.onSecondaryContainer,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
+                  
                 ],
               ),
               const SizedBox(height: 16),
@@ -2480,46 +2392,6 @@ class _DownloadScreenState extends State<DownloadScreen>
                   ),
                 ],
               ),
-              // NUEVO: Selector de método de descarga
-              const SizedBox(height: 16),
-
-              Row(
-                mainAxisAlignment: MainAxisAlignment.start,
-                children: [
-                  Icon(
-                    Icons.download,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                  const SizedBox(width: 8),
-                  TranslatedText('download_method'),
-                  const SizedBox(width: 8),
-                  DropdownButton<bool>(
-                    value: _usarExplode,
-                    items: [
-                      DropdownMenuItem(
-                        value: true,
-                        child: TranslatedText('explode'),
-                      ),
-                      DropdownMenuItem(
-                        value: false,
-                        child: TranslatedText('direct'),
-                      ),
-                    ],
-                    onChanged: (_isDownloading || _isPlaylistDownloading) 
-                        ? null 
-                        : (v) async {
-                            if (v != null) {
-                              setState(() => _usarExplode = v);
-                              // Guardar en preferencias y actualizar notifier
-                              final prefs = await SharedPreferences.getInstance();
-                              await prefs.setBool('download_type_explode', v);
-                              downloadTypeNotifier.value = v;
-                            }
-                          },
-                  ),
-                ],
-              ),
-
             ],
           ),
         ),

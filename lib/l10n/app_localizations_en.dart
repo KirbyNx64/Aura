@@ -76,7 +76,9 @@ const Map<String, String> appLocalizationsEn = {
   'battery_optimization_info': 'Battery optimization is already disabled',
 
   // App settings
-  'app_settings': 'App settings',
+  'app_settings': 'App information',
+  'select_language_desc': 'Select the language of the app',
+  'select_theme_desc': 'Select the theme of the app',
   'artwork_quality': 'Artwork quality when playing',
   'artwork_quality_description':
       'Select the quality of artwork when playing music',
@@ -98,6 +100,8 @@ const Map<String, String> appLocalizationsEn = {
   // Dialogs
   'confirm_clear_lyrics': 'Delete song lyrics?',
   'confirm_clear_artwork': 'Clear artwork cache?',
+  'search_options': 'Search options',
+  'search_song': 'Search song',
   'confirm': 'Confirm',
   'success': 'Success',
   'download_completed': 'Download completed',
@@ -121,6 +125,7 @@ const Map<String, String> appLocalizationsEn = {
   // Others (add as needed)
   'search': 'Search',
   'search_in_youtube_music': 'Search in YouTube Music',
+  'open_in_youtube_music': 'Open in YouTube Music',
   'info': 'Information',
   'search_music_in_ytm': 'Search and download music from YouTube Music.',
   'understood': 'Understood',

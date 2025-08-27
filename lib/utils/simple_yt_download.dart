@@ -4,6 +4,7 @@ import 'package:music/utils/download_manager.dart';
 import 'package:music/utils/yt_search/service.dart';
 import 'package:music/l10n/locale_provider.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'dart:async';
 
 // Clase para manejar la cola de descargas
 class DownloadQueue {
@@ -246,14 +247,79 @@ class SimpleYtDownload {
   }
 }
 
-// Widget simple para botón de descarga
-class SimpleDownloadButton extends StatelessWidget {
+// Widget simple para botón de descarga con cambio de ícono
+class SimpleDownloadButton extends StatefulWidget {
   final YtMusicResult item;
   
   const SimpleDownloadButton({
     super.key,
     required this.item,
   });
+
+  @override
+  State<SimpleDownloadButton> createState() => _SimpleDownloadButtonState();
+}
+
+class _SimpleDownloadButtonState extends State<SimpleDownloadButton> {
+  bool _isDownloading = false;
+  bool _isProcessing = false;
+  StreamSubscription? _downloadStateSubscription;
+
+  @override
+  void initState() {
+    super.initState();
+    // Suscribirse al estado de descarga global
+    _setupDownloadStateListener();
+  }
+
+  @override
+  void dispose() {
+    _downloadStateSubscription?.cancel();
+    super.dispose();
+  }
+
+  void _setupDownloadStateListener() {
+    // Escuchar cambios en el estado de descarga global
+    _downloadStateSubscription = Stream.periodic(const Duration(milliseconds: 100))
+        .listen((_) {
+      if (mounted) {
+        _checkDownloadState();
+      }
+    });
+  }
+
+  void _checkDownloadState() {
+    // Verificar si esta canción específica está siendo descargada
+    final downloadQueue = DownloadQueue();
+    final currentTask = downloadQueue.currentTask;
+    
+    if (currentTask != null && 
+        currentTask.videoId == widget.item.videoId) {
+      // Esta canción está siendo descargada
+      if (!_isDownloading && !_isProcessing) {
+        _startDownloadAnimation();
+      }
+    } else {
+      // Esta canción no está siendo descargada
+      if (_isDownloading || _isProcessing) {
+        _stopDownloadAnimation();
+      }
+    }
+  }
+
+  void _startDownloadAnimation() {
+    setState(() {
+      _isDownloading = true;
+      _isProcessing = false;
+    });
+  }
+
+  void _stopDownloadAnimation() {
+    setState(() {
+      _isDownloading = false;
+      _isProcessing = false;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -265,8 +331,10 @@ class SimpleDownloadButton extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
         child: InkWell(
           borderRadius: BorderRadius.circular(8),
-          onTap: item.videoId != null
+          onTap: widget.item.videoId != null && !_isDownloading && !_isProcessing
               ? () async {
+                  _startDownloadAnimation();
+                  
                   // Navigator.pop(context); // Ya no cerramos el modal al descargar
                   // Usar un pequeño delay para asegurar que el modal se cierre antes de iniciar la descarga
                   await Future.delayed(const Duration(milliseconds: 100));
@@ -274,6 +342,7 @@ class SimpleDownloadButton extends StatelessWidget {
                   final List<ConnectivityResult> connectivityResult = await Connectivity().checkConnectivity();
                   if (connectivityResult.contains(ConnectivityResult.none)) {
                     if (context.mounted) {
+                      _stopDownloadAnimation();
                       showDialog(
                         context: context,
                         builder: (context) => AlertDialog(
@@ -293,20 +362,24 @@ class SimpleDownloadButton extends StatelessWidget {
                   if (context.mounted) {
                     SimpleYtDownload.downloadVideoWithArtist(
                       context,
-                      item.videoId!,
-                      item.title ?? '',
-                      item.artist ?? '',
+                      widget.item.videoId!,
+                      widget.item.title ?? '',
+                      widget.item.artist ?? '',
                     );
+                    // La animación se detendrá automáticamente cuando el DownloadManager
+                    // notifique que la descarga ha terminado
                   }
                 }
               : null,
-          child: Tooltip(
-            message: LocaleProvider.tr('download_audio'),
-            child: Icon(
-              Icons.download,
-              color: Theme.of(context).colorScheme.onPrimaryContainer,
-              size: 20,
-            ),
+                                             child: Tooltip(
+               message: _isDownloading || _isProcessing
+                   ? (_isDownloading ? LocaleProvider.tr('downloading') : LocaleProvider.tr('processing'))
+                   : LocaleProvider.tr('download_audio'),
+                          child: Icon(
+                _isDownloading || _isProcessing ? Icons.downloading : Icons.download,
+                color: Theme.of(context).colorScheme.onPrimaryContainer,
+                size: 20,
+              ),
           ),
         ),
       ),

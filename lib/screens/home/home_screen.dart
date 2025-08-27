@@ -184,14 +184,20 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   // Devuelve la lista de accesos directos para mostrar en quick_access
-  List<SongModel> get _accessDirectSongs {
-    final shortcutPaths = _shortcutSongs.map((s) => s.data).toList();
-    final List<SongModel> combined = [
-      ..._shortcutSongs,
-      ..._mostPlayed.where((s) => !shortcutPaths.contains(s.data)),
-    ];
-    return combined.take(18).toList();
-  }
+          List<SongModel> get _accessDirectSongs {
+          final shortcutPaths = _shortcutSongs.map((s) => s.data).toList();
+          
+          // Mezclar las canciones recientes de forma aleatoria
+          final shuffledRecents = List<SongModel>.from(_recentSongs)..shuffle();
+          
+          final List<SongModel> combined = [
+            ..._shortcutSongs,
+            ..._mostPlayed.where((s) => !shortcutPaths.contains(s.data)).take(18),
+            ...shuffledRecents.where((s) => !shortcutPaths.contains(s.data) &&
+                                          !_mostPlayed.any((mp) => mp.data == s.data)),
+          ];
+          return combined.take(100).toList();
+        }
 
   @override
   void initState() {
@@ -201,6 +207,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       _loadAllSongs();
       _loadMostPlayed().then((_) async {
         await _loadShortcuts();
+        await _loadRecentsData();
         _initQuickPickPages();
         setState(() {});
       });
@@ -669,34 +676,40 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           ),
                         ),
                         const SizedBox(width: 8),
-                        // Botón de YouTube para buscar la canción
-                        ElevatedButton.icon(
-                          onPressed: () async {
+                        // Botón de búsqueda para abrir opciones
+                        InkWell(
+                          onTap: () async {
                             Navigator.of(context).pop();
-                            await _searchSongOnYouTube(song);
+                            await _showSearchOptions(song);
                           },
-                          label: Text(
-                            'YouTube',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                              fontSize: 14,
-                            ),
-                          ),
-                          icon: const Icon(Icons.search, size: 20),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Theme.of(
-                              context,
-                            ).colorScheme.primaryContainer,
-                            foregroundColor: Theme.of(
-                              context,
-                            ).colorScheme.onPrimaryContainer,
-                            elevation: 0,
+                          borderRadius: BorderRadius.circular(12),
+                          child: Container(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 16,
                               vertical: 8,
                             ),
-                            shape: RoundedRectangleBorder(
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).colorScheme.primaryContainer,
                               borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.search,
+                                  size: 20,
+                                  color: Theme.of(context).colorScheme.onPrimaryContainer,
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'Buscar',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 14,
+                                    color: Theme.of(context).colorScheme.onPrimaryContainer,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ),
@@ -912,7 +925,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           unawaited(_preloadArtworkForSong(song));
           if (!mounted) return;
           // Usar todas las canciones de selección rápida extendidas (más de 20) para reproducción
-          final extendedQuickPick = _shuffledQuickPick.take(50).toList();
+          final extendedQuickPick = _shuffledQuickPick.take(100).toList();
           await _playSongAndOpenPlayer(
             song,
             extendedQuickPick,
@@ -1021,6 +1034,25 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       setState(() {
         _recentSongs = [];
         _showingRecents = true;
+      });
+    }
+  }
+
+  // Método para cargar solo los datos de recientes sin mostrar la UI
+  Future<void> _loadRecentsData() async {
+    try {
+      final recents = await RecentsDB().getRecents();
+      setState(() {
+        _recentSongs = recents;
+        // No cambiamos _showingRecents aquí
+      });
+
+      // Precargar carátulas de canciones recientes
+      unawaited(_preloadArtworksForSongs(recents));
+    } catch (e) {
+      setState(() {
+        _recentSongs = [];
+        // No cambiamos _showingRecents aquí
       });
     }
   }
@@ -1347,34 +1379,40 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       ),
                     ),
                     const SizedBox(width: 8),
-                    // Botón de YouTube para buscar la canción
-                    ElevatedButton.icon(
-                      onPressed: () async {
+                    // Botón de búsqueda para abrir opciones
+                    InkWell(
+                      onTap: () async {
                         Navigator.of(context).pop();
-                        await _searchSongOnYouTube(song);
+                        await _showSearchOptions(song);
                       },
-                      label: Text(
-                        'YouTube',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 14,
-                        ),
-                      ),
-                      icon: const Icon(Icons.search, size: 20),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Theme.of(
-                          context,
-                        ).colorScheme.primaryContainer,
-                        foregroundColor: Theme.of(
-                          context,
-                        ).colorScheme.onPrimaryContainer,
-                        elevation: 0,
+                      borderRadius: BorderRadius.circular(12),
+                      child: Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 16,
                           vertical: 8,
                         ),
-                        shape: RoundedRectangleBorder(
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.primaryContainer,
                           borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.search,
+                              size: 20,
+                              color: Theme.of(context).colorScheme.onPrimaryContainer,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Buscar',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 14,
+                                color: Theme.of(context).colorScheme.onPrimaryContainer,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
@@ -2116,13 +2154,16 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                           },
                                         ),
                                         selected: isCurrent,
-                                        selectedTileColor: isAmoledTheme
-                                            ? Colors.white.withValues(
-                                                alpha: 0.1,
+                                        selectedTileColor: isCurrent
+                                            ? (isAmoledTheme
+                                                ? Colors.white.withValues(alpha: 0.15)
+                                                : Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.8))
+                                            : null,
+                                        shape: isCurrent
+                                            ? RoundedRectangleBorder(
+                                                borderRadius: BorderRadius.circular(16),
                                               )
-                                            : Theme.of(
-                                                context,
-                                              ).colorScheme.primaryContainer,
+                                            : null,
                                         onTap: () async {
                                           // Precargar la carátula antes de reproducir
                                           unawaited(
@@ -2224,52 +2265,44 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                               const SizedBox(
                                                                 width: 8,
                                                               ),
-                                                              // Botón de YouTube para buscar la canción
-                                                              ElevatedButton.icon(
-                                                                onPressed: () async {
+                                                              // Botón de búsqueda para abrir opciones
+                                                              InkWell(
+                                                                onTap: () async {
                                                                   Navigator.of(
                                                                     context,
                                                                   ).pop();
-                                                                  await _searchSongOnYouTube(
+                                                                  await _showSearchOptions(
                                                                     song,
                                                                   );
                                                                 },
-                                                                label: Text(
-                                                                  'YouTube',
-                                                                  style: TextStyle(
-                                                                    fontWeight:
-                                                                        FontWeight
-                                                                            .w600,
-                                                                    fontSize:
-                                                                        14,
+                                                                borderRadius: BorderRadius.circular(12),
+                                                                child: Container(
+                                                                  padding: const EdgeInsets.symmetric(
+                                                                    horizontal: 16,
+                                                                    vertical: 8,
                                                                   ),
-                                                                ),
-                                                                icon: const Icon(
-                                                                  Icons.search,
-                                                                  size: 20,
-                                                                ),
-                                                                style: ElevatedButton.styleFrom(
-                                                                  backgroundColor:
-                                                                      Theme.of(
-                                                                        context,
-                                                                      ).colorScheme.primaryContainer,
-                                                                  foregroundColor:
-                                                                      Theme.of(
-                                                                        context,
-                                                                      ).colorScheme.onPrimaryContainer,
-                                                                  elevation: 0,
-                                                                  padding:
-                                                                      const EdgeInsets.symmetric(
-                                                                        horizontal:
-                                                                            16,
-                                                                        vertical:
-                                                                            8,
+                                                                  decoration: BoxDecoration(
+                                                                    color: Theme.of(context).colorScheme.primaryContainer,
+                                                                    borderRadius: BorderRadius.circular(12),
+                                                                  ),
+                                                                  child: Row(
+                                                                    mainAxisSize: MainAxisSize.min,
+                                                                    children: [
+                                                                      Icon(
+                                                                        Icons.search,
+                                                                        size: 20,
+                                                                        color: Theme.of(context).colorScheme.onPrimaryContainer,
                                                                       ),
-                                                                  shape: RoundedRectangleBorder(
-                                                                    borderRadius:
-                                                                        BorderRadius.circular(
-                                                                          12,
+                                                                      const SizedBox(width: 8),
+                                                                      Text(
+                                                                        'Buscar',
+                                                                        style: TextStyle(
+                                                                          fontWeight: FontWeight.w600,
+                                                                          fontSize: 14,
+                                                                          color: Theme.of(context).colorScheme.onPrimaryContainer,
                                                                         ),
+                                                                      ),
+                                                                    ],
                                                                   ),
                                                                 ),
                                                               ),
@@ -2549,54 +2582,44 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                           const SizedBox(
                                                             width: 8,
                                                           ),
-                                                          // Botón de YouTube para buscar la canción
-                                                          ElevatedButton.icon(
-                                                            onPressed: () async {
+                                                                                                                    // Botón de búsqueda para abrir opciones
+                                                          InkWell(
+                                                            onTap: () async {
                                                               Navigator.of(
                                                                 context,
                                                               ).pop();
-                                                              await _searchSongOnYouTube(
+                                                              await _showSearchOptions(
                                                                 song,
                                                               );
                                                             },
-                                                            label: Text(
-                                                              'YouTube',
-                                                              style: TextStyle(
-                                                                fontWeight:
-                                                                    FontWeight
-                                                                        .w600,
-                                                                fontSize: 14,
+                                                            borderRadius: BorderRadius.circular(12),
+                                                            child: Container(
+                                                              padding: const EdgeInsets.symmetric(
+                                                                horizontal: 16,
+                                                                vertical: 8,
                                                               ),
-                                                            ),
-                                                            icon: const Icon(
-                                                              Icons.search,
-                                                              size: 20,
-                                                            ),
-                                                            style: ElevatedButton.styleFrom(
-                                                              backgroundColor:
-                                                                  Theme.of(
-                                                                        context,
-                                                                      )
-                                                                      .colorScheme
-                                                                      .primaryContainer,
-                                                              foregroundColor:
-                                                                  Theme.of(
-                                                                        context,
-                                                                      )
-                                                                      .colorScheme
-                                                                      .onPrimaryContainer,
-                                                              elevation: 0,
-                                                              padding:
-                                                                  const EdgeInsets.symmetric(
-                                                                    horizontal:
-                                                                        16,
-                                                                    vertical: 8,
+                                                              decoration: BoxDecoration(
+                                                                color: Theme.of(context).colorScheme.primaryContainer,
+                                                                borderRadius: BorderRadius.circular(12),
+                                                              ),
+                                                              child: Row(
+                                                                mainAxisSize: MainAxisSize.min,
+                                                                children: [
+                                                                  Icon(
+                                                                    Icons.search,
+                                                                    size: 20,
+                                                                    color: Theme.of(context).colorScheme.onPrimaryContainer,
                                                                   ),
-                                                              shape: RoundedRectangleBorder(
-                                                                borderRadius:
-                                                                    BorderRadius.circular(
-                                                                      12,
+                                                                  const SizedBox(width: 8),
+                                                                  Text(
+                                                                    'Buscar',
+                                                                    style: TextStyle(
+                                                                      fontWeight: FontWeight.w600,
+                                                                      fontSize: 14,
+                                                                      color: Theme.of(context).colorScheme.onPrimaryContainer,
                                                                     ),
+                                                                  ),
+                                                                ],
                                                               ),
                                                             ),
                                                           ),
@@ -2864,55 +2887,44 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                             const SizedBox(
                                                               width: 8,
                                                             ),
-                                                            // Botón de YouTube para buscar la canción
-                                                            ElevatedButton.icon(
-                                                              onPressed: () async {
+                                                            // Botón de búsqueda para abrir opciones
+                                                            InkWell(
+                                                              onTap: () async {
                                                                 Navigator.of(
                                                                   context,
                                                                 ).pop();
-                                                                await _searchSongOnYouTube(
+                                                                await _showSearchOptions(
                                                                   song,
                                                                 );
                                                               },
-                                                              label: Text(
-                                                                'YouTube',
-                                                                style: TextStyle(
-                                                                  fontWeight:
-                                                                      FontWeight
-                                                                          .w600,
-                                                                  fontSize: 14,
+                                                              borderRadius: BorderRadius.circular(12),
+                                                              child: Container(
+                                                                padding: const EdgeInsets.symmetric(
+                                                                  horizontal: 16,
+                                                                  vertical: 8,
                                                                 ),
-                                                              ),
-                                                              icon: const Icon(
-                                                                Icons.search,
-                                                                size: 20,
-                                                              ),
-                                                              style: ElevatedButton.styleFrom(
-                                                                backgroundColor:
-                                                                    Theme.of(
-                                                                          context,
-                                                                        )
-                                                                        .colorScheme
-                                                                        .primaryContainer,
-                                                                foregroundColor:
-                                                                    Theme.of(
-                                                                          context,
-                                                                        )
-                                                                        .colorScheme
-                                                                        .onPrimaryContainer,
-                                                                elevation: 0,
-                                                                padding:
-                                                                    const EdgeInsets.symmetric(
-                                                                      horizontal:
-                                                                          16,
-                                                                      vertical:
-                                                                          8,
+                                                                decoration: BoxDecoration(
+                                                                  color: Theme.of(context).colorScheme.primaryContainer,
+                                                                  borderRadius: BorderRadius.circular(12),
+                                                                ),
+                                                                child: Row(
+                                                                  mainAxisSize: MainAxisSize.min,
+                                                                  children: [
+                                                                    Icon(
+                                                                      Icons.search,
+                                                                      size: 20,
+                                                                      color: Theme.of(context).colorScheme.onPrimaryContainer,
                                                                     ),
-                                                                shape: RoundedRectangleBorder(
-                                                                  borderRadius:
-                                                                      BorderRadius.circular(
-                                                                        12,
+                                                                    const SizedBox(width: 8),
+                                                                    Text(
+                                                                      'Buscar',
+                                                                      style: TextStyle(
+                                                                        fontWeight: FontWeight.w600,
+                                                                        fontSize: 14,
+                                                                        color: Theme.of(context).colorScheme.onPrimaryContainer,
                                                                       ),
+                                                                    ),
+                                                                  ],
                                                                 ),
                                                               ),
                                                             ),
@@ -3204,13 +3216,16 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                           },
                                         ),
                                         selected: isCurrent,
-                                        selectedTileColor: isAmoledTheme
-                                            ? Colors.white.withValues(
-                                                alpha: 0.1,
+                                        selectedTileColor: isCurrent
+                                            ? (isAmoledTheme
+                                                ? Colors.white.withValues(alpha: 0.15)
+                                                : Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.8))
+                                            : null,
+                                        shape: isCurrent
+                                            ? RoundedRectangleBorder(
+                                                borderRadius: BorderRadius.circular(16),
                                               )
-                                            : Theme.of(
-                                                context,
-                                              ).colorScheme.primaryContainer,
+                                            : null,
                                       );
                                     },
                                   );
@@ -3340,54 +3355,44 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                         const SizedBox(
                                                           width: 8,
                                                         ),
-                                                        // Botón de YouTube para buscar la canción
-                                                        ElevatedButton.icon(
-                                                          onPressed: () async {
+                                                        // Botón de búsqueda para abrir opciones
+                                                        InkWell(
+                                                          onTap: () async {
                                                             Navigator.of(
                                                               context,
                                                             ).pop();
-                                                            await _searchSongOnYouTube(
+                                                            await _showSearchOptions(
                                                               song,
                                                             );
                                                           },
-                                                          label: Text(
-                                                            'YouTube',
-                                                            style: TextStyle(
-                                                              fontWeight:
-                                                                  FontWeight
-                                                                      .w600,
-                                                              fontSize: 14,
+                                                          borderRadius: BorderRadius.circular(12),
+                                                          child: Container(
+                                                            padding: const EdgeInsets.symmetric(
+                                                              horizontal: 16,
+                                                              vertical: 8,
                                                             ),
-                                                          ),
-                                                          icon: const Icon(
-                                                            Icons.search,
-                                                            size: 20,
-                                                          ),
-                                                          style: ElevatedButton.styleFrom(
-                                                            backgroundColor:
-                                                                Theme.of(
-                                                                      context,
-                                                                    )
-                                                                    .colorScheme
-                                                                    .primaryContainer,
-                                                            foregroundColor:
-                                                                Theme.of(
-                                                                      context,
-                                                                    )
-                                                                    .colorScheme
-                                                                    .onPrimaryContainer,
-                                                            elevation: 0,
-                                                            padding:
-                                                                const EdgeInsets.symmetric(
-                                                                  horizontal:
-                                                                      16,
-                                                                  vertical: 8,
+                                                            decoration: BoxDecoration(
+                                                              color: Theme.of(context).colorScheme.primaryContainer,
+                                                              borderRadius: BorderRadius.circular(12),
+                                                            ),
+                                                            child: Row(
+                                                              mainAxisSize: MainAxisSize.min,
+                                                              children: [
+                                                                Icon(
+                                                                  Icons.search,
+                                                                  size: 20,
+                                                                  color: Theme.of(context).colorScheme.onPrimaryContainer,
                                                                 ),
-                                                            shape: RoundedRectangleBorder(
-                                                              borderRadius:
-                                                                  BorderRadius.circular(
-                                                                    12,
+                                                                const SizedBox(width: 8),
+                                                                Text(
+                                                                  'Buscar',
+                                                                  style: TextStyle(
+                                                                    fontWeight: FontWeight.w600,
+                                                                    fontSize: 14,
+                                                                    color: Theme.of(context).colorScheme.onPrimaryContainer,
                                                                   ),
+                                                                ),
+                                                              ],
                                                             ),
                                                           ),
                                                         ),
@@ -3667,11 +3672,16 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                       },
                                     ),
                                     selected: isCurrent,
-                                    selectedTileColor: isAmoledTheme
-                                        ? Colors.white.withValues(alpha: 0.1)
-                                        : Theme.of(
-                                            context,
-                                          ).colorScheme.primaryContainer,
+                                    selectedTileColor: isCurrent
+                                        ? (isAmoledTheme
+                                            ? Colors.white.withValues(alpha: 0.15)
+                                            : Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.8))
+                                        : null,
+                                    shape: isCurrent
+                                        ? RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(16),
+                                          )
+                                        : null,
                                   );
                                 }
                               },
@@ -4546,10 +4556,10 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         width: 60,
         height: 60,
         decoration: BoxDecoration(
-          color: Colors.grey[800],
+          color: Theme.of(context).colorScheme.surfaceContainer,
           borderRadius: BorderRadius.circular(8),
         ),
-        child: Icon(Icons.music_note, color: Colors.grey[400], size: 30),
+        child: Icon(Icons.music_note, size: 30),
       ),
     );
   }
@@ -4582,6 +4592,186 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     } catch (e) {
       // ignore: avoid_print
     }
+  }
+
+  // Función para buscar la canción en YouTube Music
+  Future<void> _searchSongOnYouTubeMusic(SongModel song) async {
+    try {
+      final title = song.title;
+      final artist = song.artist ?? '';
+
+      // Crear la consulta de búsqueda
+      String searchQuery = title;
+      if (artist.isNotEmpty) {
+        searchQuery = '$artist $title';
+      }
+
+      // Codificar la consulta para la URL
+      final encodedQuery = Uri.encodeComponent(searchQuery);
+      
+      // URL correcta para búsqueda en YouTube Music
+      final ytMusicSearchUrl = 'https://music.youtube.com/search?q=$encodedQuery';
+
+      // Intentar abrir YouTube Music en el navegador o en la app
+      final url = Uri.parse(ytMusicSearchUrl);
+
+      if (await canLaunchUrl(url)) {
+        await launchUrl(url, mode: LaunchMode.externalApplication);
+      } else {
+        // ignore: use_build_context_synchronously
+      }
+    } catch (e) {
+      // ignore: avoid_print
+    }
+  }
+
+  // Función para mostrar opciones de búsqueda
+  Future<void> _showSearchOptions(SongModel song) async {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Center(
+            child: TranslatedText(
+              'search_song',
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(height: 18),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Row(
+                    children: [
+                      SizedBox(width: 4),
+                      TranslatedText(
+                        'search_options',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Theme.of(context).colorScheme.onSurface,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                SizedBox(height: 20),
+                // Tarjeta de YouTube
+                InkWell(
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    _searchSongOnYouTube(song);
+                  },
+                  borderRadius: BorderRadius.circular(16),
+                  child: Container(
+                    width: double.infinity,
+                    padding: EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.secondaryContainer,
+                      borderRadius: BorderRadius.only(
+                        topLeft: Radius.circular(16),
+                        topRight: Radius.circular(16),
+                        bottomLeft: Radius.circular(4),
+                        bottomRight: Radius.circular(4),
+                      ),
+                      border: Border.all(
+                        color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Image.asset(
+                            'assets/icon/Youtube_logo.png',
+                            width: 30,
+                            height: 30,
+                          ),
+                        ),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'YouTube',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: Theme.of(context).colorScheme.onSurface,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                SizedBox(height: 4),
+                // Tarjeta de YouTube Music
+                InkWell(
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    _searchSongOnYouTubeMusic(song);
+                  },
+                  borderRadius: BorderRadius.circular(16),
+                  child: Container(
+                    width: double.infinity,
+                    padding: EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.secondaryContainer,
+                      borderRadius: BorderRadius.only(
+                        topLeft: Radius.circular(4),
+                        topRight: Radius.circular(4),
+                        bottomLeft: Radius.circular(16),
+                        bottomRight: Radius.circular(16),
+                      ),
+                      border: Border.all(
+                        color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Image.asset(
+                            'assets/icon/Youtube_Music_icon.png',
+                            width: 30,
+                            height: 30,
+                          ),
+                        ),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'YT Music',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: Theme.of(context).colorScheme.onSurface,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 }
 

@@ -317,24 +317,33 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay>
 
                                   return Column(
                                     children: [
-                                      ClipRRect(
-                                        borderRadius: BorderRadius.circular(8),
-                                        child: LinearProgressIndicator(
-                                          year2023: false,
-                                          key: ValueKey(total),
-                                          value: total > 0
-                                              ? current / total
-                                              : 0,
-                                          minHeight: 4,
-                                          borderRadius: BorderRadius.circular(
-                                            8,
+                                      Container(
+                                        decoration: BoxDecoration(
+                                          borderRadius: BorderRadius.circular(8),
+                                          border: Border.all(
+                                            color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
+                                            width: 0.5,
                                           ),
-                                          backgroundColor: Theme.of(
-                                            context,
-                                          ).colorScheme.onSurface.withAlpha(60),
-                                          color: Theme.of(
-                                            context,
-                                          ).colorScheme.primary,
+                                        ),
+                                        child: ClipRRect(
+                                          borderRadius: BorderRadius.circular(8),
+                                          child: LinearProgressIndicator(
+                                            year2023: false,
+                                            key: ValueKey(total),
+                                            value: total > 0
+                                                ? current / total
+                                                : 0,
+                                            minHeight: 4,
+                                            borderRadius: BorderRadius.circular(
+                                              8,
+                                            ),
+                                            backgroundColor: Theme.of(
+                                              context,
+                                            ).colorScheme.onSurface.withAlpha(60),
+                                            color: Theme.of(
+                                              context,
+                                            ).colorScheme.primary,
+                                          ),
                                         ),
                                       ),
                                     ],

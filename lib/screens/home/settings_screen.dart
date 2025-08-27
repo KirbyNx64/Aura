@@ -79,47 +79,411 @@ class _SettingsScreenState extends State<SettingsScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(LocaleProvider.tr('artwork_quality')),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _artworkQualityOption(
-              1024,
-              LocaleProvider.tr('100_percent_maximum'),
+        title: Center(
+          child: Text(
+            LocaleProvider.tr('artwork_quality'),
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.w600,
             ),
-            _artworkQualityOption(
-              410,
-              LocaleProvider.tr('80_percent_recommended'),
-            ),
-            _artworkQualityOption(
-              307,
-              LocaleProvider.tr('60_percent_performance'),
-            ),
-            _artworkQualityOption(205, LocaleProvider.tr('40_percent_low')),
-            _artworkQualityOption(102, LocaleProvider.tr('20_percent_minimum')),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: Text(LocaleProvider.tr('cancel')),
           ),
-        ],
+        ),
+        content: SizedBox(
+          width: 400,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(height: 18),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 4),
+                  child: Text(
+                    LocaleProvider.tr('artwork_quality_description'),
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+                    textAlign: TextAlign.left,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ),
+              SizedBox(height: 20),
+              // Tarjeta de 100% Máximo
+              InkWell(
+                onTap: () {
+                  _setArtworkQuality(1024);
+                  Navigator.of(context).pop();
+                },
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  width: double.infinity,
+                  padding: EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: _artworkQuality == 1024
+                        ? Theme.of(context).colorScheme.primaryContainer
+                        : Theme.of(context).colorScheme.secondaryContainer,
+                    borderRadius: BorderRadius.only(
+                      topLeft: Radius.circular(16),
+                      topRight: Radius.circular(16),
+                      bottomLeft: Radius.circular(4),
+                      bottomRight: Radius.circular(4),
+                    ),
+                    border: Border.all(
+                      color: _artworkQuality == 1024
+                          ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.3)
+                          : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
+                      width: _artworkQuality == 1024 ? 2 : 1,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          color: _artworkQuality == 1024
+                              ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.1)
+                              : Colors.transparent,
+                        ),
+                        child: Icon(
+                          Icons.high_quality,
+                          size: 30,
+                          color: _artworkQuality == 1024
+                              ? Theme.of(context).colorScheme.primary
+                              : Theme.of(context).colorScheme.onSurface,
+                        ),
+                      ),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              LocaleProvider.tr('100_percent_maximum'),
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: _artworkQuality == 1024
+                                    ? Theme.of(context).colorScheme.primary
+                                    : Theme.of(context).colorScheme.onSurface,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (_artworkQuality == 1024)
+                        Icon(
+                          Icons.check_circle,
+                          color: Theme.of(context).colorScheme.primary,
+                          size: 24,
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+              SizedBox(height: 4),
+              // Tarjeta de 80% Recomendado
+              InkWell(
+                onTap: () {
+                  _setArtworkQuality(410);
+                  Navigator.of(context).pop();
+                },
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  width: double.infinity,
+                  padding: EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: _artworkQuality == 410
+                        ? Theme.of(context).colorScheme.primaryContainer
+                        : Theme.of(context).colorScheme.secondaryContainer,
+                    borderRadius: BorderRadius.only(
+                      topLeft: Radius.circular(4),
+                      topRight: Radius.circular(4),
+                      bottomLeft: Radius.circular(4),
+                      bottomRight: Radius.circular(4),
+                    ),
+                    border: Border.all(
+                      color: _artworkQuality == 410
+                          ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.3)
+                          : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
+                      width: _artworkQuality == 410 ? 2 : 1,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          color: _artworkQuality == 410
+                              ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.1)
+                              : Colors.transparent,
+                        ),
+                        child: Icon(
+                          Icons.recommend,
+                          size: 30,
+                          color: _artworkQuality == 410
+                              ? Theme.of(context).colorScheme.primary
+                              : Theme.of(context).colorScheme.onSurface,
+                        ),
+                      ),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              LocaleProvider.tr('80_percent_recommended'),
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: _artworkQuality == 410
+                                    ? Theme.of(context).colorScheme.primary
+                                    : Theme.of(context).colorScheme.onSurface,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (_artworkQuality == 410)
+                        Icon(
+                          Icons.check_circle,
+                          color: Theme.of(context).colorScheme.primary,
+                          size: 24,
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+              SizedBox(height: 4),
+              // Tarjeta de 60% Rendimiento
+              InkWell(
+                onTap: () {
+                  _setArtworkQuality(307);
+                  Navigator.of(context).pop();
+                },
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  width: double.infinity,
+                  padding: EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: _artworkQuality == 307
+                        ? Theme.of(context).colorScheme.primaryContainer
+                        : Theme.of(context).colorScheme.secondaryContainer,
+                    borderRadius: BorderRadius.only(
+                      topLeft: Radius.circular(4),
+                      topRight: Radius.circular(4),
+                      bottomLeft: Radius.circular(4),
+                      bottomRight: Radius.circular(4),
+                    ),
+                    border: Border.all(
+                      color: _artworkQuality == 307
+                          ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.3)
+                          : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
+                      width: _artworkQuality == 307 ? 2 : 1,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          color: _artworkQuality == 307
+                              ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.1)
+                              : Colors.transparent,
+                        ),
+                        child: Icon(
+                          Icons.speed,
+                          size: 30,
+                          color: _artworkQuality == 307
+                              ? Theme.of(context).colorScheme.primary
+                              : Theme.of(context).colorScheme.onSurface,
+                        ),
+                      ),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              LocaleProvider.tr('60_percent_performance'),
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: _artworkQuality == 307
+                                    ? Theme.of(context).colorScheme.primary
+                                    : Theme.of(context).colorScheme.onSurface,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (_artworkQuality == 307)
+                        Icon(
+                          Icons.check_circle,
+                          color: Theme.of(context).colorScheme.primary,
+                          size: 24,
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+              SizedBox(height: 4),
+              // Tarjeta de 40% Bajo
+              InkWell(
+                onTap: () {
+                  _setArtworkQuality(205);
+                  Navigator.of(context).pop();
+                },
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  width: double.infinity,
+                  padding: EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: _artworkQuality == 205
+                        ? Theme.of(context).colorScheme.primaryContainer
+                        : Theme.of(context).colorScheme.secondaryContainer,
+                    borderRadius: BorderRadius.only(
+                      topLeft: Radius.circular(4),
+                      topRight: Radius.circular(4),
+                      bottomLeft: Radius.circular(4),
+                      bottomRight: Radius.circular(4),
+                    ),
+                    border: Border.all(
+                      color: _artworkQuality == 205
+                          ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.3)
+                          : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
+                      width: _artworkQuality == 205 ? 2 : 1,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          color: _artworkQuality == 205
+                              ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.1)
+                              : Colors.transparent,
+                        ),
+                        child: Icon(
+                          Icons.low_priority,
+                          size: 30,
+                          color: _artworkQuality == 205
+                              ? Theme.of(context).colorScheme.primary
+                              : Theme.of(context).colorScheme.onSurface,
+                        ),
+                      ),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              LocaleProvider.tr('40_percent_low'),
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: _artworkQuality == 205
+                                    ? Theme.of(context).colorScheme.primary
+                                    : Theme.of(context).colorScheme.onSurface,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (_artworkQuality == 205)
+                        Icon(
+                          Icons.check_circle,
+                          color: Theme.of(context).colorScheme.primary,
+                          size: 24,
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+              SizedBox(height: 4),
+              // Tarjeta de 20% Mínimo
+              InkWell(
+                onTap: () {
+                  _setArtworkQuality(102);
+                  Navigator.of(context).pop();
+                },
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  width: double.infinity,
+                  padding: EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: _artworkQuality == 102
+                        ? Theme.of(context).colorScheme.primaryContainer
+                        : Theme.of(context).colorScheme.secondaryContainer,
+                    borderRadius: BorderRadius.only(
+                      topLeft: Radius.circular(4),
+                      topRight: Radius.circular(4),
+                      bottomLeft: Radius.circular(16),
+                      bottomRight: Radius.circular(16),
+                    ),
+                    border: Border.all(
+                      color: _artworkQuality == 102
+                          ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.3)
+                          : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
+                      width: _artworkQuality == 102 ? 2 : 1,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          color: _artworkQuality == 102
+                              ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.1)
+                              : Colors.transparent,
+                        ),
+                        child: Icon(
+                          Icons.compress,
+                          size: 30,
+                          color: _artworkQuality == 102
+                              ? Theme.of(context).colorScheme.primary
+                              : Theme.of(context).colorScheme.onSurface,
+                        ),
+                      ),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              LocaleProvider.tr('20_percent_minimum'),
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: _artworkQuality == 102
+                                    ? Theme.of(context).colorScheme.primary
+                                    : Theme.of(context).colorScheme.onSurface,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (_artworkQuality == 102)
+                        Icon(
+                          Icons.check_circle,
+                          color: Theme.of(context).colorScheme.primary,
+                          size: 24,
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
-    );
-  }
-
-  Widget _artworkQualityOption(int value, String label) {
-    return RadioListTile<int>(
-      value: value,
-      groupValue: _artworkQuality,
-      title: Text(label),
-      onChanged: (v) {
-        if (v != null) {
-          _setArtworkQuality(v);
-          Navigator.of(context).pop();
-        }
-      },
     );
   }
 
@@ -137,48 +501,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     setState(() {
       _currentLanguage = lang;
     });
-  }
-
-  void _showLanguageDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(LocaleProvider.tr('change_language')),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            RadioListTile<String>(
-              value: 'es',
-              groupValue: _currentLanguage,
-              title: const Text('Español'),
-              onChanged: (v) {
-                if (v != null) {
-                  _setLanguage(v);
-                  Navigator.of(context).pop();
-                }
-              },
-            ),
-            RadioListTile<String>(
-              value: 'en',
-              groupValue: _currentLanguage,
-              title: const Text('English'),
-              onChanged: (v) {
-                if (v != null) {
-                  _setLanguage(v);
-                  Navigator.of(context).pop();
-                }
-              },
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: Text(LocaleProvider.tr('cancel')),
-          ),
-        ],
-      ),
-    );
   }
 
   Future<void> _checkBatteryOptimization() async {
@@ -219,46 +541,266 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  void _showThemeSelectionDialog(BuildContext context) {
+    void _showThemeSelectionDialog(BuildContext context) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(LocaleProvider.tr('select_theme')),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.brightness_auto),
-              title: Text(LocaleProvider.tr('system_default')),
-              onTap: () {
-                widget.setThemeMode?.call(AppThemeMode.system);
-                Navigator.of(context).pop();
-              },
+        title: Center(
+          child: TranslatedText(
+            'select_theme',
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.w600,
             ),
-            ListTile(
-              leading: const Icon(Icons.light_mode),
-              title: Text(LocaleProvider.tr('light_mode')),
-              onTap: () {
-                widget.setThemeMode?.call(AppThemeMode.light);
-                Navigator.of(context).pop();
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.dark_mode),
-              title: Text(LocaleProvider.tr('dark_mode')),
-              onTap: () {
-                widget.setThemeMode?.call(AppThemeMode.dark);
-                Navigator.of(context).pop();
-              },
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: Text(LocaleProvider.tr('cancel')),
           ),
-        ],
+        ),
+        content: SizedBox(
+          width: 400,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(height: 18),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 4),
+                  child: TranslatedText(
+                    'select_theme_desc',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+                    textAlign: TextAlign.left,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ),
+              SizedBox(height: 20),
+              // Tarjeta de Sistema predeterminado
+              InkWell(
+                onTap: () {
+                  widget.setThemeMode?.call(AppThemeMode.system);
+                  Navigator.of(context).pop();
+                },
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  width: double.infinity,
+                  padding: EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: _getCurrentThemeText(context) == LocaleProvider.tr('system_default')
+                        ? Theme.of(context).colorScheme.primaryContainer
+                        : Theme.of(context).colorScheme.secondaryContainer,
+                    borderRadius: BorderRadius.only(
+                      topLeft: Radius.circular(16),
+                      topRight: Radius.circular(16),
+                      bottomLeft: Radius.circular(4),
+                      bottomRight: Radius.circular(4),
+                    ),
+                    border: Border.all(
+                      color: _getCurrentThemeText(context) == LocaleProvider.tr('system_default')
+                          ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.3)
+                          : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
+                      width: _getCurrentThemeText(context) == LocaleProvider.tr('system_default') ? 2 : 1,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          color: _getCurrentThemeText(context) == LocaleProvider.tr('system_default')
+                              ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.1)
+                              : Colors.transparent,
+                        ),
+                        child: Icon(
+                          Icons.brightness_auto,
+                          size: 30,
+                          color: _getCurrentThemeText(context) == LocaleProvider.tr('system_default')
+                              ? Theme.of(context).colorScheme.primary
+                              : Theme.of(context).colorScheme.onSurface,
+                        ),
+                      ),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              LocaleProvider.tr('system_default'),
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: _getCurrentThemeText(context) == LocaleProvider.tr('system_default')
+                                    ? Theme.of(context).colorScheme.primary
+                                    : Theme.of(context).colorScheme.onSurface,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (_getCurrentThemeText(context) == LocaleProvider.tr('system_default'))
+                        Icon(
+                          Icons.check_circle,
+                          color: Theme.of(context).colorScheme.primary,
+                          size: 24,
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+              SizedBox(height: 4),
+              // Tarjeta de Modo claro
+              InkWell(
+                onTap: () {
+                  widget.setThemeMode?.call(AppThemeMode.light);
+                  Navigator.of(context).pop();
+                },
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  width: double.infinity,
+                  padding: EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: _getCurrentThemeText(context) == LocaleProvider.tr('light_mode')
+                        ? Theme.of(context).colorScheme.primaryContainer
+                        : Theme.of(context).colorScheme.secondaryContainer,
+                    borderRadius: BorderRadius.only(
+                      topLeft: Radius.circular(4),
+                      topRight: Radius.circular(4),
+                      bottomLeft: Radius.circular(4),
+                      bottomRight: Radius.circular(4),
+                    ),
+                    border: Border.all(
+                      color: _getCurrentThemeText(context) == LocaleProvider.tr('light_mode')
+                          ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.3)
+                          : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
+                      width: _getCurrentThemeText(context) == LocaleProvider.tr('light_mode') ? 2 : 1,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          color: _getCurrentThemeText(context) == LocaleProvider.tr('light_mode')
+                              ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.1)
+                              : Colors.transparent,
+                        ),
+                        child: Icon(
+                          Icons.light_mode,
+                          size: 30,
+                          color: _getCurrentThemeText(context) == LocaleProvider.tr('light_mode')
+                              ? Theme.of(context).colorScheme.primary
+                              : Theme.of(context).colorScheme.onSurface,
+                        ),
+                      ),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              LocaleProvider.tr('light_mode'),
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: _getCurrentThemeText(context) == LocaleProvider.tr('light_mode')
+                                    ? Theme.of(context).colorScheme.primary
+                                    : Theme.of(context).colorScheme.onSurface,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (_getCurrentThemeText(context) == LocaleProvider.tr('light_mode'))
+                        Icon(
+                          Icons.check_circle,
+                          color: Theme.of(context).colorScheme.primary,
+                          size: 24,
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+              SizedBox(height: 4),
+              // Tarjeta de Modo oscuro
+              InkWell(
+                onTap: () {
+                  widget.setThemeMode?.call(AppThemeMode.dark);
+                  Navigator.of(context).pop();
+                },
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  width: double.infinity,
+                  padding: EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: _getCurrentThemeText(context) == LocaleProvider.tr('dark_mode')
+                        ? Theme.of(context).colorScheme.primaryContainer
+                        : Theme.of(context).colorScheme.secondaryContainer,
+                    borderRadius: BorderRadius.only(
+                      bottomLeft: Radius.circular(16),
+                      bottomRight: Radius.circular(16),
+                      topLeft: Radius.circular(4),
+                      topRight: Radius.circular(4),
+                    ),
+                    border: Border.all(
+                      color: _getCurrentThemeText(context) == LocaleProvider.tr('dark_mode')
+                          ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.3)
+                          : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
+                      width: _getCurrentThemeText(context) == LocaleProvider.tr('dark_mode') ? 2 : 1,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          color: _getCurrentThemeText(context) == LocaleProvider.tr('dark_mode')
+                              ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.1)
+                              : Colors.transparent,
+                        ),
+                        child: Icon(
+                          Icons.dark_mode,
+                          size: 30,
+                          color: _getCurrentThemeText(context) == LocaleProvider.tr('dark_mode')
+                              ? Theme.of(context).colorScheme.primary
+                              : Theme.of(context).colorScheme.onSurface,
+                        ),
+                      ),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              LocaleProvider.tr('dark_mode'),
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: _getCurrentThemeText(context) == LocaleProvider.tr('dark_mode')
+                                    ? Theme.of(context).colorScheme.primary
+                                    : Theme.of(context).colorScheme.onSurface,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (_getCurrentThemeText(context) == LocaleProvider.tr('dark_mode'))
+                        Icon(
+                          Icons.check_circle,
+                          color: Theme.of(context).colorScheme.primary,
+                          size: 24,
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -436,6 +978,639 @@ class _SettingsScreenState extends State<SettingsScreen> {
     downloadTypeNotifier.value = explode;
   }
 
+  // Función para mostrar selección de método de descarga con el mismo diseño
+  Future<void> _showDownloadTypeSelection() async {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Center(
+            child: TranslatedText(
+              'download_type',
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          content: SizedBox(
+            width: 400,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(height: 18),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 4),
+                    child: TranslatedText(
+                      'download_type_desc',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
+                      textAlign: TextAlign.left,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ),
+                SizedBox(height: 20),
+                // Tarjeta de método Explode
+                InkWell(
+                  onTap: () async {
+                    Navigator.of(context).pop();
+                    await _setDownloadType(true);
+                  },
+                  borderRadius: BorderRadius.circular(16),
+                  child: Container(
+                    width: double.infinity,
+                    padding: EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: _downloadTypeExplode 
+                          ? Theme.of(context).colorScheme.primaryContainer
+                          : Theme.of(context).colorScheme.secondaryContainer,
+                      borderRadius: BorderRadius.only(
+                        topLeft: Radius.circular(16),
+                        topRight: Radius.circular(16),
+                        bottomLeft: Radius.circular(4),
+                        bottomRight: Radius.circular(4),
+                      ),
+                      border: Border.all(
+                        color: _downloadTypeExplode
+                            ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.3)
+                            : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
+                        width: _downloadTypeExplode ? 2 : 1,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                            color: _downloadTypeExplode
+                                ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.1)
+                                : Colors.transparent,
+                          ),
+                          child: Icon(
+                            Icons.explore,
+                            size: 30,
+                            color: _downloadTypeExplode
+                                ? Theme.of(context).colorScheme.primary
+                                : Theme.of(context).colorScheme.onSurface,
+                          ),
+                        ),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                LocaleProvider.tr('explode'),
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: _downloadTypeExplode
+                                      ? Theme.of(context).colorScheme.primary
+                                      : Theme.of(context).colorScheme.onSurface,
+                                ),
+                              ),
+                              
+                            ],
+                          ),
+                        ),
+                        if (_downloadTypeExplode)
+                          Icon(
+                            Icons.check_circle,
+                            color: Theme.of(context).colorScheme.primary,
+                            size: 24,
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+                SizedBox(height: 4),
+                // Tarjeta de método Directo
+                InkWell(
+                  onTap: () async {
+                    Navigator.of(context).pop();
+                    await _setDownloadType(false);
+                  },
+                  borderRadius: BorderRadius.circular(16),
+                  child: Container(
+                    width: double.infinity,
+                    padding: EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: !_downloadTypeExplode 
+                          ? Theme.of(context).colorScheme.primaryContainer
+                          : Theme.of(context).colorScheme.secondaryContainer,
+                      borderRadius: BorderRadius.only(
+                        topLeft: Radius.circular(4),
+                        topRight: Radius.circular(4),
+                        bottomLeft: Radius.circular(16),
+                        bottomRight: Radius.circular(16),
+                      ),
+                      border: Border.all(
+                        color: !_downloadTypeExplode
+                            ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.3)
+                            : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
+                        width: !_downloadTypeExplode ? 2 : 1,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                            color: !_downloadTypeExplode
+                                ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.1)
+                                : Colors.transparent,
+                          ),
+                          child: Icon(
+                            Icons.download_done,
+                            size: 30,
+                            color: !_downloadTypeExplode
+                                ? Theme.of(context).colorScheme.primary
+                                : Theme.of(context).colorScheme.onSurface,
+                          ),
+                        ),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                LocaleProvider.tr('direct'),
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: !_downloadTypeExplode
+                                      ? Theme.of(context).colorScheme.primary
+                                      : Theme.of(context).colorScheme.onSurface,
+                                ),
+                              ),
+                              
+                            ],
+                          ),
+                        ),
+                        if (!_downloadTypeExplode)
+                          Icon(
+                            Icons.check_circle,
+                            color: Theme.of(context).colorScheme.primary,
+                            size: 24,
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _showLanguageDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Center(
+          child: TranslatedText(
+            'change_language',
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+        content: SizedBox(
+          width: 400,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(height: 18),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 4),
+                  child: TranslatedText(
+                    'select_language_desc',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+                    textAlign: TextAlign.left,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ),
+              SizedBox(height: 20),
+              // Tarjeta de Español
+              InkWell(
+                onTap: () {
+                  _setLanguage('es');
+                  Navigator.of(context).pop();
+                },
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  width: double.infinity,
+                  padding: EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: _currentLanguage == 'es'
+                        ? Theme.of(context).colorScheme.primaryContainer
+                        : Theme.of(context).colorScheme.secondaryContainer,
+                    borderRadius: BorderRadius.only(
+                      topLeft: Radius.circular(16),
+                      topRight: Radius.circular(16),
+                      bottomLeft: Radius.circular(4),
+                      bottomRight: Radius.circular(4),
+                    ),
+                    border: Border.all(
+                      color: _currentLanguage == 'es'
+                          ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.3)
+                          : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
+                      width: _currentLanguage == 'es' ? 2 : 1,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          color: _currentLanguage == 'es'
+                              ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.1)
+                              : Colors.transparent,
+                        ),
+                        child: Icon(
+                          Icons.language,
+                          size: 30,
+                          color: _currentLanguage == 'es'
+                              ? Theme.of(context).colorScheme.primary
+                              : Theme.of(context).colorScheme.onSurface,
+                        ),
+                      ),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Español',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: _currentLanguage == 'es'
+                                    ? Theme.of(context).colorScheme.primary
+                                    : Theme.of(context).colorScheme.onSurface,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (_currentLanguage == 'es')
+                        Icon(
+                          Icons.check_circle,
+                          color: Theme.of(context).colorScheme.primary,
+                          size: 24,
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+              SizedBox(height: 4),
+              // Tarjeta de English
+              InkWell(
+                onTap: () {
+                  _setLanguage('en');
+                  Navigator.of(context).pop();
+                },
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  width: double.infinity,
+                  padding: EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: _currentLanguage == 'en'
+                        ? Theme.of(context).colorScheme.primaryContainer
+                        : Theme.of(context).colorScheme.secondaryContainer,
+                    borderRadius: BorderRadius.only(
+                      bottomLeft: Radius.circular(16),
+                      bottomRight: Radius.circular(16),
+                      topLeft: Radius.circular(4),
+                      topRight: Radius.circular(4),
+                    ),
+                    border: Border.all(
+                      color: _currentLanguage == 'en'
+                          ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.3)
+                          : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
+                      width: _currentLanguage == 'en' ? 2 : 1,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          color: _currentLanguage == 'en'
+                              ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.1)
+                              : Colors.transparent,
+                        ),
+                        child: Icon(
+                          Icons.language,
+                          size: 30,
+                          color: _currentLanguage == 'en'
+                              ? Theme.of(context).colorScheme.primary
+                              : Theme.of(context).colorScheme.onSurface,
+                        ),
+                      ),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'English',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: _currentLanguage == 'en'
+                                    ? Theme.of(context).colorScheme.primary
+                                    : Theme.of(context).colorScheme.onSurface,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (_currentLanguage == 'en')
+                        Icon(
+                          Icons.check_circle,
+                          color: Theme.of(context).colorScheme.primary,
+                          size: 24,
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Función para mostrar confirmación de eliminación de letras con el mismo diseño
+  Future<void> _showDeleteLyricsConfirmation() async {
+    showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Center(
+            child: TranslatedText(
+              'delete_lyrics',
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          content: SizedBox(
+            width: 400,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(height: 18),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 4),
+                    child: TranslatedText(
+                      'delete_lyrics_confirm',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
+                      textAlign: TextAlign.left,
+                      maxLines: 4,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ),
+                SizedBox(height: 20),
+                // Tarjeta de confirmar eliminación
+                InkWell(
+                  onTap: () async {
+                    Navigator.of(context).pop(true);
+                    await SyncedLyricsService.clearLyrics();
+                    if (context.mounted) {
+                      _showLyricsDeletedDialog();
+                    }
+                  },
+                  borderRadius: BorderRadius.circular(16),
+                  child: Container(
+                    width: double.infinity,
+                    padding: EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.errorContainer,
+                      borderRadius: BorderRadius.only(
+                        topLeft: Radius.circular(16),
+                        topRight: Radius.circular(16),
+                        bottomLeft: Radius.circular(4),
+                        bottomRight: Radius.circular(4),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: EdgeInsets.all(8),
+                          child: Icon(
+                            Icons.delete_forever,
+                            size: 30,
+                            color: Theme.of(context).colorScheme.error,
+                          ),
+                        ),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                LocaleProvider.tr('delete'),
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: Theme.of(context).colorScheme.error,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                SizedBox(height: 4),
+                // Tarjeta de cancelar
+                InkWell(
+                  onTap: () => Navigator.of(context).pop(false),
+                  borderRadius: BorderRadius.circular(16),
+                  child: Container(
+                    width: double.infinity,
+                    padding: EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.secondaryContainer,
+                      borderRadius: BorderRadius.only(
+                        bottomLeft: Radius.circular(16),
+                        bottomRight: Radius.circular(16),
+                        topLeft: Radius.circular(4),
+                        topRight: Radius.circular(4),
+                      ),
+                      border: Border.all(
+                        color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                            color: Colors.transparent,
+                          ),
+                          child: Icon(
+                            Icons.cancel,
+                            size: 30,
+                            color: Theme.of(context).colorScheme.onSurface,
+                          ),
+                        ),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                LocaleProvider.tr('cancel'),
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: Theme.of(context).colorScheme.onSurface,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // Función para mostrar diálogo de letras eliminadas
+  void _showLyricsDeletedDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Center(
+            child: TranslatedText(
+              'lyrics_deleted',
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          content: SizedBox(
+            width: 400,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(height: 18),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 4),
+                    child: TranslatedText(
+                      'lyrics_deleted_desc',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
+                      textAlign: TextAlign.left,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ),
+                SizedBox(height: 20),
+                // Tarjeta de aceptar
+                InkWell(
+                  onTap: () => Navigator.of(context).pop(),
+                  borderRadius: BorderRadius.circular(16),
+                  child: Container(
+                    width: double.infinity,
+                    padding: EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.primaryContainer,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
+                        width: 2,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                          ),
+                          child: Icon(
+                            Icons.check_circle,
+                            size: 30,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                        ),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                LocaleProvider.tr('ok'),
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: Theme.of(context).colorScheme.primary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Future<void> _loadColorScheme() async {
     final savedColorScheme = await ThemePreferences.getColorScheme();
     setState(() {
@@ -524,6 +1699,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const SizedBox(height: 8),
           Card(
+            margin: EdgeInsets.zero,
+            shape: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(16),
+                topRight: Radius.circular(16),
+                bottomLeft: Radius.circular(4),
+                bottomRight: Radius.circular(4),
+              ),
+            ),
             child: Column(
               children: [
                 ListTile(
@@ -535,27 +1719,57 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   title: TranslatedText('select_theme'),
                   subtitle: TranslatedText(
                     _getCurrentThemeText(context),
-                    style: const TextStyle(fontSize: 12),
+                    style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7)),
                   ),
                   onTap: () => _showThemeSelectionDialog(context),
                 ),
-                const Divider(height: 1),
+              ],
+            ),
+          ),
+          const SizedBox(height: 4),
+          Card(
+            margin: EdgeInsets.zero,
+            shape: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(4),
+                topRight: Radius.circular(4),
+                bottomLeft: Radius.circular(4),
+                bottomRight: Radius.circular(4),
+              ),
+            ),
+            child: Column(
+              children: [
                 ListTile(
                   leading: const Icon(Icons.palette),
                   title: Text(LocaleProvider.tr('select_color')),
                   subtitle: Text(
                     ThemePreferences.getColorName(_currentColorScheme),
-                    style: const TextStyle(fontSize: 12),
+                    style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7)),
                   ),
                   onTap: () => _showColorSelectionDialog(context),
                 ),
-                const Divider(height: 1),
+              ],
+            ),
+          ),
+          const SizedBox(height: 4),
+          Card(
+            margin: EdgeInsets.zero,
+            shape: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(4),
+                topRight: Radius.circular(4),
+                bottomLeft: Radius.circular(16),
+                bottomRight: Radius.circular(16),
+              ),
+            ),
+            child: Column(
+              children: [
                 ListTile(
                   leading: const Icon(Icons.language),
                   title: TranslatedText('change_language'),
                   subtitle: TranslatedText(
                     _currentLanguage == 'es' ? 'spanish' : 'english',
-                    style: const TextStyle(fontSize: 12),
+                    style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7)),
                   ),
                   onTap: () => _showLanguageDialog(context),
                 ),
@@ -571,6 +1785,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const SizedBox(height: 8),
           Card(
+            margin: EdgeInsets.zero,
+            shape: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(16),
+                topRight: Radius.circular(16),
+                bottomLeft: Radius.circular(4),
+                bottomRight: Radius.circular(4),
+              ),
+            ),
             child: Column(
               children: [
                 ListTile(
@@ -601,7 +1824,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         )
                       : null,
                 ),
-                const Divider(height: 1),
+              ],
+            ),
+          ),
+          const SizedBox(height: 4),
+          Card(
+            margin: EdgeInsets.zero,
+            shape: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(4),
+                topRight: Radius.circular(4),
+                bottomLeft: Radius.circular(4),
+                bottomRight: Radius.circular(4),
+              ),
+            ),
+            child: Column(
+              children: [
                 ListTile(
                   leading: const Icon(Icons.folder),
                   title: TranslatedText('save_path'),
@@ -615,48 +1853,67 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                   '',
                                 )
                               : _downloadDirectory!,
-                          style: const TextStyle(fontSize: 12),
+                          style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7)),
                           overflow: TextOverflow.ellipsis,
                         )
                       : TranslatedText(
                           'not_selected',
-                          style: const TextStyle(fontSize: 12),
+                          style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7)),
                         ),
                   trailing: const Icon(Icons.edit),
                   onTap: _pickDownloadDirectory,
                 ),
-                const Divider(height: 1),
+              ],
+            ),
+          ),
+          const SizedBox(height: 4),
+          Card(
+            margin: EdgeInsets.zero,
+            shape: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(4),
+                topRight: Radius.circular(4),
+                bottomLeft: Radius.circular(4),
+                bottomRight: Radius.circular(4),
+              ),
+            ),
+            child: Column(
+              children: [
                 ListTile(
                   leading: const Icon(Icons.download),
                   title: TranslatedText('download_type'),
                   subtitle: TranslatedText(
                     'download_type_desc',
-                    style: const TextStyle(fontSize: 12),
+                    style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7)),
                   ),
-                  trailing: DropdownButton<bool>(
-                    value: _downloadTypeExplode,
-                    items: [
-                      DropdownMenuItem(
-                        value: true,
-                        child: TranslatedText('explode'),
-                      ),
-                      DropdownMenuItem(
-                        value: false,
-                        child: TranslatedText('direct'),
-                      ),
-                    ],
-                    onChanged: (v) {
-                      if (v != null) _setDownloadType(v);
-                    },
+                  trailing: IconButton(
+                    icon: const Icon(Icons.arrow_drop_down),
+                    onPressed: () => _showDownloadTypeSelection(),
                   ),
+                  onTap: () => _showDownloadTypeSelection(),
                 ),
-                const Divider(height: 1),
+              ],
+            ),
+          ),
+          const SizedBox(height: 4),
+          Card(
+            margin: EdgeInsets.zero,
+            shape: const RoundedRectangleBorder(  
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(4),
+                topRight: Radius.circular(4),
+                bottomLeft: Radius.circular(16),
+                bottomRight: Radius.circular(16),
+              ),
+            ),
+            child: Column(
+              children: [
                 ListTile(
                   leading: const Icon(Icons.security),
                   title: Text(LocaleProvider.tr('grant_all_files_permission')),
                   subtitle: Text(
                     LocaleProvider.tr('grant_all_files_permission_desc'),
-                    style: const TextStyle(fontSize: 12),
+                    style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7)),
                   ),
                   onTap: () async {
                     final status = await Permission.manageExternalStorage
@@ -692,6 +1949,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const SizedBox(height: 8),
           Card(
+            margin: EdgeInsets.zero,
+            shape: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(16),
+                topRight: Radius.circular(16),
+                bottomLeft: Radius.circular(4),
+                bottomRight: Radius.circular(4),
+              ),
+            ),
             child: Column(
               children: [
                 ListTile(
@@ -717,13 +1983,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         LocaleProvider.tr(
                           'artwork_quality_description',
                         ), // Agrega esta key en tus traducciones
-                        style: const TextStyle(fontSize: 12),
+                        style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7)),
                       ),
                     ],
                   ),
                   onTap: () => _showArtworkQualityDialog(context),
                 ),
-                const Divider(height: 1),
+              ],
+            ),
+          ),
+          const SizedBox(height: 4),
+          Card(
+            margin: EdgeInsets.zero,
+            shape: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(4),
+                topRight: Radius.circular(4),
+                bottomLeft: Radius.circular(4),
+                bottomRight: Radius.circular(4),
+              ),
+            ),
+            child: Column(
+              children: [
                 FutureBuilder<SharedPreferences>(
                   future: SharedPreferences.getInstance(),
                   builder: (context, snapshot) {
@@ -740,94 +2021,60 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       title: Text(LocaleProvider.tr('index_songs_on_startup')),
                       subtitle: Text(
                         LocaleProvider.tr('index_songs_on_startup_desc'),
-                        style: const TextStyle(fontSize: 12),
+                        style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7)),
                       ),
                       secondary: const Icon(Icons.library_music),
+                      thumbIcon: WidgetStateProperty.resolveWith<Icon?>((Set<WidgetState> states) {
+                        if (states.contains(WidgetState.selected)) {
+                          return const Icon(Icons.check, size: 20);
+                        } else {
+                          return const Icon(Icons.close, size: 20);
+                        }
+                      }),
                     );
                   },
                 ),
-                const Divider(height: 1),
+              ],
+            ),
+          ),
+          const SizedBox(height: 4),
+          Card(
+            margin: EdgeInsets.zero,
+            shape: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(4),
+                topRight: Radius.circular(4),
+                bottomLeft: Radius.circular(4),
+                bottomRight: Radius.circular(4),
+              ),
+            ),
+            child: Column(
+              children: [
                 ListTile(
                   leading: const Icon(Icons.lyrics),
                   title: Text(LocaleProvider.tr('delete_lyrics')),
                   subtitle: Text(
                     LocaleProvider.tr('delete_lyrics_desc'),
-                    style: const TextStyle(fontSize: 12),
+                    style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7)),
                   ),
-                  onTap: () async {
-                    final confirmed = await showDialog<bool>(
-                      context: context,
-                      builder: (context) => AlertDialog(
-                        title: Text(LocaleProvider.tr('delete_lyrics')),
-                        content: Text(
-                          LocaleProvider.tr('delete_lyrics_confirm'),
-                        ),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.of(context).pop(false),
-                            child: Text(LocaleProvider.tr('cancel')),
-                          ),
-                          TextButton(
-                            onPressed: () => Navigator.of(context).pop(true),
-                            child: Text(LocaleProvider.tr('delete')),
-                          ),
-                        ],
-                      ),
-                    );
-                    if (confirmed == true) {
-                      await SyncedLyricsService.clearLyrics();
-                      if (context.mounted) {
-                        showDialog(
-                          context: context,
-                          builder: (context) => AlertDialog(
-                            title: Text(LocaleProvider.tr('lyrics_deleted')),
-                            content: Text(
-                              LocaleProvider.tr('lyrics_deleted_desc'),
-                            ),
-                          ),
-                        );
-                      }
-                    }
-                  },
+                  onTap: () => _showDeleteLyricsConfirmation(),
                 ),
-                //const Divider(height: 1),
-                //ListTile(
-                //  leading: const Icon(Icons.cleaning_services),
-                //  title: Text(LocaleProvider.tr('clear_artwork_cache')),
-                //  subtitle: Text(LocaleProvider.tr('clear_artwork_cache_desc'), style: const TextStyle(fontSize: 12)),
-                //  onTap: () async {
-                //    final confirmed = await showDialog<bool>(
-                //      context: context,
-                //      builder: (context) => AlertDialog(
-                //        title: Text(LocaleProvider.tr('clear_artwork_cache')),
-                //        content: Text(LocaleProvider.tr('clear_artwork_cache_confirm')),
-                //        actions: [
-                //          TextButton(
-                //            onPressed: () => Navigator.of(context).pop(false),
-                //            child: Text(LocaleProvider.tr('cancel')),
-                //          ),
-                //          TextButton(
-                //            onPressed: () => Navigator.of(context).pop(true),
-                //            child: Text(LocaleProvider.tr('delete')),
-                //          ),
-                //        ],
-                //      ),
-                //    );
-                //    if (confirmed == true) {
-                //      await ArtworkDB.clearCache();
-                //      if (context.mounted) {
-                //        showDialog(
-                //          context: context,
-                //          builder: (context) => AlertDialog(
-                //            title: Text(LocaleProvider.tr('artwork_cache_cleared')),
-                //            content: Text(LocaleProvider.tr('artwork_cache_cleared_desc')),
-                //          ),
-                //        );
-                //      }
-                //    }
-                //  },
-                //),
-                const Divider(height: 1),
+              ],
+            ),
+          ),
+          const SizedBox(height: 4),
+          Card(
+            margin: EdgeInsets.zero,
+            shape: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(4),
+                topRight: Radius.circular(4),
+                bottomLeft: Radius.circular(16),
+                bottomRight: Radius.circular(16),
+              ),
+            ),
+            child: Column(
+              children: [
                 ListTile(
                   leading: const Icon(Icons.battery_alert),
                   title: Text(LocaleProvider.tr('ignore_battery_optimization')),
@@ -845,7 +2092,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       const SizedBox(height: 2),
                       Text(
                         LocaleProvider.tr('ignore_battery_optimization_desc'),
-                        style: const TextStyle(fontSize: 12),
+                        style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7)),
                       ),
                     ],
                   ),
@@ -863,6 +2110,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const SizedBox(height: 8),
           Card(
+            margin: EdgeInsets.zero,
+            shape: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(16),
+                topRight: Radius.circular(16),
+                bottomLeft: Radius.circular(4),
+                bottomRight: Radius.circular(4),
+              ),
+            ),
             child: Column(
               children: [
                 ListTile(
@@ -870,17 +2126,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   title: Text(LocaleProvider.tr('export_backup')),
                   subtitle: Text(
                     LocaleProvider.tr('export_backup_desc'),
-                    style: const TextStyle(fontSize: 12),
+                    style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7)),
                   ),
                   onTap: _exportBackup,
                 ),
-                const Divider(height: 1),
+              ],
+            ),
+          ),
+          const SizedBox(height: 4),
+          Card(
+            margin: EdgeInsets.zero,
+            shape: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(4),
+                topRight: Radius.circular(4),
+                bottomLeft: Radius.circular(16),
+                bottomRight: Radius.circular(16),
+              ),
+            ),
+            child: Column(
+              children: [
                 ListTile(
                   leading: const Icon(Icons.upload_file),
                   title: Text(LocaleProvider.tr('import_backup')),
                   subtitle: Text(
                     LocaleProvider.tr('import_backup_desc'),
-                    style: const TextStyle(fontSize: 12),
+                    style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7)),
                   ),
                   onTap: _importBackup,
                 ),
@@ -896,6 +2167,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const SizedBox(height: 8),
           Card(
+            margin: EdgeInsets.zero,
+            shape: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(16),
+                topRight: Radius.circular(16),
+                bottomLeft: Radius.circular(4),
+                bottomRight: Radius.circular(4),
+              ),
+            ),
             child: Column(
               children: [
                 ListTile(
@@ -903,7 +2183,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   title: Text(LocaleProvider.tr('app_updates')),
                   subtitle: Text(
                     LocaleProvider.tr('check_for_updates'),
-                    style: const TextStyle(fontSize: 12),
+                    style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7)),
                   ),
                   onTap: () {
                     Navigator.push(
@@ -912,13 +2192,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     );
                   },
                 ),
-                const Divider(height: 1),
+              ],
+            ),
+          ),
+          const SizedBox(height: 4),
+          Card(
+            margin: EdgeInsets.zero,
+            shape: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(4),
+                topRight: Radius.circular(4),
+                bottomLeft: Radius.circular(16),
+                bottomRight: Radius.circular(16),
+              ),
+            ),
+            child: Column(
+              children: [
                 ListTile(
                   leading: const Icon(Icons.info_outline),
                   title: Text(LocaleProvider.tr('about')),
                   subtitle: Text(
                     LocaleProvider.tr('app_info'),
-                    style: const TextStyle(fontSize: 12),
+                    style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7)),
                   ),
                   onTap: () {
                     showDialog(
@@ -952,7 +2247,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              '${LocaleProvider.tr('version')}: v1.4.9',
+                              '${LocaleProvider.tr('version')}: v1.4.10',
                               style: const TextStyle(fontSize: 15),
                               textAlign: TextAlign.center,
                             ),

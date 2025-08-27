@@ -139,7 +139,9 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                   width: size,
                   height: size,
                   alignment: Alignment.center,
-                  child: const CircularProgressIndicator(),
+                  child: const CircularProgressIndicator(
+                    year2023: false,
+                  ),
                 ),
           // Optimización: Cache de imagen
           cacheWidth: (size * MediaQuery.of(context).devicePixelRatio).round(),
@@ -156,12 +158,11 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
       width: size,
       height: size,
       decoration: BoxDecoration(
-        color: Colors.grey[900],
+        color: Theme.of(context).colorScheme.surfaceContainer,
         borderRadius: BorderRadius.circular(16),
       ),
       child: Icon(
         Icons.music_note,
-        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.54),
         size: size * 0.5,
       ),
     );
@@ -204,7 +205,9 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                   width: 60,
                   height: 60,
                   alignment: Alignment.center,
-                  child: const CircularProgressIndicator(),
+                  child: const CircularProgressIndicator(
+                    year2023: false,
+                  ),
                 ),
         );
       }
@@ -219,10 +222,10 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
       width: 60,
       height: 60,
       decoration: BoxDecoration(
-        color: Colors.grey[800],
+        color: Theme.of(context).colorScheme.surfaceContainer,
         borderRadius: BorderRadius.circular(8),
       ),
-      child: Icon(Icons.music_note, color: Colors.grey[400], size: 30),
+      child: Icon(Icons.music_note, size: 30),
     );
   }
 
@@ -253,6 +256,186 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     } catch (e) {
       // ignore: avoid_print
     }
+  }
+
+  // Función para buscar la canción en YouTube Music
+  Future<void> _searchSongOnYouTubeMusic(MediaItem mediaItem) async {
+    try {
+      final title = mediaItem.title;
+      final artist = mediaItem.artist ?? '';
+
+      // Crear la consulta de búsqueda
+      String searchQuery = title;
+      if (artist.isNotEmpty) {
+        searchQuery = '$artist $title';
+      }
+
+      // Codificar la consulta para la URL
+      final encodedQuery = Uri.encodeComponent(searchQuery);
+      
+      // URL correcta para búsqueda en YouTube Music
+      final ytMusicSearchUrl = 'https://music.youtube.com/search?q=$encodedQuery';
+
+      // Intentar abrir YouTube Music en el navegador o en la app
+      final url = Uri.parse(ytMusicSearchUrl);
+
+      if (await canLaunchUrl(url)) {
+        await launchUrl(url, mode: LaunchMode.externalApplication);
+      } else {
+        // ignore: use_build_context_synchronously
+      }
+    } catch (e) {
+      // ignore: avoid_print
+    }
+  }
+
+  // Función para mostrar opciones de búsqueda
+  Future<void> _showSearchOptions(MediaItem mediaItem) async {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Center(
+            child: TranslatedText(
+              'search_song',
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(height: 18),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Row(
+                    children: [
+                      SizedBox(width: 4),
+                      TranslatedText(
+                        'search_options',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Theme.of(context).colorScheme.onSurface,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                SizedBox(height: 20),
+                // Tarjeta de YouTube
+                InkWell(
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    _searchSongOnYouTube(mediaItem);
+                  },
+                  borderRadius: BorderRadius.circular(16),
+                  child: Container(
+                    width: double.infinity,
+                    padding: EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.secondaryContainer,
+                      borderRadius: BorderRadius.only(
+                        topLeft: Radius.circular(16),
+                        topRight: Radius.circular(16),
+                        bottomLeft: Radius.circular(4),
+                        bottomRight: Radius.circular(4),
+                      ),
+                      border: Border.all(
+                        color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Image.asset(
+                            'assets/icon/Youtube_logo.png',
+                            width: 30,
+                            height: 30,
+                          ),
+                        ),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'YouTube',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: Theme.of(context).colorScheme.onSurface,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                SizedBox(height: 4),
+                // Tarjeta de YouTube Music
+                InkWell(
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    _searchSongOnYouTubeMusic(mediaItem);
+                  },
+                  borderRadius: BorderRadius.circular(16),
+                  child: Container(
+                    width: double.infinity,
+                    padding: EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.secondaryContainer,
+                      borderRadius: BorderRadius.only(
+                        topLeft: Radius.circular(4),
+                        topRight: Radius.circular(4),
+                        bottomLeft: Radius.circular(16),
+                        bottomRight: Radius.circular(16),
+                      ),
+                      border: Border.all(
+                        color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Image.asset(
+                            'assets/icon/Youtube_Music_icon.png',
+                            width: 30,
+                            height: 30,
+                          ),
+                        ),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'YT Music',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: Theme.of(context).colorScheme.onSurface,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _loadLyrics(MediaItem mediaItem) async {
@@ -314,7 +497,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     );
     _playPauseController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 350),
+      duration: const Duration(milliseconds: 250),
       value: 1.0, // Empieza en pausa (o 0.0 si quieres que empiece en play)
     );
     _prefsFuture = SharedPreferences.getInstance();
@@ -438,34 +621,40 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                       ),
                     ),
                     const SizedBox(width: 8),
-                    // Botón de YouTube para buscar la canción
-                    ElevatedButton.icon(
-                      onPressed: () async {
+                    // Botón de búsqueda para abrir opciones
+                    InkWell(
+                      onTap: () async {
                         Navigator.of(context).pop();
-                        await _searchSongOnYouTube(mediaItem);
+                        await _showSearchOptions(mediaItem);
                       },
-                      label: Text(
-                        'YouTube',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 14,
-                        ),
-                      ),
-                      icon: const Icon(Icons.search, size: 20),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Theme.of(
-                          context,
-                        ).colorScheme.primaryContainer,
-                        foregroundColor: Theme.of(
-                          context,
-                        ).colorScheme.onPrimaryContainer,
-                        elevation: 0,
+                      borderRadius: BorderRadius.circular(12),
+                      child: Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 16,
                           vertical: 8,
                         ),
-                        shape: RoundedRectangleBorder(
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.primaryContainer,
                           borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.search,
+                              size: 20,
+                              color: Theme.of(context).colorScheme.onPrimaryContainer,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Buscar',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 14,
+                                color: Theme.of(context).colorScheme.onPrimaryContainer,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
@@ -835,41 +1024,39 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
 
   void _showPlaylistDialog(BuildContext context) {
     final queue = audioHandler?.queue.value;
-    final maxHeight = MediaQuery.of(context).size.height * 0.6;
+    final maxHeight = MediaQuery.of(context).size.height * 0.95;
 
     showModalBottomSheet(
       context: context,
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       isScrollControlled: true,
       builder: (context) {
-        return SafeArea(
-          child: Container(
-            constraints: BoxConstraints(maxHeight: maxHeight),
-            child: StreamBuilder<MediaItem?>(
-              stream: audioHandler?.mediaItem,
-              builder: (context, snapshot) {
-                final currentMediaItem =
-                    snapshot.data ?? audioHandler?.mediaItem.valueOrNull;
+        return Container(
+          constraints: BoxConstraints(maxHeight: maxHeight),
+          child: StreamBuilder<MediaItem?>(
+            stream: audioHandler?.mediaItem,
+            builder: (context, snapshot) {
+              final currentMediaItem =
+                  snapshot.data ?? audioHandler?.mediaItem.valueOrNull;
 
-                // Encontrar el índice de la canción actual
-                int currentIndex = -1;
-                if (currentMediaItem != null) {
-                  for (int i = 0; i < queue!.length; i++) {
-                    if (queue[i].id == currentMediaItem.id) {
-                      currentIndex = i;
-                      break;
-                    }
+              // Encontrar el índice de la canción actual
+              int currentIndex = -1;
+              if (currentMediaItem != null) {
+                for (int i = 0; i < queue!.length; i++) {
+                  if (queue[i].id == currentMediaItem.id) {
+                    currentIndex = i;
+                    break;
                   }
                 }
+              }
 
-                return _PlaylistListView(
-                  queue: queue ?? [],
-                  currentMediaItem: currentMediaItem,
-                  currentIndex: currentIndex,
-                  maxHeight: maxHeight,
-                );
-              },
-            ),
+              return _PlaylistListView(
+                queue: queue ?? [],
+                currentMediaItem: currentMediaItem,
+                currentIndex: currentIndex,
+                maxHeight: maxHeight,
+              );
+            },
           ),
         );
       },
@@ -931,35 +1118,33 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
             isScrollControlled: true,
             builder: (context) {
               final queue = audioHandler?.queue.value;
-              final maxHeight = MediaQuery.of(context).size.height * 0.6;
-              return SafeArea(
-                child: Container(
-                  constraints: BoxConstraints(maxHeight: maxHeight),
-                  child: StreamBuilder<MediaItem?>(
-                    stream: audioHandler?.mediaItem,
-                    builder: (context, snapshot) {
-                      final currentMediaItem =
-                          snapshot.data ?? audioHandler?.mediaItem.valueOrNull;
+              final maxHeight = MediaQuery.of(context).size.height;
+              return Container(
+                constraints: BoxConstraints(maxHeight: maxHeight),
+                child: StreamBuilder<MediaItem?>(
+                  stream: audioHandler?.mediaItem,
+                  builder: (context, snapshot) {
+                    final currentMediaItem =
+                        snapshot.data ?? audioHandler?.mediaItem.valueOrNull;
 
-                      // Encontrar el índice de la canción actual
-                      int currentIndex = -1;
-                      if (currentMediaItem != null) {
-                        for (int i = 0; i < queue!.length; i++) {
-                          if (queue[i].id == currentMediaItem.id) {
-                            currentIndex = i;
-                            break;
-                          }
+                    // Encontrar el índice de la canción actual
+                    int currentIndex = -1;
+                    if (currentMediaItem != null) {
+                      for (int i = 0; i < queue!.length; i++) {
+                        if (queue[i].id == currentMediaItem.id) {
+                          currentIndex = i;
+                          break;
                         }
                       }
+                    }
 
-                      return _PlaylistListView(
-                        queue: queue ?? [],
-                        currentMediaItem: currentMediaItem,
-                        currentIndex: currentIndex,
-                        maxHeight: maxHeight,
-                      );
-                    },
-                  ),
+                    return _PlaylistListView(
+                      queue: queue ?? [],
+                      currentMediaItem: currentMediaItem,
+                      currentIndex: currentIndex,
+                      maxHeight: maxHeight,
+                    );
+                  },
                 ),
               );
             },
@@ -1190,6 +1375,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                       child: _loadingLyrics
                                           ? const Center(
                                               child: CircularProgressIndicator(
+                                                year2023: false,
                                                 color: Colors.white,
                                               ),
                                             )
@@ -1255,23 +1441,43 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                         ),
                         SizedBox(
                           width: width * 0.85,
+                          child: TitleMarquee(
+                            text: currentMediaItem!.title,
+                            maxWidth: artworkSize,
+                            style: Theme.of(context)
+                                .textTheme
+                                .headlineSmall
+                                ?.copyWith(
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onSurface,
+                                  fontSize: buttonFontSize + 0.75,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                          ),
+                        ),
+                        SizedBox(height: height * 0.01),
+                        SizedBox(
+                          width: width * 0.85,
                           child: Row(
                             children: [
                               Expanded(
-                                child: TitleMarquee(
-                                  text: currentMediaItem!.title,
-                                  maxWidth:
-                                      artworkSize - (isSmallScreen ? 60 : 40),
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .headlineSmall
+                                child: Text(
+                                  (currentMediaItem.artist == null ||
+                                          currentMediaItem.artist!.trim().isEmpty)
+                                      ? LocaleProvider.tr('unknown_artist')
+                                      : currentMediaItem.artist!,
+                                  style: Theme.of(context).textTheme.titleMedium
                                       ?.copyWith(
                                         color: Theme.of(
                                           context,
                                         ).colorScheme.onSurface,
-                                        fontSize: buttonFontSize + 0.75,
-                                        fontWeight: FontWeight.bold,
+                                        fontWeight: FontWeight.w400,
+                                        fontSize: 18,
                                       ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  textAlign: TextAlign.left,
                                 ),
                               ),
                               SizedBox(width: width * 0.04),
@@ -1339,7 +1545,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                             isFav
                                                 ? Icons.favorite
                                                 : Icons.favorite_border,
-                                            size: 34,
+                                            size: 32,
                                             color: Theme.of(
                                               context,
                                             ).colorScheme.onSurface,
@@ -1351,27 +1557,6 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                 },
                               ),
                             ],
-                          ),
-                        ),
-                        SizedBox(height: height * 0.01),
-                        SizedBox(
-                          width: width * 0.85,
-                          child: Text(
-                            (currentMediaItem.artist == null ||
-                                    currentMediaItem.artist!.trim().isEmpty)
-                                ? LocaleProvider.tr('unknown_artist')
-                                : currentMediaItem.artist!,
-                            style: Theme.of(context).textTheme.titleMedium
-                                ?.copyWith(
-                                  color: Theme.of(
-                                    context,
-                                  ).colorScheme.onSurface,
-                                  fontWeight: FontWeight.w400,
-                                  fontSize: 18,
-                                ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            textAlign: TextAlign.left,
                           ),
                         ),
                         SizedBox(height: height * 0.015),
@@ -1894,11 +2079,12 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                                     ? SizedBox(
                                                                         width:
                                                                             playIconSize -
-                                                                            15,
+                                                                            5,
                                                                         height:
                                                                             playIconSize -
-                                                                            15,
+                                                                            5,
                                                                         child: CircularProgressIndicator(
+                                                                          year2023: false,
                                                                           strokeWidth:
                                                                               5,
                                                                           strokeCap:
@@ -2467,37 +2653,45 @@ class _TitleMarqueeState extends State<TitleMarquee> {
         return SizedBox(
           height: 40,
           width: widget.maxWidth,
-          child: Text(
-            widget.text,
-            style: widget.style,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              widget.text,
+              style: widget.style,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
         );
       }
       return SizedBox(
         height: 40,
         width: widget.maxWidth,
-        child: Marquee(
-          key: ValueKey(widget.text),
-          text: widget.text,
-          style: widget.style!,
-          velocity: 30.0,
-          blankSpace: 40.0,
-          startPadding: 0.0,
-          fadingEdgeStartFraction: 0.1,
-          fadingEdgeEndFraction: 0.1,
+        child: Center(
+          child: Marquee(
+            key: ValueKey(widget.text),
+            text: widget.text,
+            style: widget.style!,
+            velocity: 30.0,
+            blankSpace: 40.0,
+            startPadding: 0.0,
+            fadingEdgeStartFraction: 0.1,
+            fadingEdgeEndFraction: 0.1,
+          ),
         ),
       );
     } else {
       return SizedBox(
         height: 40,
         width: widget.maxWidth,
-        child: Text(
-          widget.text,
-          style: widget.style,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            widget.text,
+            style: widget.style,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
         ),
       );
     }
@@ -2789,7 +2983,7 @@ class _VerticalMarqueeLyricsState extends State<VerticalMarqueeLyrics>
               child: ListView.builder(
                 controller: _scrollController,
                 physics: const AlwaysScrollableScrollPhysics(),
-                padding: EdgeInsets.symmetric(vertical: 0, horizontal: 10),
+                padding: EdgeInsets.only(top: 60, bottom: 0, left: 10, right: 10),
                 itemCount: lines.length,
                 itemBuilder: (context, index) {
                   final isCurrent = index == idx;
@@ -2855,10 +3049,8 @@ class _PlaylistListViewState extends State<_PlaylistListView> {
     super.initState();
     // Calcular la posición inicial para centrar la canción actual
     final itemHeight = 72.0; // Altura aproximada de cada ListTile
-    final headerHeight = 80.0; // Altura del encabezado
     final initialOffset = widget.currentIndex >= 0
-        ? headerHeight +
-              (widget.currentIndex * itemHeight) -
+        ? (widget.currentIndex * itemHeight) -
               (widget.maxHeight / 2) +
               (itemHeight / 2)
         : 0.0;
@@ -2876,76 +3068,113 @@ class _PlaylistListViewState extends State<_PlaylistListView> {
 
   @override
   Widget build(BuildContext context) {
-    return ListView.builder(
-      controller: _scrollController,
-      shrinkWrap: true,
-      itemCount: widget.queue.length + 1, // +1 para el encabezado
-      itemBuilder: (context, index) {
-        if (index == 0) {
-          // Encabezado fijo como primer elemento de la lista
-          return Column(
-            children: [
-              const SizedBox(height: 12),
-              Container(
-                width: 40,
-                height: 5,
-                decoration: BoxDecoration(
-                  color: Colors.white24,
-                  borderRadius: BorderRadius.circular(3),
-                ),
+    return Stack(
+      children: [
+        // Lista de canciones con padding superior para el encabezado fijo
+        ListView.builder(
+          controller: _scrollController,
+          shrinkWrap: true,
+          padding: const EdgeInsets.only(top: 100), // Aumentado el espacio para evitar recorte
+          itemCount: widget.queue.length,
+          itemBuilder: (context, index) {
+            final item = widget.queue[index];
+            final isCurrent = item.id == widget.currentMediaItem?.id;
+            final isAmoledTheme =
+                colorSchemeNotifier.value == AppColorScheme.amoled;
+            final songId = item.extras?['songId'] ?? 0;
+            final songPath = item.extras?['data'] ?? '';
+            
+            // Agregar padding adicional al primer elemento para evitar recorte
+            final isFirstItem = index == 0;
+            
+            return Padding(
+              padding: EdgeInsets.only(
+                top: isFirstItem ? 8.0 : 0.0,
+                bottom: isFirstItem ? 4.0 : 0.0,
               ),
-              const SizedBox(height: 16),
-              Text(
-                LocaleProvider.tr('playlist'),
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
+              child: ListTile(
+                leading: ArtworkListTile(
+                  songId: songId,
+                  songPath: songPath,
+                  artUri: item.artUri,
+                  size: 48,
+                  borderRadius: BorderRadius.circular(8),
                 ),
+                title: Text(
+                  item.title,
+                  maxLines: 1,
+                  style: TextStyle(
+                    fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
+                    color: isCurrent
+                        ? (isAmoledTheme
+                              ? Colors.white
+                              : Theme.of(context).colorScheme.primary)
+                        : null,
+                  ),
+                ),
+                subtitle: Text(
+                  item.artist ?? LocaleProvider.tr('unknown_artist'),
+                  maxLines: 1,
+                ),
+                selected: isCurrent,
+                selectedTileColor: isCurrent
+                    ? (isAmoledTheme
+                        ? Colors.white.withValues(alpha: 0.15)
+                        : Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.8))
+                    : null,
+                shape: isCurrent
+                    ? RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      )
+                    : null,
+                onTap: () {
+                  audioHandler?.skipToQueueItem(index);
+                  // No cerramos el modal, así se mantiene abierto
+                },
               ),
-              const SizedBox(height: 12),
-            ],
-          );
-        }
-        final item = widget.queue[index - 1];
-        final isCurrent = item.id == widget.currentMediaItem?.id;
-        final isAmoledTheme =
-            colorSchemeNotifier.value == AppColorScheme.amoled;
-        final songId = item.extras?['songId'] ?? 0;
-        final songPath = item.extras?['data'] ?? '';
-        return ListTile(
-          leading: ArtworkListTile(
-            songId: songId,
-            songPath: songPath,
-            artUri: item.artUri,
-            size: 48,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          title: Text(
-            item.title,
-            maxLines: 1,
-            style: TextStyle(
-              fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
-              color: isCurrent
-                  ? (isAmoledTheme
-                        ? Colors.white
-                        : Theme.of(context).colorScheme.primary)
-                  : null,
+            );
+          },
+        ),
+        
+        // Encabezado fijo en la parte superior con bordes redondeados
+        Positioned(
+          top: 0,
+          left: 0,
+          right: 0,
+          child: Container(
+            decoration: BoxDecoration(
+              color: Theme.of(context).scaffoldBackgroundColor,
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(20),
+                topRight: Radius.circular(20),
+              ),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Column(
+              children: [
+                const SizedBox(height: 12),
+                Container(
+                  width: 40,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: Colors.white24,
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  LocaleProvider.tr('playlist'),
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
             ),
           ),
-          subtitle: Text(
-            item.artist ?? LocaleProvider.tr('unknown_artist'),
-            maxLines: 1,
-          ),
-          selected: isCurrent,
-          selectedTileColor: isAmoledTheme
-              ? Colors.white.withValues(alpha: 0.1)
-              : Theme.of(context).colorScheme.primaryContainer,
-          onTap: () {
-            audioHandler?.skipToQueueItem(index - 1);
-            // No cerramos el modal, así se mantiene abierto
-          },
-        );
-      },
+        ),
+      ],
     );
   }
 }
@@ -2992,6 +3221,14 @@ class _ArtworkListTileState extends State<ArtworkListTile> {
 
   @override
   Widget build(BuildContext context) {
+    return SizedBox(
+      width: widget.size,
+      height: widget.size,
+      child: _buildArtworkContent(),
+    );
+  }
+
+  Widget _buildArtworkContent() {
     if (widget.artUri != null &&
         (widget.artUri!.isScheme('http') || widget.artUri!.isScheme('https'))) {
       return ClipRRect(
@@ -3003,6 +3240,9 @@ class _ArtworkListTileState extends State<ArtworkListTile> {
           fit: BoxFit.cover,
           cacheWidth: 400,
           cacheHeight: 400,
+          errorBuilder: (context, error, stackTrace) {
+            return _buildFallbackIcon();
+          },
         ),
       );
     }
@@ -3014,18 +3254,29 @@ class _ArtworkListTileState extends State<ArtworkListTile> {
           width: widget.size,
           height: widget.size,
           fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) {
+            return _buildFallbackIcon();
+          },
         ),
       );
     } else {
-      return Container(
-        width: widget.size,
-        height: widget.size,
-        decoration: BoxDecoration(
-          color: Colors.grey[900],
-          borderRadius: widget.borderRadius,
-        ),
-        child: Icon(Icons.music_note, size: widget.size * 0.5),
-      );
+      return _buildFallbackIcon();
     }
+  }
+
+  Widget _buildFallbackIcon() {
+    return Container(
+      width: widget.size,
+      height: widget.size,
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainer,
+        borderRadius: widget.borderRadius,
+      ),
+      child: Icon(
+        Icons.music_note, 
+        size: widget.size * 0.5,
+        color: Theme.of(context).colorScheme.onSurface,
+      ),
+    );
   }
 }

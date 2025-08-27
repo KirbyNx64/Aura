@@ -6,7 +6,7 @@ class RecentsDB {
   factory RecentsDB() => _instance;
   RecentsDB._internal();
 
-  static const int maxRecents = 50;
+  static const int maxRecents = 300;
   Box<int>? _box;
 
   Future<Box<int>> get box async {

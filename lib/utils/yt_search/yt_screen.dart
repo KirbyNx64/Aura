@@ -20,6 +20,7 @@ import 'package:flutter/foundation.dart';
 import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 // Función para mostrar la notificación de progreso de descarga
 class DownloadNotificationThrottler {
@@ -2756,50 +2757,43 @@ class _YtPreviewPlayerState extends State<_YtPreviewPlayer> {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             SimpleDownloadButton(item: _currentItem),
-                            const SizedBox(width: 12),
-                            SizedBox(
-                              height: 50,
-                              width: 50,
-                              child: Material(
-                                color: _isAmoled(context)
-                                    ? Theme.of(
-                                        context,
-                                      ).colorScheme.primaryContainer
-                                    : Theme.of(
-                                        context,
-                                      ).colorScheme.secondaryContainer,
-                                borderRadius: BorderRadius.circular(8),
-                                child: InkWell(
-                                  borderRadius: BorderRadius.circular(8),
-                                  onTap: _currentItem.videoId != null
-                                      ? () {
-                                          Clipboard.setData(
-                                            ClipboardData(
-                                              text:
-                                                  'https://music.youtube.com/watch?v=${_currentItem.videoId}',
-                                            ),
-                                          );
-                                          // Navigator.pop(context); // Ya no cerramos el modal al copiar el link
-                                        }
-                                      : null,
-                                  child: Tooltip(
-                                    message: LocaleProvider.tr('copy_link'),
-                                    child: Icon(
-                                      Icons.link,
-                                      color: _isAmoled(context)
-                                          ? Theme.of(
-                                              context,
-                                            ).colorScheme.onPrimaryContainer
-                                          : Theme.of(
-                                              context,
-                                            ).colorScheme.onSecondaryContainer,
-                                      size: 20,
-                                    ),
-                                  ),
-                                ),
+                            
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                                         // Botón para abrir en YouTube Music
+                    SizedBox(
+                      height: 50,
+                      width: 50,
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(8),
+                          onTap: _currentItem.videoId != null
+                              ? () async {
+                                  try {
+                                    final ytMusicUrl = 'https://music.youtube.com/watch?v=${_currentItem.videoId}';
+                                    final url = Uri.parse(ytMusicUrl);
+                                    if (await canLaunchUrl(url)) {
+                                      await launchUrl(url, mode: LaunchMode.externalApplication);
+                                    }
+                                  } catch (e) {
+                                    // Manejar error silenciosamente
+                                  }
+                                }
+                              : null,
+                          child: Center(
+                            child: Tooltip(
+                              message: LocaleProvider.tr('open_in_youtube_music'),
+                              child: Image.asset(
+                                'assets/icon/Youtube_Music_icon.png',
+                                width: 44,
+                                height: 44,
                               ),
                             ),
-                          ],
+                          ),
                         ),
                       ),
                     ),

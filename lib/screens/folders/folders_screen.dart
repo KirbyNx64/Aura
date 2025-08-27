@@ -447,37 +447,48 @@ class _FoldersScreenState extends State<FoldersScreen>
                       ),
                     ),
                     const SizedBox(width: 8),
-                    // Botón de YouTube para buscar la canción
-                    ElevatedButton.icon(
-                      onPressed: () async {
-                        Navigator.of(context).pop();
-                        await _searchSongOnYouTube(song);
-                      },
-                      label: Text(
-                        'YouTube',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 14,
-                        ),
-                      ),
-                      icon: const Icon(Icons.search, size: 20),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Theme.of(
-                          context,
-                        ).colorScheme.primaryContainer,
-                        foregroundColor: Theme.of(
-                          context,
-                        ).colorScheme.onPrimaryContainer,
-                        elevation: 0,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 8,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                    ),
+                                         // Botón para buscar la canción en YouTube o YouTube Music
+                     GestureDetector(
+                       onTap: () async {
+                         Navigator.of(context).pop();
+                         await _showSearchOptions(song);
+                       },
+                       child: Container(
+                         padding: const EdgeInsets.symmetric(
+                           horizontal: 16,
+                           vertical: 8,
+                         ),
+                         decoration: BoxDecoration(
+                           color: Theme.of(
+                             context,
+                           ).colorScheme.primaryContainer,
+                           borderRadius: BorderRadius.circular(12),
+                         ),
+                         child: Row(
+                           mainAxisSize: MainAxisSize.min,
+                           children: [
+                             Icon(
+                               Icons.search,
+                               size: 20,
+                               color: Theme.of(
+                                 context,
+                               ).colorScheme.onPrimaryContainer,
+                             ),
+                             const SizedBox(width: 8),
+                             TranslatedText(
+                               'search',
+                               style: TextStyle(
+                                 fontWeight: FontWeight.w600,
+                                 fontSize: 14,
+                                 color: Theme.of(
+                                   context,
+                                 ).colorScheme.onPrimaryContainer,
+                               ),
+                             ),
+                           ],
+                         ),
+                       ),
+                     ),
                   ],
                 ),
               ),
@@ -571,22 +582,7 @@ class _FoldersScreenState extends State<FoldersScreen>
                 title: TranslatedText('delete_from_device'),
                 onTap: () async {
                   Navigator.of(context).pop();
-                  final success = await _deleteSongFromDevice(song);
-                  if (!success && context.mounted) {
-                    showDialog(
-                      context: context,
-                      builder: (context) => AlertDialog(
-                        title: TranslatedText('error'),
-                        content: TranslatedText('could_not_delete_song'),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.of(context).pop(),
-                            child: TranslatedText('ok'),
-                          ),
-                        ],
-                      ),
-                    );
-                  }
+                  await _showDeleteConfirmation(song);
                 },
               ),
               ListTile(
@@ -1009,10 +1005,10 @@ class _FoldersScreenState extends State<FoldersScreen>
         width: 60,
         height: 60,
         decoration: BoxDecoration(
-          color: Colors.grey[800],
+          color: Theme.of(context).colorScheme.surfaceContainer,
           borderRadius: BorderRadius.circular(8),
         ),
-        child: Icon(Icons.music_note, color: Colors.grey[400], size: 30),
+        child: Icon(Icons.music_note, size: 30),
       ),
     );
   }
@@ -1047,6 +1043,512 @@ class _FoldersScreenState extends State<FoldersScreen>
     }
   }
 
+  // Función para buscar la canción en YouTube Music
+  Future<void> _searchSongOnYouTubeMusic(SongModel song) async {
+    try {
+      final title = song.title;
+      final artist = song.artist ?? '';
+
+      // Crear la consulta de búsqueda
+      String searchQuery = title;
+      if (artist.isNotEmpty) {
+        searchQuery = '$artist $title';
+      }
+
+      // Codificar la consulta para la URL
+      final encodedQuery = Uri.encodeComponent(searchQuery);
+      
+      // URL correcta para búsqueda en YouTube Music
+      final ytMusicSearchUrl = 'https://music.youtube.com/search?q=$encodedQuery';
+
+      // Intentar abrir YouTube Music en el navegador o en la app
+      final url = Uri.parse(ytMusicSearchUrl);
+
+      if (await canLaunchUrl(url)) {
+        await launchUrl(url, mode: LaunchMode.externalApplication);
+      } else {
+        // ignore: use_build_context_synchronously
+      }
+    } catch (e) {
+      // ignore: avoid_print
+    }
+  }
+
+  // Función para mostrar opciones de búsqueda
+  Future<void> _showSearchOptions(SongModel song) async {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Center(
+            child: TranslatedText(
+              'search_song',
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(height: 18),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Row(
+                    children: [
+                      SizedBox(width: 4),
+                      TranslatedText(
+                        'search_options',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Theme.of(context).colorScheme.onSurface,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                SizedBox(height: 20),
+                // Tarjeta de YouTube
+                InkWell(
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    _searchSongOnYouTube(song);
+                  },
+                  borderRadius: BorderRadius.circular(16),
+                  child: Container(
+                    width: double.infinity,
+                    padding: EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.secondaryContainer,
+                      borderRadius: BorderRadius.only(
+                        topLeft: Radius.circular(16),
+                        topRight: Radius.circular(16),
+                        bottomLeft: Radius.circular(4),
+                        bottomRight: Radius.circular(4),
+                      ),
+                      border: Border.all(
+                        color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Image.asset(
+                            'assets/icon/Youtube_logo.png',
+                            width: 30,
+                            height: 30,
+                          ),
+                        ),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'YouTube',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: Theme.of(context).colorScheme.onSurface,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                SizedBox(height: 4),
+                // Tarjeta de YouTube Music
+                InkWell(
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    _searchSongOnYouTubeMusic(song);
+                  },
+                  borderRadius: BorderRadius.circular(16),
+                  child: Container(
+                    width: double.infinity,
+                    padding: EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.secondaryContainer,
+                      borderRadius: BorderRadius.only(
+                        topLeft: Radius.circular(4),
+                        topRight: Radius.circular(4),
+                        bottomLeft: Radius.circular(16),
+                        bottomRight: Radius.circular(16),
+                      ),
+                      border: Border.all(
+                        color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Image.asset(
+                            'assets/icon/Youtube_Music_icon.png',
+                            width: 30,
+                            height: 30,
+                          ),
+                        ),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'YT Music',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: Theme.of(context).colorScheme.onSurface,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // Función para mostrar confirmación de borrado con el mismo diseño
+  Future<void> _showDeleteConfirmation(SongModel song) async {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Center(
+            child: TranslatedText(
+              'delete_song',
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          content: SizedBox(
+            width: 400,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(height: 18),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 4),
+                    child: TranslatedText(
+                      'delete_song_confirm',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
+                      textAlign: TextAlign.left,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ),
+                SizedBox(height: 20),
+                // Tarjeta de confirmar borrado
+                InkWell(
+                  onTap: () async {
+                    Navigator.of(context).pop();
+                    final success = await _deleteSongFromDevice(song);
+                    if (!success && context.mounted) {
+                      showDialog(
+                        context: context,
+                        builder: (context) => AlertDialog(
+                          title: TranslatedText('error'),
+                          content: TranslatedText('could_not_delete_song'),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.of(context).pop(),
+                              child: TranslatedText('ok'),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+                  },
+                  borderRadius: BorderRadius.circular(16),
+                  child: Container(
+                    width: double.infinity,
+                    padding: EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.errorContainer,
+                      borderRadius: BorderRadius.only(
+                        topLeft: Radius.circular(16),
+                        topRight: Radius.circular(16),
+                        bottomLeft: Radius.circular(4),
+                        bottomRight: Radius.circular(4),
+                      ),
+                      border: Border.all(
+                        color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Icon(
+                            Icons.delete_forever,
+                            size: 30,
+                            color: Theme.of(context).colorScheme.onErrorContainer,
+                          ),
+                        ),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            LocaleProvider.tr('delete'),
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: Theme.of(context).colorScheme.onErrorContainer,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                SizedBox(height: 4),
+                // Tarjeta de cancelar
+                InkWell(
+                  onTap: () {
+                    Navigator.of(context).pop();
+                  },
+                  borderRadius: BorderRadius.circular(16),
+                  child: Container(
+                    width: double.infinity,
+                    padding: EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.secondaryContainer,
+                      borderRadius: BorderRadius.only(
+                        bottomLeft: Radius.circular(16),
+                        bottomRight: Radius.circular(16),
+                        topLeft: Radius.circular(4),
+                        topRight: Radius.circular(4),
+                      ),
+                      border: Border.all(
+                        color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Icon(
+                            Icons.cancel_outlined,
+                            size: 30,
+                            color: Theme.of(context).colorScheme.onSurface,
+                          ),
+                        ),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            LocaleProvider.tr('cancel'),
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: Theme.of(context).colorScheme.onSurface,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // Función para mostrar confirmación de borrado de carpeta con el mismo diseño
+  Future<void> _showDeleteFolderConfirmation(String folderKey, String folderName) async {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Center(
+            child: TranslatedText(
+              'delete_folder',
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          content: SizedBox(
+            width: 400,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(height: 18),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 4),
+                    child: TranslatedText(
+                      'delete_folder_confirm',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
+                      textAlign: TextAlign.left,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ),
+                SizedBox(height: 20),
+                // Tarjeta de confirmar borrado
+                InkWell(
+                  onTap: () async {
+                    Navigator.of(context).pop();
+                    final success = await _deleteFolderAndSongs(folderKey);
+                    if (!success && context.mounted) {
+                      showDialog(
+                        context: context,
+                        builder: (context) => AlertDialog(
+                          title: TranslatedText('error'),
+                          content: TranslatedText('could_not_delete_folder'),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.of(context).pop(),
+                              child: TranslatedText('ok'),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+                  },
+                  borderRadius: BorderRadius.circular(16),
+                  child: Container(
+                    width: double.infinity,
+                    padding: EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.errorContainer,
+                      borderRadius: BorderRadius.only(
+                        topLeft: Radius.circular(16),
+                        topRight: Radius.circular(16),
+                        bottomLeft: Radius.circular(4),
+                        bottomRight: Radius.circular(4),
+                      ),
+                      border: Border.all(
+                        color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Icon(
+                            Icons.folder_delete,
+                            size: 30,
+                            color: Theme.of(context).colorScheme.onErrorContainer,
+                          ),
+                        ),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            LocaleProvider.tr('delete'),
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: Theme.of(context).colorScheme.onErrorContainer,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                SizedBox(height: 4),
+                // Tarjeta de cancelar
+                InkWell(
+                  onTap: () {
+                    Navigator.of(context).pop();
+                  },
+                  borderRadius: BorderRadius.circular(16),
+                  child: Container(
+                    width: double.infinity,
+                    padding: EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.secondaryContainer,
+                      borderRadius: BorderRadius.only(
+                        bottomLeft: Radius.circular(16),
+                        bottomRight: Radius.circular(16),
+                        topLeft: Radius.circular(4),
+                        topRight: Radius.circular(4),
+                      ),
+                      border: Border.all(
+                        color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Icon(
+                            Icons.cancel_outlined,
+                            size: 30,
+                            color: Theme.of(context).colorScheme.onSurface,
+                          ),
+                        ),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            LocaleProvider.tr('cancel'),
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: Theme.of(context).colorScheme.onSurface,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
@@ -1079,7 +1581,9 @@ class _FoldersScreenState extends State<FoldersScreen>
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return const Scaffold(body: Center(child: CircularProgressIndicator(
+        year2023: false,
+      )));
     }
     if (songPathsByFolder.isEmpty) {
       return Scaffold(
@@ -1168,50 +1672,7 @@ class _FoldersScreenState extends State<FoldersScreen>
                       trailing: PopupMenuButton<String>(
                         onSelected: (value) async {
                           if (value == 'delete') {
-                            final confirmed = await showDialog<bool>(
-                              context: context,
-                              builder: (context) => AlertDialog(
-                                title: TranslatedText('delete_folder'),
-                                content: TranslatedText(
-                                  'delete_folder_confirm',
-                                ),
-                                actions: [
-                                  TextButton(
-                                    onPressed: () =>
-                                        Navigator.of(context).pop(false),
-                                    child: TranslatedText('cancel'),
-                                  ),
-                                  TextButton(
-                                    onPressed: () =>
-                                        Navigator.of(context).pop(true),
-                                    child: TranslatedText('delete'),
-                                  ),
-                                ],
-                              ),
-                            );
-                            if (confirmed == true) {
-                              final success = await _deleteFolderAndSongs(
-                                entry.key,
-                              );
-                              if (!success && context.mounted) {
-                                showDialog(
-                                  context: context,
-                                  builder: (context) => AlertDialog(
-                                    title: TranslatedText('error'),
-                                    content: TranslatedText(
-                                      'could_not_delete_folder',
-                                    ),
-                                    actions: [
-                                      TextButton(
-                                        onPressed: () =>
-                                            Navigator.of(context).pop(),
-                                        child: TranslatedText('ok'),
-                                      ),
-                                    ],
-                                  ),
-                                );
-                              }
-                            }
+                            await _showDeleteFolderConfirmation(entry.key, folderDisplayNames[entry.key] ?? '');
                           }
                         },
                         itemBuilder: (context) => [
@@ -1641,6 +2102,7 @@ class _FoldersScreenState extends State<FoldersScreen>
                               ? Colors.white
                               : Theme.of(context).colorScheme.primary,
                           fontWeight: FontWeight.bold,
+                          fontSize: 16,
                         )
                       : null,
                 ),
@@ -1680,9 +2142,16 @@ class _FoldersScreenState extends State<FoldersScreen>
               )
             : null,
         selected: isCurrent,
-        selectedTileColor: isAmoledTheme
-            ? Colors.white.withValues(alpha: 0.1)
-            : Theme.of(context).colorScheme.primaryContainer,
+        selectedTileColor: isCurrent
+            ? (isAmoledTheme
+                ? Colors.white.withValues(alpha: 0.15)
+                : Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.8))
+            : null,
+        shape: isCurrent
+            ? RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              )
+            : null,
       ),
     );
   }

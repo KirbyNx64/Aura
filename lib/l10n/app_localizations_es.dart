@@ -80,7 +80,9 @@ const Map<String, String> appLocalizationsEs = {
   'battery_optimization_info': 'La optimización de batería ya está desactivada',
 
   // App settings
-  'app_settings': 'Ajustes de la app',
+  'app_settings': 'Información de la app',
+  'select_language_desc': 'Selecciona el idioma de la app',
+  'select_theme_desc': 'Selecciona el tema de la app',
   'artwork_quality': 'Calidad de carátula al reproducir',
   'hero_animation': 'Animación Hero',
   'hero_animation_desc':
@@ -104,6 +106,8 @@ const Map<String, String> appLocalizationsEs = {
   'confirm_clear_lyrics': '¿Eliminar letras de canciones?',
   'confirm_clear_artwork': '¿Limpiar caché de carátulas?',
   'confirm': 'Confirmar',
+  'search_options': 'Opciones de búsqueda',
+  'search_song': 'Buscar canción',
   'success': 'Éxito',
   'error': 'Error',
   'download_completed': 'Descarga completada',
@@ -127,6 +131,7 @@ const Map<String, String> appLocalizationsEs = {
   // Others (agrega según necesites)
   'search': 'Buscar',
   'search_in_youtube_music': 'Buscar en YouTube Music',
+  'open_in_youtube_music': 'Abrir en YouTube Music',
   'info': 'Información',
   'search_music_in_ytm': 'Busca y descarga música de YouTube Music.',
   'download_understood': 'Entendido',

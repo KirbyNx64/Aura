@@ -1,7 +1,7 @@
 name: music
 description: "A new Flutter project."
 publish_to: 'none'
-version: 1.4.9+1
+version: 1.4.10+1
 
 environment:
   sdk: ^3.8.1
@@ -61,3 +61,5 @@ flutter:
   assets:
     - assets/icon.png
     - assets/icon/icon_foreground.svg
+    - assets/icon/Youtube_logo.png
+    - assets/icon/Youtube_Music_icon.png
