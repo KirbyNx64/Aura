@@ -5,6 +5,9 @@ enum AppThemeMode { system, light, dark }
 
 enum AppColorScheme {
   deepPurple,
+  purple,
+  deepPurpleAccent,
+  indigo,
   blueAccent,
   cyanAccent,
   deepOrange,
@@ -13,7 +16,6 @@ enum AppColorScheme {
   lightGreen,
   pink,
   red,
-  purple,
   green,
   orange,
   amber,
@@ -99,6 +101,12 @@ class ThemePreferences {
     switch (scheme) {
       case AppColorScheme.deepPurple:
         return Colors.deepPurple;
+      case AppColorScheme.purple:
+        return Colors.purple;
+      case AppColorScheme.deepPurpleAccent:
+        return Colors.deepPurpleAccent;
+      case AppColorScheme.indigo:
+        return Colors.indigo;
       case AppColorScheme.blueAccent:
         return Colors.blueAccent;
       case AppColorScheme.cyanAccent:
@@ -115,8 +123,6 @@ class ThemePreferences {
         return Colors.pink;
       case AppColorScheme.red:
         return Colors.red;
-      case AppColorScheme.purple:
-        return Colors.purple;
       case AppColorScheme.green:
         return Colors.green;
       case AppColorScheme.orange:
@@ -135,6 +141,12 @@ class ThemePreferences {
     switch (scheme) {
       case AppColorScheme.deepPurple:
         return 'Deep Purple';
+      case AppColorScheme.purple:
+        return 'Purple';
+      case AppColorScheme.deepPurpleAccent:
+        return 'Deep Purple Accent';
+      case AppColorScheme.indigo:
+        return 'Indigo';
       case AppColorScheme.blueAccent:
         return 'Blue Accent';
       case AppColorScheme.cyanAccent:
@@ -151,8 +163,6 @@ class ThemePreferences {
         return 'Pink';
       case AppColorScheme.red:
         return 'Red';
-      case AppColorScheme.purple:
-        return 'Purple';
       case AppColorScheme.green:
         return 'Green';
       case AppColorScheme.orange:

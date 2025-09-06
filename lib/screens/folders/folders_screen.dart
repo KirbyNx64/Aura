@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:path/path.dart' as p;
 import 'package:on_audio_query/on_audio_query.dart';
 import 'package:music/main.dart';
 import 'package:audio_service/audio_service.dart';
@@ -19,6 +20,7 @@ import 'package:music/screens/play/player_screen.dart';
 import 'package:music/utils/db/playlist_model.dart' as hive_model;
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:media_scanner/media_scanner.dart';
 
 enum OrdenCarpetas {
   normal,
@@ -461,7 +463,9 @@ class _FoldersScreenState extends State<FoldersScreen>
                          decoration: BoxDecoration(
                            color: Theme.of(
                              context,
-                           ).colorScheme.primaryContainer,
+                           ).brightness == Brightness.dark
+                           ? Theme.of(context).colorScheme.primaryContainer
+                           : Theme.of(context).colorScheme.onPrimaryContainer.withValues(alpha: 0.7),
                            borderRadius: BorderRadius.circular(12),
                          ),
                          child: Row(
@@ -472,7 +476,9 @@ class _FoldersScreenState extends State<FoldersScreen>
                                size: 20,
                                color: Theme.of(
                                  context,
-                               ).colorScheme.onPrimaryContainer,
+                               ).brightness == Brightness.dark
+                               ? Theme.of(context).colorScheme.onPrimaryContainer
+                               : Theme.of(context).colorScheme.surfaceContainer,
                              ),
                              const SizedBox(width: 8),
                              TranslatedText(
@@ -482,7 +488,9 @@ class _FoldersScreenState extends State<FoldersScreen>
                                  fontSize: 14,
                                  color: Theme.of(
                                    context,
-                                 ).colorScheme.onPrimaryContainer,
+                                 ).brightness == Brightness.dark
+                                 ? Theme.of(context).colorScheme.onPrimaryContainer
+                                 : Theme.of(context).colorScheme.surfaceContainer,
                                ),
                              ),
                            ],
@@ -558,6 +566,22 @@ class _FoldersScreenState extends State<FoldersScreen>
                       ShareParams(text: song.title, files: [XFile(dataPath)]),
                     );
                   }
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.drive_file_move),
+                title: TranslatedText('move_to_folder'),
+                onTap: () async {
+                  Navigator.of(context).pop();
+                  await _showFolderSelector(song, isMove: true);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.copy),
+                title: TranslatedText('copy_to_folder'),
+                onTap: () async {
+                  Navigator.of(context).pop();
+                  await _showFolderSelector(song, isMove: false);
                 },
               ),
               ListTile(
@@ -1079,145 +1103,166 @@ class _FoldersScreenState extends State<FoldersScreen>
     showDialog(
       context: context,
       builder: (BuildContext context) {
-        return AlertDialog(
-          title: Center(
-            child: TranslatedText(
-              'search_song',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.w600,
+        return ValueListenableBuilder<AppColorScheme>(
+          valueListenable: colorSchemeNotifier,
+          builder: (context, colorScheme, child) {
+            
+            final isAmoled = colorScheme == AppColorScheme.amoled;
+            final isDark = Theme.of(context).brightness == Brightness.dark;
+            
+            return AlertDialog(
+              title: Center(
+                child: TranslatedText(
+                  'search_song',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
-            ),
-          ),
-          content: SizedBox(
-            width: double.maxFinite,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                SizedBox(height: 18),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Row(
-                    children: [
-                      SizedBox(width: 4),
-                      TranslatedText(
-                        'search_options',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Theme.of(context).colorScheme.onSurface,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                SizedBox(height: 20),
-                // Tarjeta de YouTube
-                InkWell(
-                  onTap: () {
-                    Navigator.of(context).pop();
-                    _searchSongOnYouTube(song);
-                  },
-                  borderRadius: BorderRadius.circular(16),
-                  child: Container(
-                    width: double.infinity,
-                    padding: EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.secondaryContainer,
-                      borderRadius: BorderRadius.only(
-                        topLeft: Radius.circular(16),
-                        topRight: Radius.circular(16),
-                        bottomLeft: Radius.circular(4),
-                        bottomRight: Radius.circular(4),
-                      ),
-                      border: Border.all(
-                        color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
-                        width: 1,
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Image.asset(
-                            'assets/icon/Youtube_logo.png',
-                            width: 30,
-                            height: 30,
-                          ),
-                        ),
-                        SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'YouTube',
+              content: SizedBox(
+                width: double.maxFinite,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(height: 18),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Row(
+                        children: [
+                          SizedBox(width: 4),
+                          TranslatedText(
+                            'search_options',
                             style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
+                              fontSize: 14,
                               color: Theme.of(context).colorScheme.onSurface,
                             ),
                           ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                SizedBox(height: 4),
-                // Tarjeta de YouTube Music
-                InkWell(
-                  onTap: () {
-                    Navigator.of(context).pop();
-                    _searchSongOnYouTubeMusic(song);
-                  },
-                  borderRadius: BorderRadius.circular(16),
-                  child: Container(
-                    width: double.infinity,
-                    padding: EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.secondaryContainer,
-                      borderRadius: BorderRadius.only(
-                        topLeft: Radius.circular(4),
-                        topRight: Radius.circular(4),
-                        bottomLeft: Radius.circular(16),
-                        bottomRight: Radius.circular(16),
-                      ),
-                      border: Border.all(
-                        color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
-                        width: 1,
+                        ],
                       ),
                     ),
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(12),
+                    SizedBox(height: 20),
+                    // Tarjeta de YouTube
+                    InkWell(
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        _searchSongOnYouTube(song);
+                      },
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        width: double.infinity,
+                        padding: EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: isAmoled && isDark
+                              ? Colors.white.withValues(alpha: 0.1) // Color personalizado para amoled
+                              : Theme.of(context).colorScheme.secondaryContainer,
+                          borderRadius: BorderRadius.only(
+                            topLeft: Radius.circular(16),
+                            topRight: Radius.circular(16),
+                            bottomLeft: Radius.circular(4),
+                            bottomRight: Radius.circular(4),
                           ),
-                          child: Image.asset(
-                            'assets/icon/Youtube_Music_icon.png',
-                            width: 30,
-                            height: 30,
+                          border: Border.all(
+                            color: isAmoled && isDark
+                                ? Colors.white.withValues(alpha: 0.2) // Borde personalizado para amoled
+                                : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
+                            width: 1,
                           ),
                         ),
-                        SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'YT Music',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              color: Theme.of(context).colorScheme.onSurface,
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Image.asset(
+                                'assets/icon/Youtube_logo.png',
+                                width: 30,
+                                height: 30,
+                              ),
                             ),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'YouTube',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: isAmoled && isDark
+                                      ? Colors.white // Texto blanco para amoled
+                                      : Theme.of(context).colorScheme.onSurface,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: 4),
+                    // Tarjeta de YouTube Music
+                    InkWell(
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        _searchSongOnYouTubeMusic(song);
+                      },
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        width: double.infinity,
+                        padding: EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: isAmoled && isDark
+                              ? Colors.white.withValues(alpha: 0.1) // Color personalizado para amoled
+                              : Theme.of(context).colorScheme.secondaryContainer,
+                          borderRadius: BorderRadius.only(
+                            topLeft: Radius.circular(4),
+                            topRight: Radius.circular(4),
+                            bottomLeft: Radius.circular(16),
+                            bottomRight: Radius.circular(16),
+                          ),
+                          border: Border.all(
+                            color: isAmoled && isDark
+                                ? Colors.white.withValues(alpha: 0.2) // Borde personalizado para amoled
+                                : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
+                            width: 1,
                           ),
                         ),
-                      ],
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Image.asset(
+                                'assets/icon/Youtube_Music_icon.png',
+                                width: 30,
+                                height: 30,
+                              ),
+                            ),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'YT Music',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: isAmoled && isDark
+                                      ? Colors.white // Texto blanco para amoled
+                                      : Theme.of(context).colorScheme.onSurface,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
-                  ),
+                    
+                  ],
                 ),
-                
-              ],
-            ),
-          ),
+              ),
+            );
+          },
         );
       },
     );
@@ -1228,159 +1273,184 @@ class _FoldersScreenState extends State<FoldersScreen>
     showDialog(
       context: context,
       builder: (BuildContext context) {
-        return AlertDialog(
-          title: Center(
-            child: TranslatedText(
-              'delete_song',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-          content: SizedBox(
-            width: 400,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                SizedBox(height: 18),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 4),
-                    child: TranslatedText(
-                      'delete_song_confirm',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Theme.of(context).colorScheme.onSurface,
-                      ),
-                      textAlign: TextAlign.left,
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
-                    ),
+        return ValueListenableBuilder<AppColorScheme>(
+          valueListenable: colorSchemeNotifier,
+          builder: (context, colorScheme, child) {
+            
+            final isAmoled = colorScheme == AppColorScheme.amoled;
+            final isDark = Theme.of(context).brightness == Brightness.dark;
+            
+            return AlertDialog(
+              title: Center(
+                child: TranslatedText(
+                  'delete_song',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
-                SizedBox(height: 20),
-                // Tarjeta de confirmar borrado
-                InkWell(
-                  onTap: () async {
-                    Navigator.of(context).pop();
-                    final success = await _deleteSongFromDevice(song);
-                    if (!success && context.mounted) {
-                      showDialog(
-                        context: context,
-                        builder: (context) => AlertDialog(
-                          title: TranslatedText('error'),
-                          content: TranslatedText('could_not_delete_song'),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.of(context).pop(),
-                              child: TranslatedText('ok'),
+              ),
+              content: SizedBox(
+                width: 400,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(height: 18),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 4),
+                        child: TranslatedText(
+                          'delete_song_confirm',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Theme.of(context).colorScheme.onSurface,
+                          ),
+                          textAlign: TextAlign.left,
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: 20),
+                    // Tarjeta de confirmar borrado
+                    InkWell(
+                      onTap: () async {
+                        Navigator.of(context).pop();
+                        final success = await _deleteSongFromDevice(song);
+                        if (!success && context.mounted) {
+                          showDialog(
+                            context: context,
+                            builder: (context) => AlertDialog(
+                              title: TranslatedText('error'),
+                              content: TranslatedText('could_not_delete_song'),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.of(context).pop(),
+                                  child: TranslatedText('ok'),
+                                ),
+                              ],
+                            ),
+                          );
+                        }
+                      },
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        width: double.infinity,
+                        padding: EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: isAmoled && isDark
+                              ? Colors.red.withValues(alpha: 0.2) // Color personalizado para amoled
+                              : Theme.of(context).colorScheme.errorContainer,
+                          borderRadius: BorderRadius.only(
+                            topLeft: Radius.circular(16),
+                            topRight: Radius.circular(16),
+                            bottomLeft: Radius.circular(4),
+                            bottomRight: Radius.circular(4),
+                          ),
+                          border: Border.all(
+                            color: isAmoled && isDark
+                                ? Colors.red.withValues(alpha: 0.4) // Borde personalizado para amoled
+                                : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
+                            width: 1,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Icon(
+                                Icons.delete_forever,
+                                size: 30,
+                                color: isAmoled && isDark
+                                    ? Colors.red // Ícono rojo para amoled
+                                    : Theme.of(context).colorScheme.onErrorContainer,
+                              ),
+                            ),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                LocaleProvider.tr('delete'),
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: isAmoled && isDark
+                                      ? Colors.red // Texto rojo para amoled
+                                      : Theme.of(context).colorScheme.onErrorContainer,
+                                ),
+                              ),
                             ),
                           ],
                         ),
-                      );
-                    }
-                  },
-                  borderRadius: BorderRadius.circular(16),
-                  child: Container(
-                    width: double.infinity,
-                    padding: EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.errorContainer,
-                      borderRadius: BorderRadius.only(
-                        topLeft: Radius.circular(16),
-                        topRight: Radius.circular(16),
-                        bottomLeft: Radius.circular(4),
-                        bottomRight: Radius.circular(4),
-                      ),
-                      border: Border.all(
-                        color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
-                        width: 1,
                       ),
                     ),
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(12),
+                    SizedBox(height: 4),
+                    // Tarjeta de cancelar
+                    InkWell(
+                      onTap: () {
+                        Navigator.of(context).pop();
+                      },
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        width: double.infinity,
+                        padding: EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: isAmoled && isDark
+                              ? Colors.white.withValues(alpha: 0.1) // Color personalizado para amoled
+                              : Theme.of(context).colorScheme.secondaryContainer,
+                          borderRadius: BorderRadius.only(
+                            bottomLeft: Radius.circular(16),
+                            bottomRight: Radius.circular(16),
+                            topLeft: Radius.circular(4),
+                            topRight: Radius.circular(4),
                           ),
-                          child: Icon(
-                            Icons.delete_forever,
-                            size: 30,
-                            color: Theme.of(context).colorScheme.onErrorContainer,
+                          border: Border.all(
+                            color: isAmoled && isDark
+                                ? Colors.white.withValues(alpha: 0.2) // Borde personalizado para amoled
+                                : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
+                            width: 1,
                           ),
                         ),
-                        SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            LocaleProvider.tr('delete'),
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              color: Theme.of(context).colorScheme.onErrorContainer,
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Icon(
+                                Icons.cancel_outlined,
+                                size: 30,
+                                color: isAmoled && isDark
+                                    ? Colors.white // Ícono blanco para amoled
+                                    : Theme.of(context).colorScheme.onSurface,
+                              ),
                             ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                SizedBox(height: 4),
-                // Tarjeta de cancelar
-                InkWell(
-                  onTap: () {
-                    Navigator.of(context).pop();
-                  },
-                  borderRadius: BorderRadius.circular(16),
-                  child: Container(
-                    width: double.infinity,
-                    padding: EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.secondaryContainer,
-                      borderRadius: BorderRadius.only(
-                        bottomLeft: Radius.circular(16),
-                        bottomRight: Radius.circular(16),
-                        topLeft: Radius.circular(4),
-                        topRight: Radius.circular(4),
-                      ),
-                      border: Border.all(
-                        color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
-                        width: 1,
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Icon(
-                            Icons.cancel_outlined,
-                            size: 30,
-                            color: Theme.of(context).colorScheme.onSurface,
-                          ),
-                        ),
-                        SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            LocaleProvider.tr('cancel'),
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              color: Theme.of(context).colorScheme.onSurface,
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                LocaleProvider.tr('cancel'),
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: isAmoled && isDark
+                                      ? Colors.white // Texto blanco para amoled
+                                      : Theme.of(context).colorScheme.onSurface,
+                                ),
+                              ),
                             ),
-                          ),
+                          ],
                         ),
-                      ],
+                      ),
                     ),
-                  ),
+                  ],
                 ),
-              ],
-            ),
-          ),
+              ),
+            );
+          },
         );
       },
     );
@@ -1391,159 +1461,184 @@ class _FoldersScreenState extends State<FoldersScreen>
     showDialog(
       context: context,
       builder: (BuildContext context) {
-        return AlertDialog(
-          title: Center(
-            child: TranslatedText(
-              'delete_folder',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-          content: SizedBox(
-            width: 400,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                SizedBox(height: 18),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 4),
-                    child: TranslatedText(
-                      'delete_folder_confirm',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Theme.of(context).colorScheme.onSurface,
-                      ),
-                      textAlign: TextAlign.left,
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
-                    ),
+        return ValueListenableBuilder<AppColorScheme>(
+          valueListenable: colorSchemeNotifier,
+          builder: (context, colorScheme, child) {
+            
+            final isAmoled = colorScheme == AppColorScheme.amoled;
+            final isDark = Theme.of(context).brightness == Brightness.dark;
+            
+            return AlertDialog(
+              title: Center(
+                child: TranslatedText(
+                  'delete_folder',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
-                SizedBox(height: 20),
-                // Tarjeta de confirmar borrado
-                InkWell(
-                  onTap: () async {
-                    Navigator.of(context).pop();
-                    final success = await _deleteFolderAndSongs(folderKey);
-                    if (!success && context.mounted) {
-                      showDialog(
-                        context: context,
-                        builder: (context) => AlertDialog(
-                          title: TranslatedText('error'),
-                          content: TranslatedText('could_not_delete_folder'),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.of(context).pop(),
-                              child: TranslatedText('ok'),
+              ),
+              content: SizedBox(
+                width: 400,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(height: 18),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 4),
+                        child: TranslatedText(
+                          'delete_folder_confirm',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Theme.of(context).colorScheme.onSurface,
+                          ),
+                          textAlign: TextAlign.left,
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: 20),
+                    // Tarjeta de confirmar borrado
+                    InkWell(
+                      onTap: () async {
+                        Navigator.of(context).pop();
+                        final success = await _deleteFolderAndSongs(folderKey);
+                        if (!success && context.mounted) {
+                          showDialog(
+                            context: context,
+                            builder: (context) => AlertDialog(
+                              title: TranslatedText('error'),
+                              content: TranslatedText('could_not_delete_folder'),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.of(context).pop(),
+                                  child: TranslatedText('ok'),
+                                ),
+                              ],
+                            ),
+                          );
+                        }
+                      },
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        width: double.infinity,
+                        padding: EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: isAmoled && isDark
+                              ? Colors.red.withValues(alpha: 0.2) // Color personalizado para amoled
+                              : Theme.of(context).colorScheme.errorContainer,
+                          borderRadius: BorderRadius.only(
+                            topLeft: Radius.circular(16),
+                            topRight: Radius.circular(16),
+                            bottomLeft: Radius.circular(4),
+                            bottomRight: Radius.circular(4),
+                          ),
+                          border: Border.all(
+                            color: isAmoled && isDark
+                                ? Colors.red.withValues(alpha: 0.4) // Borde personalizado para amoled
+                                : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
+                            width: 1,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Icon(
+                                Icons.folder_delete,
+                                size: 30,
+                                color: isAmoled && isDark
+                                    ? Colors.red // Ícono rojo para amoled
+                                    : Theme.of(context).colorScheme.onErrorContainer,
+                              ),
+                            ),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                LocaleProvider.tr('delete'),
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: isAmoled && isDark
+                                      ? Colors.red // Texto rojo para amoled
+                                      : Theme.of(context).colorScheme.onErrorContainer,
+                                ),
+                              ),
                             ),
                           ],
                         ),
-                      );
-                    }
-                  },
-                  borderRadius: BorderRadius.circular(16),
-                  child: Container(
-                    width: double.infinity,
-                    padding: EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.errorContainer,
-                      borderRadius: BorderRadius.only(
-                        topLeft: Radius.circular(16),
-                        topRight: Radius.circular(16),
-                        bottomLeft: Radius.circular(4),
-                        bottomRight: Radius.circular(4),
-                      ),
-                      border: Border.all(
-                        color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
-                        width: 1,
                       ),
                     ),
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(12),
+                    SizedBox(height: 4),
+                    // Tarjeta de cancelar
+                    InkWell(
+                      onTap: () {
+                        Navigator.of(context).pop();
+                      },
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        width: double.infinity,
+                        padding: EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: isAmoled && isDark
+                              ? Colors.white.withValues(alpha: 0.1) // Color personalizado para amoled
+                              : Theme.of(context).colorScheme.secondaryContainer,
+                          borderRadius: BorderRadius.only(
+                            bottomLeft: Radius.circular(16),
+                            bottomRight: Radius.circular(16),
+                            topLeft: Radius.circular(4),
+                            topRight: Radius.circular(4),
                           ),
-                          child: Icon(
-                            Icons.folder_delete,
-                            size: 30,
-                            color: Theme.of(context).colorScheme.onErrorContainer,
+                          border: Border.all(
+                            color: isAmoled && isDark
+                                ? Colors.white.withValues(alpha: 0.2) // Borde personalizado para amoled
+                                : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
+                            width: 1,
                           ),
                         ),
-                        SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            LocaleProvider.tr('delete'),
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              color: Theme.of(context).colorScheme.onErrorContainer,
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Icon(
+                                Icons.cancel_outlined,
+                                size: 30,
+                                color: isAmoled && isDark
+                                    ? Colors.white // Ícono blanco para amoled
+                                    : Theme.of(context).colorScheme.onSurface,
+                              ),
                             ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                SizedBox(height: 4),
-                // Tarjeta de cancelar
-                InkWell(
-                  onTap: () {
-                    Navigator.of(context).pop();
-                  },
-                  borderRadius: BorderRadius.circular(16),
-                  child: Container(
-                    width: double.infinity,
-                    padding: EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.secondaryContainer,
-                      borderRadius: BorderRadius.only(
-                        bottomLeft: Radius.circular(16),
-                        bottomRight: Radius.circular(16),
-                        topLeft: Radius.circular(4),
-                        topRight: Radius.circular(4),
-                      ),
-                      border: Border.all(
-                        color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
-                        width: 1,
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Icon(
-                            Icons.cancel_outlined,
-                            size: 30,
-                            color: Theme.of(context).colorScheme.onSurface,
-                          ),
-                        ),
-                        SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            LocaleProvider.tr('cancel'),
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              color: Theme.of(context).colorScheme.onSurface,
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                LocaleProvider.tr('cancel'),
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: isAmoled && isDark
+                                      ? Colors.white // Texto blanco para amoled
+                                      : Theme.of(context).colorScheme.onSurface,
+                                ),
+                              ),
                             ),
-                          ),
+                          ],
                         ),
-                      ],
+                      ),
                     ),
-                  ),
+                  ],
                 ),
-              ],
-            ),
-          ),
+              ),
+            );
+          },
         );
       },
     );
@@ -1620,6 +1715,10 @@ class _FoldersScreenState extends State<FoldersScreen>
         child: Scaffold(
           resizeToAvoidBottomInset: true,
           appBar: AppBar(
+            backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+            surfaceTintColor: Colors.transparent,
+            elevation: 0,
+            scrolledUnderElevation: 0,
             title: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -1720,8 +1819,21 @@ class _FoldersScreenState extends State<FoldersScreen>
         },
         child: Scaffold(
           appBar: AppBar(
+            backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+            surfaceTintColor: Colors.transparent,
+            elevation: 0,
+        scrolledUnderElevation: 0,
             leading: _isSelecting
-                ? null
+                ? IconButton(
+                    icon: const Icon(Icons.close),
+                    tooltip: LocaleProvider.tr('cancel_selection'),
+                    onPressed: () {
+                      setState(() {
+                        _isSelecting = false;
+                        _selectedSongPaths.clear();
+                      });
+                    },
+                  )
                 : IconButton(
                     icon: const Icon(Icons.arrow_back),
                     onPressed: () {
@@ -1747,36 +1859,6 @@ class _FoldersScreenState extends State<FoldersScreen>
             actions: [
               if (_isSelecting) ...[
                 IconButton(
-                  icon: const Icon(Icons.favorite_outline),
-                  tooltip: LocaleProvider.tr('add_to_favorites'),
-                  onPressed: _selectedSongPaths.isEmpty
-                      ? null
-                      : () async {
-                          // Acción masiva: añadir a favoritos
-                          final selectedSongs = _displaySongs.where(
-                            (s) => _selectedSongPaths.contains(s.data),
-                          );
-                          for (final song in selectedSongs) {
-                            await _addToFavorites(song);
-                          }
-                          favoritesShouldReload.value =
-                              !favoritesShouldReload.value;
-                          setState(() {
-                            _isSelecting = false;
-                            _selectedSongPaths.clear();
-                          });
-                        },
-                ),
-                IconButton(
-                  icon: const Icon(Icons.playlist_add),
-                  tooltip: LocaleProvider.tr('add_to_playlist'),
-                  onPressed: _selectedSongPaths.isEmpty
-                      ? null
-                      : () async {
-                          await _handleAddToPlaylistMassive(context);
-                        },
-                ),
-                IconButton(
                   icon: const Icon(Icons.select_all),
                   tooltip: LocaleProvider.tr('select_all'),
                   onPressed: () {
@@ -1796,15 +1878,116 @@ class _FoldersScreenState extends State<FoldersScreen>
                     });
                   },
                 ),
-                IconButton(
-                  icon: const Icon(Icons.close),
-                  tooltip: LocaleProvider.tr('cancel_selection'),
-                  onPressed: () {
-                    setState(() {
-                      _isSelecting = false;
-                      _selectedSongPaths.clear();
-                    });
+                PopupMenuButton<String>(
+                  icon: const Icon(Icons.more_vert),
+                  tooltip: LocaleProvider.tr('options'),
+                  onSelected: (String value) async {
+                    switch (value) {
+                      case 'add_to_favorites':
+                        if (_selectedSongPaths.isNotEmpty) {
+                          final selectedSongs = _displaySongs.where(
+                            (s) => _selectedSongPaths.contains(s.data),
+                          );
+                          for (final song in selectedSongs) {
+                            await _addToFavorites(song);
+                          }
+                          favoritesShouldReload.value =
+                              !favoritesShouldReload.value;
+                          setState(() {
+                            _isSelecting = false;
+                            _selectedSongPaths.clear();
+                          });
+                        }
+                        break;
+                      case 'add_to_playlist':
+                        if (_selectedSongPaths.isNotEmpty) {
+                          await _handleAddToPlaylistMassive(context);
+                        }
+                        break;
+                      case 'copy_to_folder':
+                        if (_selectedSongPaths.isNotEmpty) {
+                          await _handleCopyToFolder(context);
+                        }
+                        break;
+                      case 'move_to_folder':
+                        if (_selectedSongPaths.isNotEmpty) {
+                          await _handleMoveToFolder(context);
+                        }
+                        break;
+                      case 'delete_songs':
+                        if (_selectedSongPaths.isNotEmpty) {
+                          await _handleDeleteSongs(context);
+                        }
+                        break;
+                    }
                   },
+                  itemBuilder: (BuildContext context) => [
+                    PopupMenuItem<String>(
+                      value: 'add_to_favorites',
+                      enabled: _selectedSongPaths.isNotEmpty,
+                      child: Row(
+                        children: [
+                          const Icon(Icons.favorite_outline),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(LocaleProvider.tr('add_to_favorites')),
+                          ),
+                        ],
+                      ),
+                    ),
+                    PopupMenuItem<String>(
+                      value: 'add_to_playlist',
+                      enabled: _selectedSongPaths.isNotEmpty,
+                      child: Row(
+                        children: [
+                          const Icon(Icons.playlist_add),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(LocaleProvider.tr('add_to_playlist')),
+                          ),
+                        ],
+                      ),
+                    ),
+                    PopupMenuItem<String>(
+                      value: 'copy_to_folder',
+                      enabled: _selectedSongPaths.isNotEmpty,
+                      child: Row(
+                        children: [
+                          const Icon(Icons.copy),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(LocaleProvider.tr('copy_to_folder')),
+                          ),
+                        ],
+                      ),
+                    ),
+                    PopupMenuItem<String>(
+                      value: 'move_to_folder',
+                      enabled: _selectedSongPaths.isNotEmpty,
+                      child: Row(
+                        children: [
+                          const Icon(Icons.drive_file_move),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(LocaleProvider.tr('move_to_folder')),
+                          ),
+                        ],
+                      ),
+                    ),
+                    PopupMenuItem<String>(
+                      value: 'delete_songs',
+                      enabled: _selectedSongPaths.isNotEmpty,
+                      child: Row(
+                        children: [
+                          const Icon(Icons.delete),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(LocaleProvider.tr('delete_songs')),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ] else ...[
                 IconButton(
@@ -2144,7 +2327,7 @@ class _FoldersScreenState extends State<FoldersScreen>
         selected: isCurrent,
         selectedTileColor: isCurrent
             ? (isAmoledTheme
-                ? Colors.white.withValues(alpha: 0.15)
+                ? Colors.transparent
                 : Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.8))
             : null,
         shape: isCurrent
@@ -2238,6 +2421,620 @@ class _FoldersScreenState extends State<FoldersScreen>
 
       // Notificar a la pantalla de inicio que debe actualizar las playlists
       playlistsShouldReload.value = !playlistsShouldReload.value;
+    }
+  }
+
+  Future<void> _handleCopyToFolder(BuildContext context) async {
+    if (!context.mounted) return;
+    
+    final selectedSongs = _displaySongs.where(
+      (s) => _selectedSongPaths.contains(s.data),
+    ).toList();
+    
+    if (selectedSongs.isEmpty) return;
+    
+    // Usar la función existente para mostrar el selector de carpetas
+    // pero adaptada para múltiples canciones
+    await _showFolderSelectorMultiple(selectedSongs, isMove: false);
+  }
+
+  Future<void> _handleMoveToFolder(BuildContext context) async {
+    if (!context.mounted) return;
+    
+    final selectedSongs = _displaySongs.where(
+      (s) => _selectedSongPaths.contains(s.data),
+    ).toList();
+    
+    if (selectedSongs.isEmpty) return;
+    
+    // Usar la función existente para mostrar el selector de carpetas
+    // pero adaptada para múltiples canciones
+    await _showFolderSelectorMultiple(selectedSongs, isMove: true);
+  }
+
+  Future<void> _handleDeleteSongs(BuildContext context) async {
+    if (!context.mounted) return;
+    
+    final selectedSongs = _displaySongs.where(
+      (s) => _selectedSongPaths.contains(s.data),
+    ).toList();
+    
+    if (selectedSongs.isEmpty) return;
+    
+    // Mostrar diálogo de confirmación con el mismo diseño que el individual
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+        
+        return AlertDialog(
+          title: Center(
+            child: Text(
+              LocaleProvider.tr('delete_songs'),
+              style: const TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          content: SizedBox(
+            width: 400,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(height: 18),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: Text(
+                      LocaleProvider.tr('delete_songs_confirm')
+                          .replaceAll('{count}', selectedSongs.length.toString()),
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
+                      textAlign: TextAlign.left,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                // Tarjeta de confirmar borrado
+                InkWell(
+                  onTap: () {
+                    Navigator.of(context).pop(true);
+                  },
+                  borderRadius: BorderRadius.circular(16),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: isAmoled && isDark
+                          ? Colors.red.withValues(alpha: 0.2)
+                          : Theme.of(context).colorScheme.errorContainer,
+                      borderRadius: const BorderRadius.only(
+                        topLeft: Radius.circular(16),
+                        topRight: Radius.circular(16),
+                        bottomLeft: Radius.circular(4),
+                        bottomRight: Radius.circular(4),
+                      ),
+                      border: Border.all(
+                        color: isAmoled && isDark
+                            ? Colors.red.withValues(alpha: 0.4)
+                            : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Icon(
+                            Icons.delete_forever,
+                            size: 30,
+                            color: isAmoled && isDark
+                                ? Colors.red
+                                : Theme.of(context).colorScheme.onErrorContainer,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            LocaleProvider.tr('delete'),
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: isAmoled && isDark
+                                  ? Colors.red
+                                  : Theme.of(context).colorScheme.onErrorContainer,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                // Tarjeta de cancelar
+                InkWell(
+                  onTap: () {
+                    Navigator.of(context).pop(false);
+                  },
+                  borderRadius: BorderRadius.circular(16),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: isAmoled && isDark
+                          ? Colors.white.withValues(alpha: 0.1)
+                          : Theme.of(context).colorScheme.secondaryContainer,
+                      borderRadius: const BorderRadius.only(
+                        bottomLeft: Radius.circular(16),
+                        bottomRight: Radius.circular(16),
+                        topLeft: Radius.circular(4),
+                        topRight: Radius.circular(4),
+                      ),
+                      border: Border.all(
+                        color: isAmoled && isDark
+                            ? Colors.white.withValues(alpha: 0.2)
+                            : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Icon(
+                            Icons.cancel_outlined,
+                            size: 30,
+                            color: isAmoled && isDark
+                                ? Colors.white
+                                : Theme.of(context).colorScheme.onSurface,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            LocaleProvider.tr('cancel'),
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: isAmoled && isDark
+                                  ? Colors.white
+                                  : Theme.of(context).colorScheme.onSurface,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+    
+    if (confirmed == true) {
+      await _deleteMultipleSongs(selectedSongs);
+    }
+  }
+
+  // Función para borrar múltiples canciones (optimizada)
+  Future<void> _deleteMultipleSongs(List<SongModel> songs) async {
+    int successCount = 0;
+    int errorCount = 0;
+    final List<String> songPaths = songs.map((s) => s.data).toList();
+    
+    try {
+      // Primero retirar todas las canciones de la cola de una vez
+      try {
+        final handler = audioHandler as MyAudioHandler;
+        await handler.removeSongsByPath(List<String>.from(songPaths));
+      } catch (_) {}
+
+      // Borrar archivos físicos
+      for (final song in songs) {
+        try {
+          final file = File(song.data);
+          if (await file.exists()) {
+            await file.delete();
+            successCount++;
+            
+            // Limpiar caché de artwork
+            try {
+              removeArtworkFromCache(song.data);
+            } catch (_) {}
+          } else {
+            errorCount++;
+          }
+        } catch (e) {
+          errorCount++;
+        }
+      }
+
+      // Limpiar de todas las bases de datos
+      try {
+        for (final path in songPaths) {
+          await FavoritesDB().removeFavorite(path);
+        }
+      } catch (_) {}
+      try {
+        for (final path in songPaths) {
+          await RecentsDB().removeRecent(path);
+        }
+      } catch (_) {}
+      try {
+        for (final path in songPaths) {
+          if (await ShortcutsDB().isShortcut(path)) {
+            await ShortcutsDB().removeShortcut(path);
+          }
+        }
+      } catch (_) {}
+      try {
+        final playlists = await PlaylistsDB().getAllPlaylists();
+        for (final p in playlists) {
+          final toRemove = p.songPaths.where((sp) => songPaths.contains(sp)).toList();
+          for (final sp in toRemove) {
+            await PlaylistsDB().removeSongFromPlaylist(p.id, sp);
+          }
+        }
+      } catch (_) {}
+
+      // Sincronizar índice una sola vez
+      try {
+        await SongsIndexDB().cleanNonExistentFiles();
+      } catch (_) {}
+
+      // Actualizar el estado local
+      if (carpetaSeleccionada != null) {
+        setState(() {
+          _originalSongs.removeWhere((s) => songPaths.contains(s.data));
+          _filteredSongs.removeWhere((s) => songPaths.contains(s.data));
+          _displaySongs.removeWhere((s) => songPaths.contains(s.data));
+          songPathsByFolder[carpetaSeleccionada!]?.removeWhere(
+            (path) => songPaths.contains(path),
+          );
+        });
+      }
+
+      // Notificar a otras pantallas
+      try {
+        favoritesShouldReload.value = !favoritesShouldReload.value;
+        shortcutsShouldReload.value = !shortcutsShouldReload.value;
+        playlistsShouldReload.value = !playlistsShouldReload.value;
+      } catch (_) {}
+
+    } catch (e) {
+      // No hacer nada
+    }
+    
+    if (mounted) {
+      _showMessage(
+        LocaleProvider.tr('songs_deleted'),
+        isError: false,
+        description: LocaleProvider.tr('delete_completed')
+            .replaceAll('{success}', successCount.toString())
+            .replaceAll('{error}', errorCount.toString()),
+      );
+      
+      setState(() {
+        _isSelecting = false;
+        _selectedSongPaths.clear();
+      });
+    }
+  }
+
+  // Función para mostrar el selector de carpetas para múltiples canciones
+  // Reutiliza la lógica de _showFolderSelector pero adaptada para múltiples canciones
+  Future<void> _showFolderSelectorMultiple(List<SongModel> songs, {required bool isMove}) async {
+    // Verificar permisos para la primera canción (asumimos que todas están en la misma ubicación)
+    if (songs.isNotEmpty) {
+      await _checkFilePermissions(songs.first.data);
+    }
+    
+    final folders = await SongsIndexDB().getFolders();
+    
+    // Crear mapa de carpetas con sus rutas completas originales
+    final Map<String, String> folderMap = {};
+    for (final folder in folders) {
+      // Obtener la ruta original completa desde las canciones
+      final songsInFolder = await SongsIndexDB().getSongsFromFolder(folder);
+      String originalPath = folder;
+      
+      if (songsInFolder.isNotEmpty) {
+        // Usar la ruta del primer archivo para obtener la carpeta original
+        final firstSongPath = songsInFolder.first;
+        final originalFolder = p.dirname(firstSongPath);
+        originalPath = originalFolder;
+      }
+      
+      folderMap[folder] = originalPath;
+    }
+    
+    // Para simplificar, mostrar todas las carpetas disponibles
+    // El usuario puede elegir cualquier carpeta, incluso la actual
+    final availableFolders = folders;
+
+    if (availableFolders.isEmpty) {
+      _showMessage(
+        isMove 
+          ? 'No hay otras carpetas disponibles para mover las canciones.' 
+          : 'No hay carpetas disponibles para copiar las canciones.',
+        isError: true,
+      );
+      return;
+    }
+
+    // Ordenar las carpetas alfabéticamente igual que en la pantalla principal
+    availableFolders.sort((a, b) {
+      // Usar folderDisplayNames si está disponible, sino usar el nombre de la carpeta de la ruta
+      final nameA = folderDisplayNames.containsKey(a) 
+          ? folderDisplayNames[a]!.toLowerCase()
+          : p.basename(folderMap[a] ?? '').toLowerCase();
+      final nameB = folderDisplayNames.containsKey(b) 
+          ? folderDisplayNames[b]!.toLowerCase()
+          : p.basename(folderMap[b] ?? '').toLowerCase();
+      return nameA.compareTo(nameB);
+    });
+
+    if (!mounted) return;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => SafeArea(
+        child: Container(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.7,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Encabezado
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  border: Border(
+                    bottom: BorderSide(
+                      color: Theme.of(context).dividerColor.withValues(alpha: 0.1),
+                    ),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      isMove ? Icons.drive_file_move : Icons.copy,
+                      color: Theme.of(context).colorScheme.inverseSurface.withValues(alpha: 0.95),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        isMove ? LocaleProvider.tr('move_to_folder') : LocaleProvider.tr('copy_to_folder'),
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      icon: const Icon(Icons.close),
+                    ),
+                  ],
+                ),
+              ),
+              // Lista de carpetas
+              Flexible(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: availableFolders.length,
+                  itemBuilder: (context, index) {
+                    final folder = availableFolders[index];
+                    final originalPath = folderMap[folder] ?? folder;
+                    final displayName = folderDisplayNames[folder] ?? p.basename(originalPath);
+                    
+                    return ListTile(
+                      leading: Icon(
+                        Icons.folder,
+                      ),
+                      title: Text(
+                        displayName,
+                        maxLines: 1,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      onTap: () async {
+                        Navigator.of(context).pop();
+                        await _processMultipleSongs(songs, originalPath, isMove: isMove);
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Función para procesar múltiples canciones (copiar o mover)
+  Future<void> _processMultipleSongs(List<SongModel> songs, String destinationFolder, {required bool isMove}) async {
+    int successCount = 0;
+    int errorCount = 0;
+    
+    for (final song in songs) {
+      try {
+        if (isMove) {
+          await _moveSongToFolderInternal(song, destinationFolder);
+        } else {
+          await _copySongToFolderInternal(song, destinationFolder);
+        }
+        successCount++;
+      } catch (e) {
+        errorCount++;
+      }
+    }
+    
+    if (mounted) {
+      _showMessage(
+        isMove 
+          ? LocaleProvider.tr('song_moved')
+          : LocaleProvider.tr('song_copied'),
+        isError: false,
+        description: isMove 
+          ? LocaleProvider.tr('move_completed')
+              .replaceAll('{success}', successCount.toString())
+              .replaceAll('{error}', errorCount.toString())
+          : LocaleProvider.tr('copy_completed')
+              .replaceAll('{success}', successCount.toString())
+              .replaceAll('{error}', errorCount.toString()),
+      );
+      
+      setState(() {
+        _isSelecting = false;
+        _selectedSongPaths.clear();
+      });
+      
+      // No recargar la pantalla, las funciones internas ya actualizaron el estado local
+    }
+  }
+
+  // Versión interna de _copySongToFolder sin diálogos de confirmación
+  Future<void> _copySongToFolderInternal(SongModel song, String destinationFolder) async {
+    try {
+      final sourceFile = File(song.data);
+      if (!await sourceFile.exists()) {
+        throw Exception('El archivo no existe.');
+      }
+
+      final fileName = p.basename(song.data);
+      final destinationPath = p.join(destinationFolder, fileName);
+      var destinationFile = File(destinationPath);
+
+      // Verificar si el archivo ya existe en el destino
+      if (await destinationFile.exists()) {
+        // Generar un nombre único
+        final nameWithoutExt = p.basenameWithoutExtension(song.data);
+        final extension = p.extension(song.data);
+        int counter = 1;
+        String newFileName;
+        String finalDestinationPath;
+        do {
+          newFileName = '${nameWithoutExt}_$counter$extension';
+          finalDestinationPath = p.join(destinationFolder, newFileName);
+          destinationFile = File(finalDestinationPath);
+          counter++;
+        } while (await destinationFile.exists());
+        
+        await sourceFile.copy(finalDestinationPath);
+      } else {
+        await sourceFile.copy(destinationPath);
+      }
+
+      // Actualizar el archivo en el sistema de medios de Android
+      await MediaScanner.loadMedia(path: destinationPath);
+      
+      // Actualizar la base de datos solo para este archivo
+      await SongsIndexDB().forceReindex();
+
+      // Actualizar el estado local sin recargar toda la pantalla
+      if (carpetaSeleccionada != null) {
+        setState(() {
+          // No removemos la canción de la carpeta actual porque es una copia
+          // Solo actualizamos el mapa de paths de la carpeta destino
+          final destinationFolderKey = destinationFolder;
+          if (songPathsByFolder.containsKey(destinationFolderKey)) {
+            songPathsByFolder[destinationFolderKey]!.add(song.data);
+          }
+        });
+      }
+
+      // Notificar a otras pantallas que deben refrescar
+      try {
+        favoritesShouldReload.value = !favoritesShouldReload.value;
+        shortcutsShouldReload.value = !shortcutsShouldReload.value;
+        playlistsShouldReload.value = !playlistsShouldReload.value;
+      } catch (_) {}
+    } catch (e) {
+      throw Exception('Error copiando canción: $e');
+    }
+  }
+
+  // Versión interna de _moveSongToFolder sin diálogos de confirmación
+  Future<void> _moveSongToFolderInternal(SongModel song, String destinationFolder) async {
+    try {
+      final sourceFile = File(song.data);
+      if (!await sourceFile.exists()) {
+        throw Exception('El archivo no existe.');
+      }
+
+      final fileName = p.basename(song.data);
+      final destinationPath = p.join(destinationFolder, fileName);
+      var destinationFile = File(destinationPath);
+
+      // Verificar si el archivo ya existe en el destino
+      if (await destinationFile.exists()) {
+        // Generar un nombre único
+        final nameWithoutExt = p.basenameWithoutExtension(song.data);
+        final extension = p.extension(song.data);
+        int counter = 1;
+        String newFileName;
+        String finalDestinationPath;
+        do {
+          newFileName = '${nameWithoutExt}_$counter$extension';
+          finalDestinationPath = p.join(destinationFolder, newFileName);
+          destinationFile = File(finalDestinationPath);
+          counter++;
+        } while (await destinationFile.exists());
+        
+        await sourceFile.rename(finalDestinationPath);
+      } else {
+        await sourceFile.rename(destinationPath);
+      }
+
+      // Actualizar el archivo en el sistema de medios de Android
+      await MediaScanner.loadMedia(path: destinationPath);
+      
+      // Actualizar la base de datos solo para este archivo
+      await SongsIndexDB().forceReindex();
+
+      // Actualizar el estado local sin recargar toda la pantalla
+      if (carpetaSeleccionada != null) {
+        setState(() {
+          // Remover la canción de la carpeta actual
+          _originalSongs.removeWhere((s) => s.data == song.data);
+          _filteredSongs.removeWhere((s) => s.data == song.data);
+          _displaySongs.removeWhere((s) => s.data == song.data);
+          // También actualiza el mapa de paths
+          songPathsByFolder[carpetaSeleccionada!]?.removeWhere(
+            (path) => path == song.data,
+          );
+        });
+      }
+
+      // Notificar a otras pantallas que deben refrescar
+      try {
+        favoritesShouldReload.value = !favoritesShouldReload.value;
+        shortcutsShouldReload.value = !shortcutsShouldReload.value;
+        playlistsShouldReload.value = !playlistsShouldReload.value;
+      } catch (_) {}
+    } catch (e) {
+      throw Exception('Error moviendo canción: $e');
     }
   }
 
@@ -2446,5 +3243,450 @@ class _FoldersScreenState extends State<FoldersScreen>
     setState(() {
       carpetaSeleccionada = null;
     });
+  }
+
+  // Función para mostrar el selector de carpetas
+  Future<void> _showFolderSelector(SongModel song, {required bool isMove}) async {
+    // Verificar permisos antes de continuar
+    await _checkFilePermissions(song.data);
+    
+    final folders = await SongsIndexDB().getFolders();
+    final currentFolder = _getFolderPath(song.data);
+    
+    // Crear mapa de carpetas con sus rutas completas originales
+    final Map<String, String> folderMap = {};
+    for (final folder in folders) {
+      // Obtener la ruta original completa desde las canciones
+      final songsInFolder = await SongsIndexDB().getSongsFromFolder(folder);
+      String originalPath = folder;
+      
+      if (songsInFolder.isNotEmpty) {
+        // Usar la ruta del primer archivo para obtener la carpeta original
+        final firstSongPath = songsInFolder.first;
+        final originalFolder = p.dirname(firstSongPath);
+        originalPath = originalFolder;
+      }
+      
+      folderMap[folder] = originalPath;
+    }
+    
+    // Filtrar la carpeta actual si es mover
+    final availableFolders = isMove 
+        ? folders.where((folder) => folder != currentFolder).toList()
+        : folders;
+
+    if (availableFolders.isEmpty) {
+      _showMessage(
+        isMove ? 'No hay otras carpetas disponibles para mover la canción.' : 'No hay carpetas disponibles para copiar la canción.',
+        isError: true,
+      );
+      return;
+    }
+
+    // Ordenar las carpetas alfabéticamente igual que en la pantalla principal
+    availableFolders.sort((a, b) {
+      // Usar folderDisplayNames si está disponible, sino usar el nombre de la carpeta de la ruta
+      final nameA = folderDisplayNames.containsKey(a) 
+          ? folderDisplayNames[a]!.toLowerCase()
+          : p.basename(folderMap[a] ?? '').toLowerCase();
+      final nameB = folderDisplayNames.containsKey(b) 
+          ? folderDisplayNames[b]!.toLowerCase()
+          : p.basename(folderMap[b] ?? '').toLowerCase();
+      return nameA.compareTo(nameB);
+    });
+
+    if (!mounted) return;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => SafeArea(
+        child: Container(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.7,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Encabezado
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  border: Border(
+                    bottom: BorderSide(
+                      color: Theme.of(context).dividerColor.withValues(alpha: 0.1),
+                    ),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      isMove ? Icons.drive_file_move : Icons.copy,
+                      color: Theme.of(context).colorScheme.inverseSurface.withValues(alpha: 0.95),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        isMove ? LocaleProvider.tr('move_song') : LocaleProvider.tr('copy_song'),
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      icon: const Icon(Icons.close),
+                    ),
+                  ],
+                ),
+              ),
+              // Lista de carpetas
+              Flexible(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: availableFolders.length,
+                  itemBuilder: (context, index) {
+                    final folder = availableFolders[index];
+                    final originalPath = folderMap[folder]!;
+                    final displayName = p.basename(originalPath);
+                    
+                    return ListTile(
+                      leading: const Icon(Icons.folder),
+                      title: Text(
+                        displayName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      onTap: () async {
+                        Navigator.of(context).pop();
+                        if (isMove) {
+                          await _moveSongToFolder(song, originalPath);
+                        } else {
+                          await _copySongToFolder(song, originalPath);
+                        }
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Función para mover una canción a otra carpeta
+  Future<void> _moveSongToFolder(SongModel song, String destinationFolder) async {
+    try {
+      final sourceFile = File(song.data);
+      if (!await sourceFile.exists()) {
+        _showMessage('El archivo no existe.', isError: true);
+        return;
+      }
+
+      final fileName = p.basename(song.data);
+      final destinationPath = p.join(destinationFolder, fileName);
+      final destinationFile = File(destinationPath);
+
+      // Verificar si ya existe un archivo con el mismo nombre
+      if (await destinationFile.exists()) {
+        _showMessage(LocaleProvider.tr('error_moving_song'), description: LocaleProvider.tr('file_already_exists'), isError: true);
+        return;
+      }
+
+      // Verificar que la carpeta de destino existe y es accesible
+      final destinationDir = Directory(destinationFolder);
+      
+      if (!await destinationDir.exists()) {
+        _showMessage('La carpeta de destino no existe o no es accesible.\n\nRuta: $destinationFolder', isError: true);
+        return;
+      }
+
+      // Intentar mover el archivo usando copy + delete como fallback
+      bool moveSuccessful = false;
+      try {
+        // Primero intentar rename (más eficiente)
+        await sourceFile.rename(destinationPath);
+        moveSuccessful = true;
+      } catch (e) {
+        // Si rename falla, intentar copy + delete
+        try {
+          await sourceFile.copy(destinationPath);
+          await sourceFile.delete();
+          moveSuccessful = true;
+        } catch (copyError) {
+          // Si copy falla, eliminar el archivo copiado si existe
+          try {
+            final tempFile = File(destinationPath);
+            if (await tempFile.exists()) {
+              await tempFile.delete();
+            }
+          } catch (_) {
+            // Ignorar errores al eliminar archivo temporal
+          }
+          rethrow;
+        }
+      }
+
+      if (!moveSuccessful) {
+        throw Exception('No se pudo mover el archivo');
+      }
+
+      // Actualizar el archivo en el sistema de medios de Android
+      await MediaScanner.loadMedia(path: destinationPath);
+      
+      // Actualizar la base de datos solo para este archivo
+      await SongsIndexDB().forceReindex();
+      
+      // Actualizar el estado local sin recargar toda la pantalla
+      if (carpetaSeleccionada != null) {
+        setState(() {
+          // Remover la canción de la carpeta actual
+          _originalSongs.removeWhere((s) => s.data == song.data);
+          _filteredSongs.removeWhere((s) => s.data == song.data);
+          _displaySongs.removeWhere((s) => s.data == song.data);
+          // También actualiza el mapa de paths
+          songPathsByFolder[carpetaSeleccionada!]?.removeWhere(
+            (path) => path == song.data,
+          );
+        });
+      }
+      
+      // Notificar a otras pantallas que deben refrescar
+      try {
+        favoritesShouldReload.value = !favoritesShouldReload.value;
+        shortcutsShouldReload.value = !shortcutsShouldReload.value;
+      } catch (_) {}
+
+      _showMessage(
+        LocaleProvider.tr('song_moved'),
+        description: LocaleProvider.tr('song_moved_desc'),
+      );
+
+    } catch (e) {
+      _showMessage(
+        LocaleProvider.tr('error_moving_song'),
+        description: '${LocaleProvider.tr('error_moving_song_desc')}\n\nError: ${e.toString()}',
+        isError: true,
+      );
+    }
+  }
+
+  // Función para copiar una canción a otra carpeta
+  Future<void> _copySongToFolder(SongModel song, String destinationFolder) async {
+    try {
+      final sourceFile = File(song.data);
+      if (!await sourceFile.exists()) {
+        _showMessage('El archivo no existe.', isError: true);
+        return;
+      }
+
+      final fileName = p.basename(song.data);
+      final destinationPath = p.join(destinationFolder, fileName);
+      final destinationFile = File(destinationPath);
+
+      // Verificar si ya existe un archivo con el mismo nombre
+      if (await destinationFile.exists()) {
+        _showMessage(LocaleProvider.tr('error_copying_song'), description: LocaleProvider.tr('file_already_exists'), isError: true);
+        return;
+      }
+
+      // Verificar que la carpeta de destino existe y es accesible
+      final destinationDir = Directory(destinationFolder);
+      
+      if (!await destinationDir.exists()) {
+        _showMessage('La carpeta de destino no existe o no es accesible.\n\nRuta: $destinationFolder', isError: true);
+        return;
+      }
+
+      // Copiar el archivo
+      await sourceFile.copy(destinationPath);
+
+      // Verificar que la copia fue exitosa
+      if (!await destinationFile.exists()) {
+        throw Exception('La copia no se completó correctamente');
+      }
+
+      // Actualizar el archivo en el sistema de medios de Android
+      await MediaScanner.loadMedia(path: destinationPath);
+      
+      // Actualizar la base de datos solo para este archivo
+      await SongsIndexDB().forceReindex();
+      
+      // Notificar a otras pantallas que deben refrescar
+      try {
+        favoritesShouldReload.value = !favoritesShouldReload.value;
+        shortcutsShouldReload.value = !shortcutsShouldReload.value;
+      } catch (_) {}
+
+      _showMessage(
+        LocaleProvider.tr('song_copied'),
+        description: LocaleProvider.tr('song_copied_desc'),
+      );
+
+    } catch (e) {
+      _showMessage(
+        LocaleProvider.tr('error_copying_song'),
+        description: '${LocaleProvider.tr('error_copying_song_desc')}\n\nError: ${e.toString()}',
+        isError: true,
+      );
+    }
+  }
+
+  // Función auxiliar para obtener la ruta de carpeta de un archivo
+  String _getFolderPath(String filePath) {
+    var normalizedPath = p.normalize(filePath);
+    var dirPath = p.dirname(normalizedPath);
+    dirPath = p.normalize(dirPath);
+    if (dirPath.contains('/')) dirPath = dirPath.replaceAll('/', '\\');
+    dirPath = dirPath.trim();
+    if (dirPath.endsWith('\\') && dirPath.length > 3) {
+      dirPath = dirPath.substring(0, dirPath.length - 1);
+    }
+    dirPath = dirPath.toLowerCase();
+    return dirPath;
+  }
+
+  // Función para verificar permisos de archivos
+  Future<void> _checkFilePermissions(String filePath) async {
+    try {
+      final file = File(filePath);
+      final parentDir = Directory(p.dirname(filePath));
+      
+      // Verificar si podemos leer el archivo
+      if (!await file.exists()) {
+        return;
+      }
+      
+      // Verificar si podemos leer el directorio padre
+      if (!await parentDir.exists()) {
+        return;
+      }
+      
+      // Intentar listar el directorio para verificar permisos
+      await parentDir.list().first;
+    } catch (e) {
+      _showMessage(
+        'Advertencia de permisos',
+        description: 'Puede haber problemas con los permisos de archivos. Error: ${e.toString()}',
+        isError: true,
+      );
+    }
+  }
+
+  // Función para mostrar mensajes de confirmación o error
+  void _showMessage(String title, {String? description, bool isError = false}) {
+    if (!mounted) return;
+    
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return ValueListenableBuilder<AppColorScheme>(
+          valueListenable: colorSchemeNotifier,
+          builder: (context, colorScheme, child) {
+            final isAmoled = colorScheme == AppColorScheme.amoled;
+            final isDark = Theme.of(context).brightness == Brightness.dark;
+            
+            return AlertDialog(
+              title: Center(
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              content: SizedBox(
+                width: 400,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (description != null) ...[
+                      SizedBox(height: 18),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 4),
+                          child: Text(
+                            description,
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Theme.of(context).colorScheme.onSurface,
+                            ),
+                            textAlign: TextAlign.left,
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ),
+                      SizedBox(height: 20),
+                    ],
+                    // Tarjeta de aceptar
+                    InkWell(
+                      onTap: () => Navigator.of(context).pop(),
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        width: double.infinity,
+                        padding: EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: isAmoled && isDark
+                              ? Colors.white.withValues(alpha: 0.2)
+                              : Theme.of(context).colorScheme.primaryContainer,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: isAmoled && isDark
+                                ? Colors.white.withValues(alpha: 0.4)
+                                : Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
+                            width: 2,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(12),
+                                color: isError
+                                    ? null
+                                    : (isAmoled && isDark
+                                        ? Colors.white.withValues(alpha: 0.2)
+                                        : Theme.of(context).colorScheme.primary.withValues(alpha: 0.1)),
+                              ),
+                              child: Icon(
+                                isError ? Icons.error : Icons.check_circle,
+                                size: 30,
+                                color: isAmoled && isDark
+                                    ? Colors.white
+                                    : Theme.of(context).colorScheme.primary,
+                              ),
+                            ),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                LocaleProvider.tr('ok'),
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: isAmoled && isDark
+                                      ? Colors.white
+                                      : Theme.of(context).colorScheme.primary,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 }

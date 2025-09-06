@@ -30,6 +30,35 @@ Uint8List? decodeAndCropImage(Uint8List bytes) {
   return null;
 }
 
+// Top-level function para recortar imágenes hqdefault (elimina franjas negras)
+Uint8List? decodeAndCropImageHQ(Uint8List bytes) {
+  final original = img.decodeImage(bytes);
+  if (original != null) {
+    // Para hqdefault (480x360), el contenido real está en el centro
+    // Las franjas negras están arriba y abajo
+    final width = original.width;
+    final height = original.height;
+    
+    // Calcular el área de contenido real (aproximadamente 60% del centro)
+    final contentHeight = (height * 0.6).round();
+    final offsetY = (height - contentHeight) ~/ 2;
+    
+    // Crear un cuadrado del área de contenido
+    final minSide = width < contentHeight ? width : contentHeight;
+    final offsetX = (width - minSide) ~/ 2;
+    
+    final square = img.copyCrop(
+      original, 
+      x: offsetX, 
+      y: offsetY, 
+      width: minSide, 
+      height: minSide
+    );
+    return Uint8List.fromList(img.encodeJpg(square));
+  }
+  return null;
+}
+
 class DownloadManager {
   static final DownloadManager _instance = DownloadManager._internal();
   factory DownloadManager() => _instance;
@@ -165,7 +194,9 @@ class DownloadManager {
       final filePath = '$saveDir/$safeTitle.m4a';
 
       // Descargar portada
-      final coverBytes = await _downloadCover(video.id.toString());
+      final prefs = await SharedPreferences.getInstance();
+      final highQuality = prefs.getBool('cover_quality_high') ?? true;
+      final coverBytes = await _downloadCover(video.id.toString(), highQuality: highQuality);
 
       onInfoUpdate?.call(video.title, video.author, coverBytes);
 
@@ -276,7 +307,9 @@ class DownloadManager {
         : (await getApplicationDocumentsDirectory()).path;
 
     // Descargar portada
-    final coverBytes = await _downloadCover(video.id.toString());
+    final prefs = await SharedPreferences.getInstance();
+    final highQuality = prefs.getBool('cover_quality_high') ?? true;
+    final coverBytes = await _downloadCover(video.id.toString(), highQuality: highQuality);
 
     onInfoUpdate?.call(video.title, video.author, coverBytes);
 
@@ -609,27 +642,64 @@ class DownloadManager {
     return await Future.sync(() => func());
   }
 
-  Future<Uint8List?> _downloadCover(String videoId) async {
+  Future<Uint8List?> _downloadCover(String videoId, {bool highQuality = true}) async {
     final coverUrlMax = 'https://img.youtube.com/vi/$videoId/maxresdefault.jpg';
     final coverUrlHQ = 'https://img.youtube.com/vi/$videoId/hqdefault.jpg';
 
     Uint8List? bytes;
     final client = HttpClient();
     try {
-      // 1. Intentar maxresdefault
-      final request = await client.getUrl(Uri.parse(coverUrlMax));
-      final response = await request.close();
-      if (response.statusCode == 200) {
-        bytes = Uint8List.fromList(await _consolidateResponseBytes(response));
+      if (highQuality) {
+        // Calidad alta: prioridad maxresdefault, fallback hqdefault, luego http
+        try {
+          final request = await client.getUrl(Uri.parse(coverUrlMax));
+          final response = await request.close();
+          if (response.statusCode == 200) {
+            bytes = Uint8List.fromList(await _consolidateResponseBytes(response));
+          } else {
+            // Si maxresdefault falla, intentar hqdefault
+            final requestHQ = await client.getUrl(Uri.parse(coverUrlHQ));
+            final responseHQ = await requestHQ.close();
+            if (responseHQ.statusCode == 200) {
+              bytes = Uint8List.fromList(await _consolidateResponseBytes(responseHQ));
+            } else {
+              // Si hqdefault también falla, usar http
+              final httpResponse = await http.get(Uri.parse(coverUrlHQ));
+              if (httpResponse.statusCode == 200) {
+                bytes = httpResponse.bodyBytes;
+              } else {
+                throw Exception('No se pudo descargar ninguna portada');
+              }
+            }
+          }
+        } catch (e) {
+          // Si HttpClient falla, usar http
+          final httpResponse = await http.get(Uri.parse(coverUrlHQ));
+          if (httpResponse.statusCode == 200) {
+            bytes = httpResponse.bodyBytes;
+          } else {
+            throw Exception('No se pudo descargar ninguna portada');
+          }
+        }
       } else {
-        // 2. Intentar hqdefault
-        final requestHQ = await client.getUrl(Uri.parse(coverUrlHQ));
-        final responseHQ = await requestHQ.close();
-        if (responseHQ.statusCode == 200) {
-          bytes = Uint8List.fromList(await _consolidateResponseBytes(responseHQ));
-        } else {
-          // 3. Fallback: usar thumbnailUrl con http
-          final httpResponse = await http.get(Uri.parse('https://img.youtube.com/vi/$videoId/hqdefault.jpg'));
+        // Calidad baja: directamente hqdefault, si falla usar http
+        try {
+          final requestHQ = await client.getUrl(Uri.parse(coverUrlHQ));
+          final responseHQ = await requestHQ.close();
+          if (responseHQ.statusCode == 200) {
+            bytes = Uint8List.fromList(await _consolidateResponseBytes(responseHQ));
+          } else {
+            // Si hqdefault falla, usar http
+            final httpResponse = await http.get(Uri.parse(coverUrlHQ));
+            if (httpResponse.statusCode == 200) {
+              bytes = httpResponse.bodyBytes;
+            } else {
+              throw Exception('No se pudo descargar ninguna portada');
+            }
+          }
+        } catch (e) {
+          // Si HttpClient falla, usar http
+          final httpResponse = await http.get(Uri.parse(coverUrlHQ));
           if (httpResponse.statusCode == 200) {
             bytes = httpResponse.bodyBytes;
           } else {
@@ -637,10 +707,19 @@ class DownloadManager {
           }
         }
       }
-      // Recortar a cuadrado centrado
-      final croppedBytes = await compute(decodeAndCropImage, bytes);
-      if (croppedBytes != null) {
-        bytes = croppedBytes;
+      // Recortar a cuadrado centrado según la calidad
+      if (highQuality) {
+        // Para calidad alta (maxresdefault), recorte normal centrado
+        final croppedBytes = await compute(decodeAndCropImage, bytes);
+        if (croppedBytes != null) {
+          bytes = croppedBytes;
+        }
+      } else {
+        // Para calidad baja (hqdefault), recorte especial para eliminar franjas negras
+        final croppedBytes = await compute(decodeAndCropImageHQ, bytes);
+        if (croppedBytes != null) {
+          bytes = croppedBytes;
+        }
       }
     } finally {
       client.close();

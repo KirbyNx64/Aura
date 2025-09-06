@@ -842,3 +842,634 @@ Future<List<YtMusicResult>> getAlbumSongs(String browseId) async {
   }
   return results;
 }
+
+// Función mejorada para buscar listas de reproducción con paginación
+Future<List<Map<String, String>>> searchPlaylistsWithPagination(String query, {int maxPages = 3}) async {
+  final allResults = <Map<String, String>>[];
+  String? continuationToken;
+  int currentPage = 0;
+
+  while (currentPage < maxPages) {
+    final data = {
+      ...ytServiceContext,
+      'query': query,
+      'params': getSearchParams('playlists', null, false),
+    };
+
+    if (continuationToken != null) {
+      data['continuation'] = continuationToken;
+    }
+
+    try {
+      final response = (await sendRequest("search", data)).data;
+      final results = <Map<String, String>>[];
+      String? nextToken;
+
+      if (continuationToken == null) {
+        // Primera búsqueda
+        final sections = nav(response, [
+          'contents',
+          'tabbedSearchResultsRenderer',
+          'tabs',
+          0,
+          'tabRenderer',
+          'content',
+          'sectionListRenderer',
+          'contents'
+        ]);
+
+        if (sections is List) {
+          for (var section in sections) {
+            final shelf = section['musicShelfRenderer'];
+            if (shelf != null && shelf['contents'] is List) {
+              for (var item in shelf['contents']) {
+                final renderer = item['musicResponsiveListItemRenderer'];
+                if (renderer != null) {
+                  final playlistData = _parsePlaylistItem(renderer);
+                  if (playlistData != null) {
+                    results.add(playlistData);
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        // Obtener token de continuación
+        final shelfRenderer = nav(response, [
+          'contents',
+          'tabbedSearchResultsRenderer',
+          'tabs',
+          0,
+          'tabRenderer',
+          'content',
+          'sectionListRenderer',
+          'contents',
+          0,
+          'musicShelfRenderer'
+        ]);
+
+        if (shelfRenderer != null && shelfRenderer['continuations'] != null) {
+          nextToken = shelfRenderer['continuations'][0]['nextContinuationData']['continuation'];
+        }
+      } else {
+        // Continuaciones
+        var contents = nav(response, [
+          'onResponseReceivedActions',
+          0,
+          'appendContinuationItemsAction',
+          'continuationItems'
+        ]);
+
+        contents ??= nav(response, [
+          'continuationContents',
+          'musicShelfContinuation',
+          'contents'
+        ]);
+
+        if (contents is List) {
+          final playlistItems = contents.where((item) => 
+            item['musicResponsiveListItemRenderer'] != null
+          ).toList();
+
+          for (var item in playlistItems) {
+            final renderer = item['musicResponsiveListItemRenderer'];
+            if (renderer != null) {
+              final playlistData = _parsePlaylistItem(renderer);
+              if (playlistData != null) {
+                results.add(playlistData);
+              }
+            }
+          }
+        }
+
+        // Obtener siguiente token
+        try {
+          nextToken = nav(response, [
+            'onResponseReceivedActions',
+            0,
+            'appendContinuationItemsAction',
+            'continuationItems',
+            0,
+            'continuationItemRenderer',
+            'continuationEndpoint',
+            'continuationCommand',
+            'token'
+          ]);
+
+          nextToken ??= nav(response, [
+            'continuationContents',
+            'musicShelfContinuation',
+            'continuations',
+            0,
+            'nextContinuationData',
+            'continuation'
+          ]);
+        } catch (e) {
+          nextToken = null;
+        }
+      }
+
+      allResults.addAll(results);
+      
+      if (results.isEmpty || nextToken == null) {
+        break;
+      }
+      
+      continuationToken = nextToken;
+      currentPage++;
+    } catch (e) {
+      // ('Error en búsqueda de playlists: $e');
+      break;
+    }
+  }
+
+  return allResults;
+}
+
+// Función simple para compatibilidad con el código existente
+Future<List<Map<String, String>>> searchPlaylistsOnly(String query) async {
+  return await searchPlaylistsWithPagination(query, maxPages: 1);
+}
+
+// Función auxiliar para parsear items de playlist individuales
+Map<String, String>? _parsePlaylistItem(Map<String, dynamic> renderer) {
+  // Extraer browseId de los menús (más robusto que la implementación anterior)
+  String? browseId;
+  final menuItems = renderer['menu']?['menuRenderer']?['items'];
+  
+  if (menuItems is List) {
+    for (var menuItem in menuItems) {
+      final endpoint = menuItem['menuNavigationItemRenderer']?['navigationEndpoint']?['browseEndpoint'];
+      if (endpoint != null && endpoint['browseId'] != null) {
+        final id = endpoint['browseId'].toString();
+        // Aceptar diferentes tipos de IDs de playlist
+        if (id.startsWith('VL') || id.startsWith('PL') || id.startsWith('OL')) {
+          browseId = id;
+          break;
+        }
+      }
+    }
+  }
+
+  // Si no hay browseId en el menú, intentar extraerlo de otros lugares
+  if (browseId == null) {
+    // Intentar desde el overlay
+    browseId = nav(renderer, [
+      'overlay',
+      'musicItemThumbnailOverlayRenderer',
+      'content',
+      'musicPlayButtonRenderer',
+      'playNavigationEndpoint',
+      'watchPlaylistEndpoint',
+      'playlistId'
+    ])?.toString();
+
+    // O desde navigationEndpoint
+    browseId ??= nav(renderer, [
+      'flexColumns',
+      0,
+      'musicResponsiveListItemFlexColumnRenderer',
+      'text',
+      'runs',
+      0,
+      'navigationEndpoint',
+      'browseEndpoint',
+      'browseId'
+    ])?.toString();
+  }
+
+  if (browseId == null) return null;
+
+  // Extraer título
+  final title = renderer['flexColumns']?[0]?['musicResponsiveListItemFlexColumnRenderer']?['text']?['runs']?[0]?['text'];
+  if (title == null) return null;
+
+  // Extraer número de elementos
+  final subtitleRuns = renderer['flexColumns']?[1]?['musicResponsiveListItemFlexColumnRenderer']?['text']?['runs'];
+  String? itemCount;
+  
+  if (subtitleRuns is List) {
+    // Buscar el número de elementos (generalmente el último run numérico)
+    for (var i = subtitleRuns.length - 1; i >= 0; i--) {
+      final text = subtitleRuns[i]['text'];
+      if (text != null && RegExp(r'\d+').hasMatch(text)) {
+        itemCount = text;
+        break;
+      }
+    }
+  }
+
+  // Extraer thumbnail
+  String? thumbUrl;
+  final thumbnails = renderer['thumbnail']?['musicThumbnailRenderer']?['thumbnail']?['thumbnails'];
+  if (thumbnails is List && thumbnails.isNotEmpty) {
+    thumbUrl = thumbnails.last['url'];
+  }
+
+  return {
+    'title': title,
+    'browseId': browseId,
+    'thumbUrl': thumbUrl ?? '',
+    'itemCount': itemCount ?? '0',
+  };
+}
+
+// Función principal para obtener canciones de una lista de reproducción
+Future<List<YtMusicResult>> getPlaylistSongs(String playlistId, {int limit = 100}) async {
+  // Convertir el ID de playlist al formato correcto
+  String browseId = playlistId.startsWith("VL") ? playlistId : "VL$playlistId";
+  
+  final data = {
+    ...ytServiceContext,
+    'browseId': browseId,
+  };
+
+  try {
+    final response = (await sendRequest("browse", data)).data;
+    final results = <YtMusicResult>[];
+
+    // Buscar las canciones en diferentes ubicaciones posibles
+    var contents = _findPlaylistContents(response);
+    
+    if (contents is List) {
+      // Parsear las canciones iniciales
+      final initialSongs = _parsePlaylistItems(contents);
+      results.addAll(initialSongs);
+
+      // Si necesitamos más canciones y hay continuaciones, obtenerlas
+      if (results.length < limit) {
+        final continuationSongs = await _getPlaylistContinuations(
+          response, 
+          data, 
+          limit - results.length
+        );
+        results.addAll(continuationSongs);
+      }
+    }
+
+    return results.take(limit).toList();
+  } catch (e) {
+    // print('Error obteniendo canciones de playlist: $e');
+    return [];
+  }
+}
+
+// Función auxiliar para encontrar el contenido de la playlist
+List<dynamic>? _findPlaylistContents(Map<String, dynamic> response) {
+  // Intentar múltiples rutas para encontrar las canciones
+  var contents = nav(response, [
+    'contents',
+    'twoColumnBrowseResultsRenderer',
+    'secondaryContents',
+    'sectionListRenderer',
+    'contents',
+    0,
+    'musicPlaylistShelfRenderer',
+    'contents'
+  ]);
+
+  contents ??= nav(response, [
+    'contents',
+    'singleColumnBrowseResultsRenderer',
+    'tabs',
+    0,
+    'tabRenderer',
+    'content',
+    'sectionListRenderer',
+    'contents',
+    0,
+    'musicPlaylistShelfRenderer',
+    'contents'
+  ]);
+
+  contents ??= nav(response, [
+    'contents',
+    'twoColumnBrowseResultsRenderer',
+    'secondaryContents',
+    'sectionListRenderer',
+    'contents',
+    0,
+    'musicShelfRenderer',
+    'contents'
+  ]);
+
+  contents ??= nav(response, [
+    'contents',
+    'singleColumnBrowseResultsRenderer',
+    'tabs',
+    0,
+    'tabRenderer',
+    'content',
+    'sectionListRenderer',
+    'contents',
+    0,
+    'musicShelfRenderer',
+    'contents'
+  ]);
+
+  return contents;
+}
+
+// Función para parsear los items de la playlist
+List<YtMusicResult> _parsePlaylistItems(List<dynamic> contents) {
+  final results = <YtMusicResult>[];
+
+  for (var item in contents) {
+    final renderer = item['musicResponsiveListItemRenderer'];
+    if (renderer != null) {
+      final song = _parsePlaylistSong(renderer);
+      if (song != null) {
+        results.add(song);
+      }
+    }
+  }
+
+  return results;
+}
+
+// Función para parsear una canción individual de la playlist
+YtMusicResult? _parsePlaylistSong(Map<String, dynamic> renderer) {
+  // Obtener videoId de diferentes ubicaciones
+  String? videoId = nav(renderer, ['playlistItemData', 'videoId']);
+  
+  // Si no está en playlistItemData, buscar en el menú
+  if (videoId == null && renderer.containsKey('menu')) {
+    final menuItems = nav(renderer, ['menu', 'menuRenderer', 'items']);
+    if (menuItems is List) {
+      for (var menuItem in menuItems) {
+        if (menuItem.containsKey('menuServiceItemRenderer')) {
+          final menuService = nav(menuItem, [
+            'menuServiceItemRenderer',
+            'serviceEndpoint',
+            'playlistEditEndpoint'
+          ]);
+          if (menuService != null) {
+            videoId = nav(menuService, ['actions', 0, 'removedVideoId']);
+            if (videoId != null) break;
+          }
+        }
+      }
+    }
+  }
+
+  // Si aún no tenemos videoId, buscar en el botón de play
+  if (videoId == null) {
+    final playButton = nav(renderer, [
+      'overlay',
+      'musicItemThumbnailOverlayRenderer',
+      'content',
+      'musicPlayButtonRenderer',
+      'playNavigationEndpoint',
+      'watchEndpoint'
+    ]);
+    if (playButton != null) {
+      videoId = playButton['videoId'];
+    }
+  }
+
+  if (videoId == null) return null;
+
+  // Obtener título
+  final title = nav(renderer, [
+    'flexColumns',
+    0,
+    'musicResponsiveListItemFlexColumnRenderer',
+    'text',
+    'runs',
+    0,
+    'text'
+  ]);
+
+  if (title == null || title == 'Song deleted') return null;
+
+  // Obtener artista
+  String? artist;
+  final subtitleRuns = nav(renderer, [
+    'flexColumns',
+    1,
+    'musicResponsiveListItemFlexColumnRenderer',
+    'text',
+    'runs'
+  ]);
+
+  if (subtitleRuns is List) {
+    // Buscar el primer run que no sea " • " y que tenga navigationEndpoint
+    for (var run in subtitleRuns) {
+      if (run['text'] != ' • ' && 
+          run['text'] != null && 
+          run['navigationEndpoint'] != null) {
+        artist = run['text'];
+        break;
+      }
+    }
+    
+    // Si no encontramos artista con navigationEndpoint, tomar el primero que no sea " • "
+    artist ??= subtitleRuns.firstWhere(
+      (run) => run['text'] != ' • ' && run['text'] != null,
+      orElse: () => {'text': null},
+    )['text'];
+  }
+
+  // Obtener duración (comentado ya que YtMusicResult no tiene este campo)
+  // String? duration;
+  // final fixedColumns = nav(renderer, ['fixedColumns']);
+  // if (fixedColumns != null && fixedColumns is List && fixedColumns.isNotEmpty) {
+  //   final durationText = nav(fixedColumns[0], ['text', 'simpleText']) ??
+  //       nav(fixedColumns[0], ['text', 'runs', 0, 'text']);
+  //   duration = durationText;
+  // }
+
+  // Obtener thumbnail
+  String? thumbUrl;
+  final thumbnails = nav(renderer, [
+    'thumbnail',
+    'musicThumbnailRenderer',
+    'thumbnail',
+    'thumbnails'
+  ]);
+  if (thumbnails is List && thumbnails.isNotEmpty) {
+    thumbUrl = thumbnails.last['url'];
+  }
+
+  return YtMusicResult(
+    title: title,
+    artist: artist,
+    thumbUrl: thumbUrl,
+    videoId: videoId,
+  );
+}
+
+// Función para obtener continuaciones de la playlist
+Future<List<YtMusicResult>> _getPlaylistContinuations(
+  Map<String, dynamic> response, 
+  Map<String, dynamic> data, 
+  int limit
+) async {
+  final results = <YtMusicResult>[];
+  
+  // Buscar token de continuación
+  String? continuationToken = _getPlaylistContinuationToken(response);
+  
+  while (continuationToken != null && results.length < limit) {
+    try {
+      final continuationData = {
+        ...data,
+        'continuation': continuationToken,
+      };
+      
+      final continuationResponse = (await sendRequest("browse", continuationData)).data;
+      
+      // Buscar items de continuación
+      var continuationItems = nav(continuationResponse, [
+        'continuationContents',
+        'musicPlaylistShelfContinuation',
+        'contents'
+      ]);
+      
+      continuationItems ??= nav(continuationResponse, [
+        'onResponseReceivedActions',
+        0,
+        'appendContinuationItemsAction',
+        'continuationItems'
+      ]);
+
+      if (continuationItems != null && continuationItems is List) {
+        final songs = _parsePlaylistItems(continuationItems);
+        results.addAll(songs);
+        
+        // Obtener siguiente token
+        continuationToken = _getPlaylistContinuationToken(continuationResponse);
+      } else {
+        break;
+      }
+    } catch (e) {
+      // print('Error en continuación de playlist: $e');
+      break;
+    }
+  }
+  
+  return results;
+}
+
+// Función para obtener el token de continuación de playlist
+String? _getPlaylistContinuationToken(Map<String, dynamic> response) {
+  // Buscar en diferentes ubicaciones
+  var token = nav(response, [
+    'contents',
+    'twoColumnBrowseResultsRenderer',
+    'secondaryContents',
+    'sectionListRenderer',
+    'contents',
+    0,
+    'musicPlaylistShelfRenderer',
+    'continuations',
+    0,
+    'nextContinuationData',
+    'continuation'
+  ]);
+
+  token ??= nav(response, [
+    'contents',
+    'singleColumnBrowseResultsRenderer',
+    'tabs',
+    0,
+    'tabRenderer',
+    'content',
+    'sectionListRenderer',
+    'contents',
+    0,
+    'musicPlaylistShelfRenderer',
+    'continuations',
+    0,
+    'nextContinuationData',
+    'continuation'
+  ]);
+
+  token ??= nav(response, [
+    'continuationContents',
+    'musicPlaylistShelfContinuation',
+    'continuations',
+    0,
+    'nextContinuationData',
+    'continuation'
+  ]);
+
+  return token;
+}
+
+// Función para obtener información de la playlist (título, autor, etc.)
+Future<Map<String, dynamic>?> getPlaylistInfo(String playlistId) async {
+  String browseId = playlistId.startsWith("VL") ? playlistId : "VL$playlistId";
+  
+  final data = {
+    ...ytServiceContext,
+    'browseId': browseId,
+  };
+
+  try {
+    final response = (await sendRequest("browse", data)).data;
+    
+    // Buscar header en diferentes ubicaciones
+    var header = nav(response, ['header', 'musicDetailHeaderRenderer']);
+    
+    header ??= nav(response, [
+      'contents',
+      'twoColumnBrowseResultsRenderer',
+      'tabs',
+      0,
+      'tabRenderer',
+      'content',
+      'sectionListRenderer',
+      'contents',
+      0,
+      'musicResponsiveHeaderRenderer'
+    ]);
+
+    if (header == null) return null;
+
+    // Extraer información del header
+    final title = nav(header, ['title', 'runs', 0, 'text']);
+    final description = nav(header, [
+      'description',
+      'musicDescriptionShelfRenderer',
+      'description',
+      'runs',
+      0,
+      'text'
+    ]);
+
+    // Extraer número de canciones
+    String? songCount;
+    final secondSubtitleRuns = nav(header, ['secondSubtitle', 'runs']);
+    if (secondSubtitleRuns is List && secondSubtitleRuns.isNotEmpty) {
+      final countText = nav(secondSubtitleRuns[0], ['text']);
+      if (countText != null) {
+        final match = RegExp(r'(\d+)').firstMatch(countText);
+        songCount = match?.group(1);
+      }
+    }
+
+    // Extraer thumbnail
+    String? thumbUrl;
+    final thumbnails = nav(header, [
+      'thumbnail',
+      'musicThumbnailRenderer',
+      'thumbnail',
+      'thumbnails'
+    ]);
+    if (thumbnails is List && thumbnails.isNotEmpty) {
+      thumbUrl = thumbnails.last['url'];
+    }
+
+    return {
+      'title': title,
+      'description': description,
+      'songCount': songCount,
+      'thumbUrl': thumbUrl,
+    };
+  } catch (e) {
+    // print('Error obteniendo información de playlist: $e');
+    return null;
+  }
+}

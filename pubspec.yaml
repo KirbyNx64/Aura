@@ -1,7 +1,7 @@
 name: music
 description: "A new Flutter project."
 publish_to: 'none'
-version: 1.4.10+1
+version: 1.4.11+1
 
 environment:
   sdk: ^3.8.1
@@ -44,7 +44,7 @@ dependencies:
   ota_update: ^7.0.2
   scroll_to_index: ^3.0.1
   mini_music_visualizer: ^1.1.4
-  flutter_local_notifications: ^19.4.0
+  flutter_local_notifications: ^19.4.1
   squiggly_slider: ^1.0.5
   flutter_svg: ^2.2.0
 
@@ -54,7 +54,7 @@ dev_dependencies:
   flutter_lints: ^6.0.0
   flutter_launcher_icons: ^0.14.4
   hive_generator: ^2.0.1
-  build_runner: ^2.4.6
+  build_runner: ^2.4.13
 
 flutter:
   uses-material-design: true

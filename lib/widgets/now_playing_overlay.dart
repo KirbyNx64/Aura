@@ -8,6 +8,7 @@ import 'package:music/widgets/hero_cached.dart';
 import 'package:music/utils/audio/background_audio_handler.dart';
 import 'package:marquee/marquee.dart';
 import 'package:music/utils/notifiers.dart';
+import 'package:music/utils/theme_preferences.dart';
 
 class NowPlayingOverlay extends StatefulWidget {
   final bool showBar;
@@ -31,18 +32,23 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay>
     super.initState();
     _playPauseController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 350),
+      duration: const Duration(milliseconds: 150), // Reducido de 350ms a 150ms
       value: 1.0,
     );
 
-    // Escuchar cambios en el estado de reproducción con debounce
+    // Escuchar cambios en el estado de reproducción con debounce mínimo
     audioHandler?.playbackState.listen((state) {
       _playingDebounce?.cancel();
-      _playingDebounce = Timer(const Duration(milliseconds: 100), () {
+      _playingDebounce = Timer(const Duration(milliseconds: 25), () { // Reducido de 100ms a 25ms
         if (mounted) {
           _isPlayingNotifier.value = state.playing;
         }
       });
+      
+      // Actualización inmediata para estados críticos
+      if (state.playing != _isPlayingNotifier.value) {
+        _isPlayingNotifier.value = state.playing;
+      }
     });
   }
 
@@ -235,7 +241,7 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay>
                                     text: currentSong.title,
                                     maxWidth:
                                         MediaQuery.of(context).size.width -
-                                        170, // Ajusta según tu layout
+                                        162, // Ajusta según tu layout
                                     style: Theme.of(
                                       context,
                                     ).textTheme.titleMedium,
@@ -254,32 +260,72 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay>
                                 ],
                               ),
                             ),
-                            const SizedBox(width: 8),
 
                             RepaintBoundary(
                               child: ValueListenableBuilder<bool>(
                                 valueListenable: _isPlayingNotifier,
                                 builder: (context, isPlaying, child) {
-                                  // Sincroniza la animación
-                                  if (isPlaying) {
-                                    _playPauseController.forward();
-                                  } else {
-                                    _playPauseController.reverse();
-                                  }
-                                  return IconButton(
-                                    iconSize: 36,
-                                    icon: AnimatedIcon(
-                                      icon: AnimatedIcons.play_pause,
-                                      progress: _playPauseController,
-                                      size: 36,
+                                  // Sincroniza la animación inmediatamente
+                                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                                    if (isPlaying) {
+                                      _playPauseController.forward();
+                                    } else {
+                                      _playPauseController.reverse();
+                                    }
+                                  });
+                                  
+                                  return Material(
+                                    color: Colors.transparent,
+                                    child: InkWell(
+                                      customBorder: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(
+                                          isPlaying ? (40 / 3) : (40 / 2),
+                                        ),
+                                      ),
+                                      splashColor: Colors.transparent,
+                                      highlightColor: Colors.transparent,
+                                      onTap: () {
+                                        // Actualizar el estado inmediatamente para mejor UX
+                                        _isPlayingNotifier.value = !isPlaying;
+                                        
+                                        // Ejecutar la acción de audio de forma asíncrona para no bloquear la UI
+                                        Future.microtask(() {
+                                          if (isPlaying) {
+                                            audioHandler?.pause();
+                                          } else {
+                                            audioHandler?.play();
+                                          }
+                                        });
+                                      },
+                                      child: AnimatedContainer(
+                                        duration: const Duration(milliseconds: 250),
+                                        curve: Curves.easeInOut,
+                                        width: 40,
+                                        height: 40,
+                                        decoration: BoxDecoration(
+                                          color: colorSchemeNotifier.value == AppColorScheme.amoled
+                                              ? Colors.white
+                                              : Theme.of(context).brightness == Brightness.dark
+                                                  ? Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.6)
+                                                  : Theme.of(context).colorScheme.onPrimaryContainer.withValues(alpha: 0.7),
+                                          borderRadius: BorderRadius.circular(
+                                            isPlaying ? (40 / 3) : (40 / 2),
+                                          ),
+                                        ),
+                                        child: Center(
+                                          child: AnimatedIcon(
+                                            icon: AnimatedIcons.play_pause,
+                                            progress: _playPauseController,
+                                            size: 28,
+                                            color: colorSchemeNotifier.value == AppColorScheme.amoled
+                                                ? Colors.black
+                                                : Theme.of(context).brightness == Brightness.dark
+                                                  ? Theme.of(context).colorScheme.onPrimaryContainer
+                                                  : Theme.of(context).colorScheme.surfaceContainer,
+                                          ),
+                                        ),
+                                      ),
                                     ),
-                                    onPressed: () {
-                                      if (isPlaying) {
-                                        audioHandler?.pause();
-                                      } else {
-                                        audioHandler?.play();
-                                      }
-                                    },
                                   );
                                 },
                               ),
@@ -339,7 +385,7 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay>
                                             ),
                                             backgroundColor: Theme.of(
                                               context,
-                                            ).colorScheme.onSurface.withAlpha(60),
+                                            ).colorScheme.primary.withValues(alpha: 0.3),
                                             color: Theme.of(
                                               context,
                                             ).colorScheme.primary,

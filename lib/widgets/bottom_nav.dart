@@ -3,6 +3,8 @@ import 'package:music/main.dart';
 import 'package:flutter/material.dart';
 import 'package:music/widgets/now_playing_overlay.dart';
 import 'package:music/l10n/locale_provider.dart';
+import 'package:music/utils/notifiers.dart';
+import 'package:music/utils/theme_preferences.dart';
 
 typedef PageBuilderWithTabChange =
     Widget Function(BuildContext context, void Function(int) onTabChange);
@@ -57,33 +59,39 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
     super.dispose();
   }
 
-  List<NavigationDestination> get _navBarItems => [
-    NavigationDestination(
-      icon: Icon(Icons.home_outlined),
-      selectedIcon: Icon(Icons.home),
-      label: LocaleProvider.tr('home'),
-    ),
-    NavigationDestination(
-      icon: Icon(Icons.search),
-      selectedIcon: Icon(Icons.search),
-      label: LocaleProvider.tr('nav_search'),
-    ),
-    NavigationDestination(
-      icon: Icon(Icons.favorite_border),
-      selectedIcon: Icon(Icons.favorite),
-      label: LocaleProvider.tr('nav_favorites'),
-    ),
-    NavigationDestination(
-      icon: Icon(Icons.folder_outlined),
-      selectedIcon: Icon(Icons.folder),
-      label: LocaleProvider.tr('folders'),
-    ),
-    NavigationDestination(
-      icon: Icon(Icons.download_outlined),
-      selectedIcon: Icon(Icons.download),
-      label: LocaleProvider.tr('nav_downloads'),
-    ),
-  ];
+  List<NavigationDestination> _getNavBarItems(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final iconColor = isDark ? null : theme.colorScheme.onPrimaryContainer.withValues(alpha: 0.75);
+    
+    return [
+      NavigationDestination(
+        icon: Icon(Icons.home_outlined),
+        selectedIcon: Icon(Icons.home, color: iconColor),
+        label: LocaleProvider.tr('home'),
+      ),
+      NavigationDestination(
+        icon: Icon(Icons.search),
+        selectedIcon: Icon(Icons.search, color: iconColor),
+        label: LocaleProvider.tr('nav_search'),
+      ),
+      NavigationDestination(
+        icon: Icon(Icons.favorite_border),
+        selectedIcon: Icon(Icons.favorite, color: iconColor),
+        label: LocaleProvider.tr('nav_favorites'),
+      ),
+      NavigationDestination(
+        icon: Icon(Icons.folder_outlined),
+        selectedIcon: Icon(Icons.folder, color: iconColor),
+        label: LocaleProvider.tr('folders'),
+      ),
+      NavigationDestination(
+        icon: Icon(Icons.download_outlined),
+        selectedIcon: Icon(Icons.download, color: iconColor),
+        label: LocaleProvider.tr('nav_downloads'),
+      ),
+    ];
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -157,12 +165,24 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
       bottomNavigationBar: ValueListenableBuilder<String>(
         valueListenable: languageNotifier,
         builder: (context, lang, child) {
-          return NavigationBar(
-            backgroundColor: Theme.of(context).colorScheme.surface,
-            animationDuration: const Duration(milliseconds: 400),
-            selectedIndex: _selectedIndex,
-            onDestinationSelected: _onItemTapped,
-            destinations: _navBarItems,
+          return ValueListenableBuilder<AppColorScheme>(
+            valueListenable: colorSchemeNotifier,
+            builder: (context, colorScheme, child) {
+              final isAmoled = colorScheme == AppColorScheme.amoled;
+              final isDark = Theme.of(context).brightness == Brightness.dark;
+              
+              return NavigationBar(
+                backgroundColor: Theme.of(context).colorScheme.surface,
+                animationDuration: const Duration(milliseconds: 400),
+                selectedIndex: _selectedIndex,
+                onDestinationSelected: _onItemTapped,
+                destinations: _getNavBarItems(context),
+                // Personalizar el color del indicador seleccionado para tema amoled
+                indicatorColor: isAmoled && isDark 
+                    ? Colors.white// Color más sutil para amoled
+                    : null, // Usar el color por defecto para otros temas
+              );
+            },
           );
         },
       ),

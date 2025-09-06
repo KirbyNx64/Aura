@@ -30,7 +30,7 @@ Future<AudioHandler> initAudioService() async {
         androidNotificationChannelName: 'Aura Music',
         androidNotificationOngoing: true,
         androidNotificationClickStartsActivity: true,
-        androidStopForegroundOnPause: false,
+        // androidStopForegroundOnPause: false,
         androidResumeOnClick: true,
         preloadArtwork: true,
       ),
@@ -274,6 +274,9 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         final playing = _player.playing;
         final processingState = _transformState(event.processingState);
 
+        // Debug: verificar todos los eventos de playback
+        // print('🎵 DEBUG: PlaybackEvent - State: ${event.processingState}, Playing: $playing, Index: ${_player.currentIndex}');
+
         playbackState.add(
           playbackState.value.copyWith(
             controls: [
@@ -301,6 +304,45 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
             _player.loopMode == LoopMode.one) {
           unawaited(_player.seek(Duration.zero));
           unawaited(_player.play());
+        }
+        
+        // Si se completó y es la última canción de la lista, pausar automáticamente
+        if (event.processingState == ProcessingState.completed) {
+          final currentIndex = _player.currentIndex;
+          // print('🔍 DEBUG: Canción completada - Index: $currentIndex, Queue length: ${_mediaQueue.length}, Loop mode: ${_player.loopMode}');
+          
+          if (currentIndex != null && 
+              currentIndex >= 0 && 
+              currentIndex >= _mediaQueue.length - 1 &&
+              _player.loopMode != LoopMode.all &&
+              _mediaQueue.isNotEmpty) {
+            // Debug: verificar que estamos en la última canción
+            // print('❤️ DEBUG: Última canción completada - Index: $currentIndex, Queue length: ${_mediaQueue.length}, Loop mode: ${_player.loopMode}');
+            
+            // Es la última canción y no está en modo repeat all, pausar
+            // Agregar un pequeño delay para asegurar que el estado se procese correctamente
+            Timer(const Duration(milliseconds: 100), () {
+              if (mounted && _player.playing) {
+                // print('❤️ DEBUG: Pausando automáticamente la última canción');
+                unawaited(pause());
+              }
+            });
+          } else {
+            // print('❌ DEBUG: No se cumplen las condiciones para pausar - Index válido: ${currentIndex != null}, Índice >= 0: ${currentIndex != null && currentIndex >= 0}, Es último: ${currentIndex != null && currentIndex >= _mediaQueue.length - 1}, No es loop all: ${_player.loopMode != LoopMode.all}, Queue no vacía: ${_mediaQueue.isNotEmpty}');
+          }
+        }
+        
+        // Verificar también cuando el estado cambia a completed y el player se detiene automáticamente
+        if (event.processingState == ProcessingState.completed && 
+            !_player.playing &&
+            _player.loopMode == LoopMode.off) {
+          final currentIndex = _player.currentIndex;
+          if (currentIndex != null && 
+              currentIndex >= _mediaQueue.length - 1) {
+            // print('DEBUG: Player se detuvo automáticamente al final de la lista');
+            // El player ya se pausó automáticamente, solo actualizar el estado
+            playbackState.add(playbackState.value.copyWith(playing: false));
+          }
         }
       });
 
@@ -419,6 +461,18 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
       _playingSubscription = _player.playingStream.listen((playing) {
         playbackState.add(playbackState.value.copyWith(playing: playing));
+        
+        // Debug: verificar cuando se pausa automáticamente
+        // print('▶️ DEBUG: Playing stream - Playing: $playing, Loop mode: ${_player.loopMode}, Index: ${_player.currentIndex}');
+        
+        if (!playing && _player.loopMode == LoopMode.off) {
+          final currentIndex = _player.currentIndex;
+          if (currentIndex != null && 
+              currentIndex >= _mediaQueue.length - 1) {
+            // print('🛑 DEBUG: Playing stream detectó pausa automática al final de la lista');
+          }
+        }
+        
         if (playing) {
           // Reanudar timer de tracking si hay una canción actual y no ha sido guardada
           if (_currentTrackingId != null && !_hasBeenTracked) {
@@ -444,6 +498,9 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       _processingStateSubscription = _player.processingStateStream.listen((
         state,
       ) {
+        // Debug: verificar el processing state
+        // print('⚙️ DEBUG: ProcessingState - State: $state, Index: ${_player.currentIndex}');
+        
         playbackState.add(
           playbackState.value.copyWith(processingState: _transformState(state)),
         );

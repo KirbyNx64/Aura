@@ -1,9 +1,9 @@
 {
-  "version": "1.4.10",
+  "version": "1.4.11",
   "apk_urls": {
-    "arm64-v8a": "https://github.com/KirbyNx64/Aura/releases/download/v1.4.10/AuraMusic-v1.4.10-arm64-v8a.apk",
-    "armeabi-v7a": "https://github.com/KirbyNx64/Aura/releases/download/v1.4.10/AuraMusic-v1.4.10-armeabi-v7a.apk",
-    "x86_64": "https://github.com/KirbyNx64/Aura/releases/download/v1.4.10/AuraMusic-v1.4.10-x86_64.apk"
+    "arm64-v8a": "https://github.com/KirbyNx64/Aura/releases/download/v1.4.11/AuraMusic-v1.4.11-arm64-v8a.apk",
+    "armeabi-v7a": "https://github.com/KirbyNx64/Aura/releases/download/v1.4.11/AuraMusic-v1.4.11-armeabi-v7a.apk",
+    "x86_64": "https://github.com/KirbyNx64/Aura/releases/download/v1.4.11/AuraMusic-v1.4.11-x86_64.apk"
   },
-  "changelog": "• Es posible que no se actualice correctamente vía OTA. Descarga manual desde: https://github.com/KirbyNx64/Aura/releases/tag/v1.4.10\n\n• Mejoras visuales en la interfaz."
+  "changelog": "• Es posible que no se actualice correctamente vía OTA. Descarga manual desde: https://github.com/KirbyNx64/Aura/releases/tag/v1.4.11\n\n• Mejoras visuales en la interfaz.\n\n• Ahora puedes mover o copiar canciones entre carpetas directamente desde la app.\n\n• Las búsquedas en YouTube Music ahora muestran listas de reproducción para facilitar la reproducción de múltiples canciones."
 }

@@ -517,7 +517,9 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                           vertical: 8,
                         ),
                         decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.primaryContainer,
+                          color: Theme.of(context).brightness == Brightness.dark
+                            ? Theme.of(context).colorScheme.primaryContainer
+                            : Theme.of(context).colorScheme.onPrimaryContainer.withValues(alpha: 0.7),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Row(
@@ -526,7 +528,9 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                             Icon(
                               Icons.search,
                               size: 20,
-                              color: Theme.of(context).colorScheme.onPrimaryContainer,
+                              color: Theme.of(context).brightness == Brightness.dark
+                                ? Theme.of(context).colorScheme.onPrimaryContainer
+                                : Theme.of(context).colorScheme.surfaceContainer,
                             ),
                             const SizedBox(width: 8),
                             TranslatedText(
@@ -534,7 +538,9 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                               style: TextStyle(
                                 fontWeight: FontWeight.w600,
                                 fontSize: 14,
-                                color: Theme.of(context).colorScheme.onPrimaryContainer,
+                                color: Theme.of(context).brightness == Brightness.dark
+                                  ? Theme.of(context).colorScheme.onPrimaryContainer
+                                  : Theme.of(context).colorScheme.surfaceContainer,
                               ),
                             ),
                           ],
@@ -1037,7 +1043,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
       selected: isCurrent,
       selectedTileColor: isCurrent
           ? (isAmoledTheme
-              ? Colors.white.withValues(alpha: 0.15)
+              ? Colors.transparent
               : Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.8))
           : null,
       shape: isCurrent
@@ -1054,6 +1060,10 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     return Scaffold(
       resizeToAvoidBottomInset: true,
       appBar: AppBar(
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0,
         title: _isSelecting
             ? Text(
                 '${_selectedSongIds.length} ${LocaleProvider.tr('selected')}',
@@ -1385,145 +1395,165 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     showDialog(
       context: context,
       builder: (BuildContext context) {
-        return AlertDialog(
-          title: Center(
-            child: TranslatedText(
-              'search_song',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.w600,
+        return ValueListenableBuilder<AppColorScheme>(
+          valueListenable: colorSchemeNotifier,
+          builder: (context, colorScheme, child) {
+            final isAmoled = colorScheme == AppColorScheme.amoled;
+            final isDark = Theme.of(context).brightness == Brightness.dark;
+            
+            return AlertDialog(
+              title: Center(
+                child: TranslatedText(
+                  'search_song',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
-            ),
-          ),
-          content: SizedBox(
-            width: double.maxFinite,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                SizedBox(height: 18),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Row(
-                    children: [
-                      SizedBox(width: 4),
-                      TranslatedText(
-                        'search_options',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Theme.of(context).colorScheme.onSurface,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                SizedBox(height: 20),
-                // Tarjeta de YouTube
-                InkWell(
-                  onTap: () {
-                    Navigator.of(context).pop();
-                    _searchSongOnYouTube(song);
-                  },
-                  borderRadius: BorderRadius.circular(16),
-                  child: Container(
-                    width: double.infinity,
-                    padding: EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.secondaryContainer,
-                      borderRadius: BorderRadius.only(
-                        topLeft: Radius.circular(16),
-                        topRight: Radius.circular(16),
-                        bottomLeft: Radius.circular(4),
-                        bottomRight: Radius.circular(4),
-                      ),
-                      border: Border.all(
-                        color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
-                        width: 1,
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Image.asset(
-                            'assets/icon/Youtube_logo.png',
-                            width: 30,
-                            height: 30,
-                          ),
-                        ),
-                        SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'YouTube',
+              content: SizedBox(
+                width: double.maxFinite,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(height: 18),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Row(
+                        children: [
+                          SizedBox(width: 4),
+                          TranslatedText(
+                            'search_options',
                             style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
+                              fontSize: 14,
                               color: Theme.of(context).colorScheme.onSurface,
                             ),
                           ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                SizedBox(height: 4),
-                // Tarjeta de YouTube Music
-                InkWell(
-                  onTap: () {
-                    Navigator.of(context).pop();
-                    _searchSongOnYouTubeMusic(song);
-                  },
-                  borderRadius: BorderRadius.circular(16),
-                  child: Container(
-                    width: double.infinity,
-                    padding: EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.secondaryContainer,
-                      borderRadius: BorderRadius.only(
-                        topLeft: Radius.circular(4),
-                        topRight: Radius.circular(4),
-                        bottomLeft: Radius.circular(16),
-                        bottomRight: Radius.circular(16),
-                      ),
-                      border: Border.all(
-                        color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
-                        width: 1,
+                        ],
                       ),
                     ),
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(12),
+                    SizedBox(height: 20),
+                    // Tarjeta de YouTube
+                    InkWell(
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        _searchSongOnYouTube(song);
+                      },
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        width: double.infinity,
+                        padding: EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: isAmoled && isDark
+                              ? Colors.white.withValues(alpha: 0.1) // Color personalizado para amoled
+                              : Theme.of(context).colorScheme.secondaryContainer,
+                          borderRadius: BorderRadius.only(
+                            topLeft: Radius.circular(16),
+                            topRight: Radius.circular(16),
+                            bottomLeft: Radius.circular(4),
+                            bottomRight: Radius.circular(4),
                           ),
-                          child: Image.asset(
-                            'assets/icon/Youtube_Music_icon.png',
-                            width: 30,
-                            height: 30,
+                          border: Border.all(
+                            color: isAmoled && isDark
+                                ? Colors.white.withValues(alpha: 0.2) // Borde personalizado para amoled
+                                : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
+                            width: 1,
                           ),
                         ),
-                        SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'YT Music',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              color: Theme.of(context).colorScheme.onSurface,
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Image.asset(
+                                'assets/icon/Youtube_logo.png',
+                                width: 30,
+                                height: 30,
+                              ),
                             ),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'YouTube',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: isAmoled && isDark
+                                      ? Colors.white // Texto blanco para amoled
+                                      : Theme.of(context).colorScheme.onSurface,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: 4),
+                    // Tarjeta de YouTube Music
+                    InkWell(
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        _searchSongOnYouTubeMusic(song);
+                      },
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        width: double.infinity,
+                        padding: EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: isAmoled && isDark
+                              ? Colors.white.withValues(alpha: 0.1) // Color personalizado para amoled
+                              : Theme.of(context).colorScheme.secondaryContainer,
+                          borderRadius: BorderRadius.only(
+                            topLeft: Radius.circular(4),
+                            topRight: Radius.circular(4),
+                            bottomLeft: Radius.circular(16),
+                            bottomRight: Radius.circular(16),
+                          ),
+                          border: Border.all(
+                            color: isAmoled && isDark
+                                ? Colors.white.withValues(alpha: 0.2) // Borde personalizado para amoled
+                                : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
+                            width: 1,
                           ),
                         ),
-                      ],
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Image.asset(
+                                'assets/icon/Youtube_Music_icon.png',
+                                width: 30,
+                                height: 30,
+                              ),
+                            ),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'YT Music',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: isAmoled && isDark
+                                      ? Colors.white // Texto blanco para amoled
+                                      : Theme.of(context).colorScheme.onSurface,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
-                  ),
+                    
+                  ],
                 ),
-                
-              ],
-            ),
-          ),
+              ),
+            );
+          },
         );
       },
     );

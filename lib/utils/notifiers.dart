@@ -29,6 +29,10 @@ final ValueNotifier<bool> audioQualityNotifier = ValueNotifier<bool>(
   true,
 ); // true: alta, false: baja
 
+final ValueNotifier<bool> coverQualityNotifier = ValueNotifier<bool>(
+  true,
+); // true: alta, false: baja
+
 final ValueNotifier<bool> heroAnimationNotifier = ValueNotifier(false);
 
 final ValueNotifier<bool> playLoadingNotifier = ValueNotifier(false);

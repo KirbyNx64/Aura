@@ -36,6 +36,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String _currentLanguage = 'es';
   String? _downloadDirectory;
   bool _downloadTypeExplode = false; // true: Explode, false: Directo
+  bool _coverQualityHigh = true; // true: Alto, false: Bajo
   AppColorScheme _currentColorScheme = AppColorScheme.deepPurple;
   int _artworkQuality = 410; // 80% por defecto
   int? _availableBytesAtDownloadDir;
@@ -48,6 +49,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _loadLanguage();
     _loadDownloadDirectory();
     _loadDownloadType();
+    _loadCoverQuality();
     _loadColorScheme();
     _loadArtworkQuality();
     _initHeroAnimationSetting();
@@ -78,412 +80,522 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void _showArtworkQualityDialog(BuildContext context) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Center(
-          child: Text(
-            LocaleProvider.tr('artwork_quality'),
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-        content: SizedBox(
-          width: 400,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              SizedBox(height: 18),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 4),
-                  child: Text(
-                    LocaleProvider.tr('artwork_quality_description'),
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Theme.of(context).colorScheme.onSurface,
-                    ),
-                    textAlign: TextAlign.left,
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
+      builder: (context) {
+        return ValueListenableBuilder<AppColorScheme>(
+          valueListenable: colorSchemeNotifier,
+          builder: (context, colorScheme, child) {
+            final isAmoled = colorScheme == AppColorScheme.amoled;
+            final isDark = Theme.of(context).brightness == Brightness.dark;
+            
+            return AlertDialog(
+              title: Center(
+                child: Text(
+                  LocaleProvider.tr('artwork_quality'),
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
-              SizedBox(height: 20),
-              // Tarjeta de 100% Máximo
-              InkWell(
-                onTap: () {
-                  _setArtworkQuality(1024);
-                  Navigator.of(context).pop();
-                },
-                borderRadius: BorderRadius.circular(16),
-                child: Container(
-                  width: double.infinity,
-                  padding: EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: _artworkQuality == 1024
-                        ? Theme.of(context).colorScheme.primaryContainer
-                        : Theme.of(context).colorScheme.secondaryContainer,
-                    borderRadius: BorderRadius.only(
-                      topLeft: Radius.circular(16),
-                      topRight: Radius.circular(16),
-                      bottomLeft: Radius.circular(4),
-                      bottomRight: Radius.circular(4),
-                    ),
-                    border: Border.all(
-                      color: _artworkQuality == 1024
-                          ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.3)
-                          : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
-                      width: _artworkQuality == 1024 ? 2 : 1,
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(12),
-                          color: _artworkQuality == 1024
-                              ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.1)
-                              : Colors.transparent,
-                        ),
-                        child: Icon(
-                          Icons.high_quality,
-                          size: 30,
-                          color: _artworkQuality == 1024
-                              ? Theme.of(context).colorScheme.primary
-                              : Theme.of(context).colorScheme.onSurface,
+              content: SizedBox(
+                width: 400,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(height: 18),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 4),
+                        child: Text(
+                          LocaleProvider.tr('artwork_quality_description'),
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Theme.of(context).colorScheme.onSurface,
+                          ),
+                          textAlign: TextAlign.left,
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      SizedBox(width: 8),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                    ),
+                    SizedBox(height: 20),
+                    // Tarjeta de 100% Máximo
+                    InkWell(
+                      onTap: () {
+                        _setArtworkQuality(1024);
+                        Navigator.of(context).pop();
+                      },
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        width: double.infinity,
+                        padding: EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: _artworkQuality == 1024
+                              ? (isAmoled && isDark
+                                  ? Colors.white.withValues(alpha: 0.2) // Color personalizado para amoled seleccionado
+                                  : Theme.of(context).colorScheme.primaryContainer)
+                              : (isAmoled && isDark
+                                  ? Colors.white.withValues(alpha: 0.1) // Color personalizado para amoled no seleccionado
+                                  : Theme.of(context).colorScheme.secondaryContainer),
+                          borderRadius: BorderRadius.only(
+                            topLeft: Radius.circular(16),
+                            topRight: Radius.circular(16),
+                            bottomLeft: Radius.circular(4),
+                            bottomRight: Radius.circular(4),
+                          ),
+                          border: Border.all(
+                            color: _artworkQuality == 1024
+                                ? (isAmoled && isDark
+                                    ? Colors.white.withValues(alpha: 0.4) // Borde personalizado para amoled seleccionado
+                                    : Theme.of(context).colorScheme.primary.withValues(alpha: 0.3))
+                                : (isAmoled && isDark
+                                    ? Colors.white.withValues(alpha: 0.2) // Borde personalizado para amoled no seleccionado
+                                    : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1)),
+                            width: _artworkQuality == 1024 ? 2 : 1,
+                          ),
+                        ),
+                        child: Row(
                           children: [
-                            Text(
-                              LocaleProvider.tr('100_percent_maximum'),
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
+                            Container(
+                              padding: EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(12),
                                 color: _artworkQuality == 1024
-                                    ? Theme.of(context).colorScheme.primary
-                                    : Theme.of(context).colorScheme.onSurface,
+                                    ? (isAmoled && isDark
+                                        ? Colors.white.withValues(alpha: 0.2) // Fondo del ícono para amoled seleccionado
+                                        : Theme.of(context).colorScheme.primary.withValues(alpha: 0.1))
+                                    : Colors.transparent,
+                              ),
+                              child: Icon(
+                                Icons.high_quality,
+                                size: 30,
+                                color: _artworkQuality == 1024
+                                    ? (isAmoled && isDark
+                                        ? Colors.white // Ícono blanco para amoled seleccionado
+                                        : Theme.of(context).colorScheme.primary)
+                                    : (isAmoled && isDark
+                                        ? Colors.white // Ícono blanco para amoled no seleccionado
+                                        : Theme.of(context).colorScheme.onSurface),
                               ),
                             ),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    LocaleProvider.tr('100_percent_maximum'),
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: _artworkQuality == 1024
+                                          ? (isAmoled && isDark
+                                              ? Colors.white // Texto blanco para amoled seleccionado
+                                              : Theme.of(context).colorScheme.primary)
+                                          : (isAmoled && isDark
+                                              ? Colors.white // Texto blanco para amoled no seleccionado
+                                              : Theme.of(context).colorScheme.onSurface),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            if (_artworkQuality == 1024)
+                              Icon(
+                                Icons.check_circle,
+                                color: isAmoled && isDark
+                                    ? Colors.white // Check blanco para amoled
+                                    : Theme.of(context).colorScheme.primary,
+                                size: 24,
+                              ),
                           ],
                         ),
                       ),
-                      if (_artworkQuality == 1024)
-                        Icon(
-                          Icons.check_circle,
-                          color: Theme.of(context).colorScheme.primary,
-                          size: 24,
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-              SizedBox(height: 4),
-              // Tarjeta de 80% Recomendado
-              InkWell(
-                onTap: () {
-                  _setArtworkQuality(410);
-                  Navigator.of(context).pop();
-                },
-                borderRadius: BorderRadius.circular(16),
-                child: Container(
-                  width: double.infinity,
-                  padding: EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: _artworkQuality == 410
-                        ? Theme.of(context).colorScheme.primaryContainer
-                        : Theme.of(context).colorScheme.secondaryContainer,
-                    borderRadius: BorderRadius.only(
-                      topLeft: Radius.circular(4),
-                      topRight: Radius.circular(4),
-                      bottomLeft: Radius.circular(4),
-                      bottomRight: Radius.circular(4),
                     ),
-                    border: Border.all(
-                      color: _artworkQuality == 410
-                          ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.3)
-                          : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
-                      width: _artworkQuality == 410 ? 2 : 1,
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: EdgeInsets.all(8),
+                    SizedBox(height: 4),
+                    // Tarjeta de 80% Recomendado
+                    InkWell(
+                      onTap: () {
+                        _setArtworkQuality(410);
+                        Navigator.of(context).pop();
+                      },
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        width: double.infinity,
+                        padding: EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(12),
                           color: _artworkQuality == 410
-                              ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.1)
-                              : Colors.transparent,
+                              ? (isAmoled && isDark
+                                  ? Colors.white.withValues(alpha: 0.2) // Color personalizado para amoled seleccionado
+                                  : Theme.of(context).colorScheme.primaryContainer)
+                              : (isAmoled && isDark
+                                  ? Colors.white.withValues(alpha: 0.1) // Color personalizado para amoled no seleccionado
+                                  : Theme.of(context).colorScheme.secondaryContainer),
+                          borderRadius: BorderRadius.only(
+                            topLeft: Radius.circular(4),
+                            topRight: Radius.circular(4),
+                            bottomLeft: Radius.circular(4),
+                            bottomRight: Radius.circular(4),
+                          ),
+                          border: Border.all(
+                            color: _artworkQuality == 410
+                                ? (isAmoled && isDark
+                                    ? Colors.white.withValues(alpha: 0.4) // Borde personalizado para amoled seleccionado
+                                    : Theme.of(context).colorScheme.primary.withValues(alpha: 0.3))
+                                : (isAmoled && isDark
+                                    ? Colors.white.withValues(alpha: 0.2) // Borde personalizado para amoled no seleccionado
+                                    : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1)),
+                            width: _artworkQuality == 410 ? 2 : 1,
+                          ),
                         ),
-                        child: Icon(
-                          Icons.recommend,
-                          size: 30,
-                          color: _artworkQuality == 410
-                              ? Theme.of(context).colorScheme.primary
-                              : Theme.of(context).colorScheme.onSurface,
-                        ),
-                      ),
-                      SizedBox(width: 8),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                        child: Row(
                           children: [
-                            Text(
-                              LocaleProvider.tr('80_percent_recommended'),
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
+                            Container(
+                              padding: EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(12),
                                 color: _artworkQuality == 410
-                                    ? Theme.of(context).colorScheme.primary
-                                    : Theme.of(context).colorScheme.onSurface,
+                                    ? (isAmoled && isDark
+                                        ? Colors.white.withValues(alpha: 0.2) // Fondo del ícono para amoled seleccionado
+                                        : Theme.of(context).colorScheme.primary.withValues(alpha: 0.1))
+                                    : Colors.transparent,
+                              ),
+                              child: Icon(
+                                Icons.recommend,
+                                size: 30,
+                                color: _artworkQuality == 410
+                                    ? (isAmoled && isDark
+                                        ? Colors.white // Ícono blanco para amoled seleccionado
+                                        : Theme.of(context).colorScheme.primary)
+                                    : (isAmoled && isDark
+                                        ? Colors.white // Ícono blanco para amoled no seleccionado
+                                        : Theme.of(context).colorScheme.onSurface),
                               ),
                             ),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    LocaleProvider.tr('80_percent_recommended'),
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: _artworkQuality == 410
+                                          ? (isAmoled && isDark
+                                              ? Colors.white // Texto blanco para amoled seleccionado
+                                              : Theme.of(context).colorScheme.primary)
+                                          : (isAmoled && isDark
+                                              ? Colors.white // Texto blanco para amoled no seleccionado
+                                              : Theme.of(context).colorScheme.onSurface),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            if (_artworkQuality == 410)
+                              Icon(
+                                Icons.check_circle,
+                                color: isAmoled && isDark
+                                    ? Colors.white // Check blanco para amoled
+                                    : Theme.of(context).colorScheme.primary,
+                                size: 24,
+                              ),
                           ],
                         ),
                       ),
-                      if (_artworkQuality == 410)
-                        Icon(
-                          Icons.check_circle,
-                          color: Theme.of(context).colorScheme.primary,
-                          size: 24,
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-              SizedBox(height: 4),
-              // Tarjeta de 60% Rendimiento
-              InkWell(
-                onTap: () {
-                  _setArtworkQuality(307);
-                  Navigator.of(context).pop();
-                },
-                borderRadius: BorderRadius.circular(16),
-                child: Container(
-                  width: double.infinity,
-                  padding: EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: _artworkQuality == 307
-                        ? Theme.of(context).colorScheme.primaryContainer
-                        : Theme.of(context).colorScheme.secondaryContainer,
-                    borderRadius: BorderRadius.only(
-                      topLeft: Radius.circular(4),
-                      topRight: Radius.circular(4),
-                      bottomLeft: Radius.circular(4),
-                      bottomRight: Radius.circular(4),
                     ),
-                    border: Border.all(
-                      color: _artworkQuality == 307
-                          ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.3)
-                          : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
-                      width: _artworkQuality == 307 ? 2 : 1,
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: EdgeInsets.all(8),
+                    SizedBox(height: 4),
+                    // Tarjeta de 60% Rendimiento
+                    InkWell(
+                      onTap: () {
+                        _setArtworkQuality(307);
+                        Navigator.of(context).pop();
+                      },
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        width: double.infinity,
+                        padding: EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(12),
                           color: _artworkQuality == 307
-                              ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.1)
-                              : Colors.transparent,
+                              ? (isAmoled && isDark
+                                  ? Colors.white.withValues(alpha: 0.2) // Color personalizado para amoled seleccionado
+                                  : Theme.of(context).colorScheme.primaryContainer)
+                              : (isAmoled && isDark
+                                  ? Colors.white.withValues(alpha: 0.1) // Color personalizado para amoled no seleccionado
+                                  : Theme.of(context).colorScheme.secondaryContainer),
+                          borderRadius: BorderRadius.only(
+                            topLeft: Radius.circular(4),
+                            topRight: Radius.circular(4),
+                            bottomLeft: Radius.circular(4),
+                            bottomRight: Radius.circular(4),
+                          ),
+                          border: Border.all(
+                            color: _artworkQuality == 307
+                                ? (isAmoled && isDark
+                                    ? Colors.white.withValues(alpha: 0.4) // Borde personalizado para amoled seleccionado
+                                    : Theme.of(context).colorScheme.primary.withValues(alpha: 0.3))
+                                : (isAmoled && isDark
+                                    ? Colors.white.withValues(alpha: 0.2) // Borde personalizado para amoled no seleccionado
+                                    : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1)),
+                            width: _artworkQuality == 307 ? 2 : 1,
+                          ),
                         ),
-                        child: Icon(
-                          Icons.speed,
-                          size: 30,
-                          color: _artworkQuality == 307
-                              ? Theme.of(context).colorScheme.primary
-                              : Theme.of(context).colorScheme.onSurface,
-                        ),
-                      ),
-                      SizedBox(width: 8),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                        child: Row(
                           children: [
-                            Text(
-                              LocaleProvider.tr('60_percent_performance'),
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
+                            Container(
+                              padding: EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(12),
                                 color: _artworkQuality == 307
-                                    ? Theme.of(context).colorScheme.primary
-                                    : Theme.of(context).colorScheme.onSurface,
+                                    ? (isAmoled && isDark
+                                        ? Colors.white.withValues(alpha: 0.2) // Fondo del ícono para amoled seleccionado
+                                        : Theme.of(context).colorScheme.primary.withValues(alpha: 0.1))
+                                    : Colors.transparent,
+                              ),
+                              child: Icon(
+                                Icons.speed,
+                                size: 30,
+                                color: _artworkQuality == 307
+                                    ? (isAmoled && isDark
+                                        ? Colors.white // Ícono blanco para amoled seleccionado
+                                        : Theme.of(context).colorScheme.primary)
+                                    : (isAmoled && isDark
+                                        ? Colors.white // Ícono blanco para amoled no seleccionado
+                                        : Theme.of(context).colorScheme.onSurface),
                               ),
                             ),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    LocaleProvider.tr('60_percent_performance'),
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: _artworkQuality == 307
+                                          ? (isAmoled && isDark
+                                              ? Colors.white // Texto blanco para amoled seleccionado
+                                              : Theme.of(context).colorScheme.primary)
+                                          : (isAmoled && isDark
+                                              ? Colors.white // Texto blanco para amoled no seleccionado
+                                              : Theme.of(context).colorScheme.onSurface),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            if (_artworkQuality == 307)
+                              Icon(
+                                Icons.check_circle,
+                                color: isAmoled && isDark
+                                    ? Colors.white // Check blanco para amoled
+                                    : Theme.of(context).colorScheme.primary,
+                                size: 24,
+                              ),
                           ],
                         ),
                       ),
-                      if (_artworkQuality == 307)
-                        Icon(
-                          Icons.check_circle,
-                          color: Theme.of(context).colorScheme.primary,
-                          size: 24,
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-              SizedBox(height: 4),
-              // Tarjeta de 40% Bajo
-              InkWell(
-                onTap: () {
-                  _setArtworkQuality(205);
-                  Navigator.of(context).pop();
-                },
-                borderRadius: BorderRadius.circular(16),
-                child: Container(
-                  width: double.infinity,
-                  padding: EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: _artworkQuality == 205
-                        ? Theme.of(context).colorScheme.primaryContainer
-                        : Theme.of(context).colorScheme.secondaryContainer,
-                    borderRadius: BorderRadius.only(
-                      topLeft: Radius.circular(4),
-                      topRight: Radius.circular(4),
-                      bottomLeft: Radius.circular(4),
-                      bottomRight: Radius.circular(4),
                     ),
-                    border: Border.all(
-                      color: _artworkQuality == 205
-                          ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.3)
-                          : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
-                      width: _artworkQuality == 205 ? 2 : 1,
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: EdgeInsets.all(8),
+                    SizedBox(height: 4),
+                    // Tarjeta de 40% Bajo
+                    InkWell(
+                      onTap: () {
+                        _setArtworkQuality(205);
+                        Navigator.of(context).pop();
+                      },
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        width: double.infinity,
+                        padding: EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(12),
                           color: _artworkQuality == 205
-                              ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.1)
-                              : Colors.transparent,
+                              ? (isAmoled && isDark
+                                  ? Colors.white.withValues(alpha: 0.2) // Color personalizado para amoled seleccionado
+                                  : Theme.of(context).colorScheme.primaryContainer)
+                              : (isAmoled && isDark
+                                  ? Colors.white.withValues(alpha: 0.1) // Color personalizado para amoled no seleccionado
+                                  : Theme.of(context).colorScheme.secondaryContainer),
+                          borderRadius: BorderRadius.only(
+                            topLeft: Radius.circular(4),
+                            topRight: Radius.circular(4),
+                            bottomLeft: Radius.circular(4),
+                            bottomRight: Radius.circular(4),
+                          ),
+                          border: Border.all(
+                            color: _artworkQuality == 205
+                                ? (isAmoled && isDark
+                                    ? Colors.white.withValues(alpha: 0.4) // Borde personalizado para amoled seleccionado
+                                    : Theme.of(context).colorScheme.primary.withValues(alpha: 0.3))
+                                : (isAmoled && isDark
+                                    ? Colors.white.withValues(alpha: 0.2) // Borde personalizado para amoled no seleccionado
+                                    : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1)),
+                            width: _artworkQuality == 205 ? 2 : 1,
+                          ),
                         ),
-                        child: Icon(
-                          Icons.low_priority,
-                          size: 30,
-                          color: _artworkQuality == 205
-                              ? Theme.of(context).colorScheme.primary
-                              : Theme.of(context).colorScheme.onSurface,
-                        ),
-                      ),
-                      SizedBox(width: 8),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                        child: Row(
                           children: [
-                            Text(
-                              LocaleProvider.tr('40_percent_low'),
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
+                            Container(
+                              padding: EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(12),
                                 color: _artworkQuality == 205
-                                    ? Theme.of(context).colorScheme.primary
-                                    : Theme.of(context).colorScheme.onSurface,
+                                    ? (isAmoled && isDark
+                                        ? Colors.white.withValues(alpha: 0.2) // Fondo del ícono para amoled seleccionado
+                                        : Theme.of(context).colorScheme.primary.withValues(alpha: 0.1))
+                                    : Colors.transparent,
+                              ),
+                              child: Icon(
+                                Icons.low_priority,
+                                size: 30,
+                                color: _artworkQuality == 205
+                                    ? (isAmoled && isDark
+                                        ? Colors.white // Ícono blanco para amoled seleccionado
+                                        : Theme.of(context).colorScheme.primary)
+                                    : (isAmoled && isDark
+                                        ? Colors.white // Ícono blanco para amoled no seleccionado
+                                        : Theme.of(context).colorScheme.onSurface),
                               ),
                             ),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    LocaleProvider.tr('40_percent_low'),
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: _artworkQuality == 205
+                                          ? (isAmoled && isDark
+                                              ? Colors.white // Texto blanco para amoled seleccionado
+                                              : Theme.of(context).colorScheme.primary)
+                                          : (isAmoled && isDark
+                                              ? Colors.white // Texto blanco para amoled no seleccionado
+                                              : Theme.of(context).colorScheme.onSurface),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            if (_artworkQuality == 205)
+                              Icon(
+                                Icons.check_circle,
+                                color: isAmoled && isDark
+                                    ? Colors.white // Check blanco para amoled
+                                    : Theme.of(context).colorScheme.primary,
+                                size: 24,
+                              ),
                           ],
                         ),
                       ),
-                      if (_artworkQuality == 205)
-                        Icon(
-                          Icons.check_circle,
-                          color: Theme.of(context).colorScheme.primary,
-                          size: 24,
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-              SizedBox(height: 4),
-              // Tarjeta de 20% Mínimo
-              InkWell(
-                onTap: () {
-                  _setArtworkQuality(102);
-                  Navigator.of(context).pop();
-                },
-                borderRadius: BorderRadius.circular(16),
-                child: Container(
-                  width: double.infinity,
-                  padding: EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: _artworkQuality == 102
-                        ? Theme.of(context).colorScheme.primaryContainer
-                        : Theme.of(context).colorScheme.secondaryContainer,
-                    borderRadius: BorderRadius.only(
-                      topLeft: Radius.circular(4),
-                      topRight: Radius.circular(4),
-                      bottomLeft: Radius.circular(16),
-                      bottomRight: Radius.circular(16),
                     ),
-                    border: Border.all(
-                      color: _artworkQuality == 102
-                          ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.3)
-                          : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
-                      width: _artworkQuality == 102 ? 2 : 1,
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: EdgeInsets.all(8),
+                    SizedBox(height: 4),
+                    // Tarjeta de 20% Mínimo
+                    InkWell(
+                      onTap: () {
+                        _setArtworkQuality(102);
+                        Navigator.of(context).pop();
+                      },
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        width: double.infinity,
+                        padding: EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(12),
                           color: _artworkQuality == 102
-                              ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.1)
-                              : Colors.transparent,
+                              ? (isAmoled && isDark
+                                  ? Colors.white.withValues(alpha: 0.2) // Color personalizado para amoled seleccionado
+                                  : Theme.of(context).colorScheme.primaryContainer)
+                              : (isAmoled && isDark
+                                  ? Colors.white.withValues(alpha: 0.1) // Color personalizado para amoled no seleccionado
+                                  : Theme.of(context).colorScheme.secondaryContainer),
+                          borderRadius: BorderRadius.only(
+                            topLeft: Radius.circular(4),
+                            topRight: Radius.circular(4),
+                            bottomLeft: Radius.circular(16),
+                            bottomRight: Radius.circular(16),
+                          ),
+                          border: Border.all(
+                            color: _artworkQuality == 102
+                                ? (isAmoled && isDark
+                                    ? Colors.white.withValues(alpha: 0.4) // Borde personalizado para amoled seleccionado
+                                    : Theme.of(context).colorScheme.primary.withValues(alpha: 0.3))
+                                : (isAmoled && isDark
+                                    ? Colors.white.withValues(alpha: 0.2) // Borde personalizado para amoled no seleccionado
+                                    : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1)),
+                            width: _artworkQuality == 102 ? 2 : 1,
+                          ),
                         ),
-                        child: Icon(
-                          Icons.compress,
-                          size: 30,
-                          color: _artworkQuality == 102
-                              ? Theme.of(context).colorScheme.primary
-                              : Theme.of(context).colorScheme.onSurface,
-                        ),
-                      ),
-                      SizedBox(width: 8),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                        child: Row(
                           children: [
-                            Text(
-                              LocaleProvider.tr('20_percent_minimum'),
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
+                            Container(
+                              padding: EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(12),
                                 color: _artworkQuality == 102
-                                    ? Theme.of(context).colorScheme.primary
-                                    : Theme.of(context).colorScheme.onSurface,
+                                    ? (isAmoled && isDark
+                                        ? Colors.white.withValues(alpha: 0.2) // Fondo del ícono para amoled seleccionado
+                                        : Theme.of(context).colorScheme.primary.withValues(alpha: 0.1))
+                                    : Colors.transparent,
+                              ),
+                              child: Icon(
+                                Icons.compress,
+                                size: 30,
+                                color: _artworkQuality == 102
+                                    ? (isAmoled && isDark
+                                        ? Colors.white // Ícono blanco para amoled seleccionado
+                                        : Theme.of(context).colorScheme.primary)
+                                    : (isAmoled && isDark
+                                        ? Colors.white // Ícono blanco para amoled no seleccionado
+                                        : Theme.of(context).colorScheme.onSurface),
                               ),
                             ),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    LocaleProvider.tr('20_percent_minimum'),
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: _artworkQuality == 102
+                                          ? (isAmoled && isDark
+                                              ? Colors.white // Texto blanco para amoled seleccionado
+                                              : Theme.of(context).colorScheme.primary)
+                                          : (isAmoled && isDark
+                                              ? Colors.white // Texto blanco para amoled no seleccionado
+                                              : Theme.of(context).colorScheme.onSurface),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            if (_artworkQuality == 102)
+                              Icon(
+                                Icons.check_circle,
+                                color: isAmoled && isDark
+                                    ? Colors.white // Check blanco para amoled
+                                    : Theme.of(context).colorScheme.primary,
+                                size: 24,
+                              ),
                           ],
                         ),
                       ),
-                      if (_artworkQuality == 102)
-                        Icon(
-                          Icons.check_circle,
-                          color: Theme.of(context).colorScheme.primary,
-                          size: 24,
-                        ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
-            ],
-          ),
-        ),
-      ),
+            );
+          },
+        );
+      },
     );
   }
 
@@ -544,264 +656,334 @@ class _SettingsScreenState extends State<SettingsScreen> {
     void _showThemeSelectionDialog(BuildContext context) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Center(
-          child: TranslatedText(
-            'select_theme',
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-        content: SizedBox(
-          width: 400,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              SizedBox(height: 18),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 4),
-                  child: TranslatedText(
-                    'select_theme_desc',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Theme.of(context).colorScheme.onSurface,
-                    ),
-                    textAlign: TextAlign.left,
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
+      builder: (context) {
+        return ValueListenableBuilder<AppColorScheme>(
+          valueListenable: colorSchemeNotifier,
+          builder: (context, colorScheme, child) {
+            final isAmoled = colorScheme == AppColorScheme.amoled;
+            final isDark = Theme.of(context).brightness == Brightness.dark;
+            
+            return AlertDialog(
+              title: Center(
+                child: TranslatedText(
+                  'select_theme',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
-              SizedBox(height: 20),
-              // Tarjeta de Sistema predeterminado
-              InkWell(
-                onTap: () {
-                  widget.setThemeMode?.call(AppThemeMode.system);
-                  Navigator.of(context).pop();
-                },
-                borderRadius: BorderRadius.circular(16),
-                child: Container(
-                  width: double.infinity,
-                  padding: EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: _getCurrentThemeText(context) == LocaleProvider.tr('system_default')
-                        ? Theme.of(context).colorScheme.primaryContainer
-                        : Theme.of(context).colorScheme.secondaryContainer,
-                    borderRadius: BorderRadius.only(
-                      topLeft: Radius.circular(16),
-                      topRight: Radius.circular(16),
-                      bottomLeft: Radius.circular(4),
-                      bottomRight: Radius.circular(4),
-                    ),
-                    border: Border.all(
-                      color: _getCurrentThemeText(context) == LocaleProvider.tr('system_default')
-                          ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.3)
-                          : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
-                      width: _getCurrentThemeText(context) == LocaleProvider.tr('system_default') ? 2 : 1,
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(12),
-                          color: _getCurrentThemeText(context) == LocaleProvider.tr('system_default')
-                              ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.1)
-                              : Colors.transparent,
-                        ),
-                        child: Icon(
-                          Icons.brightness_auto,
-                          size: 30,
-                          color: _getCurrentThemeText(context) == LocaleProvider.tr('system_default')
-                              ? Theme.of(context).colorScheme.primary
-                              : Theme.of(context).colorScheme.onSurface,
+              content: SizedBox(
+                width: 400,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(height: 18),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 4),
+                        child: TranslatedText(
+                          'select_theme_desc',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Theme.of(context).colorScheme.onSurface,
+                          ),
+                          textAlign: TextAlign.left,
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      SizedBox(width: 8),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                    ),
+                    SizedBox(height: 20),
+                    // Tarjeta de Sistema predeterminado
+                    InkWell(
+                      onTap: () {
+                        widget.setThemeMode?.call(AppThemeMode.system);
+                        Navigator.of(context).pop();
+                      },
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        width: double.infinity,
+                        padding: EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: _getCurrentThemeText(context) == LocaleProvider.tr('system_default')
+                              ? (isAmoled && isDark
+                                  ? Colors.white.withValues(alpha: 0.2) // Color personalizado para amoled seleccionado
+                                  : Theme.of(context).colorScheme.primaryContainer)
+                              : (isAmoled && isDark
+                                  ? Colors.white.withValues(alpha: 0.1) // Color personalizado para amoled no seleccionado
+                                  : Theme.of(context).colorScheme.secondaryContainer),
+                          borderRadius: BorderRadius.only(
+                            topLeft: Radius.circular(16),
+                            topRight: Radius.circular(16),
+                            bottomLeft: Radius.circular(4),
+                            bottomRight: Radius.circular(4),
+                          ),
+                          border: Border.all(
+                            color: _getCurrentThemeText(context) == LocaleProvider.tr('system_default')
+                                ? (isAmoled && isDark
+                                    ? Colors.white.withValues(alpha: 0.4) // Borde personalizado para amoled seleccionado
+                                    : Theme.of(context).colorScheme.primary.withValues(alpha: 0.3))
+                                : (isAmoled && isDark
+                                    ? Colors.white.withValues(alpha: 0.2) // Borde personalizado para amoled no seleccionado
+                                    : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1)),
+                            width: _getCurrentThemeText(context) == LocaleProvider.tr('system_default') ? 2 : 1,
+                          ),
+                        ),
+                        child: Row(
                           children: [
-                            Text(
-                              LocaleProvider.tr('system_default'),
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
+                            Container(
+                              padding: EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(12),
                                 color: _getCurrentThemeText(context) == LocaleProvider.tr('system_default')
-                                    ? Theme.of(context).colorScheme.primary
-                                    : Theme.of(context).colorScheme.onSurface,
+                                    ? (isAmoled && isDark
+                                        ? Colors.white.withValues(alpha: 0.2) // Fondo del ícono para amoled seleccionado
+                                        : Theme.of(context).colorScheme.primary.withValues(alpha: 0.1))
+                                    : Colors.transparent,
+                              ),
+                              child: Icon(
+                                Icons.brightness_auto,
+                                size: 30,
+                                color: _getCurrentThemeText(context) == LocaleProvider.tr('system_default')
+                                    ? (isAmoled && isDark
+                                        ? Colors.white // Ícono blanco para amoled seleccionado
+                                        : Theme.of(context).colorScheme.primary)
+                                    : (isAmoled && isDark
+                                        ? Colors.white // Ícono blanco para amoled no seleccionado
+                                        : Theme.of(context).colorScheme.onSurface),
                               ),
                             ),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    LocaleProvider.tr('system_default'),
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: _getCurrentThemeText(context) == LocaleProvider.tr('system_default')
+                                          ? (isAmoled && isDark
+                                              ? Colors.white // Texto blanco para amoled seleccionado
+                                              : Theme.of(context).colorScheme.primary)
+                                          : (isAmoled && isDark
+                                              ? Colors.white // Texto blanco para amoled no seleccionado
+                                              : Theme.of(context).colorScheme.onSurface),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            if (_getCurrentThemeText(context) == LocaleProvider.tr('system_default'))
+                              Icon(
+                                Icons.check_circle,
+                                color: isAmoled && isDark
+                                    ? Colors.white // Check blanco para amoled
+                                    : Theme.of(context).colorScheme.primary,
+                                size: 24,
+                              ),
                           ],
                         ),
                       ),
-                      if (_getCurrentThemeText(context) == LocaleProvider.tr('system_default'))
-                        Icon(
-                          Icons.check_circle,
-                          color: Theme.of(context).colorScheme.primary,
-                          size: 24,
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-              SizedBox(height: 4),
-              // Tarjeta de Modo claro
-              InkWell(
-                onTap: () {
-                  widget.setThemeMode?.call(AppThemeMode.light);
-                  Navigator.of(context).pop();
-                },
-                borderRadius: BorderRadius.circular(16),
-                child: Container(
-                  width: double.infinity,
-                  padding: EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: _getCurrentThemeText(context) == LocaleProvider.tr('light_mode')
-                        ? Theme.of(context).colorScheme.primaryContainer
-                        : Theme.of(context).colorScheme.secondaryContainer,
-                    borderRadius: BorderRadius.only(
-                      topLeft: Radius.circular(4),
-                      topRight: Radius.circular(4),
-                      bottomLeft: Radius.circular(4),
-                      bottomRight: Radius.circular(4),
                     ),
-                    border: Border.all(
-                      color: _getCurrentThemeText(context) == LocaleProvider.tr('light_mode')
-                          ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.3)
-                          : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
-                      width: _getCurrentThemeText(context) == LocaleProvider.tr('light_mode') ? 2 : 1,
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: EdgeInsets.all(8),
+                    SizedBox(height: 4),
+                    // Tarjeta de Modo claro
+                    InkWell(
+                      onTap: () {
+                        widget.setThemeMode?.call(AppThemeMode.light);
+                        Navigator.of(context).pop();
+                      },
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        width: double.infinity,
+                        padding: EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(12),
                           color: _getCurrentThemeText(context) == LocaleProvider.tr('light_mode')
-                              ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.1)
-                              : Colors.transparent,
+                              ? (isAmoled && isDark
+                                  ? Colors.white.withValues(alpha: 0.2) // Color personalizado para amoled seleccionado
+                                  : Theme.of(context).colorScheme.primaryContainer)
+                              : (isAmoled && isDark
+                                  ? Colors.white.withValues(alpha: 0.1) // Color personalizado para amoled no seleccionado
+                                  : Theme.of(context).colorScheme.secondaryContainer),
+                          borderRadius: BorderRadius.only(
+                            topLeft: Radius.circular(4),
+                            topRight: Radius.circular(4),
+                            bottomLeft: Radius.circular(4),
+                            bottomRight: Radius.circular(4),
+                          ),
+                          border: Border.all(
+                            color: _getCurrentThemeText(context) == LocaleProvider.tr('light_mode')
+                                ? (isAmoled && isDark
+                                    ? Colors.white.withValues(alpha: 0.4) // Borde personalizado para amoled seleccionado
+                                    : Theme.of(context).colorScheme.primary.withValues(alpha: 0.3))
+                                : (isAmoled && isDark
+                                    ? Colors.white.withValues(alpha: 0.2) // Borde personalizado para amoled no seleccionado
+                                    : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1)),
+                            width: _getCurrentThemeText(context) == LocaleProvider.tr('light_mode') ? 2 : 1,
+                          ),
                         ),
-                        child: Icon(
-                          Icons.light_mode,
-                          size: 30,
-                          color: _getCurrentThemeText(context) == LocaleProvider.tr('light_mode')
-                              ? Theme.of(context).colorScheme.primary
-                              : Theme.of(context).colorScheme.onSurface,
-                        ),
-                      ),
-                      SizedBox(width: 8),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                        child: Row(
                           children: [
-                            Text(
-                              LocaleProvider.tr('light_mode'),
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
+                            Container(
+                              padding: EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(12),
                                 color: _getCurrentThemeText(context) == LocaleProvider.tr('light_mode')
-                                    ? Theme.of(context).colorScheme.primary
-                                    : Theme.of(context).colorScheme.onSurface,
+                                    ? (isAmoled && isDark
+                                        ? Colors.white.withValues(alpha: 0.2) // Fondo del ícono para amoled seleccionado
+                                        : Theme.of(context).colorScheme.primary.withValues(alpha: 0.1))
+                                    : Colors.transparent,
+                              ),
+                              child: Icon(
+                                Icons.light_mode,
+                                size: 30,
+                                color: _getCurrentThemeText(context) == LocaleProvider.tr('light_mode')
+                                    ? (isAmoled && isDark
+                                        ? Colors.white // Ícono blanco para amoled seleccionado
+                                        : Theme.of(context).colorScheme.primary)
+                                    : (isAmoled && isDark
+                                        ? Colors.white // Ícono blanco para amoled no seleccionado
+                                        : Theme.of(context).colorScheme.onSurface),
                               ),
                             ),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    LocaleProvider.tr('light_mode'),
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: _getCurrentThemeText(context) == LocaleProvider.tr('light_mode')
+                                          ? (isAmoled && isDark
+                                              ? Colors.white // Texto blanco para amoled seleccionado
+                                              : Theme.of(context).colorScheme.primary)
+                                          : (isAmoled && isDark
+                                              ? Colors.white // Texto blanco para amoled no seleccionado
+                                              : Theme.of(context).colorScheme.onSurface),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            if (_getCurrentThemeText(context) == LocaleProvider.tr('light_mode'))
+                              Icon(
+                                Icons.check_circle,
+                                color: isAmoled && isDark
+                                    ? Colors.white // Check blanco para amoled
+                                    : Theme.of(context).colorScheme.primary,
+                                size: 24,
+                              ),
                           ],
                         ),
                       ),
-                      if (_getCurrentThemeText(context) == LocaleProvider.tr('light_mode'))
-                        Icon(
-                          Icons.check_circle,
-                          color: Theme.of(context).colorScheme.primary,
-                          size: 24,
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-              SizedBox(height: 4),
-              // Tarjeta de Modo oscuro
-              InkWell(
-                onTap: () {
-                  widget.setThemeMode?.call(AppThemeMode.dark);
-                  Navigator.of(context).pop();
-                },
-                borderRadius: BorderRadius.circular(16),
-                child: Container(
-                  width: double.infinity,
-                  padding: EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: _getCurrentThemeText(context) == LocaleProvider.tr('dark_mode')
-                        ? Theme.of(context).colorScheme.primaryContainer
-                        : Theme.of(context).colorScheme.secondaryContainer,
-                    borderRadius: BorderRadius.only(
-                      bottomLeft: Radius.circular(16),
-                      bottomRight: Radius.circular(16),
-                      topLeft: Radius.circular(4),
-                      topRight: Radius.circular(4),
                     ),
-                    border: Border.all(
-                      color: _getCurrentThemeText(context) == LocaleProvider.tr('dark_mode')
-                          ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.3)
-                          : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
-                      width: _getCurrentThemeText(context) == LocaleProvider.tr('dark_mode') ? 2 : 1,
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: EdgeInsets.all(8),
+                    SizedBox(height: 4),
+                    // Tarjeta de Modo oscuro
+                    InkWell(
+                      onTap: () {
+                        widget.setThemeMode?.call(AppThemeMode.dark);
+                        Navigator.of(context).pop();
+                      },
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        width: double.infinity,
+                        padding: EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(12),
                           color: _getCurrentThemeText(context) == LocaleProvider.tr('dark_mode')
-                              ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.1)
-                              : Colors.transparent,
+                              ? (isAmoled && isDark
+                                  ? Colors.white.withValues(alpha: 0.2) // Color personalizado para amoled seleccionado
+                                  : Theme.of(context).colorScheme.primaryContainer)
+                              : (isAmoled && isDark
+                                  ? Colors.white.withValues(alpha: 0.1) // Color personalizado para amoled no seleccionado
+                                  : Theme.of(context).colorScheme.secondaryContainer),
+                          borderRadius: BorderRadius.only(
+                            bottomLeft: Radius.circular(16),
+                            bottomRight: Radius.circular(16),
+                            topLeft: Radius.circular(4),
+                            topRight: Radius.circular(4),
+                          ),
+                          border: Border.all(
+                            color: _getCurrentThemeText(context) == LocaleProvider.tr('dark_mode')
+                                ? (isAmoled && isDark
+                                    ? Colors.white.withValues(alpha: 0.4) // Borde personalizado para amoled seleccionado
+                                    : Theme.of(context).colorScheme.primary.withValues(alpha: 0.3))
+                                : (isAmoled && isDark
+                                    ? Colors.white.withValues(alpha: 0.2) // Borde personalizado para amoled no seleccionado
+                                    : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1)),
+                            width: _getCurrentThemeText(context) == LocaleProvider.tr('dark_mode') ? 2 : 1,
+                          ),
                         ),
-                        child: Icon(
-                          Icons.dark_mode,
-                          size: 30,
-                          color: _getCurrentThemeText(context) == LocaleProvider.tr('dark_mode')
-                              ? Theme.of(context).colorScheme.primary
-                              : Theme.of(context).colorScheme.onSurface,
-                        ),
-                      ),
-                      SizedBox(width: 8),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                        child: Row(
                           children: [
-                            Text(
-                              LocaleProvider.tr('dark_mode'),
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
+                            Container(
+                              padding: EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(12),
                                 color: _getCurrentThemeText(context) == LocaleProvider.tr('dark_mode')
-                                    ? Theme.of(context).colorScheme.primary
-                                    : Theme.of(context).colorScheme.onSurface,
+                                    ? (isAmoled && isDark
+                                        ? Colors.white.withValues(alpha: 0.2) // Fondo del ícono para amoled seleccionado
+                                        : Theme.of(context).colorScheme.primary.withValues(alpha: 0.1))
+                                    : Colors.transparent,
+                              ),
+                              child: Icon(
+                                Icons.dark_mode,
+                                size: 30,
+                                color: _getCurrentThemeText(context) == LocaleProvider.tr('dark_mode')
+                                    ? (isAmoled && isDark
+                                        ? Colors.white // Ícono blanco para amoled seleccionado
+                                        : Theme.of(context).colorScheme.primary)
+                                    : (isAmoled && isDark
+                                        ? Colors.white // Ícono blanco para amoled no seleccionado
+                                        : Theme.of(context).colorScheme.onSurface),
                               ),
                             ),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    LocaleProvider.tr('dark_mode'),
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: _getCurrentThemeText(context) == LocaleProvider.tr('dark_mode')
+                                          ? (isAmoled && isDark
+                                              ? Colors.white // Texto blanco para amoled seleccionado
+                                              : Theme.of(context).colorScheme.primary)
+                                          : (isAmoled && isDark
+                                              ? Colors.white // Texto blanco para amoled no seleccionado
+                                              : Theme.of(context).colorScheme.onSurface),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            if (_getCurrentThemeText(context) == LocaleProvider.tr('dark_mode'))
+                              Icon(
+                                Icons.check_circle,
+                                color: isAmoled && isDark
+                                    ? Colors.white // Check blanco para amoled
+                                    : Theme.of(context).colorScheme.primary,
+                                size: 24,
+                              ),
                           ],
                         ),
                       ),
-                      if (_getCurrentThemeText(context) == LocaleProvider.tr('dark_mode'))
-                        Icon(
-                          Icons.check_circle,
-                          color: Theme.of(context).colorScheme.primary,
-                          size: 24,
-                        ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
-            ],
-          ),
-        ),
-      ),
+            );
+          },
+        );
+      },
     );
   }
 
@@ -923,6 +1105,266 @@ class _SettingsScreenState extends State<SettingsScreen> {
     downloadTypeNotifier.value = _downloadTypeExplode;
   }
 
+  Future<void> _loadCoverQuality() async {
+    final prefs = await SharedPreferences.getInstance();
+    final quality = prefs.getBool('cover_quality_high') ?? true;
+    setState(() {
+      _coverQualityHigh = quality;
+    });
+    // Actualizar el notifier global
+    coverQualityNotifier.value = quality;
+  }
+
+  Future<void> _setCoverQuality(bool highQuality) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('cover_quality_high', highQuality);
+    setState(() {
+      _coverQualityHigh = highQuality;
+    });
+    // Actualizar el notifier global
+    coverQualityNotifier.value = highQuality;
+  }
+
+  Future<void> _showCoverQualitySelection() async {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return ValueListenableBuilder<AppColorScheme>(
+          valueListenable: colorSchemeNotifier,
+          builder: (context, colorScheme, child) {
+            final isAmoled = colorScheme == AppColorScheme.amoled;
+            final isDark = Theme.of(context).brightness == Brightness.dark;
+            
+            return AlertDialog(
+              title: Center(
+                child: TranslatedText(
+                  'cover_quality',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              content: SizedBox(
+                width: 400,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(height: 18),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 4),
+                        child: TranslatedText(
+                          'cover_quality_desc',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Theme.of(context).colorScheme.onSurface,
+                          ),
+                          textAlign: TextAlign.left,
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: 20),
+                    // Tarjeta de calidad alta
+                    InkWell(
+                      onTap: () async {
+                        Navigator.of(context).pop();
+                        await _setCoverQuality(true);
+                      },
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        width: double.infinity,
+                        padding: EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: _coverQualityHigh 
+                              ? (isAmoled && isDark
+                                  ? Colors.white.withValues(alpha: 0.2)
+                                  : Theme.of(context).colorScheme.primaryContainer)
+                              : (isAmoled && isDark
+                                  ? Colors.white.withValues(alpha: 0.1)
+                                  : Theme.of(context).colorScheme.secondaryContainer),
+                          borderRadius: BorderRadius.only(
+                            topLeft: Radius.circular(16),
+                            topRight: Radius.circular(16),
+                            bottomLeft: Radius.circular(4),
+                            bottomRight: Radius.circular(4),
+                          ),
+                          border: Border.all(
+                            color: _coverQualityHigh
+                                ? (isAmoled && isDark
+                                    ? Colors.white.withValues(alpha: 0.4)
+                                    : Theme.of(context).colorScheme.primary.withValues(alpha: 0.3))
+                                : (isAmoled && isDark
+                                    ? Colors.white.withValues(alpha: 0.2)
+                                    : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1)),
+                            width: _coverQualityHigh ? 2 : 1,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(12),
+                                color: _coverQualityHigh
+                                    ? (isAmoled && isDark
+                                        ? Colors.white.withValues(alpha: 0.2)
+                                        : Theme.of(context).colorScheme.primary.withValues(alpha: 0.1))
+                                    : Colors.transparent,
+                              ),
+                              child: Icon(
+                                Icons.high_quality,
+                                size: 30,
+                                color: _coverQualityHigh
+                                    ? (isAmoled && isDark
+                                        ? Colors.white
+                                        : Theme.of(context).colorScheme.primary)
+                                    : (isAmoled && isDark
+                                        ? Colors.white
+                                        : Theme.of(context).colorScheme.onSurface),
+                              ),
+                            ),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    LocaleProvider.tr('high_quality'),
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: _coverQualityHigh
+                                          ? (isAmoled && isDark
+                                              ? Colors.white
+                                              : Theme.of(context).colorScheme.primary)
+                                          : (isAmoled && isDark
+                                              ? Colors.white
+                                              : Theme.of(context).colorScheme.onSurface),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            if (_coverQualityHigh)
+                              Icon(
+                                Icons.check_circle,
+                                color: isAmoled && isDark
+                                    ? Colors.white
+                                    : Theme.of(context).colorScheme.primary,
+                                size: 24,
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: 4),
+                    // Tarjeta de calidad baja
+                    InkWell(
+                      onTap: () async {
+                        Navigator.of(context).pop();
+                        await _setCoverQuality(false);
+                      },
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        width: double.infinity,
+                        padding: EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: !_coverQualityHigh 
+                              ? (isAmoled && isDark
+                                  ? Colors.white.withValues(alpha: 0.2)
+                                  : Theme.of(context).colorScheme.primaryContainer)
+                              : (isAmoled && isDark
+                                  ? Colors.white.withValues(alpha: 0.1)
+                                  : Theme.of(context).colorScheme.secondaryContainer),
+                          borderRadius: BorderRadius.only(
+                            topLeft: Radius.circular(4),
+                            topRight: Radius.circular(4),
+                            bottomLeft: Radius.circular(16),
+                            bottomRight: Radius.circular(16),
+                          ),
+                          border: Border.all(
+                            color: !_coverQualityHigh
+                                ? (isAmoled && isDark
+                                    ? Colors.white.withValues(alpha: 0.4)
+                                    : Theme.of(context).colorScheme.primary.withValues(alpha: 0.3))
+                                : (isAmoled && isDark
+                                    ? Colors.white.withValues(alpha: 0.2)
+                                    : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1)),
+                            width: !_coverQualityHigh ? 2 : 1,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(12),
+                                color: !_coverQualityHigh
+                                    ? (isAmoled && isDark
+                                        ? Colors.white.withValues(alpha: 0.2)
+                                        : Theme.of(context).colorScheme.primary.withValues(alpha: 0.1))
+                                    : Colors.transparent,
+                              ),
+                              child: Icon(
+                                Icons.low_priority,
+                                size: 30,
+                                color: !_coverQualityHigh
+                                    ? (isAmoled && isDark
+                                        ? Colors.white
+                                        : Theme.of(context).colorScheme.primary)
+                                    : (isAmoled && isDark
+                                        ? Colors.white
+                                        : Theme.of(context).colorScheme.onSurface),
+                              ),
+                            ),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    LocaleProvider.tr('low_quality'),
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: !_coverQualityHigh
+                                          ? (isAmoled && isDark
+                                              ? Colors.white
+                                              : Theme.of(context).colorScheme.primary)
+                                          : (isAmoled && isDark
+                                              ? Colors.white
+                                              : Theme.of(context).colorScheme.onSurface),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            if (!_coverQualityHigh)
+                              Icon(
+                                Icons.check_circle,
+                                color: isAmoled && isDark
+                                    ? Colors.white
+                                    : Theme.of(context).colorScheme.primary,
+                                size: 24,
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   Future<void> _refreshAvailableSpace() async {
     try {
       if (Platform.isAndroid) {
@@ -983,191 +1425,239 @@ class _SettingsScreenState extends State<SettingsScreen> {
     showDialog(
       context: context,
       builder: (BuildContext context) {
-        return AlertDialog(
-          title: Center(
-            child: TranslatedText(
-              'download_type',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.w600,
+        return ValueListenableBuilder<AppColorScheme>(
+          valueListenable: colorSchemeNotifier,
+          builder: (context, colorScheme, child) {
+            final isAmoled = colorScheme == AppColorScheme.amoled;
+            final isDark = Theme.of(context).brightness == Brightness.dark;
+            
+            return AlertDialog(
+              title: Center(
+                child: TranslatedText(
+                  'download_type',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
-            ),
-          ),
-          content: SizedBox(
-            width: 400,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                SizedBox(height: 18),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 4),
-                    child: TranslatedText(
-                      'download_type_desc',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Theme.of(context).colorScheme.onSurface,
-                      ),
-                      textAlign: TextAlign.left,
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ),
-                SizedBox(height: 20),
-                // Tarjeta de método Explode
-                InkWell(
-                  onTap: () async {
-                    Navigator.of(context).pop();
-                    await _setDownloadType(true);
-                  },
-                  borderRadius: BorderRadius.circular(16),
-                  child: Container(
-                    width: double.infinity,
-                    padding: EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: _downloadTypeExplode 
-                          ? Theme.of(context).colorScheme.primaryContainer
-                          : Theme.of(context).colorScheme.secondaryContainer,
-                      borderRadius: BorderRadius.only(
-                        topLeft: Radius.circular(16),
-                        topRight: Radius.circular(16),
-                        bottomLeft: Radius.circular(4),
-                        bottomRight: Radius.circular(4),
-                      ),
-                      border: Border.all(
-                        color: _downloadTypeExplode
-                            ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.3)
-                            : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
-                        width: _downloadTypeExplode ? 2 : 1,
+              content: SizedBox(
+                width: 400,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(height: 18),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 4),
+                        child: TranslatedText(
+                          'download_type_desc',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Theme.of(context).colorScheme.onSurface,
+                          ),
+                          textAlign: TextAlign.left,
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                     ),
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(12),
+                    SizedBox(height: 20),
+                    // Tarjeta de método Explode
+                    InkWell(
+                      onTap: () async {
+                        Navigator.of(context).pop();
+                        await _setDownloadType(true);
+                      },
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        width: double.infinity,
+                        padding: EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: _downloadTypeExplode 
+                              ? (isAmoled && isDark
+                                  ? Colors.white.withValues(alpha: 0.2) // Color personalizado para amoled seleccionado
+                                  : Theme.of(context).colorScheme.primaryContainer)
+                              : (isAmoled && isDark
+                                  ? Colors.white.withValues(alpha: 0.1) // Color personalizado para amoled no seleccionado
+                                  : Theme.of(context).colorScheme.secondaryContainer),
+                          borderRadius: BorderRadius.only(
+                            topLeft: Radius.circular(16),
+                            topRight: Radius.circular(16),
+                            bottomLeft: Radius.circular(4),
+                            bottomRight: Radius.circular(4),
+                          ),
+                          border: Border.all(
                             color: _downloadTypeExplode
-                                ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.1)
-                                : Colors.transparent,
-                          ),
-                          child: Icon(
-                            Icons.explore,
-                            size: 30,
-                            color: _downloadTypeExplode
-                                ? Theme.of(context).colorScheme.primary
-                                : Theme.of(context).colorScheme.onSurface,
+                                ? (isAmoled && isDark
+                                    ? Colors.white.withValues(alpha: 0.4) // Borde personalizado para amoled seleccionado
+                                    : Theme.of(context).colorScheme.primary.withValues(alpha: 0.3))
+                                : (isAmoled && isDark
+                                    ? Colors.white.withValues(alpha: 0.2) // Borde personalizado para amoled no seleccionado
+                                    : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1)),
+                            width: _downloadTypeExplode ? 2 : 1,
                           ),
                         ),
-                        SizedBox(width: 8),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                LocaleProvider.tr('explode'),
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                  color: _downloadTypeExplode
-                                      ? Theme.of(context).colorScheme.primary
-                                      : Theme.of(context).colorScheme.onSurface,
-                                ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(12),
+                                color: _downloadTypeExplode
+                                    ? (isAmoled && isDark
+                                        ? Colors.white.withValues(alpha: 0.2) // Fondo del ícono para amoled seleccionado
+                                        : Theme.of(context).colorScheme.primary.withValues(alpha: 0.1))
+                                    : Colors.transparent,
                               ),
-                              
-                            ],
-                          ),
-                        ),
-                        if (_downloadTypeExplode)
-                          Icon(
-                            Icons.check_circle,
-                            color: Theme.of(context).colorScheme.primary,
-                            size: 24,
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-                SizedBox(height: 4),
-                // Tarjeta de método Directo
-                InkWell(
-                  onTap: () async {
-                    Navigator.of(context).pop();
-                    await _setDownloadType(false);
-                  },
-                  borderRadius: BorderRadius.circular(16),
-                  child: Container(
-                    width: double.infinity,
-                    padding: EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: !_downloadTypeExplode 
-                          ? Theme.of(context).colorScheme.primaryContainer
-                          : Theme.of(context).colorScheme.secondaryContainer,
-                      borderRadius: BorderRadius.only(
-                        topLeft: Radius.circular(4),
-                        topRight: Radius.circular(4),
-                        bottomLeft: Radius.circular(16),
-                        bottomRight: Radius.circular(16),
-                      ),
-                      border: Border.all(
-                        color: !_downloadTypeExplode
-                            ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.3)
-                            : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
-                        width: !_downloadTypeExplode ? 2 : 1,
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(12),
-                            color: !_downloadTypeExplode
-                                ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.1)
-                                : Colors.transparent,
-                          ),
-                          child: Icon(
-                            Icons.download_done,
-                            size: 30,
-                            color: !_downloadTypeExplode
-                                ? Theme.of(context).colorScheme.primary
-                                : Theme.of(context).colorScheme.onSurface,
-                          ),
-                        ),
-                        SizedBox(width: 8),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                LocaleProvider.tr('direct'),
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                  color: !_downloadTypeExplode
-                                      ? Theme.of(context).colorScheme.primary
-                                      : Theme.of(context).colorScheme.onSurface,
-                                ),
+                              child: Icon(
+                                Icons.explore,
+                                size: 30,
+                                color: _downloadTypeExplode
+                                    ? (isAmoled && isDark
+                                        ? Colors.white // Ícono blanco para amoled seleccionado
+                                        : Theme.of(context).colorScheme.primary)
+                                    : (isAmoled && isDark
+                                        ? Colors.white // Ícono blanco para amoled no seleccionado
+                                        : Theme.of(context).colorScheme.onSurface),
                               ),
-                              
-                            ],
+                            ),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    LocaleProvider.tr('explode'),
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: _downloadTypeExplode
+                                          ? (isAmoled && isDark
+                                              ? Colors.white // Texto blanco para amoled seleccionado
+                                              : Theme.of(context).colorScheme.primary)
+                                          : (isAmoled && isDark
+                                              ? Colors.white // Texto blanco para amoled no seleccionado
+                                              : Theme.of(context).colorScheme.onSurface),
+                                    ),
+                                  ),
+                                  
+                                ],
+                              ),
+                            ),
+                            if (_downloadTypeExplode)
+                              Icon(
+                                Icons.check_circle,
+                                color: isAmoled && isDark
+                                    ? Colors.white // Check blanco para amoled
+                                    : Theme.of(context).colorScheme.primary,
+                                size: 24,
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: 4),
+                    // Tarjeta de método Directo
+                    InkWell(
+                      onTap: () async {
+                        Navigator.of(context).pop();
+                        await _setDownloadType(false);
+                      },
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        width: double.infinity,
+                        padding: EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: !_downloadTypeExplode 
+                              ? (isAmoled && isDark
+                                  ? Colors.white.withValues(alpha: 0.2) // Color personalizado para amoled seleccionado
+                                  : Theme.of(context).colorScheme.primaryContainer)
+                              : (isAmoled && isDark
+                                  ? Colors.white.withValues(alpha: 0.1) // Color personalizado para amoled no seleccionado
+                                  : Theme.of(context).colorScheme.secondaryContainer),
+                          borderRadius: BorderRadius.only(
+                            topLeft: Radius.circular(4),
+                            topRight: Radius.circular(4),
+                            bottomLeft: Radius.circular(16),
+                            bottomRight: Radius.circular(16),
+                          ),
+                          border: Border.all(
+                            color: !_downloadTypeExplode
+                                ? (isAmoled && isDark
+                                    ? Colors.white.withValues(alpha: 0.4) // Borde personalizado para amoled seleccionado
+                                    : Theme.of(context).colorScheme.primary.withValues(alpha: 0.3))
+                                : (isAmoled && isDark
+                                    ? Colors.white.withValues(alpha: 0.2) // Borde personalizado para amoled no seleccionado
+                                    : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1)),
+                            width: !_downloadTypeExplode ? 2 : 1,
                           ),
                         ),
-                        if (!_downloadTypeExplode)
-                          Icon(
-                            Icons.check_circle,
-                            color: Theme.of(context).colorScheme.primary,
-                            size: 24,
-                          ),
-                      ],
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(12),
+                                color: !_downloadTypeExplode
+                                    ? (isAmoled && isDark
+                                        ? Colors.white.withValues(alpha: 0.2) // Fondo del ícono para amoled seleccionado
+                                        : Theme.of(context).colorScheme.primary.withValues(alpha: 0.1))
+                                    : Colors.transparent,
+                              ),
+                              child: Icon(
+                                Icons.download_done,
+                                size: 30,
+                                color: !_downloadTypeExplode
+                                    ? (isAmoled && isDark
+                                        ? Colors.white // Ícono blanco para amoled seleccionado
+                                        : Theme.of(context).colorScheme.primary)
+                                    : (isAmoled && isDark
+                                        ? Colors.white // Ícono blanco para amoled no seleccionado
+                                        : Theme.of(context).colorScheme.onSurface),
+                              ),
+                            ),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    LocaleProvider.tr('direct'),
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: !_downloadTypeExplode
+                                          ? (isAmoled && isDark
+                                              ? Colors.white // Texto blanco para amoled seleccionado
+                                              : Theme.of(context).colorScheme.primary)
+                                          : (isAmoled && isDark
+                                              ? Colors.white // Texto blanco para amoled no seleccionado
+                                              : Theme.of(context).colorScheme.onSurface),
+                                    ),
+                                  ),
+                                  
+                                ],
+                              ),
+                            ),
+                            if (!_downloadTypeExplode)
+                              Icon(
+                                Icons.check_circle,
+                                color: isAmoled && isDark
+                                    ? Colors.white // Check blanco para amoled
+                                    : Theme.of(context).colorScheme.primary,
+                                size: 24,
+                              ),
+                          ],
+                        ),
+                      ),
                     ),
-                  ),
+                  ],
                 ),
-              ],
-            ),
-          ),
+              ),
+            );
+          },
         );
       },
     );
@@ -1176,190 +1666,240 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void _showLanguageDialog(BuildContext context) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Center(
-          child: TranslatedText(
-            'change_language',
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-        content: SizedBox(
-          width: 400,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              SizedBox(height: 18),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 4),
-                  child: TranslatedText(
-                    'select_language_desc',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Theme.of(context).colorScheme.onSurface,
-                    ),
-                    textAlign: TextAlign.left,
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
+      builder: (context) {
+        return ValueListenableBuilder<AppColorScheme>(
+          valueListenable: colorSchemeNotifier,
+          builder: (context, colorScheme, child) {
+            final isAmoled = colorScheme == AppColorScheme.amoled;
+            final isDark = Theme.of(context).brightness == Brightness.dark;
+            
+            return AlertDialog(
+              title: Center(
+                child: TranslatedText(
+                  'change_language',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
-              SizedBox(height: 20),
-              // Tarjeta de Español
-              InkWell(
-                onTap: () {
-                  _setLanguage('es');
-                  Navigator.of(context).pop();
-                },
-                borderRadius: BorderRadius.circular(16),
-                child: Container(
-                  width: double.infinity,
-                  padding: EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: _currentLanguage == 'es'
-                        ? Theme.of(context).colorScheme.primaryContainer
-                        : Theme.of(context).colorScheme.secondaryContainer,
-                    borderRadius: BorderRadius.only(
-                      topLeft: Radius.circular(16),
-                      topRight: Radius.circular(16),
-                      bottomLeft: Radius.circular(4),
-                      bottomRight: Radius.circular(4),
-                    ),
-                    border: Border.all(
-                      color: _currentLanguage == 'es'
-                          ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.3)
-                          : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
-                      width: _currentLanguage == 'es' ? 2 : 1,
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(12),
-                          color: _currentLanguage == 'es'
-                              ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.1)
-                              : Colors.transparent,
-                        ),
-                        child: Icon(
-                          Icons.language,
-                          size: 30,
-                          color: _currentLanguage == 'es'
-                              ? Theme.of(context).colorScheme.primary
-                              : Theme.of(context).colorScheme.onSurface,
+              content: SizedBox(
+                width: 400,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(height: 18),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 4),
+                        child: TranslatedText(
+                          'select_language_desc',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Theme.of(context).colorScheme.onSurface,
+                          ),
+                          textAlign: TextAlign.left,
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      SizedBox(width: 8),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                    ),
+                    SizedBox(height: 20),
+                    // Tarjeta de Español
+                    InkWell(
+                      onTap: () {
+                        _setLanguage('es');
+                        Navigator.of(context).pop();
+                      },
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        width: double.infinity,
+                        padding: EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: _currentLanguage == 'es'
+                              ? (isAmoled && isDark
+                                  ? Colors.white.withValues(alpha: 0.2) // Color personalizado para amoled seleccionado
+                                  : Theme.of(context).colorScheme.primaryContainer)
+                              : (isAmoled && isDark
+                                  ? Colors.white.withValues(alpha: 0.1) // Color personalizado para amoled no seleccionado
+                                  : Theme.of(context).colorScheme.secondaryContainer),
+                          borderRadius: BorderRadius.only(
+                            topLeft: Radius.circular(16),
+                            topRight: Radius.circular(16),
+                            bottomLeft: Radius.circular(4),
+                            bottomRight: Radius.circular(4),
+                          ),
+                          border: Border.all(
+                            color: _currentLanguage == 'es'
+                                ? (isAmoled && isDark
+                                    ? Colors.white.withValues(alpha: 0.4) // Borde personalizado para amoled seleccionado
+                                    : Theme.of(context).colorScheme.primary.withValues(alpha: 0.3))
+                                : (isAmoled && isDark
+                                    ? Colors.white.withValues(alpha: 0.2) // Borde personalizado para amoled no seleccionado
+                                    : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1)),
+                            width: _currentLanguage == 'es' ? 2 : 1,
+                          ),
+                        ),
+                        child: Row(
                           children: [
-                            Text(
-                              'Español',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
+                            Container(
+                              padding: EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(12),
                                 color: _currentLanguage == 'es'
-                                    ? Theme.of(context).colorScheme.primary
-                                    : Theme.of(context).colorScheme.onSurface,
+                                    ? (isAmoled && isDark
+                                        ? Colors.white.withValues(alpha: 0.2) // Fondo del ícono para amoled seleccionado
+                                        : Theme.of(context).colorScheme.primary.withValues(alpha: 0.1))
+                                    : Colors.transparent,
+                              ),
+                              child: Icon(
+                                Icons.language,
+                                size: 30,
+                                color: _currentLanguage == 'es'
+                                    ? (isAmoled && isDark
+                                        ? Colors.white // Ícono blanco para amoled seleccionado
+                                        : Theme.of(context).colorScheme.primary)
+                                    : (isAmoled && isDark
+                                        ? Colors.white // Ícono blanco para amoled no seleccionado
+                                        : Theme.of(context).colorScheme.onSurface),
                               ),
                             ),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Español',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: _currentLanguage == 'es'
+                                          ? (isAmoled && isDark
+                                              ? Colors.white // Texto blanco para amoled seleccionado
+                                              : Theme.of(context).colorScheme.primary)
+                                          : (isAmoled && isDark
+                                              ? Colors.white // Texto blanco para amoled no seleccionado
+                                              : Theme.of(context).colorScheme.onSurface),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            if (_currentLanguage == 'es')
+                              Icon(
+                                Icons.check_circle,
+                                color: isAmoled && isDark
+                                    ? Colors.white // Check blanco para amoled
+                                    : Theme.of(context).colorScheme.primary,
+                                size: 24,
+                              ),
                           ],
                         ),
                       ),
-                      if (_currentLanguage == 'es')
-                        Icon(
-                          Icons.check_circle,
-                          color: Theme.of(context).colorScheme.primary,
-                          size: 24,
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-              SizedBox(height: 4),
-              // Tarjeta de English
-              InkWell(
-                onTap: () {
-                  _setLanguage('en');
-                  Navigator.of(context).pop();
-                },
-                borderRadius: BorderRadius.circular(16),
-                child: Container(
-                  width: double.infinity,
-                  padding: EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: _currentLanguage == 'en'
-                        ? Theme.of(context).colorScheme.primaryContainer
-                        : Theme.of(context).colorScheme.secondaryContainer,
-                    borderRadius: BorderRadius.only(
-                      bottomLeft: Radius.circular(16),
-                      bottomRight: Radius.circular(16),
-                      topLeft: Radius.circular(4),
-                      topRight: Radius.circular(4),
                     ),
-                    border: Border.all(
-                      color: _currentLanguage == 'en'
-                          ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.3)
-                          : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
-                      width: _currentLanguage == 'en' ? 2 : 1,
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: EdgeInsets.all(8),
+                    SizedBox(height: 4),
+                    // Tarjeta de English
+                    InkWell(
+                      onTap: () {
+                        _setLanguage('en');
+                        Navigator.of(context).pop();
+                      },
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        width: double.infinity,
+                        padding: EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(12),
                           color: _currentLanguage == 'en'
-                              ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.1)
-                              : Colors.transparent,
+                              ? (isAmoled && isDark
+                                  ? Colors.white.withValues(alpha: 0.2) // Color personalizado para amoled seleccionado
+                                  : Theme.of(context).colorScheme.primaryContainer)
+                              : (isAmoled && isDark
+                                  ? Colors.white.withValues(alpha: 0.1) // Color personalizado para amoled no seleccionado
+                                  : Theme.of(context).colorScheme.secondaryContainer),
+                          borderRadius: BorderRadius.only(
+                            bottomLeft: Radius.circular(16),
+                            bottomRight: Radius.circular(16),
+                            topLeft: Radius.circular(4),
+                            topRight: Radius.circular(4),
+                          ),
+                          border: Border.all(
+                            color: _currentLanguage == 'en'
+                                ? (isAmoled && isDark
+                                    ? Colors.white.withValues(alpha: 0.4) // Borde personalizado para amoled seleccionado
+                                    : Theme.of(context).colorScheme.primary.withValues(alpha: 0.3))
+                                : (isAmoled && isDark
+                                    ? Colors.white.withValues(alpha: 0.2) // Borde personalizado para amoled no seleccionado
+                                    : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1)),
+                            width: _currentLanguage == 'en' ? 2 : 1,
+                          ),
                         ),
-                        child: Icon(
-                          Icons.language,
-                          size: 30,
-                          color: _currentLanguage == 'en'
-                              ? Theme.of(context).colorScheme.primary
-                              : Theme.of(context).colorScheme.onSurface,
-                        ),
-                      ),
-                      SizedBox(width: 8),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                        child: Row(
                           children: [
-                            Text(
-                              'English',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
+                            Container(
+                              padding: EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(12),
                                 color: _currentLanguage == 'en'
-                                    ? Theme.of(context).colorScheme.primary
-                                    : Theme.of(context).colorScheme.onSurface,
+                                    ? (isAmoled && isDark
+                                        ? Colors.white.withValues(alpha: 0.2) // Fondo del ícono para amoled seleccionado
+                                        : Theme.of(context).colorScheme.primary.withValues(alpha: 0.1))
+                                    : Colors.transparent,
+                              ),
+                              child: Icon(
+                                Icons.language,
+                                size: 30,
+                                color: _currentLanguage == 'en'
+                                    ? (isAmoled && isDark
+                                        ? Colors.white // Ícono blanco para amoled seleccionado
+                                        : Theme.of(context).colorScheme.primary)
+                                    : (isAmoled && isDark
+                                        ? Colors.white // Ícono blanco para amoled no seleccionado
+                                        : Theme.of(context).colorScheme.onSurface),
                               ),
                             ),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'English',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: _currentLanguage == 'en'
+                                          ? (isAmoled && isDark
+                                              ? Colors.white // Texto blanco para amoled seleccionado
+                                              : Theme.of(context).colorScheme.primary)
+                                          : (isAmoled && isDark
+                                              ? Colors.white // Texto blanco para amoled no seleccionado
+                                              : Theme.of(context).colorScheme.onSurface),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            if (_currentLanguage == 'en')
+                              Icon(
+                                Icons.check_circle,
+                                color: isAmoled && isDark
+                                    ? Colors.white // Check blanco para amoled
+                                    : Theme.of(context).colorScheme.primary,
+                                size: 24,
+                              ),
                           ],
                         ),
                       ),
-                      if (_currentLanguage == 'en')
-                        Icon(
-                          Icons.check_circle,
-                          color: Theme.of(context).colorScheme.primary,
-                          size: 24,
-                        ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
-            ],
-          ),
-        ),
-      ),
+            );
+          },
+        );
+      },
     );
   }
 
@@ -1368,149 +1908,177 @@ class _SettingsScreenState extends State<SettingsScreen> {
     showDialog<bool>(
       context: context,
       builder: (BuildContext context) {
-        return AlertDialog(
-          title: Center(
-            child: TranslatedText(
-              'delete_lyrics',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.w600,
+        return ValueListenableBuilder<AppColorScheme>(
+          valueListenable: colorSchemeNotifier,
+          builder: (context, colorScheme, child) {
+            final isAmoled = colorScheme == AppColorScheme.amoled;
+            final isDark = Theme.of(context).brightness == Brightness.dark;
+            
+            return AlertDialog(
+              title: Center(
+                child: TranslatedText(
+                  'delete_lyrics',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
-            ),
-          ),
-          content: SizedBox(
-            width: 400,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                SizedBox(height: 18),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 4),
-                    child: TranslatedText(
-                      'delete_lyrics_confirm',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Theme.of(context).colorScheme.onSurface,
-                      ),
-                      textAlign: TextAlign.left,
-                      maxLines: 4,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ),
-                SizedBox(height: 20),
-                // Tarjeta de confirmar eliminación
-                InkWell(
-                  onTap: () async {
-                    Navigator.of(context).pop(true);
-                    await SyncedLyricsService.clearLyrics();
-                    if (context.mounted) {
-                      _showLyricsDeletedDialog();
-                    }
-                  },
-                  borderRadius: BorderRadius.circular(16),
-                  child: Container(
-                    width: double.infinity,
-                    padding: EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.errorContainer,
-                      borderRadius: BorderRadius.only(
-                        topLeft: Radius.circular(16),
-                        topRight: Radius.circular(16),
-                        bottomLeft: Radius.circular(4),
-                        bottomRight: Radius.circular(4),
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: EdgeInsets.all(8),
-                          child: Icon(
-                            Icons.delete_forever,
-                            size: 30,
-                            color: Theme.of(context).colorScheme.error,
-                          ),
-                        ),
-                        SizedBox(width: 8),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                LocaleProvider.tr('delete'),
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                  color: Theme.of(context).colorScheme.error,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                SizedBox(height: 4),
-                // Tarjeta de cancelar
-                InkWell(
-                  onTap: () => Navigator.of(context).pop(false),
-                  borderRadius: BorderRadius.circular(16),
-                  child: Container(
-                    width: double.infinity,
-                    padding: EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.secondaryContainer,
-                      borderRadius: BorderRadius.only(
-                        bottomLeft: Radius.circular(16),
-                        bottomRight: Radius.circular(16),
-                        topLeft: Radius.circular(4),
-                        topRight: Radius.circular(4),
-                      ),
-                      border: Border.all(
-                        color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
-                        width: 1,
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(12),
-                            color: Colors.transparent,
-                          ),
-                          child: Icon(
-                            Icons.cancel,
-                            size: 30,
+              content: SizedBox(
+                width: 400,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(height: 18),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 4),
+                        child: TranslatedText(
+                          'delete_lyrics_confirm',
+                          style: TextStyle(
+                            fontSize: 14,
                             color: Theme.of(context).colorScheme.onSurface,
                           ),
+                          textAlign: TextAlign.left,
+                          maxLines: 4,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                        SizedBox(width: 8),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                LocaleProvider.tr('cancel'),
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                  color: Theme.of(context).colorScheme.onSurface,
-                                ),
+                      ),
+                    ),
+                    SizedBox(height: 20),
+                    // Tarjeta de confirmar eliminación
+                    InkWell(
+                      onTap: () async {
+                        Navigator.of(context).pop(true);
+                        await SyncedLyricsService.clearLyrics();
+                        if (context.mounted) {
+                          _showLyricsDeletedDialog();
+                        }
+                      },
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        width: double.infinity,
+                        padding: EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: isAmoled && isDark
+                              ? Colors.red.withValues(alpha: 0.2) // Color personalizado para amoled
+                              : Theme.of(context).colorScheme.errorContainer,
+                          borderRadius: BorderRadius.only(
+                            topLeft: Radius.circular(16),
+                            topRight: Radius.circular(16),
+                            bottomLeft: Radius.circular(4),
+                            bottomRight: Radius.circular(4),
+                          ),
+                          border: isAmoled && isDark
+                              ? Border.all(
+                                  color: Colors.red.withValues(alpha: 0.4), // Borde personalizado para amoled
+                                  width: 1,
+                                )
+                              : null,
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: EdgeInsets.all(8),
+                              child: Icon(
+                                Icons.delete_forever,
+                                size: 30,
+                                color: isAmoled && isDark
+                                    ? Colors.red // Ícono rojo para amoled
+                                    : Theme.of(context).colorScheme.error,
                               ),
-                            ],
+                            ),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    LocaleProvider.tr('delete'),
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: isAmoled && isDark
+                                          ? Colors.red // Texto rojo para amoled
+                                          : Theme.of(context).colorScheme.error,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: 4),
+                    // Tarjeta de cancelar
+                    InkWell(
+                      onTap: () => Navigator.of(context).pop(false),
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        width: double.infinity,
+                        padding: EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: isAmoled && isDark
+                              ? Colors.white.withValues(alpha: 0.1) // Color personalizado para amoled
+                              : Theme.of(context).colorScheme.secondaryContainer,
+                          borderRadius: BorderRadius.only(
+                            bottomLeft: Radius.circular(16),
+                            bottomRight: Radius.circular(16),
+                            topLeft: Radius.circular(4),
+                            topRight: Radius.circular(4),
+                          ),
+                          border: Border.all(
+                            color: isAmoled && isDark
+                                ? Colors.white.withValues(alpha: 0.2) // Borde personalizado para amoled
+                                : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
+                            width: 1,
                           ),
                         ),
-                      ],
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(12),
+                                color: Colors.transparent,
+                              ),
+                              child: Icon(
+                                Icons.cancel,
+                                size: 30,
+                                color: isAmoled && isDark
+                                    ? Colors.white // Ícono blanco para amoled
+                                    : Theme.of(context).colorScheme.onSurface,
+                              ),
+                            ),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    LocaleProvider.tr('cancel'),
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: isAmoled && isDark
+                                          ? Colors.white // Texto blanco para amoled
+                                          : Theme.of(context).colorScheme.onSurface,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
-                  ),
+                  ],
                 ),
-              ],
-            ),
-          ),
+              ),
+            );
+          },
         );
       },
     );
@@ -1521,91 +2089,109 @@ class _SettingsScreenState extends State<SettingsScreen> {
     showDialog(
       context: context,
       builder: (BuildContext context) {
-        return AlertDialog(
-          title: Center(
-            child: TranslatedText(
-              'lyrics_deleted',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.w600,
+        return ValueListenableBuilder<AppColorScheme>(
+          valueListenable: colorSchemeNotifier,
+          builder: (context, colorScheme, child) {
+            final isAmoled = colorScheme == AppColorScheme.amoled;
+            final isDark = Theme.of(context).brightness == Brightness.dark;
+            
+            return AlertDialog(
+              title: Center(
+                child: TranslatedText(
+                  'lyrics_deleted',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
-            ),
-          ),
-          content: SizedBox(
-            width: 400,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                SizedBox(height: 18),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 4),
-                    child: TranslatedText(
-                      'lyrics_deleted_desc',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Theme.of(context).colorScheme.onSurface,
+              content: SizedBox(
+                width: 400,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(height: 18),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 4),
+                        child: TranslatedText(
+                          'lyrics_deleted_desc',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Theme.of(context).colorScheme.onSurface,
+                          ),
+                          textAlign: TextAlign.left,
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
-                      textAlign: TextAlign.left,
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
                     ),
-                  ),
-                ),
-                SizedBox(height: 20),
-                // Tarjeta de aceptar
-                InkWell(
-                  onTap: () => Navigator.of(context).pop(),
-                  borderRadius: BorderRadius.circular(16),
-                  child: Container(
-                    width: double.infinity,
-                    padding: EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.primaryContainer,
+                    SizedBox(height: 20),
+                    // Tarjeta de aceptar
+                    InkWell(
+                      onTap: () => Navigator.of(context).pop(),
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
-                        width: 2,
+                      child: Container(
+                        width: double.infinity,
+                        padding: EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: isAmoled && isDark
+                              ? Colors.white.withValues(alpha: 0.2) // Color personalizado para amoled
+                              : Theme.of(context).colorScheme.primaryContainer,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: isAmoled && isDark
+                                ? Colors.white.withValues(alpha: 0.4) // Borde personalizado para amoled
+                                : Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
+                            width: 2,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(12),
+                                color: isAmoled && isDark
+                                    ? Colors.white.withValues(alpha: 0.2) // Fondo del ícono para amoled
+                                    : Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                              ),
+                              child: Icon(
+                                Icons.check_circle,
+                                size: 30,
+                                color: isAmoled && isDark
+                                    ? Colors.white // Ícono blanco para amoled
+                                    : Theme.of(context).colorScheme.primary,
+                              ),
+                            ),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    LocaleProvider.tr('ok'),
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: isAmoled && isDark
+                                          ? Colors.white // Texto blanco para amoled
+                                          : Theme.of(context).colorScheme.primary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(12),
-                            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
-                          ),
-                          child: Icon(
-                            Icons.check_circle,
-                            size: 30,
-                            color: Theme.of(context).colorScheme.primary,
-                          ),
-                        ),
-                        SizedBox(width: 8),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                LocaleProvider.tr('ok'),
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                  color: Theme.of(context).colorScheme.primary,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+                  ],
                 ),
-              ],
-            ),
-          ),
+              ),
+            );
+          },
         );
       },
     );
@@ -1683,6 +2269,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0,
         title: TranslatedText('settings'),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
@@ -1891,6 +2481,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     onPressed: () => _showDownloadTypeSelection(),
                   ),
                   onTap: () => _showDownloadTypeSelection(),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 4),
+          Card(
+            margin: EdgeInsets.zero,
+            shape: const RoundedRectangleBorder(  
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(4),
+                topRight: Radius.circular(4),
+                bottomLeft: Radius.circular(4),
+                bottomRight: Radius.circular(4),
+              ),
+            ),
+            child: Column(
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.image),
+                  title: TranslatedText('cover_quality'),
+                  subtitle: TranslatedText(
+                    'cover_quality_desc',
+                    style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7)),
+                  ),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.arrow_drop_down),
+                    onPressed: () => _showCoverQualitySelection(),
+                  ),
+                  onTap: () => _showCoverQualitySelection(),
                 ),
               ],
             ),
@@ -2247,7 +2866,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              '${LocaleProvider.tr('version')}: v1.4.10',
+                              '${LocaleProvider.tr('version')}: v1.4.11',
                               style: const TextStyle(fontSize: 15),
                               textAlign: TextAlign.center,
                             ),

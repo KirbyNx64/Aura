@@ -5,6 +5,7 @@ flutter_launcher_icons:
   # Ícono para Android (foreground, sin fondo)
   image_path: "assets/icon/icon.png" 
   adaptive_icon_foreground: "assets/icon/icon_foreground.png"
+  adaptive_icon_monochrome: "assets/icon/icon_foreground.png"
 
   # Color de fondo para el ícono adaptativo Android
   adaptive_icon_background: "#4756f7"

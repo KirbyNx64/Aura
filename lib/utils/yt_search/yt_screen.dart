@@ -163,7 +163,8 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
   List<YtMusicResult> _songResults = [];
   List<YtMusicResult> _videoResults = [];
   List<dynamic> _albumResults = [];
-  String? _expandedCategory; // 'songs', 'videos', 'album', o null
+  List<Map<String, String>> _playlistResults = [];
+  String? _expandedCategory; // 'songs', 'videos', 'album', 'playlists', o null
   bool _loading = false;
   String? _error;
   double _lastViewInset = 0;
@@ -172,9 +173,13 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
   bool _noInternet = false; // Nuevo estado para internet
   bool _loadingMoreSongs = false;
   bool _loadingMoreVideos = false;
+  bool _loadingMorePlaylists = false;
   List<YtMusicResult> _albumSongs = [];
   Map<String, dynamic>? _currentAlbum;
   bool _loadingAlbumSongs = false;
+  List<YtMusicResult> _playlistSongs = [];
+  Map<String, dynamic>? _currentPlaylist;
+  bool _loadingPlaylistSongs = false;
 
   // ValueNotifiers para el progreso de descarga
   final ValueNotifier<double> downloadProgressNotifier = ValueNotifier(0.0);
@@ -189,10 +194,13 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
   // ScrollControllers para paginación incremental
   final ScrollController _songScrollController = ScrollController();
   final ScrollController _videoScrollController = ScrollController();
+  final ScrollController _playlistScrollController = ScrollController();
   int _songPage = 1;
   int _videoPage = 1;
+  int _playlistPage = 1;
   bool _hasMoreSongs = true;
   bool _hasMoreVideos = true;
+  bool _hasMorePlaylists = true;
 
   Future<List<YtMusicResult>> _searchVideosOnly(String query) async {
     final data = {
@@ -304,12 +312,20 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
       _songResults = [];
       _videoResults = [];
       _albumResults = [];
+      _playlistResults = [];
+      _albumSongs = [];
+      _currentAlbum = null;
+      _playlistSongs = [];
+      _currentPlaylist = null;
       _songPage = 1;
       _videoPage = 1;
+      _playlistPage = 1;
       _hasMoreSongs = true;
       _hasMoreVideos = true;
+      _hasMorePlaylists = true;
       _loadingMoreSongs = true;
       _loadingMoreVideos = true;
+      _loadingMorePlaylists = true;
     });
     final List<ConnectivityResult> connectivityResult = await Connectivity()
         .checkConnectivity();
@@ -321,6 +337,11 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
           _songResults = [];
           _videoResults = [];
           _albumResults = [];
+          _playlistResults = [];
+          _albumSongs = [];
+          _currentAlbum = null;
+          _playlistSongs = [];
+          _currentPlaylist = null;
           _hasSearched = false;
         });
       }
@@ -333,10 +354,16 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
       _songResults = [];
       _videoResults = [];
       _albumResults = [];
+      _playlistResults = [];
+      _albumSongs = [];
+      _currentAlbum = null;
+      _playlistSongs = [];
+      _currentPlaylist = null;
       _error = null;
       _hasSearched = true;
       _loadingMoreSongs = false;
       _loadingMoreVideos = false;
+      _loadingMorePlaylists = false;
       _showSuggestions = false;
     });
     try {
@@ -344,12 +371,14 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
       final songFuture = searchSongsOnly(_controller.text);
       final videoFuture = _searchVideosOnly(_controller.text);
       final albumFuture = searchAlbumsOnly(_controller.text);
-      final results = await Future.wait([songFuture, videoFuture, albumFuture]);
+      final playlistFuture = searchPlaylistsOnly(_controller.text);
+      final results = await Future.wait([songFuture, videoFuture, albumFuture, playlistFuture]);
       if (!mounted) return;
       setState(() {
         _songResults = (results[0] as List).cast<YtMusicResult>();
         _videoResults = (results[1] as List).cast<YtMusicResult>();
         _albumResults = (results[2] as List); // No cast<YtMusicResult> aquí
+        _playlistResults = (results[3] as List).cast<Map<String, String>>();
         // print('Álbumes encontrados:  [32m${_albumResults.length} [0m');
         _loading = false;
       });
@@ -380,6 +409,20 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
               .toList();
           _videoResults.addAll(newOnes);
           _loadingMoreVideos = false;
+        });
+      });
+      // Para listas de reproducción
+      searchPlaylistsWithPagination(_controller.text, maxPages: 5).then((
+        morePlaylists,
+      ) {
+        if (!mounted) return;
+        setState(() {
+          final existingIds = _playlistResults.map((e) => e['browseId']).toSet();
+          final newOnes = morePlaylists
+              .where((e) => !existingIds.contains(e['browseId']))
+              .toList();
+          _playlistResults.addAll(newOnes);
+          _loadingMorePlaylists = false;
         });
       });
       // Para álbumes: (puedes agregar paginación extendida aquí si lo deseas)
@@ -434,6 +477,14 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
         _loadMoreVideos();
       }
     });
+    _playlistScrollController.addListener(() {
+      if (_expandedCategory == 'playlists' &&
+          !_loadingMorePlaylists &&
+          _playlistScrollController.position.pixels >=
+              _playlistScrollController.position.maxScrollExtent - 10) {
+        _loadMorePlaylists();
+      }
+    });
 
     // Verificar si hay historial
 
@@ -457,6 +508,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
     queueLengthNotifier.dispose();
     _songScrollController.dispose();
     _videoScrollController.dispose();
+    _playlistScrollController.dispose();
     super.dispose();
   }
 
@@ -773,6 +825,29 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
     });
   }
 
+  Future<void> _loadMorePlaylists() async {
+    if (_loadingMorePlaylists || !_hasMorePlaylists) return;
+    setState(() {
+      _loadingMorePlaylists = true;
+    });
+    final nextPage = _playlistPage + 1;
+    final morePlaylists = await searchPlaylistsWithPagination(
+      _controller.text,
+      maxPages: nextPage,
+    );
+    if (!mounted) return;
+    setState(() {
+      final existingIds = _playlistResults.map((e) => e['browseId']).toSet();
+      final newOnes = morePlaylists
+          .where((e) => !existingIds.contains(e['browseId']))
+          .toList();
+      _playlistResults.addAll(newOnes);
+      _playlistPage = nextPage;
+      _loadingMorePlaylists = false;
+      _hasMorePlaylists = newOnes.isNotEmpty;
+    });
+  }
+
   // Métodos para pop interno desde el home
   bool canPopInternally() {
     // print('canPopInternally: $_expandedCategory');
@@ -789,6 +864,10 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0,
         title: _isSelectionMode
             ? Text(
                 '${_selectedIndexes.length} ${LocaleProvider.tr('selected')}',
@@ -961,29 +1040,37 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                           SizedBox(
                             height: 56,
                             width: 56,
-                            child: Material(
-                              borderRadius: BorderRadius.circular(8),
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.secondaryContainer,
-                              child: InkWell(
-                                borderRadius: BorderRadius.circular(8),
-                                onTap: _loading ? null : _search,
-                                child: ValueListenableBuilder<String>(
-                                  valueListenable: languageNotifier,
-                                  builder: (context, lang, child) {
-                                    return Tooltip(
-                                      message: LocaleProvider.tr('search'),
-                                      child: Icon(
-                                        Icons.search,
-                                        color: Theme.of(
-                                          context,
-                                        ).colorScheme.onSecondaryContainer,
-                                      ),
-                                    );
-                                  },
-                                ),
-                              ),
+                            child: ValueListenableBuilder<AppColorScheme>(
+                              valueListenable: colorSchemeNotifier,
+                              builder: (context, colorScheme, child) {
+                                final isAmoled = colorScheme == AppColorScheme.amoled;
+                                final isDark = Theme.of(context).brightness == Brightness.dark;
+                                
+                                return Material(
+                                  borderRadius: BorderRadius.circular(8),
+                                  color: isAmoled && isDark
+                                      ? Colors.white // Color personalizado para amoled
+                                      : Theme.of(context).colorScheme.secondaryContainer,
+                                  child: InkWell(
+                                    borderRadius: BorderRadius.circular(8),
+                                    onTap: _loading ? null : _search,
+                                    child: ValueListenableBuilder<String>(
+                                      valueListenable: languageNotifier,
+                                      builder: (context, lang, child) {
+                                        return Tooltip(
+                                          message: LocaleProvider.tr('search'),
+                                          child: Icon(
+                                            Icons.search,
+                                            color: isAmoled && isDark
+                                                ? Colors.black// Color blanco para amoled
+                                                : Theme.of(context).colorScheme.onSecondaryContainer,
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                );
+                              },
                             ),
                           ),
                         ],
@@ -1575,6 +1662,8 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                 _expandedCategory = null;
                                                 _albumSongs = [];
                                                 _currentAlbum = null;
+                                                _playlistSongs = [];
+                                                _currentPlaylist = null;
                                               });
                                             },
                                           ),
@@ -1863,6 +1952,463 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                             },
                                           ),
                                         ),
+                                    ],
+                                  );
+                                } else if (_expandedCategory == 'playlist') {
+                                  // Mostrar canciones de una playlist específica
+                                  return Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          IconButton(
+                                            icon: Icon(Icons.arrow_back),
+                                            tooltip: 'Volver',
+                                            onPressed: () {
+                                              setState(() {
+                                                _expandedCategory = null;
+                                                _albumSongs = [];
+                                                _currentAlbum = null;
+                                                _playlistSongs = [];
+                                                _currentPlaylist = null;
+                                              });
+                                            },
+                                          ),
+                                          if (_currentPlaylist != null) ...[
+                                            if (_currentPlaylist!['thumbUrl'] !=
+                                                null)
+                                              Padding(
+                                                padding: const EdgeInsets.only(
+                                                  right: 12,
+                                                ),
+                                                child: ClipRRect(
+                                                  borderRadius:
+                                                      BorderRadius.circular(8),
+                                                  child: Image.network(
+                                                    _currentPlaylist!['thumbUrl'],
+                                                    width: 40,
+                                                    height: 40,
+                                                    fit: BoxFit.cover,
+                                                  ),
+                                                ),
+                                              ),
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    _currentPlaylist!['title'] ?? '',
+                                                    style: Theme.of(
+                                                      context,
+                                                    ).textTheme.titleMedium,
+                                                    maxLines: 2,
+                                                    overflow: TextOverflow.ellipsis,
+                                                  ),
+
+                                                ],
+                                              ),
+                                            ),
+                                            const SizedBox(width: 2),
+                                            const Icon(
+                                              Icons.arrow_forward_ios,
+                                              size: 16,
+                                              color: Colors.transparent,
+                                            ),
+                                          ],
+                                        ],
+                                      ),
+                                      const SizedBox(height: 8),
+                                      if (_loadingPlaylistSongs)
+                                        const Expanded(
+                                          child: Center(
+                                            child: CircularProgressIndicator(),
+                                          ),
+                                        )
+                                      else if (_playlistSongs.isEmpty)
+                                        Expanded(
+                                          child: Center(
+                                            child: TranslatedText(
+                                              'no_results',
+                                              textAlign: TextAlign.center,
+                                            ),
+                                          ),
+                                        )
+                                      else
+                                        Expanded(
+                                          child: ListView.builder(
+                                            itemCount: _playlistSongs.length,
+                                            itemBuilder: (context, idx) {
+                                              final item = _playlistSongs[idx];
+                                              final videoId = item.videoId;
+                                              final isSelected =
+                                                  videoId != null &&
+                                                  _selectedIndexes.contains(
+                                                    'playlist-$videoId',
+                                                  );
+                                              return GestureDetector(
+                                                onLongPress: () {
+                                                  HapticFeedback.selectionClick();
+                                                  if (videoId == null) return;
+                                                  setState(() {
+                                                    final key =
+                                                        'playlist-$videoId';
+                                                    if (_selectedIndexes
+                                                        .contains(key)) {
+                                                      _selectedIndexes.remove(
+                                                        key,
+                                                      );
+                                                      if (_selectedIndexes
+                                                          .isEmpty) {
+                                                        _isSelectionMode = false;
+                                                      }
+                                                    } else {
+                                                      _selectedIndexes.add(key);
+                                                      _isSelectionMode = true;
+                                                    }
+                                                  });
+                                                },
+                                                onTap: () {
+                                                  if (_isSelectionMode) {
+                                                    if (videoId == null) return;
+                                                    setState(() {
+                                                      final key =
+                                                          'playlist-$videoId';
+                                                      if (_selectedIndexes
+                                                          .contains(key)) {
+                                                        _selectedIndexes.remove(
+                                                          key,
+                                                        );
+                                                        if (_selectedIndexes
+                                                            .isEmpty) {
+                                                          _isSelectionMode =
+                                                              false;
+                                                        }
+                                                      } else {
+                                                        _selectedIndexes.add(
+                                                          key,
+                                                        );
+                                                        _isSelectionMode = true;
+                                                      }
+                                                    });
+                                                  } else {
+                                                    showModalBottomSheet(
+                                                      context: context,
+                                                      shape: const RoundedRectangleBorder(
+                                                        borderRadius:
+                                                            BorderRadius.vertical(
+                                                          top: Radius.circular(
+                                                            16,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                      builder: (context) {
+                                                        return SafeArea(
+                                                          child: Padding(
+                                                            padding:
+                                                                const EdgeInsets.all(
+                                                              24,
+                                                            ),
+                                                            child: _YtPreviewPlayer(
+                                                              results:
+                                                                  _playlistSongs,
+                                                              currentIndex: idx,
+                                                              fallbackThumbUrl:
+                                                                  _currentPlaylist?['thumbUrl'],
+                                                              fallbackArtist:
+                                                                  LocaleProvider.tr('artist_unknown'),
+                                                            ),
+                                                          ),
+                                                        );
+                                                      },
+                                                    );
+                                                  }
+                                                },
+                                                child: Container(
+                                                  width: double.infinity,
+                                                  margin:
+                                                      const EdgeInsets.symmetric(),
+                                                  child: ListTile(
+                                                    contentPadding:
+                                                        const EdgeInsets.symmetric(
+                                                      horizontal: 0,
+                                                      vertical: 4,
+                                                    ),
+                                                    leading: Row(
+                                                      mainAxisSize:
+                                                          MainAxisSize.min,
+                                                      children: [
+                                                        if (_isSelectionMode)
+                                                          Checkbox(
+                                                            value: isSelected,
+                                                            onChanged: (checked) {
+                                                              setState(() {
+                                                                if (videoId ==
+                                                                    null) {
+                                                                  return;
+                                                                }
+                                                                final key =
+                                                                    'playlist-$videoId';
+                                                                if (checked ==
+                                                                    true) {
+                                                                  _selectedIndexes
+                                                                      .add(key);
+                                                                } else {
+                                                                  _selectedIndexes
+                                                                      .remove(
+                                                                    key,
+                                                                  );
+                                                                  if (_selectedIndexes
+                                                                      .isEmpty) {
+                                                                    _isSelectionMode =
+                                                                        false;
+                                                                  }
+                                                                }
+                                                              });
+                                                            },
+                                                          ),
+                                                        ClipRRect(
+                                                          borderRadius:
+                                                              BorderRadius.circular(
+                                                            8,
+                                                          ),
+                                                          child: item.thumbUrl !=
+                                                                  null
+                                                              ? Image.network(
+                                                                  item.thumbUrl!,
+                                                                  width: 56,
+                                                                  height: 56,
+                                                                  fit: BoxFit
+                                                                      .cover,
+                                                                )
+                                                              : (_currentPlaylist !=
+                                                                      null &&
+                                                                  _currentPlaylist!['thumbUrl'] !=
+                                                                      null &&
+                                                                  (_currentPlaylist!['thumbUrl']
+                                                                          as String)
+                                                                      .isNotEmpty)
+                                                            ? Image.network(
+                                                                _currentPlaylist!['thumbUrl'],
+                                                                width: 56,
+                                                                height: 56,
+                                                                fit: BoxFit
+                                                                    .cover,
+                                                              )
+                                                            : Container(
+                                                                width: 56,
+                                                                height: 56,
+                                                                decoration: BoxDecoration(
+                                                                  color: Colors
+                                                                      .grey[300],
+                                                                  borderRadius:
+                                                                      BorderRadius.circular(
+                                                                    12,
+                                                                  ),
+                                                                ),
+                                                                child: const Icon(
+                                                                  Icons
+                                                                      .music_note,
+                                                                  size: 32,
+                                                                  color: Colors
+                                                                      .grey,
+                                                                ),
+                                                              ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                    title: Text(
+                                                      item.title ??
+                                                          LocaleProvider.tr(
+                                                            'title_unknown',
+                                                          ),
+                                                      maxLines: 1,
+                                                      overflow:
+                                                          TextOverflow.ellipsis,
+                                                    ),
+                                                    subtitle: Text(
+                                                      (item.artist != null &&
+                                                              item.artist!
+                                                                  .trim()
+                                                                  .isNotEmpty)
+                                                          ? item.artist!
+                                                          : LocaleProvider.tr(
+                                                              'artist_unknown',
+                                                            ),
+                                                      maxLines: 1,
+                                                      overflow:
+                                                          TextOverflow.ellipsis,
+                                                    ),
+                                                    trailing: IconButton(
+                                                      icon: const Icon(
+                                                        Icons.link,
+                                                      ),
+                                                      tooltip: LocaleProvider.tr(
+                                                        'copy_link',
+                                                      ),
+                                                      onPressed: () {
+                                                        Clipboard.setData(
+                                                          ClipboardData(
+                                                            text:
+                                                                'https://music.youtube.com/watch?v=${item.videoId}',
+                                                          ),
+                                                        );
+                                                      },
+                                                    ),
+                                                  ),
+                                                ),
+                                              );
+                                            },
+                                          ),
+                                        ),
+                                    ],
+                                  );
+                                } else if (_expandedCategory == 'playlists') {
+                                  // Mostrar solo todas las listas de reproducción con botón de volver
+                                  return Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          IconButton(
+                                            icon: Icon(Icons.arrow_back),
+                                            tooltip: 'Volver',
+                                            onPressed: () {
+                                              setState(() {
+                                                _expandedCategory = null;
+                                              });
+                                            },
+                                          ),
+                                          Text(
+                                            LocaleProvider.tr('playlists'),
+                                            style: Theme.of(
+                                              context,
+                                            ).textTheme.titleMedium,
+                                          ),
+                                        ],
+                                      ),
+                                      Expanded(
+                                        child: ListView.builder(
+                                          controller: _playlistScrollController,
+                                          itemCount:
+                                              _playlistResults.length +
+                                              (_loadingMorePlaylists ? 1 : 0),
+                                          itemBuilder: (context, idx) {
+                                            if (_loadingMorePlaylists &&
+                                                idx == _playlistResults.length) {
+                                              return Container(
+                                                padding: const EdgeInsets.all(
+                                                  16,
+                                                ),
+                                                child: Row(
+                                                  mainAxisAlignment:
+                                                      MainAxisAlignment.center,
+                                                  children: [
+                                                    const SizedBox(
+                                                      width: 20,
+                                                      height: 20,
+                                                      child:
+                                                          CircularProgressIndicator(
+                                                            strokeWidth: 2,
+                                                          ),
+                                                    ),
+                                                    const SizedBox(width: 12),
+                                                    TranslatedText(
+                                                      'loading_more',
+                                                      style: TextStyle(
+                                                        fontSize: 14,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              );
+                                            }
+                                            final playlist = _playlistResults[idx];
+                                            return ListTile(
+                                              contentPadding:
+                                                  const EdgeInsets.symmetric(
+                                                horizontal: 0,
+                                                vertical: 10
+                                              ),
+                                              leading: ClipRRect(
+                                                borderRadius:
+                                                    BorderRadius.circular(
+                                                  8,
+                                                ),
+                                                child: playlist['thumbUrl'] != null
+                                                    ? Image.network(
+                                                        playlist['thumbUrl']!,
+                                                        width: 56,
+                                                        height: 56,
+                                                        fit: BoxFit.cover,
+                                                      )
+                                                    : Container(
+                                                        width: 56,
+                                                        height: 56,
+                                                        decoration: BoxDecoration(
+                                                          color: Colors.grey[300],
+                                                          borderRadius:
+                                                              BorderRadius.circular(
+                                                            12,
+                                                          ),
+                                                        ),
+                                                        child: const Icon(
+                                                          Icons.playlist_play,
+                                                          size: 32,
+                                                          color: Colors.grey,
+                                                        ),
+                                                      ),
+                                              ),
+                                              title: Text(
+                                                playlist['title'] ?? 
+                                                    LocaleProvider.tr('title_unknown'),
+                                                maxLines: 2,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+
+                                              trailing: IconButton(
+                                                icon: const Icon(
+                                                  Icons.link,
+                                                ),
+                                                tooltip: LocaleProvider.tr(
+                                                  'copy_link',
+                                                ),
+                                                onPressed: () {
+                                                  Clipboard.setData(
+                                                    ClipboardData(
+                                                      text: 'https://music.youtube.com/playlist?list=${playlist['browseId']}',
+                                                    ),
+                                                  );
+                                                },
+                                              ),
+                                              onTap: () async {
+                                                if (playlist['browseId'] == null) {
+                                                  return;
+                                                }
+                                                setState(() {
+                                                  _expandedCategory = 'playlist';
+                                                  _loadingPlaylistSongs = true;
+                                                  _playlistSongs = [];
+                                                  _currentPlaylist = {
+                                                    'title': playlist['title'],
+                                                    'thumbUrl': playlist['thumbUrl'],
+                                                  };
+                                                });
+                                                final songs = await getPlaylistSongs(
+                                                  playlist['browseId']!,
+                                                );
+                                                if (!mounted) return;
+                                                setState(() {
+                                                  _playlistSongs = songs;
+                                                  _loadingPlaylistSongs = false;
+                                                });
+                                              },
+                                            );
+                                          },
+                                        ),
+                                      ),
                                     ],
                                   );
                                 } else {
@@ -2321,6 +2867,140 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                       ),
                                                     ),
                                                   ),
+                                                );
+                                              }).toList(),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      // Sección Listas de Reproducción
+                                      if (_playlistResults.isNotEmpty)
+                                        SizedBox(height: 16),
+                                      Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          InkWell(
+                                            borderRadius: BorderRadius.circular(
+                                              8,
+                                            ),
+                                            onTap: () {
+                                              setState(() {
+                                                _expandedCategory = 'playlists';
+                                              });
+                                            },
+                                            child: Padding(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                vertical: 4,
+                                              ),
+                                              child: Row(
+                                                mainAxisAlignment:
+                                                    MainAxisAlignment
+                                                        .spaceBetween,
+                                                children: [
+                                                  Text(
+                                                    LocaleProvider.tr('playlists'),
+                                                    style: Theme.of(context)
+                                                        .textTheme
+                                                        .titleMedium
+                                                        ?.copyWith(
+                                                          fontSize: 20,
+                                                        ),
+                                                  ),
+                                                  Icon(Icons.chevron_right),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                          AnimatedSize(
+                                            duration: const Duration(
+                                              milliseconds: 300,
+                                            ),
+                                            curve: Curves.easeInOut,
+                                            child: Column(
+                                              children: _playlistResults.take(3).map((
+                                                playlist,
+                                              ) {
+                                                return ListTile(
+                                                  contentPadding:
+                                                      const EdgeInsets.symmetric(
+                                                    horizontal: 0,
+                                                    vertical: 10
+                                                  ),
+                                                  leading: ClipRRect(
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                      8,
+                                                    ),
+                                                    child: playlist['thumbUrl'] != null
+                                                        ? Image.network(
+                                                            playlist['thumbUrl']!,
+                                                            width: 56,
+                                                            height: 56,
+                                                            fit: BoxFit.cover,
+                                                          )
+                                                        : Container(
+                                                            width: 56,
+                                                            height: 56,
+                                                            decoration: BoxDecoration(
+                                                              color: Colors.grey[300],
+                                                              borderRadius:
+                                                                  BorderRadius.circular(
+                                                                12,
+                                                              ),
+                                                            ),
+                                                            child: const Icon(
+                                                              Icons.playlist_play,
+                                                              size: 32,
+                                                              color: Colors.grey,
+                                                            ),
+                                                          ),
+                                                  ),
+                                                  title: Text(
+                                                    playlist['title'] ?? 
+                                                        LocaleProvider.tr('title_unknown'),
+                                                    maxLines: 2,
+                                                    overflow: TextOverflow.ellipsis,
+                                                  ),
+
+                                                  trailing: IconButton(
+                                                    icon: const Icon(
+                                                      Icons.link,
+                                                    ),
+                                                    tooltip: LocaleProvider.tr(
+                                                      'copy_link',
+                                                    ),
+                                                    onPressed: () {
+                                                      Clipboard.setData(
+                                                        ClipboardData(
+                                                          text: 'https://music.youtube.com/playlist?list=${playlist['browseId']}',
+                                                        ),
+                                                      );
+                                                    },
+                                                  ),
+                                                  onTap: () async {
+                                                    if (playlist['browseId'] == null) {
+                                                      return;
+                                                    }
+                                                    setState(() {
+                                                      _expandedCategory = 'playlist';
+                                                      _loadingPlaylistSongs = true;
+                                                      _playlistSongs = [];
+                                                      _currentPlaylist = {
+                                                        'title': playlist['title'],
+                                                        'thumbUrl': playlist['thumbUrl'],
+                                                      };
+                                                    });
+                                                    final songs = await getPlaylistSongs(
+                                                      playlist['browseId']!,
+                                                    );
+                                                    if (!mounted) return;
+                                                    setState(() {
+                                                      _playlistSongs = songs;
+                                                      _loadingPlaylistSongs = false;
+                                                    });
+                                                  },
                                                 );
                                               }).toList(),
                                             ),
@@ -2938,7 +3618,7 @@ class _YtPreviewPlayerState extends State<_YtPreviewPlayer> {
                     minHeight: 6,
                     backgroundColor: Theme.of(
                       context,
-                    ).colorScheme.outline.withValues(alpha: 0.15),
+                    ).colorScheme.primary.withValues(alpha: 0.3),
                     valueColor: AlwaysStoppedAnimation<Color>(
                       Theme.of(context).colorScheme.primary,
                     ),

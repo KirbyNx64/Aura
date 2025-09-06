@@ -294,145 +294,165 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     showDialog(
       context: context,
       builder: (BuildContext context) {
-        return AlertDialog(
-          title: Center(
-            child: TranslatedText(
-              'search_song',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.w600,
+        return ValueListenableBuilder<AppColorScheme>(
+          valueListenable: colorSchemeNotifier,
+          builder: (context, colorScheme, child) {
+            final isAmoled = colorScheme == AppColorScheme.amoled;
+            final isDark = Theme.of(context).brightness == Brightness.dark;
+            
+            return AlertDialog(
+              title: Center(
+                child: TranslatedText(
+                  'search_song',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
-            ),
-          ),
-          content: SizedBox(
-            width: double.maxFinite,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                SizedBox(height: 18),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Row(
-                    children: [
-                      SizedBox(width: 4),
-                      TranslatedText(
-                        'search_options',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Theme.of(context).colorScheme.onSurface,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                SizedBox(height: 20),
-                // Tarjeta de YouTube
-                InkWell(
-                  onTap: () {
-                    Navigator.of(context).pop();
-                    _searchSongOnYouTube(mediaItem);
-                  },
-                  borderRadius: BorderRadius.circular(16),
-                  child: Container(
-                    width: double.infinity,
-                    padding: EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.secondaryContainer,
-                      borderRadius: BorderRadius.only(
-                        topLeft: Radius.circular(16),
-                        topRight: Radius.circular(16),
-                        bottomLeft: Radius.circular(4),
-                        bottomRight: Radius.circular(4),
-                      ),
-                      border: Border.all(
-                        color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
-                        width: 1,
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Image.asset(
-                            'assets/icon/Youtube_logo.png',
-                            width: 30,
-                            height: 30,
-                          ),
-                        ),
-                        SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'YouTube',
+              content: SizedBox(
+                width: double.maxFinite,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(height: 18),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Row(
+                        children: [
+                          SizedBox(width: 4),
+                          TranslatedText(
+                            'search_options',
                             style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
+                              fontSize: 14,
                               color: Theme.of(context).colorScheme.onSurface,
                             ),
                           ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                SizedBox(height: 4),
-                // Tarjeta de YouTube Music
-                InkWell(
-                  onTap: () {
-                    Navigator.of(context).pop();
-                    _searchSongOnYouTubeMusic(mediaItem);
-                  },
-                  borderRadius: BorderRadius.circular(16),
-                  child: Container(
-                    width: double.infinity,
-                    padding: EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.secondaryContainer,
-                      borderRadius: BorderRadius.only(
-                        topLeft: Radius.circular(4),
-                        topRight: Radius.circular(4),
-                        bottomLeft: Radius.circular(16),
-                        bottomRight: Radius.circular(16),
-                      ),
-                      border: Border.all(
-                        color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
-                        width: 1,
+                        ],
                       ),
                     ),
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(12),
+                    SizedBox(height: 20),
+                    // Tarjeta de YouTube
+                    InkWell(
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        _searchSongOnYouTube(mediaItem);
+                      },
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        width: double.infinity,
+                        padding: EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: isAmoled && isDark
+                              ? Colors.white.withValues(alpha: 0.1) // Color personalizado para amoled
+                              : Theme.of(context).colorScheme.secondaryContainer,
+                          borderRadius: BorderRadius.only(
+                            topLeft: Radius.circular(16),
+                            topRight: Radius.circular(16),
+                            bottomLeft: Radius.circular(4),
+                            bottomRight: Radius.circular(4),
                           ),
-                          child: Image.asset(
-                            'assets/icon/Youtube_Music_icon.png',
-                            width: 30,
-                            height: 30,
+                          border: Border.all(
+                            color: isAmoled && isDark
+                                ? Colors.white.withValues(alpha: 0.2) // Borde personalizado para amoled
+                                : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
+                            width: 1,
                           ),
                         ),
-                        SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'YT Music',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              color: Theme.of(context).colorScheme.onSurface,
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Image.asset(
+                                'assets/icon/Youtube_logo.png',
+                                width: 30,
+                                height: 30,
+                              ),
                             ),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'YouTube',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: isAmoled && isDark
+                                      ? Colors.white // Texto blanco para amoled
+                                      : Theme.of(context).colorScheme.onSurface,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: 4),
+                    // Tarjeta de YouTube Music
+                    InkWell(
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        _searchSongOnYouTubeMusic(mediaItem);
+                      },
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        width: double.infinity,
+                        padding: EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: isAmoled && isDark
+                              ? Colors.white.withValues(alpha: 0.1) // Color personalizado para amoled
+                              : Theme.of(context).colorScheme.secondaryContainer,
+                          borderRadius: BorderRadius.only(
+                            topLeft: Radius.circular(4),
+                            topRight: Radius.circular(4),
+                            bottomLeft: Radius.circular(16),
+                            bottomRight: Radius.circular(16),
+                          ),
+                          border: Border.all(
+                            color: isAmoled && isDark
+                                ? Colors.white.withValues(alpha: 0.2) // Borde personalizado para amoled
+                                : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
+                            width: 1,
                           ),
                         ),
-                      ],
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Image.asset(
+                                'assets/icon/Youtube_Music_icon.png',
+                                width: 30,
+                                height: 30,
+                              ),
+                            ),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'YT Music',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: isAmoled && isDark
+                                      ? Colors.white // Texto blanco para amoled
+                                      : Theme.of(context).colorScheme.onSurface,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
-                  ),
+                    
+                  ],
                 ),
-                
-              ],
-            ),
-          ),
+              ),
+            );
+          },
         );
       },
     );
@@ -1024,12 +1044,15 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
 
   void _showPlaylistDialog(BuildContext context) {
     final queue = audioHandler?.queue.value;
-    final maxHeight = MediaQuery.of(context).size.height * 0.95;
+    // Usar el área disponible excluyendo la barra de estado
+    final maxHeight = MediaQuery.of(context).size.height - MediaQuery.of(context).padding.top;
 
     showModalBottomSheet(
       context: context,
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       isScrollControlled: true,
+      // Asegurar que el modal respete la barra de estado
+      useSafeArea: true,
       builder: (context) {
         return Container(
           constraints: BoxConstraints(maxHeight: maxHeight),
@@ -1116,9 +1139,12 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
             context: context,
             backgroundColor: Theme.of(context).scaffoldBackgroundColor,
             isScrollControlled: true,
+            // Asegurar que el modal respete la barra de estado
+            useSafeArea: true,
             builder: (context) {
               final queue = audioHandler?.queue.value;
-              final maxHeight = MediaQuery.of(context).size.height;
+              // Usar el área disponible excluyendo la barra de estado
+              final maxHeight = MediaQuery.of(context).size.height - MediaQuery.of(context).padding.top;
               return Container(
                 constraints: BoxConstraints(maxHeight: maxHeight),
                 child: StreamBuilder<MediaItem?>(
@@ -1206,6 +1232,10 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
             },
             child: Scaffold(
               appBar: AppBar(
+                backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+                surfaceTintColor: Colors.transparent,
+                elevation: 0,
+              scrolledUnderElevation: 0,
                 leading: ValueListenableBuilder<bool>(
                   valueListenable: playLoadingNotifier,
                   builder: (context, isLoading, _) {
@@ -1264,7 +1294,6 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                     }
                   },
                 ),
-                backgroundColor: Theme.of(context).colorScheme.surface,
                 actions: [
                   IconButton(
                     iconSize: 38,
@@ -1647,6 +1676,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                               .toDouble(),
                                                           value: sliderValueMs
                                                               .toDouble(),
+                                                          inactiveColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
                                                           onChanged: (value) {
                                                             _dragValueSecondsNotifier
                                                                     .value =
@@ -2042,7 +2072,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                               duration:
                                                                   const Duration(
                                                                     milliseconds:
-                                                                        340,
+                                                                        250,
                                                                   ),
                                                               curve: Curves
                                                                   .easeInOut,
@@ -3074,7 +3104,9 @@ class _PlaylistListViewState extends State<_PlaylistListView> {
         ListView.builder(
           controller: _scrollController,
           shrinkWrap: true,
-          padding: const EdgeInsets.only(top: 100), // Aumentado el espacio para evitar recorte
+          padding: EdgeInsets.only(
+            top: 100 + MediaQuery.of(context).padding.top, // Agregar padding para la barra de estado
+          ),
           itemCount: widget.queue.length,
           itemBuilder: (context, index) {
             final item = widget.queue[index];
@@ -3138,7 +3170,7 @@ class _PlaylistListViewState extends State<_PlaylistListView> {
         
         // Encabezado fijo en la parte superior con bordes redondeados
         Positioned(
-          top: 0,
+          top: MediaQuery.of(context).padding.top, // Respeta la barra de estado
           left: 0,
           right: 0,
           child: Container(
