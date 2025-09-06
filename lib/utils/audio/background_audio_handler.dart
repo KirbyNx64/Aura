@@ -30,7 +30,7 @@ Future<AudioHandler> initAudioService() async {
         androidNotificationChannelName: 'Aura Music',
         androidNotificationOngoing: true,
         androidNotificationClickStartsActivity: true,
-        // androidStopForegroundOnPause: false,
+        androidStopForegroundOnPause: false,
         androidResumeOnClick: true,
         preloadArtwork: true,
       ),
