@@ -1071,6 +1071,8 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     if (_initializing || _isSkipping) return;
 
     _isSkipping = true;
+    _isManualChange = true;
+
     try {
       // Cancelar operaciones pendientes antes de cambiar
       _pendingArtworkOperations.clear();
@@ -1092,6 +1094,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     if (_initializing || _isSkipping) return;
 
     _isSkipping = true;
+    _isManualChange = true;
     try {
       // Cancelar operaciones pendientes antes de cambiar
       _pendingArtworkOperations.clear();
@@ -1115,8 +1118,8 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   @override
   Future<void> skipToQueueItem(int index) async {
     if (_initializing) return;
+    // _isManualChange = true;
     if (index >= 0 && index < _mediaQueue.length) {
-      _isManualChange = true;
       try {
         // Cancelar operaciones pendientes antes de cambiar
         _pendingArtworkOperations.clear();
@@ -1143,7 +1146,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       } catch (e) {
         // Error silencioso
       } finally {
-        _isManualChange = false;
+        // _isManualChange = false;
       }
     }
   }

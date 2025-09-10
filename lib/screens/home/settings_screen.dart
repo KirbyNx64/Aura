@@ -11,6 +11,9 @@ import 'package:music/utils/db/favorites_db.dart';
 import 'package:music/utils/db/playlists_db.dart';
 import 'package:music/utils/db/recent_db.dart';
 import 'package:music/utils/db/mostplayer_db.dart';
+import 'package:music/utils/db/shortcuts_db.dart';
+import 'package:music/utils/db/artwork_db.dart';
+import 'package:music/utils/db/songs_index_db.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:music/utils/notifiers.dart';
@@ -37,6 +40,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String? _downloadDirectory;
   bool _downloadTypeExplode = false; // true: Explode, false: Directo
   bool _coverQualityHigh = true; // true: Alto, false: Bajo
+  String _audioQuality = 'high'; // 'high', 'medium', 'low'
   AppColorScheme _currentColorScheme = AppColorScheme.deepPurple;
   int _artworkQuality = 410; // 80% por defecto
   int? _availableBytesAtDownloadDir;
@@ -50,6 +54,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _loadDownloadDirectory();
     _loadDownloadType();
     _loadCoverQuality();
+    _loadAudioQuality();
     _loadColorScheme();
     _loadArtworkQuality();
     _initHeroAnimationSetting();
@@ -77,6 +82,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
     });
   }
 
+  void _showInfoDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(LocaleProvider.tr('info')),
+        content: Text(LocaleProvider.tr('settings_info')),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(LocaleProvider.tr('ok')),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showArtworkQualityDialog(BuildContext context) {
     showDialog(
       context: context,
@@ -99,9 +120,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               content: SizedBox(
                 width: 400,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
+                height: 500, // Altura fija para permitir scroll
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
                     SizedBox(height: 18),
                     Align(
                       alignment: Alignment.centerLeft,
@@ -592,6 +615,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ],
                 ),
               ),
+              )
             );
           },
         );
@@ -1123,6 +1147,402 @@ class _SettingsScreenState extends State<SettingsScreen> {
     });
     // Actualizar el notifier global
     coverQualityNotifier.value = highQuality;
+  }
+
+  Future<void> _loadAudioQuality() async {
+    final prefs = await SharedPreferences.getInstance();
+    final quality = prefs.getString('audio_quality') ?? 'high';
+    setState(() {
+      _audioQuality = quality;
+    });
+    // Actualizar el notifier global
+    audioQualityNotifier.value = quality;
+  }
+
+  Future<void> _setAudioQuality(String quality) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('audio_quality', quality);
+    setState(() {
+      _audioQuality = quality;
+    });
+    // Actualizar el notifier global
+    audioQualityNotifier.value = quality;
+  }
+
+  Future<void> _showAudioQualitySelection() async {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return ValueListenableBuilder<AppColorScheme>(
+          valueListenable: colorSchemeNotifier,
+          builder: (context, colorScheme, child) {
+            final isAmoled = colorScheme == AppColorScheme.amoled;
+            final isDark = Theme.of(context).brightness == Brightness.dark;
+            
+            return AlertDialog(
+              title: Center(
+                child: TranslatedText(
+                  'audio_quality',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              content: SizedBox(
+                width: 400,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(height: 18),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 4),
+                        child: TranslatedText(
+                          'audio_quality_desc',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Theme.of(context).colorScheme.onSurface,
+                          ),
+                          textAlign: TextAlign.left,
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: 20),
+                    // Tarjeta de calidad alta
+                    InkWell(
+                      onTap: () async {
+                        Navigator.of(context).pop();
+                        await _setAudioQuality('high');
+                      },
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        width: double.infinity,
+                        padding: EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: _audioQuality == 'high' 
+                              ? (isAmoled && isDark
+                                  ? Colors.white.withValues(alpha: 0.2)
+                                  : Theme.of(context).colorScheme.primaryContainer)
+                              : (isAmoled && isDark
+                                  ? Colors.white.withValues(alpha: 0.1)
+                                  : Theme.of(context).colorScheme.secondaryContainer),
+                          borderRadius: BorderRadius.only(
+                            topLeft: Radius.circular(16),
+                            topRight: Radius.circular(16),
+                            bottomLeft: Radius.circular(4),
+                            bottomRight: Radius.circular(4),
+                          ),
+                          border: Border.all(
+                            color: _audioQuality == 'high'
+                                ? (isAmoled && isDark
+                                    ? Colors.white.withValues(alpha: 0.4)
+                                    : Theme.of(context).colorScheme.primary.withValues(alpha: 0.3))
+                                : (isAmoled && isDark
+                                    ? Colors.white.withValues(alpha: 0.2)
+                                    : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1)),
+                            width: _audioQuality == 'high' ? 2 : 1,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(12),
+                                color: _audioQuality == 'high'
+                                    ? (isAmoled && isDark
+                                        ? Colors.white.withValues(alpha: 0.2)
+                                        : Theme.of(context).colorScheme.primary.withValues(alpha: 0.1))
+                                    : Colors.transparent,
+                              ),
+                              child: Icon(
+                                Icons.high_quality,
+                                size: 30,
+                                color: _audioQuality == 'high'
+                                    ? (isAmoled && isDark
+                                        ? Colors.white
+                                        : Theme.of(context).colorScheme.primary)
+                                    : (isAmoled && isDark
+                                        ? Colors.white
+                                        : Theme.of(context).colorScheme.onSurface),
+                              ),
+                            ),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    LocaleProvider.tr('audio_quality_high'),
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: _audioQuality == 'high'
+                                          ? (isAmoled && isDark
+                                              ? Colors.white
+                                              : Theme.of(context).colorScheme.primary)
+                                          : (isAmoled && isDark
+                                              ? Colors.white
+                                              : Theme.of(context).colorScheme.onSurface),
+                                    ),
+                                  ),
+                                  SizedBox(height: 4),
+                                  Text(
+                                    LocaleProvider.tr('audio_quality_high_desc'),
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: _audioQuality == 'high'
+                                          ? (isAmoled && isDark
+                                              ? Colors.white.withValues(alpha: 0.8)
+                                              : Theme.of(context).colorScheme.primary.withValues(alpha: 0.8))
+                                          : (isAmoled && isDark
+                                              ? Colors.white.withValues(alpha: 0.7)
+                                              : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7)),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            if (_audioQuality == 'high')
+                              Icon(
+                                Icons.check_circle,
+                                color: isAmoled && isDark
+                                    ? Colors.white
+                                    : Theme.of(context).colorScheme.primary,
+                                size: 24,
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: 4),
+                    // Tarjeta de calidad media
+                    InkWell(
+                      onTap: () async {
+                        Navigator.of(context).pop();
+                        await _setAudioQuality('medium');
+                      },
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        width: double.infinity,
+                        padding: EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: _audioQuality == 'medium' 
+                              ? (isAmoled && isDark
+                                  ? Colors.white.withValues(alpha: 0.2)
+                                  : Theme.of(context).colorScheme.primaryContainer)
+                              : (isAmoled && isDark
+                                  ? Colors.white.withValues(alpha: 0.1)
+                                  : Theme.of(context).colorScheme.secondaryContainer),
+                          borderRadius: BorderRadius.only(
+                            topLeft: Radius.circular(4),
+                            topRight: Radius.circular(4),
+                            bottomLeft: Radius.circular(4),
+                            bottomRight: Radius.circular(4),
+                          ),
+                          border: Border.all(
+                            color: _audioQuality == 'medium'
+                                ? (isAmoled && isDark
+                                    ? Colors.white.withValues(alpha: 0.4)
+                                    : Theme.of(context).colorScheme.primary.withValues(alpha: 0.3))
+                                : (isAmoled && isDark
+                                    ? Colors.white.withValues(alpha: 0.2)
+                                    : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1)),
+                            width: _audioQuality == 'medium' ? 2 : 1,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(12),
+                                color: _audioQuality == 'medium'
+                                    ? (isAmoled && isDark
+                                        ? Colors.white.withValues(alpha: 0.2)
+                                        : Theme.of(context).colorScheme.primary.withValues(alpha: 0.1))
+                                    : Colors.transparent,
+                              ),
+                              child: Icon(
+                                Icons.equalizer,
+                                size: 30,
+                                color: _audioQuality == 'medium'
+                                    ? (isAmoled && isDark
+                                        ? Colors.white
+                                        : Theme.of(context).colorScheme.primary)
+                                    : (isAmoled && isDark
+                                        ? Colors.white
+                                        : Theme.of(context).colorScheme.onSurface),
+                              ),
+                            ),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    LocaleProvider.tr('audio_quality_medium'),
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: _audioQuality == 'medium'
+                                          ? (isAmoled && isDark
+                                              ? Colors.white
+                                              : Theme.of(context).colorScheme.primary)
+                                          : (isAmoled && isDark
+                                              ? Colors.white
+                                              : Theme.of(context).colorScheme.onSurface),
+                                    ),
+                                  ),
+                                  SizedBox(height: 4),
+                                  Text(
+                                    LocaleProvider.tr('audio_quality_medium_desc'),
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: _audioQuality == 'medium'
+                                          ? (isAmoled && isDark
+                                              ? Colors.white.withValues(alpha: 0.8)
+                                              : Theme.of(context).colorScheme.primary.withValues(alpha: 0.8))
+                                          : (isAmoled && isDark
+                                              ? Colors.white.withValues(alpha: 0.7)
+                                              : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7)),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            if (_audioQuality == 'medium')
+                              Icon(
+                                Icons.check_circle,
+                                color: isAmoled && isDark
+                                    ? Colors.white
+                                    : Theme.of(context).colorScheme.primary,
+                                size: 24,
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: 4),
+                    // Tarjeta de calidad baja
+                    InkWell(
+                      onTap: () async {
+                        Navigator.of(context).pop();
+                        await _setAudioQuality('low');
+                      },
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        width: double.infinity,
+                        padding: EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: _audioQuality == 'low' 
+                              ? (isAmoled && isDark
+                                  ? Colors.white.withValues(alpha: 0.2)
+                                  : Theme.of(context).colorScheme.primaryContainer)
+                              : (isAmoled && isDark
+                                  ? Colors.white.withValues(alpha: 0.1)
+                                  : Theme.of(context).colorScheme.secondaryContainer),
+                          borderRadius: BorderRadius.only(
+                            topLeft: Radius.circular(4),
+                            topRight: Radius.circular(4),
+                            bottomLeft: Radius.circular(16),
+                            bottomRight: Radius.circular(16),
+                          ),
+                          border: Border.all(
+                            color: _audioQuality == 'low'
+                                ? (isAmoled && isDark
+                                    ? Colors.white.withValues(alpha: 0.4)
+                                    : Theme.of(context).colorScheme.primary.withValues(alpha: 0.3))
+                                : (isAmoled && isDark
+                                    ? Colors.white.withValues(alpha: 0.2)
+                                    : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1)),
+                            width: _audioQuality == 'low' ? 2 : 1,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(12),
+                                color: _audioQuality == 'low'
+                                    ? (isAmoled && isDark
+                                        ? Colors.white.withValues(alpha: 0.2)
+                                        : Theme.of(context).colorScheme.primary.withValues(alpha: 0.1))
+                                    : Colors.transparent,
+                              ),
+                              child: Icon(
+                                Icons.low_priority,
+                                size: 30,
+                                color: _audioQuality == 'low'
+                                    ? (isAmoled && isDark
+                                        ? Colors.white
+                                        : Theme.of(context).colorScheme.primary)
+                                    : (isAmoled && isDark
+                                        ? Colors.white
+                                        : Theme.of(context).colorScheme.onSurface),
+                              ),
+                            ),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    LocaleProvider.tr('audio_quality_low'),
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: _audioQuality == 'low'
+                                          ? (isAmoled && isDark
+                                              ? Colors.white
+                                              : Theme.of(context).colorScheme.primary)
+                                          : (isAmoled && isDark
+                                              ? Colors.white
+                                              : Theme.of(context).colorScheme.onSurface),
+                                    ),
+                                  ),
+                                  SizedBox(height: 4),
+                                  Text(
+                                    LocaleProvider.tr('audio_quality_low_desc'),
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: _audioQuality == 'low'
+                                          ? (isAmoled && isDark
+                                              ? Colors.white.withValues(alpha: 0.8)
+                                              : Theme.of(context).colorScheme.primary.withValues(alpha: 0.8))
+                                          : (isAmoled && isDark
+                                              ? Colors.white.withValues(alpha: 0.7)
+                                              : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7)),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            if (_audioQuality == 'low')
+                              Icon(
+                                Icons.check_circle,
+                                color: isAmoled && isDark
+                                    ? Colors.white
+                                    : Theme.of(context).colorScheme.primary,
+                                size: 24,
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   Future<void> _showCoverQualitySelection() async {
@@ -2278,6 +2698,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
           icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.of(context).pop(),
         ),
+        // Icono de información
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.info_outline, size: 26),
+            onPressed: () => _showInfoDialog(context),
+          ),
+        ],
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
@@ -2285,7 +2712,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           // Preferencias
           TranslatedText(
             'preferences',
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.primary),
           ),
           const SizedBox(height: 8),
           Card(
@@ -2371,7 +2798,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           // Descargas
           TranslatedText(
             'downloads',
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.primary),
           ),
           const SizedBox(height: 8),
           Card(
@@ -2402,6 +2829,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(10),
                             child: LinearProgressIndicator(
+                              // ignore: deprecated_member_use
                               year2023: false,
                               value: (_totalBytesAtDownloadDir! > 0)
                                   ? (1 -
@@ -2409,6 +2837,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                             _totalBytesAtDownloadDir!))
                                   : null,
                               minHeight: 6,
+                              backgroundColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
                             ),
                           ),
                         )
@@ -2499,6 +2928,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: Column(
               children: [
                 ListTile(
+                  leading: const Icon(Icons.audiotrack),
+                  title: TranslatedText('audio_quality'),
+                  subtitle: TranslatedText(
+                    'audio_quality_desc',
+                    style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7)),
+                  ),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.arrow_drop_down),
+                    onPressed: () => _showAudioQualitySelection(),
+                  ),
+                  onTap: () => _showAudioQualitySelection(),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 4),
+          Card(
+            margin: EdgeInsets.zero,
+            shape: const RoundedRectangleBorder(  
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(4),
+                topRight: Radius.circular(4),
+                bottomLeft: Radius.circular(4),
+                bottomRight: Radius.circular(4),
+              ),
+            ),
+            child: Column(
+              children: [
+                ListTile(
                   leading: const Icon(Icons.image),
                   title: TranslatedText('cover_quality'),
                   subtitle: TranslatedText(
@@ -2564,7 +3022,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           // Música y reproducción
           Text(
             LocaleProvider.tr('music_and_playback'),
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.primary),
           ),
           const SizedBox(height: 8),
           Card(
@@ -2670,7 +3128,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: Column(
               children: [
                 ListTile(
-                  leading: const Icon(Icons.lyrics),
+                  leading: const Icon(Icons.lyrics_outlined),
                   title: Text(LocaleProvider.tr('delete_lyrics')),
                   subtitle: Text(
                     LocaleProvider.tr('delete_lyrics_desc'),
@@ -2725,7 +3183,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           // Apartado de Respaldo
           Text(
             LocaleProvider.tr('backup'),
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.primary),
           ),
           const SizedBox(height: 8),
           Card(
@@ -2782,7 +3240,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           // Ajustes de la app
           Text(
             LocaleProvider.tr('app_settings'),
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.primary),
           ),
           const SizedBox(height: 8),
           Card(
@@ -2791,6 +3249,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
               borderRadius: BorderRadius.only(
                 topLeft: Radius.circular(16),
                 topRight: Radius.circular(16),
+                bottomLeft: Radius.circular(4),
+                bottomRight: Radius.circular(4),
+              ),
+            ),
+            child: Column(
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.restore),
+                  title: Text(LocaleProvider.tr('reset_app')),
+                  subtitle: Text(
+                    LocaleProvider.tr('reset_app_desc'),
+                    style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7)),
+                  ),
+                  onTap: _resetApp,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 4),
+          Card(
+            margin: EdgeInsets.zero,
+            shape: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(4),
+                topRight: Radius.circular(4),
                 bottomLeft: Radius.circular(4),
                 bottomRight: Radius.circular(4),
               ),
@@ -2866,7 +3349,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              '${LocaleProvider.tr('version')}: v1.4.11',
+                              '${LocaleProvider.tr('version')}: v1.5.0',
                               style: const TextStyle(fontSize: 15),
                               textAlign: TextAlign.center,
                             ),
@@ -3050,6 +3533,446 @@ class _SettingsScreenState extends State<SettingsScreen> {
             title: Text(LocaleProvider.tr('error')),
             content: Text('${LocaleProvider.tr('error')}: $e'),
           ),
+        );
+      }
+    }
+  }
+
+  // Función para restablecer la aplicación
+  Future<void> _resetApp() async {
+    try {
+      // Mostrar diálogo de confirmación
+      if (!mounted) return;
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (BuildContext context) {
+          return ValueListenableBuilder<AppColorScheme>(
+            valueListenable: colorSchemeNotifier,
+            builder: (context, colorScheme, child) {
+              final isAmoled = colorScheme == AppColorScheme.amoled;
+              final isDark = Theme.of(context).brightness == Brightness.dark;
+              
+              return AlertDialog(
+                title: Center(
+                  child: Text(
+                    LocaleProvider.tr('reset_app_confirm'),
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                content: SizedBox(
+                  width: 400,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SizedBox(height: 18),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 4),
+                          child: Text(
+                            LocaleProvider.tr('reset_app_warning'),
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Theme.of(context).colorScheme.onSurface,
+                            ),
+                            textAlign: TextAlign.left,
+                            maxLines: 4,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ),
+                      SizedBox(height: 20),
+                      // Tarjeta de confirmar restablecimiento
+                      InkWell(
+                        onTap: () => Navigator.of(context).pop(true),
+                        borderRadius: BorderRadius.circular(16),
+                        child: Container(
+                          width: double.infinity,
+                          padding: EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: isAmoled && isDark
+                                ? Colors.red.withValues(alpha: 0.2) // Color personalizado para amoled
+                                : Theme.of(context).colorScheme.errorContainer,
+                            borderRadius: BorderRadius.only(
+                              topLeft: Radius.circular(16),
+                              topRight: Radius.circular(16),
+                              bottomLeft: Radius.circular(4),
+                              bottomRight: Radius.circular(4),
+                            ),
+                            border: isAmoled && isDark
+                                ? Border.all(
+                                    color: Colors.red.withValues(alpha: 0.4), // Borde personalizado para amoled
+                                    width: 1,
+                                  )
+                                : null,
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: EdgeInsets.all(8),
+                                child: Icon(
+                                  Icons.restore,
+                                  size: 30,
+                                  color: isAmoled && isDark
+                                      ? Colors.red // Ícono rojo para amoled
+                                      : Theme.of(context).colorScheme.error,
+                                ),
+                              ),
+                              SizedBox(width: 8),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      LocaleProvider.tr('reset_app'),
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600,
+                                        color: isAmoled && isDark
+                                            ? Colors.red // Texto rojo para amoled
+                                            : Theme.of(context).colorScheme.error,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      SizedBox(height: 4),
+                      // Tarjeta de cancelar
+                      InkWell(
+                        onTap: () => Navigator.of(context).pop(false),
+                        borderRadius: BorderRadius.circular(16),
+                        child: Container(
+                          width: double.infinity,
+                          padding: EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: isAmoled && isDark
+                                ? Colors.white.withValues(alpha: 0.1) // Color personalizado para amoled
+                                : Theme.of(context).colorScheme.secondaryContainer,
+                            borderRadius: BorderRadius.only(
+                              bottomLeft: Radius.circular(16),
+                              bottomRight: Radius.circular(16),
+                              topLeft: Radius.circular(4),
+                              topRight: Radius.circular(4),
+                            ),
+                            border: Border.all(
+                              color: isAmoled && isDark
+                                  ? Colors.white.withValues(alpha: 0.2) // Borde personalizado para amoled
+                                  : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
+                              width: 1,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(12),
+                                  color: Colors.transparent,
+                                ),
+                                child: Icon(
+                                  Icons.cancel,
+                                  size: 30,
+                                  color: isAmoled && isDark
+                                      ? Colors.white // Ícono blanco para amoled
+                                      : Theme.of(context).colorScheme.onSurface,
+                                ),
+                              ),
+                              SizedBox(width: 8),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      LocaleProvider.tr('cancel'),
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600,
+                                        color: isAmoled && isDark
+                                            ? Colors.white // Texto blanco para amoled
+                                            : Theme.of(context).colorScheme.onSurface,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          );
+        },
+      );
+
+      if (confirmed != true) return;
+
+      // Borrar todas las bases de datos
+      final boxFav = await FavoritesDB().box;
+      await boxFav.clear();
+      
+      final boxRec = await RecentsDB().box;
+      await boxRec.clear();
+      
+      final boxMost = await MostPlayedDB().box;
+      await boxMost.clear();
+      
+      final boxPl = await PlaylistsDB().box;
+      await boxPl.clear();
+      
+      final boxShortcuts = await ShortcutsDB().box;
+      await boxShortcuts.clear();
+      
+      final boxSongs = await SongsIndexDB().box;
+      await boxSongs.clear();
+      
+      await ArtworkDB.clearCache();
+      
+      // Borrar letras de canciones
+      await SyncedLyricsService.clearLyrics();
+      
+      // Borrar SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.clear();
+
+      if (!mounted) return;
+
+      // Activar notifiers para recargar datos
+      favoritesShouldReload.value = !favoritesShouldReload.value;
+      playlistsShouldReload.value = !playlistsShouldReload.value;
+      shortcutsShouldReload.value = !shortcutsShouldReload.value;
+      mostPlayedShouldReload.value = !mostPlayedShouldReload.value;
+
+      // Mostrar mensaje de éxito
+      showDialog(
+        context: context,
+        builder: (BuildContext context) {
+          return ValueListenableBuilder<AppColorScheme>(
+            valueListenable: colorSchemeNotifier,
+            builder: (context, colorScheme, child) {
+              final isAmoled = colorScheme == AppColorScheme.amoled;
+              final isDark = Theme.of(context).brightness == Brightness.dark;
+              
+              return AlertDialog(
+                title: Center(
+                  child: Text(
+                    LocaleProvider.tr('success'),
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                content: SizedBox(
+                  width: 400,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SizedBox(height: 18),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 4),
+                          child: Text(
+                            LocaleProvider.tr('reset_app_success'),
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Theme.of(context).colorScheme.onSurface,
+                            ),
+                            textAlign: TextAlign.left,
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ),
+                      SizedBox(height: 20),
+                      // Tarjeta de aceptar
+                      InkWell(
+                        onTap: () => Navigator.of(context).pop(),
+                        borderRadius: BorderRadius.circular(16),
+                        child: Container(
+                          width: double.infinity,
+                          padding: EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: isAmoled && isDark
+                                ? Colors.white.withValues(alpha: 0.2) // Color personalizado para amoled
+                                : Theme.of(context).colorScheme.primaryContainer,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: isAmoled && isDark
+                                  ? Colors.white.withValues(alpha: 0.4) // Borde personalizado para amoled
+                                  : Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
+                              width: 2,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(12),
+                                  color: isAmoled && isDark
+                                      ? Colors.white.withValues(alpha: 0.2) // Fondo del ícono para amoled
+                                      : Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                                ),
+                                child: Icon(
+                                  Icons.check_circle,
+                                  size: 30,
+                                  color: isAmoled && isDark
+                                      ? Colors.white // Ícono blanco para amoled
+                                      : Theme.of(context).colorScheme.primary,
+                                ),
+                              ),
+                              SizedBox(width: 8),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      LocaleProvider.tr('ok'),
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600,
+                                        color: isAmoled && isDark
+                                            ? Colors.white // Texto blanco para amoled
+                                            : Theme.of(context).colorScheme.primary,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          );
+        },
+      );
+    } catch (e) {
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (BuildContext context) {
+            return ValueListenableBuilder<AppColorScheme>(
+              valueListenable: colorSchemeNotifier,
+              builder: (context, colorScheme, child) {
+                final isAmoled = colorScheme == AppColorScheme.amoled;
+                final isDark = Theme.of(context).brightness == Brightness.dark;
+                
+                return AlertDialog(
+                  title: Center(
+                    child: Text(
+                      LocaleProvider.tr('error'),
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  content: SizedBox(
+                    width: 400,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        SizedBox(height: 18),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 4),
+                            child: Text(
+                              '${LocaleProvider.tr('error')}: $e',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Theme.of(context).colorScheme.onSurface,
+                              ),
+                              textAlign: TextAlign.left,
+                              maxLines: 3,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ),
+                        SizedBox(height: 20),
+                        // Tarjeta de aceptar
+                        InkWell(
+                          onTap: () => Navigator.of(context).pop(),
+                          borderRadius: BorderRadius.circular(16),
+                          child: Container(
+                            width: double.infinity,
+                            padding: EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: isAmoled && isDark
+                                  ? Colors.red.withValues(alpha: 0.2) // Color personalizado para amoled
+                                  : Theme.of(context).colorScheme.errorContainer,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: isAmoled && isDark
+                                    ? Colors.red.withValues(alpha: 0.4) // Borde personalizado para amoled
+                                    : Theme.of(context).colorScheme.error.withValues(alpha: 0.3),
+                                width: 2,
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Container(
+                                  padding: EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(12),
+                                    color: isAmoled && isDark
+                                        ? Colors.red.withValues(alpha: 0.2) // Fondo del ícono para amoled
+                                        : Theme.of(context).colorScheme.error.withValues(alpha: 0.1),
+                                  ),
+                                  child: Icon(
+                                    Icons.error,
+                                    size: 30,
+                                    color: isAmoled && isDark
+                                        ? Colors.red // Ícono rojo para amoled
+                                        : Theme.of(context).colorScheme.error,
+                                  ),
+                                ),
+                                SizedBox(width: 8),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        LocaleProvider.tr('ok'),
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w600,
+                                          color: isAmoled && isDark
+                                              ? Colors.red // Texto rojo para amoled
+                                              : Theme.of(context).colorScheme.error,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            );
+          },
         );
       }
     }

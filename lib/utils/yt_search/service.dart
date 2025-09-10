@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:dio/dio.dart';
+import '../connectivity_helper.dart';
 
 CancelToken? _searchCancelToken;
 
@@ -131,6 +132,19 @@ dynamic nav(dynamic data, List<dynamic> path) {
 
 // Función para enviar la petición
 Future<Response> sendRequest(String action, Map<dynamic, dynamic> data, {String additionalParams = "", CancelToken? cancelToken}) async {
+  // Verificar conectividad antes de hacer la petición
+  final hasConnection = await ConnectivityHelper.hasInternetConnectionWithTimeout(
+    timeout: const Duration(seconds: 5),
+  );
+  
+  if (!hasConnection) {
+    throw DioException(
+      requestOptions: RequestOptions(path: ''),
+      error: 'No hay conexión a internet',
+      type: DioExceptionType.connectionError,
+    );
+  }
+
   final dio = Dio();
   final url = "$baseUrl$action$fixedParms$additionalParams";
   return await dio.post(

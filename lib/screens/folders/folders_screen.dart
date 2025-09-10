@@ -9,6 +9,8 @@ import 'package:music/utils/audio/background_audio_handler.dart';
 import 'package:music/utils/db/favorites_db.dart';
 import 'package:music/utils/notifiers.dart';
 import 'package:music/l10n/locale_provider.dart';
+import 'package:music/screens/edit/edit_metadata_screen.dart';
+// import 'package:music/screens/convert/audio_conversion_screen.dart';
 import 'package:music/utils/theme_preferences.dart';
 import 'package:music/utils/db/playlists_db.dart';
 import 'package:music/utils/db/songs_index_db.dart';
@@ -21,6 +23,7 @@ import 'package:music/utils/db/playlist_model.dart' as hive_model;
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:media_scanner/media_scanner.dart';
+import 'package:music/widgets/song_info_dialog.dart';
 
 enum OrdenCarpetas {
   normal,
@@ -70,6 +73,11 @@ class _FoldersScreenState extends State<FoldersScreen>
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
   final ScrollController _scrollController = ScrollController();
+
+  // Variables para búsqueda de carpetas
+  final TextEditingController _folderSearchController = TextEditingController();
+  final FocusNode _folderSearchFocusNode = FocusNode();
+  List<MapEntry<String, List<String>>> _filteredFolders = [];
 
   double _lastBottomInset = 0.0;
 
@@ -146,6 +154,17 @@ class _FoldersScreenState extends State<FoldersScreen>
     } else {
       // Si estamos en la vista general, recargar para mostrar cambios
       cargarCanciones(forceIndex: false);
+    }
+  }
+
+  /// Función específica para refrescar el contenido de la carpeta actual
+  Future<void> _refreshCurrentFolder() async {
+    if (carpetaSeleccionada != null) {
+      // Sincronizar el índice de carpetas
+      await _sincronizarMapaCarpetas();
+      
+      // Actualizar solo la carpeta actual
+      await _actualizarCarpetaActual();
     }
   }
 
@@ -403,238 +422,345 @@ class _FoldersScreenState extends State<FoldersScreen>
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      builder: (context) => SafeArea(
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Encabezado con información de la canción
-              Container(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  children: [
-                    // Carátula de la canción
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: SizedBox(
-                        width: 60,
-                        height: 60,
-                        child: _buildModalArtwork(song),
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    // Título y artista
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            song.title,
-                            maxLines: 1,
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
+      useSafeArea: true,
+      builder: (context) {
+        final maxHeight = MediaQuery.of(context).size.height - MediaQuery.of(context).padding.top;
+        return Container(
+          constraints: BoxConstraints(maxHeight: maxHeight),
+          child: SafeArea(
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Encabezado con información de la canción
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    child: Row(
+                      children: [
+                        // Carátula de la canción
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: SizedBox(
+                            width: 60,
+                            height: 60,
+                            child: _buildModalArtwork(song),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        // Título y artista
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                song.title,
+                                maxLines: 1,
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                song.artist ?? LocaleProvider.tr('unknown_artist'),
+                                style: TextStyle(fontSize: 14),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                                            // Botón para buscar la canción en YouTube o YouTube Music
+                        GestureDetector(
+                          onTap: () async {
+                            Navigator.of(context).pop();
+                            await _showSearchOptions(song);
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 8,
                             ),
-                            overflow: TextOverflow.ellipsis,
+                            decoration: BoxDecoration(
+                              color: Theme.of(
+                                context,
+                              ).brightness == Brightness.dark
+                              ? Theme.of(context).colorScheme.primaryContainer
+                              : Theme.of(context).colorScheme.onPrimaryContainer.withValues(alpha: 0.7),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.search,
+                                  size: 20,
+                                  color: Theme.of(
+                                    context,
+                                  ).brightness == Brightness.dark
+                                  ? Theme.of(context).colorScheme.onPrimaryContainer
+                                  : Theme.of(context).colorScheme.surfaceContainer,
+                                ),
+                                const SizedBox(width: 8),
+                                TranslatedText(
+                                  'search',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 14,
+                                    color: Theme.of(
+                                      context,
+                                    ).brightness == Brightness.dark
+                                    ? Theme.of(context).colorScheme.onPrimaryContainer
+                                    : Theme.of(context).colorScheme.surfaceContainer,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            song.artist ?? LocaleProvider.tr('unknown_artist'),
-                            style: TextStyle(fontSize: 14),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 8),
-                                         // Botón para buscar la canción en YouTube o YouTube Music
-                     GestureDetector(
-                       onTap: () async {
-                         Navigator.of(context).pop();
-                         await _showSearchOptions(song);
-                       },
-                       child: Container(
-                         padding: const EdgeInsets.symmetric(
-                           horizontal: 16,
-                           vertical: 8,
-                         ),
-                         decoration: BoxDecoration(
-                           color: Theme.of(
-                             context,
-                           ).brightness == Brightness.dark
-                           ? Theme.of(context).colorScheme.primaryContainer
-                           : Theme.of(context).colorScheme.onPrimaryContainer.withValues(alpha: 0.7),
-                           borderRadius: BorderRadius.circular(12),
-                         ),
-                         child: Row(
-                           mainAxisSize: MainAxisSize.min,
-                           children: [
-                             Icon(
-                               Icons.search,
-                               size: 20,
-                               color: Theme.of(
-                                 context,
-                               ).brightness == Brightness.dark
-                               ? Theme.of(context).colorScheme.onPrimaryContainer
-                               : Theme.of(context).colorScheme.surfaceContainer,
-                             ),
-                             const SizedBox(width: 8),
-                             TranslatedText(
-                               'search',
-                               style: TextStyle(
-                                 fontWeight: FontWeight.w600,
-                                 fontSize: 14,
-                                 color: Theme.of(
-                                   context,
-                                 ).brightness == Brightness.dark
-                                 ? Theme.of(context).colorScheme.onPrimaryContainer
-                                 : Theme.of(context).colorScheme.surfaceContainer,
-                               ),
-                             ),
-                           ],
-                         ),
-                       ),
-                     ),
-                  ],
-                ),
-              ),
-              ListTile(
-                leading: const Icon(Icons.queue_music),
-                title: TranslatedText('add_to_queue'),
-                onTap: () async {
-                  Navigator.of(context).pop();
-                  await (audioHandler as MyAudioHandler).addSongsToQueueEnd([
-                    song,
-                  ]);
-                },
-              ),
-              ListTile(
-                leading: Icon(
-                  isFavorite ? Icons.delete_outline : Icons.favorite_border,
-                ),
-                title: TranslatedText(
-                  isFavorite ? 'remove_from_favorites' : 'add_to_favorites',
-                ),
-                onTap: () async {
-                  Navigator.of(context).pop();
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.queue_music),
+                    title: TranslatedText('add_to_queue'),
+                    onTap: () async {
+                      Navigator.of(context).pop();
+                      await (audioHandler as MyAudioHandler).addSongsToQueueEnd([
+                        song,
+                      ]);
+                    },
+                  ),
+                  ListTile(
+                    leading: Icon(
+                      isFavorite ? Icons.delete_outline : Icons.favorite_border,
+                    ),
+                    title: TranslatedText(
+                      isFavorite ? 'remove_from_favorites' : 'add_to_favorites',
+                    ),
+                    onTap: () async {
+                      Navigator.of(context).pop();
 
-                  if (isFavorite) {
-                    await FavoritesDB().removeFavorite(song.data);
-                    favoritesShouldReload.value = !favoritesShouldReload.value;
-                  } else {
-                    await _addToFavorites(song);
-                    favoritesShouldReload.value = !favoritesShouldReload.value;
-                  }
-                },
+                      if (isFavorite) {
+                        await FavoritesDB().removeFavorite(song.data);
+                        favoritesShouldReload.value = !favoritesShouldReload.value;
+                      } else {
+                        await _addToFavorites(song);
+                        favoritesShouldReload.value = !favoritesShouldReload.value;
+                      }
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.playlist_add),
+                    title: TranslatedText('add_to_playlist'),
+                    onTap: () async {
+                      Navigator.of(context).pop();
+                      await _handleAddToPlaylistSingle(context, song);
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.share),
+                    title: TranslatedText('share_audio_file'),
+                    onTap: () async {
+                      Navigator.of(context).pop();
+                      final dataPath = song.data;
+                      if (dataPath.isNotEmpty) {
+                        await SharePlus.instance.share(
+                          ShareParams(text: song.title, files: [XFile(dataPath)]),
+                        );
+                      }
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.check_box_outlined),
+                    title: TranslatedText('select'),
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      setState(() {
+                        _isSelecting = true;
+                        _selectedSongPaths.add(song.data);
+                      });
+                    },
+                  ),
+                  
+                  // Botón "Más" para mostrar opciones adicionales
+                  ListTile(
+                    leading: const Icon(Icons.more_horiz),
+                    title: TranslatedText('more'),
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      _showMoreOptionsModal(context, song, isPinned, isIgnored);
+                    },
+                  ),
+                ],
               ),
-              ListTile(
-                leading: const Icon(Icons.playlist_add),
-                title: TranslatedText('add_to_playlist'),
-                onTap: () async {
-                  Navigator.of(context).pop();
-                  await _handleAddToPlaylistSingle(context, song);
-                },
-              ),
-              ListTile(
-                leading: Icon(
-                  isPinned ? Icons.push_pin : Icons.push_pin_outlined,
-                ),
-                title: TranslatedText(
-                  isPinned ? 'unpin_shortcut' : 'pin_shortcut',
-                ),
-                onTap: () async {
-                  Navigator.of(context).pop();
-                  if (isPinned) {
-                    await ShortcutsDB().removeShortcut(song.data);
-                  } else {
-                    await ShortcutsDB().addShortcut(song.data);
-                  }
-                  if (mounted) setState(() {});
-                  shortcutsShouldReload.value = !shortcutsShouldReload.value;
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.share),
-                title: TranslatedText('share_audio_file'),
-                onTap: () async {
-                  Navigator.of(context).pop();
-                  final dataPath = song.data;
-                  if (dataPath.isNotEmpty) {
-                    await SharePlus.instance.share(
-                      ShareParams(text: song.title, files: [XFile(dataPath)]),
-                    );
-                  }
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.drive_file_move),
-                title: TranslatedText('move_to_folder'),
-                onTap: () async {
-                  Navigator.of(context).pop();
-                  await _showFolderSelector(song, isMove: true);
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.copy),
-                title: TranslatedText('copy_to_folder'),
-                onTap: () async {
-                  Navigator.of(context).pop();
-                  await _showFolderSelector(song, isMove: false);
-                },
-              ),
-              ListTile(
-                leading: Icon(
-                  isIgnored ? Icons.visibility : Icons.visibility_off,
-                ),
-                title: TranslatedText(
-                  isIgnored ? 'unignore_file' : 'ignore_file',
-                ),
-                onTap: () async {
-                  Navigator.of(context).pop();
-                  if (isIgnored) {
-                    await unignoreSong(song.data);
-                  } else {
-                    await ignoreSong(song.data);
-                  }
-                  if (mounted) setState(() {});
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.delete_outline),
-                title: TranslatedText('delete_from_device'),
-                onTap: () async {
-                  Navigator.of(context).pop();
-                  await _showDeleteConfirmation(song);
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.check_box_outlined),
-                title: TranslatedText('select'),
-                onTap: () {
-                  Navigator.of(context).pop();
-                  setState(() {
-                    _isSelecting = true;
-                    _selectedSongPaths.add(song.data);
-                  });
-                },
-              ),
-            ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
+    );
+  }
+
+  void _showMoreOptionsModal(BuildContext context, SongModel song, bool isPinned, bool isIgnored) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (context) {
+        final maxHeight = MediaQuery.of(context).size.height - MediaQuery.of(context).padding.top;
+        return Container(
+          constraints: BoxConstraints(maxHeight: maxHeight),
+          child: SafeArea(
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Encabezado con información de la canción
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    child: Row(
+                      children: [
+                        // Carátula de la canción
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: SizedBox(
+                            width: 60,
+                            height: 60,
+                            child: _buildModalArtwork(song),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        // Título y artista
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                song.title,
+                                maxLines: 1,
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                song.artist ?? LocaleProvider.tr('unknown_artist'),
+                                style: TextStyle(fontSize: 14),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        // Botón para cerrar
+                        IconButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          icon: const Icon(Icons.close),
+                        ),
+                      ],
+                    ),
+                  ),
+                  
+                  // Opciones adicionales
+                  ListTile(
+                    leading: Icon(
+                      isPinned ? Icons.push_pin : Icons.push_pin_outlined,
+                    ),
+                    title: TranslatedText(
+                      isPinned ? 'unpin_shortcut' : 'pin_shortcut',
+                    ),
+                    onTap: () async {
+                      Navigator.of(context).pop();
+                      if (isPinned) {
+                        await ShortcutsDB().removeShortcut(song.data);
+                      } else {
+                        await ShortcutsDB().addShortcut(song.data);
+                      }
+                      if (mounted) setState(() {});
+                      shortcutsShouldReload.value = !shortcutsShouldReload.value;
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.edit),
+                    title: TranslatedText('edit_metadata'),
+                    onTap: () async {
+                      Navigator.of(context).pop();
+                      await _navigateToEditScreen(songToMediaItem(song));
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.drive_file_move),
+                    title: TranslatedText('move_to_folder'),
+                    onTap: () async {
+                      Navigator.of(context).pop();
+                      await _showFolderSelector(song, isMove: true);
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.copy),
+                    title: TranslatedText('copy_to_folder'),
+                    onTap: () async {
+                      Navigator.of(context).pop();
+                      await _showFolderSelector(song, isMove: false);
+                    },
+                  ),
+                  ListTile(
+                    leading: Icon(
+                      isIgnored ? Icons.visibility : Icons.visibility_off,
+                    ),
+                    title: TranslatedText(
+                      isIgnored ? 'unignore_file' : 'ignore_file',
+                    ),
+                    onTap: () async {
+                      Navigator.of(context).pop();
+                      if (isIgnored) {
+                        await unignoreSong(song.data);
+                      } else {
+                        await ignoreSong(song.data);
+                      }
+                      if (mounted) setState(() {});
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.delete_outline),
+                    title: TranslatedText('delete_from_device'),
+                    onTap: () async {
+                      Navigator.of(context).pop();
+                      await _showDeleteConfirmation(song);
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.info_outline),
+                    title: TranslatedText('song_info'),
+                    onTap: () async {
+                      Navigator.of(context).pop();
+                      await SongInfoDialog.showFromSong(context, song, colorSchemeNotifier);
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
   MediaItem songToMediaItem(SongModel song) {
     return MediaItem(
-      id: song.id.toString(),
+      id: song.data, // Usar la ruta del archivo como ID para AudioTags
       album: song.album ?? LocaleProvider.tr('unknown_artist'),
       title: song.title,
       artist: song.artist ?? LocaleProvider.tr('unknown_artist'),
       artUri: song.uri != null ? Uri.parse(song.uri!) : null,
-      extras: {'data': song.data},
+      extras: {'data': song.data, 'db_id': song.id.toString()},
     );
   }
 
@@ -1013,6 +1139,62 @@ class _FoldersScreenState extends State<FoldersScreen>
 
     setState(() {
       _displaySongs = displayList;
+    });
+  }
+
+  // Función para filtrar carpetas
+  void _onFolderSearchChanged() async {
+    final query = quitarDiacriticos(_folderSearchController.text.toLowerCase());
+    if (query.isEmpty) {
+      setState(() {
+        _filteredFolders = [];
+      });
+      return;
+    }
+
+    // Buscar en nombres de carpetas
+    final folderMatches = songPathsByFolder.entries.where((entry) {
+      final folderName = quitarDiacriticos(folderDisplayNames[entry.key] ?? '').toLowerCase();
+      return folderName.contains(query);
+    }).toList();
+
+    // Buscar en canciones y obtener las carpetas que las contienen
+    final songMatches = <String>{}; // Set para evitar duplicados
+    try {
+      final allSongs = await _audioQuery.querySongs();
+      for (final song in allSongs) {
+        final title = quitarDiacriticos(song.title).toLowerCase();
+        final artist = quitarDiacriticos(song.artist ?? '').toLowerCase();
+        
+        if (title.contains(query) || artist.contains(query)) {
+          // Encontrar la carpeta que contiene esta canción
+          final folderPath = _getFolderPath(song.data);
+          if (songPathsByFolder.containsKey(folderPath)) {
+            songMatches.add(folderPath);
+          }
+        }
+      }
+    } catch (e) {
+      // Si hay error al buscar canciones, continuar solo con búsqueda de carpetas
+    }
+
+    // Combinar resultados de búsqueda de carpetas y canciones
+    final allMatches = <String, List<String>>{};
+    
+    // Agregar coincidencias de carpetas
+    for (final entry in folderMatches) {
+      allMatches[entry.key] = entry.value;
+    }
+    
+    // Agregar coincidencias de canciones (sin duplicar)
+    for (final folderPath in songMatches) {
+      if (!allMatches.containsKey(folderPath)) {
+        allMatches[folderPath] = songPathsByFolder[folderPath] ?? [];
+      }
+    }
+
+    setState(() {
+      _filteredFolders = allMatches.entries.toList();
     });
   }
 
@@ -1456,6 +1638,203 @@ class _FoldersScreenState extends State<FoldersScreen>
     );
   }
 
+
+  // Función para mostrar diálogo de renombrado de carpeta
+  Future<void> _showRenameFolderDialog(String folderKey, String currentName) async {
+    final TextEditingController nameController = TextEditingController(text: currentName);
+    
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return ValueListenableBuilder<AppColorScheme>(
+          valueListenable: colorSchemeNotifier,
+          builder: (context, colorScheme, child) {
+            return AlertDialog(
+              title: Center(
+                child: TranslatedText(
+                  'rename_folder',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(height: 18),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Row(
+                        children: [
+                          SizedBox(width: 4),
+                          TranslatedText(
+                            'folder_name',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Theme.of(context).colorScheme.onSurface,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    SizedBox(height: 20),
+                    TextField(
+                      controller: nameController,
+                      autofocus: true,
+                      decoration: InputDecoration(
+                        hintText: LocaleProvider.tr('enter_folder_name'),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        contentPadding: EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: TranslatedText('cancel'),
+                ),
+                TextButton(
+                  onPressed: () async {
+                    final newName = nameController.text.trim();
+                    if (newName.isNotEmpty && newName != currentName) {
+                      // Cerrar el diálogo primero
+                      if (context.mounted) {
+                        Navigator.of(context).pop();
+                      }
+                      // Luego ejecutar el renombrado
+                      await _renameFolder(folderKey, newName);
+                    } else if (newName.isEmpty) {
+                      // Mostrar mensaje de error si el nombre está vacío
+                      _showMessage(
+                        LocaleProvider.tr('error'),
+                        description: LocaleProvider.tr('folder_name_required'),
+                        isError: true,
+                      );
+                    }
+                  },
+                  child: TranslatedText('rename'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // Función para renombrar la carpeta
+  Future<void> _renameFolder(String folderKey, String newName) async {
+    try {
+      // Obtener la ruta original de la carpeta
+      final originalPath = folderKey;
+      
+      // Intentar encontrar la ruta real de la carpeta
+      String realPath = originalPath;
+      final directory = Directory(originalPath);
+      
+      // Si la ruta normalizada no existe, intentar encontrar la ruta real
+      if (!await directory.exists()) {
+        // Buscar en las canciones de la carpeta para obtener la ruta real
+        final songsInFolder = songPathsByFolder[folderKey] ?? [];
+        if (songsInFolder.isNotEmpty) {
+          // Obtener la ruta real del directorio padre de la primera canción
+          final firstSongPath = songsInFolder.first;
+          final realDirPath = p.dirname(firstSongPath);
+          realPath = realDirPath;
+        } else {
+          throw Exception('Carpeta no encontrada - no hay canciones en la carpeta');
+        }
+      }
+      
+      final realDirectory = Directory(realPath);
+      
+      // Verificar que la carpeta real existe
+      if (!await realDirectory.exists()) {
+        throw Exception('Carpeta no encontrada');
+      }
+      
+      // Crear la nueva ruta con el nuevo nombre
+      final parentDir = realDirectory.parent;
+      final newPath = p.join(parentDir.path, newName);
+      final newDirectory = Directory(newPath);
+      
+      // Verificar que no existe una carpeta con el nuevo nombre
+      if (await newDirectory.exists()) {
+        throw Exception('Ya existe una carpeta con ese nombre');
+      }
+      
+      // Renombrar la carpeta física
+      await realDirectory.rename(newPath);
+      
+      // Obtener todas las canciones de la carpeta original
+      final songsInFolder = songPathsByFolder[folderKey] ?? [];
+      
+      // Actualizar todas las rutas de las canciones en la base de datos de una vez
+      await SongsIndexDB().updateFolderPaths(realPath, newPath);
+      
+      // Actualizar los mapas locales
+      setState(() {
+        // Crear nueva entrada con la nueva ruta
+        songPathsByFolder[newPath] = songsInFolder.map((songPath) {
+          final songFileName = p.basename(songPath);
+          return p.join(newPath, songFileName);
+        }).toList();
+        
+        // Actualizar el nombre de visualización
+        folderDisplayNames[newPath] = newName;
+        
+        // Eliminar la entrada antigua
+        songPathsByFolder.remove(folderKey);
+        folderDisplayNames.remove(folderKey);
+      });
+      
+      // Mostrar mensaje de éxito
+      if (mounted) {
+        _showMessage(
+          LocaleProvider.tr('success'),
+          description: '${LocaleProvider.tr('folder_renamed_to')} "$newName"',
+          isError: false,
+        );
+      } else {
+        // print('DEBUG: Widget no está montado, no se puede mostrar mensaje');
+      }
+    } catch (e) {
+      // print('DEBUG: Error al renombrar carpeta: $e');
+      // Mostrar mensaje de error específico
+      String errorMessage;
+      if (e.toString().contains('Ya existe una carpeta con ese nombre')) {
+        errorMessage = LocaleProvider.tr('folder_name_already_exists');
+      } else if (e.toString().contains('Carpeta no encontrada')) {
+        errorMessage = LocaleProvider.tr('folder_not_found');
+      } else if (e.toString().contains('Permission denied') || e.toString().contains('Acceso denegado')) {
+        errorMessage = LocaleProvider.tr('permission_denied_rename');
+      } else {
+        errorMessage = LocaleProvider.tr('error_renaming_folder');
+      }
+      
+      if (mounted) {
+        // print('DEBUG: Mostrando mensaje de error para renombrar carpeta');
+        _showMessage(
+          LocaleProvider.tr('error'),
+          description: errorMessage,
+          isError: true,
+        );
+      } else {
+        // print('DEBUG: Widget no está montado, no se puede mostrar mensaje de error');
+      }
+    }
+  }
+
   // Función para mostrar confirmación de borrado de carpeta con el mismo diseño
   Future<void> _showDeleteFolderConfirmation(String folderKey, String folderName) async {
     showDialog(
@@ -1656,6 +2035,8 @@ class _FoldersScreenState extends State<FoldersScreen>
     _immediateMediaItemNotifier.dispose();
     _searchController.dispose();
     _searchFocusNode.dispose();
+    _folderSearchController.dispose();
+    _folderSearchFocusNode.dispose();
     _scrollController.dispose();
     foldersShouldReload.removeListener(_onFoldersShouldReload);
     super.dispose();
@@ -1668,6 +2049,9 @@ class _FoldersScreenState extends State<FoldersScreen>
     if (_lastBottomInset > 0.0 && bottomInset == 0.0) {
       if (mounted && _searchFocusNode.hasFocus) {
         _searchFocusNode.unfocus();
+      }
+      if (mounted && _folderSearchFocusNode.hasFocus) {
+        _folderSearchFocusNode.unfocus();
       }
     }
     _lastBottomInset = bottomInset;
@@ -1682,28 +2066,48 @@ class _FoldersScreenState extends State<FoldersScreen>
     }
     if (songPathsByFolder.isEmpty) {
       return Scaffold(
-        body: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.folder_off,
-                size: 48,
-                color: Theme.of(
-                  context,
-                ).colorScheme.onSurface.withValues(alpha: 0.6),
+        body: RefreshIndicator(
+          onRefresh: () async {
+            // Recargar las carpetas al hacer scroll hacia abajo
+            await cargarCanciones(forceIndex: true);
+          },
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                minHeight: MediaQuery.of(context).size.height - 
+                    MediaQuery.of(context).padding.top - 
+                    kToolbarHeight - 
+                    MediaQuery.of(context).viewInsets.bottom,
               ),
-              const SizedBox(height: 16),
-              TranslatedText(
-                'no_folders_with_songs',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Theme.of(
-                    context,
-                  ).colorScheme.onSurface.withValues(alpha: 0.6),
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(32.0),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.folder_off,
+                        size: 48,
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withValues(alpha: 0.6),
+                      ),
+                      const SizedBox(height: 16),
+                      TranslatedText(
+                        'no_folders_with_songs',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onSurface.withValues(alpha: 0.6),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ],
+            ),
           ),
         ),
       );
@@ -1729,29 +2133,84 @@ class _FoldersScreenState extends State<FoldersScreen>
             ),
             actions: [
               IconButton(
-                icon: const Icon(Icons.refresh, size: 28),
-                tooltip: LocaleProvider.tr('reload'),
-                onPressed: () => cargarCanciones(forceIndex: true),
+                icon: const Icon(Icons.info_outline, size: 28),
+                onPressed: () {
+                  showDialog(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      title: TranslatedText('info'),
+                      content: TranslatedText('folders_and_songs_info'),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          child: TranslatedText('ok'),
+                        ),
+                      ],
+                    ),
+                  );
+                },
               ),
             ],
+            bottom: PreferredSize(
+              preferredSize: const Size.fromHeight(56),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: TextField(
+                  controller: _folderSearchController,
+                  focusNode: _folderSearchFocusNode,
+                  onChanged: (_) => _onFolderSearchChanged(),
+                  onEditingComplete: () {
+                    _folderSearchFocusNode.unfocus();
+                  },
+                  decoration: InputDecoration(
+                    hintText: LocaleProvider.tr('search_folders_and_songs'),
+                    prefixIcon: const Icon(Icons.search),
+                    suffixIcon: _folderSearchController.text.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.close),
+                            onPressed: () {
+                              _folderSearchController.clear();
+                              _onFolderSearchChanged();
+                              setState(() {});
+                            },
+                          )
+                        : null,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(vertical: 0),
+                  ),
+                ),
+              ),
+            ),
           ),
-          body: ValueListenableBuilder<MediaItem?>(
-            valueListenable: _currentMediaItemNotifier,
-            builder: (context, current, child) {
-              final space = current != null ? 100.0 : 0.0;
-              return Padding(
-                padding: EdgeInsets.only(bottom: space),
-                child: ListView.builder(
-                  itemCount: songPathsByFolder.length,
-                  itemBuilder: (context, i) {
-                    final sortedEntries = songPathsByFolder.entries.toList()
-                      ..sort(
-                        (a, b) =>
-                            folderDisplayNames[a.key]!.toLowerCase().compareTo(
-                              folderDisplayNames[b.key]!.toLowerCase(),
-                            ),
-                      );
-                    final entry = sortedEntries[i];
+          body: RefreshIndicator(
+            onRefresh: () async {
+              // Recargar las carpetas al hacer scroll hacia abajo
+              await cargarCanciones(forceIndex: true);
+            },
+            child: ValueListenableBuilder<MediaItem?>(
+              valueListenable: _currentMediaItemNotifier,
+              builder: (context, current, child) {
+                final space = current != null ? 100.0 : 0.0;
+                return Padding(
+                  padding: EdgeInsets.only(bottom: space),
+                  child: ListView.builder(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          itemCount: _folderSearchController.text.isNotEmpty
+                              ? _filteredFolders.length
+                              : songPathsByFolder.length,
+                          itemBuilder: (context, i) {
+                            final sortedEntries = _folderSearchController.text.isNotEmpty
+                                ? _filteredFolders
+                                : songPathsByFolder.entries.toList()
+                                  ..sort(
+                                    (a, b) =>
+                                        folderDisplayNames[a.key]!.toLowerCase().compareTo(
+                                          folderDisplayNames[b.key]!.toLowerCase(),
+                                        ),
+                                  );
+                            final entry = sortedEntries[i];
                     final nombre = folderDisplayNames[entry.key]!;
                     final canciones = entry.value;
 
@@ -1770,11 +2229,23 @@ class _FoldersScreenState extends State<FoldersScreen>
                       },
                       trailing: PopupMenuButton<String>(
                         onSelected: (value) async {
-                          if (value == 'delete') {
+                          if (value == 'rename') {
+                            await _showRenameFolderDialog(entry.key, folderDisplayNames[entry.key] ?? '');
+                          } else if (value == 'delete') {
                             await _showDeleteFolderConfirmation(entry.key, folderDisplayNames[entry.key] ?? '');
                           }
                         },
                         itemBuilder: (context) => [
+                          PopupMenuItem(
+                            value: 'rename',
+                            child: Row(
+                              children: [
+                                Icon(Icons.edit_outlined),
+                                SizedBox(width: 8),
+                                TranslatedText('rename_folder'),
+                              ],
+                            ),
+                          ),
                           PopupMenuItem(
                             value: 'delete',
                             child: Row(
@@ -1790,8 +2261,9 @@ class _FoldersScreenState extends State<FoldersScreen>
                     );
                   },
                 ),
-              );
-            },
+                );
+              },
+            ),
           ),
         ),
       );
@@ -2082,101 +2554,111 @@ class _FoldersScreenState extends State<FoldersScreen>
               ),
             ),
           ),
-          body: ValueListenableBuilder<MediaItem?>(
-            valueListenable: _currentMediaItemNotifier,
-            builder: (context, debouncedMediaItem, child) {
-              // Detectar si el tema AMOLED está activo
-              final isAmoledTheme =
-                  colorSchemeNotifier.value == AppColorScheme.amoled;
-              final space = debouncedMediaItem != null ? 100.0 : 0.0;
+          body: RefreshIndicator(
+            onRefresh: _refreshCurrentFolder,
+            child: ValueListenableBuilder<MediaItem?>(
+              valueListenable: _currentMediaItemNotifier,
+              builder: (context, debouncedMediaItem, child) {
+                // Detectar si el tema AMOLED está activo
+                final isAmoledTheme =
+                    colorSchemeNotifier.value == AppColorScheme.amoled;
+                final space = debouncedMediaItem != null ? 100.0 : 0.0;
 
-              return Padding(
-                padding: EdgeInsets.only(bottom: space),
-                child: _filteredSongs.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.folder_off,
-                              size: 48,
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.onSurface.withValues(alpha: 0.6),
-                            ),
-                            const SizedBox(height: 16),
-                            TranslatedText(
-                              'no_songs_in_folder',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.onSurface.withValues(alpha: 0.6),
+                return Padding(
+                  padding: EdgeInsets.only(bottom: space),
+                  child: _filteredSongs.isEmpty
+                      ? SingleChildScrollView(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          child: SizedBox(
+                            height: MediaQuery.of(context).size.height - 200,
+                            child: Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.folder_off,
+                                    size: 48,
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.onSurface.withValues(alpha: 0.6),
+                                  ),
+                                  const SizedBox(height: 16),
+                                  TranslatedText(
+                                    'no_songs_in_folder',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.onSurface.withValues(alpha: 0.6),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                          ],
-                        ),
-                      )
-                    : ValueListenableBuilder<MediaItem?>(
-                        valueListenable: _immediateMediaItemNotifier,
-                        builder: (context, immediateMediaItem, child) {
-                          return ListView.builder(
-                            controller: _scrollController,
-                            itemCount: _displaySongs.length,
-                            itemBuilder: (context, i) {
-                              final song = _displaySongs[i];
-                              final path = song.data;
-                              final isCurrent =
-                                  (immediateMediaItem?.id != null &&
-                                  path.isNotEmpty &&
-                                  (immediateMediaItem!.id == path ||
-                                      immediateMediaItem.extras?['data'] ==
-                                          path));
-                              final isSelected = _selectedSongPaths.contains(
-                                path,
-                              );
-                              final isIgnoredFuture = isSongIgnored(path);
-                              return FutureBuilder<bool>(
-                                future: isIgnoredFuture,
-                                builder: (context, snapshot) {
-                                  final isIgnored = snapshot.data ?? false;
+                          ),
+                        )
+                      : ValueListenableBuilder<MediaItem?>(
+                          valueListenable: _immediateMediaItemNotifier,
+                          builder: (context, immediateMediaItem, child) {
+                            return ListView.builder(
+                              controller: _scrollController,
+                              physics: const AlwaysScrollableScrollPhysics(),
+                              itemCount: _displaySongs.length,
+                              itemBuilder: (context, i) {
+                                final song = _displaySongs[i];
+                                final path = song.data;
+                                final isCurrent =
+                                    (immediateMediaItem?.id != null &&
+                                    path.isNotEmpty &&
+                                    (immediateMediaItem!.id == path ||
+                                        immediateMediaItem.extras?['data'] ==
+                                            path));
+                                final isSelected = _selectedSongPaths.contains(
+                                  path,
+                                );
+                                final isIgnoredFuture = isSongIgnored(path);
+                                return FutureBuilder<bool>(
+                                  future: isIgnoredFuture,
+                                  builder: (context, snapshot) {
+                                    final isIgnored = snapshot.data ?? false;
 
-                                  // Solo usar ValueListenableBuilder para la canción actual
-                                  if (isCurrent) {
-                                    return ValueListenableBuilder<bool>(
-                                      valueListenable: _isPlayingNotifier,
-                                      builder: (context, playing, child) {
-                                        return _buildOptimizedListTile(
-                                          context,
-                                          song,
-                                          isCurrent,
-                                          playing,
-                                          isAmoledTheme,
-                                          isIgnored,
-                                          isSelected,
-                                        );
-                                      },
-                                    );
-                                  } else {
-                                    // Para canciones que no están reproduciéndose, no usar StreamBuilder
-                                    return _buildOptimizedListTile(
-                                      context,
-                                      song,
-                                      isCurrent,
-                                      false, // No playing
-                                      isAmoledTheme,
-                                      isIgnored,
-                                      isSelected,
-                                    );
-                                  }
-                                },
-                              );
-                            },
-                          );
-                        },
-                      ),
-              );
-            },
+                                    // Solo usar ValueListenableBuilder para la canción actual
+                                    if (isCurrent) {
+                                      return ValueListenableBuilder<bool>(
+                                        valueListenable: _isPlayingNotifier,
+                                        builder: (context, playing, child) {
+                                          return _buildOptimizedListTile(
+                                            context,
+                                            song,
+                                            isCurrent,
+                                            playing,
+                                            isAmoledTheme,
+                                            isIgnored,
+                                            isSelected,
+                                          );
+                                        },
+                                      );
+                                    } else {
+                                      // Para canciones que no están reproduciéndose, no usar StreamBuilder
+                                      return _buildOptimizedListTile(
+                                        context,
+                                        song,
+                                        isCurrent,
+                                        false, // No playing
+                                        isAmoledTheme,
+                                        isIgnored,
+                                        isSelected,
+                                      );
+                                    }
+                                  },
+                                );
+                              },
+                            );
+                          },
+                        ),
+                );
+              },
+            ),
           ),
         ),
       ),
@@ -3689,4 +4171,50 @@ class _FoldersScreenState extends State<FoldersScreen>
       },
     );
   }
+
+  Future<void> _navigateToEditScreen(MediaItem song) async {
+    await Navigator.of(context).push(
+      PageRouteBuilder(
+        pageBuilder: (context, animation, secondaryAnimation) =>
+            EditMetadataScreen(song: song),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          const begin = Offset(1.0, 0.0);
+          const end = Offset.zero;
+          const curve = Curves.ease;
+          final tween = Tween(
+            begin: begin,
+            end: end,
+          ).chain(CurveTween(curve: curve));
+          return SlideTransition(
+            position: animation.drive(tween),
+            child: child,
+          );
+        },
+      ),
+    );
+  }
+
+  /*Future<void> _navigateToConversionScreen(MediaItem song) async {
+    await Navigator.of(context).push(
+      PageRouteBuilder(
+        pageBuilder: (context, animation, secondaryAnimation) =>
+            AudioConversionScreen(song: song),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          const begin = Offset(1.0, 0.0);
+          const end = Offset.zero;
+          const curve = Curves.ease;
+          final tween = Tween(
+            begin: begin,
+            end: end,
+          ).chain(CurveTween(curve: curve));
+          return SlideTransition(
+            position: animation.drive(tween),
+            child: child,
+          );
+        },
+      ),
+    );
+  }
+  */
 }
+

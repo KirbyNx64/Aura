@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import 'dart:convert';
+import 'package:connectivity_plus/connectivity_plus.dart';
 
 class YouTubeMusicService {
   static const domain = "https://music.youtube.com/";
@@ -40,8 +41,28 @@ class YouTubeMusicService {
     },
   };
 
+  // Verificar conectividad antes de hacer peticiones
+  static Future<bool> _checkConnectivity() async {
+    try {
+      final connectivityResults = await Connectivity().checkConnectivity();
+      return !connectivityResults.contains(ConnectivityResult.none);
+    } catch (e) {
+      return false;
+    }
+  }
+
   // Función para enviar la petición (copiada de service.dart)
   Future<Response> sendRequest(String action, Map<dynamic, dynamic> data, {String additionalParams = ""}) async {
+    // Verificar conectividad antes de hacer la petición
+    final hasConnection = await _checkConnectivity();
+    if (!hasConnection) {
+      throw DioException(
+        requestOptions: RequestOptions(path: ''),
+        error: 'No hay conexión a internet',
+        type: DioExceptionType.connectionError,
+      );
+    }
+
     final dio = Dio();
     final url = "$baseUrl$action$fixedParams$additionalParams";
     return await dio.post(

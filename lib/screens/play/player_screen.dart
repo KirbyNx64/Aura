@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:marquee/marquee.dart';
+import 'package:music/widgets/marquee.dart';
 import 'package:music/main.dart';
 import 'package:music/widgets/hero_cached.dart';
 import 'package:share_plus/share_plus.dart';
@@ -20,6 +20,7 @@ import 'dart:async';
 import 'package:scroll_to_index/scroll_to_index.dart';
 import 'package:music/l10n/locale_provider.dart';
 import 'package:music/utils/theme_preferences.dart';
+import 'package:music/widgets/song_info_dialog.dart';
 import 'dart:io';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -69,6 +70,8 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
   bool _loadingLyrics = false;
   List<LyricLine> _lyricLines = [];
   int _currentLyricIndex = 0;
+  bool _apiUnavailable = false;
+  bool _noConnection = false;
   final ScrollController _lyricsScrollController = ScrollController();
   String? _lastMediaItemId;
   Timer? _seekDebounceTimer;
@@ -140,6 +143,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                   height: size,
                   alignment: Alignment.center,
                   child: const CircularProgressIndicator(
+                    // ignore: deprecated_member_use
                     year2023: false,
                   ),
                 ),
@@ -464,13 +468,15 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
       _loadingLyrics = true;
       _lyricLines = [];
       _currentLyricIndex = 0;
+      _apiUnavailable = false;
+      _noConnection = false;
     });
 
-    final lyricsData = await SyncedLyricsService.getSyncedLyrics(mediaItem);
+    final result = await SyncedLyricsService.getSyncedLyricsWithResult(mediaItem);
     if (!mounted) return;
 
-    final synced = lyricsData?.synced;
-    if (synced != null) {
+    if (result.type == LyricsResultType.found && result.data?.synced != null) {
+      final synced = result.data!.synced!;
       final lines = synced.split('\n');
       final parsed = <LyricLine>[];
       final reg = RegExp(r'\[(\d{2}):(\d{2})(?:\.(\d{2,3}))?\](.*)');
@@ -495,12 +501,17 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
       setState(() {
         _lyricLines = parsed;
         _loadingLyrics = false;
+        _apiUnavailable = false;
+        _noConnection = false;
       });
     } else {
       if (!mounted) return;
       setState(() {
         _lyricLines = [];
         _loadingLyrics = false;
+        // Marcar como no disponible solo si realmente falló la API
+        _apiUnavailable = result.type == LyricsResultType.apiUnavailable;
+        _noConnection = result.type == LyricsResultType.noConnection;
       });
     }
   }
@@ -518,7 +529,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     _playPauseController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 250),
-      value: 1.0, // Empieza en pausa (o 0.0 si quieres que empiece en play)
+      value: 0.0, // Empieza en pausa 
     );
     _prefsFuture = SharedPreferences.getInstance();
     // Eliminado: _loadQueueSource();
@@ -800,7 +811,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                 },
               ),
               ListTile(
-                leading: const Icon(Icons.lyrics),
+                leading: const Icon(Icons.lyrics_outlined),
                 title: Text(LocaleProvider.tr('show_lyrics')),
                 onTap: () async {
                   Navigator.of(context).pop();
@@ -860,41 +871,9 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
               ListTile(
                 leading: const Icon(Icons.info_outline),
                 title: Text(LocaleProvider.tr('song_info')),
-                onTap: () {
+                onTap: () async {
                   Navigator.of(context).pop();
-                  showDialog(
-                    context: context,
-                    builder: (context) => AlertDialog(
-                      title: Text(LocaleProvider.tr('song_info')),
-                      content: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '${LocaleProvider.tr('title')}: ${mediaItem.title}\n',
-                          ),
-                          Text(
-                            '${LocaleProvider.tr('artist')}: ${mediaItem.artist ?? LocaleProvider.tr('unknown_artist')}\n',
-                          ),
-                          Text(
-                            '${LocaleProvider.tr('album')}: ${mediaItem.album ?? LocaleProvider.tr('unknown_artist')}\n',
-                          ),
-                          Text(
-                            '${LocaleProvider.tr('location')}: ${mediaItem.extras?['data'] ?? ""}\n',
-                          ),
-                          Text(
-                            '${LocaleProvider.tr('duration')}: ${mediaItem.duration != null ? Duration(milliseconds: mediaItem.duration!.inMilliseconds).toString().split('.').first : "?"}',
-                          ),
-                        ],
-                      ),
-                      actions: [
-                        TextButton(
-                          child: Text(LocaleProvider.tr('close')),
-                          onPressed: () => Navigator.of(context).pop(),
-                        ),
-                      ],
-                    ),
-                  );
+                  await SongInfoDialog.show(context, mediaItem, colorSchemeNotifier);
                 },
               ),
             ],
@@ -1200,6 +1179,8 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
             // Reiniciar estado de letras para evitar que persistan entre canciones
             _lyricLines = [];
             _currentLyricIndex = 0;
+            _apiUnavailable = false;
+            _noConnection = false;
             _loadingLyrics = false;
 
             // Calcular favorito una sola vez por canción para evitar consultas repetidas
@@ -1409,17 +1390,37 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                               ),
                                             )
                                           : _lyricLines.isEmpty
-                                          ? Text(
-                                              _syncedLyrics ??
-                                                  LocaleProvider.tr(
-                                                    'lyrics_not_found',
+                                          ? _noConnection
+                                              ? Column(
+                                                  mainAxisAlignment: MainAxisAlignment.center,
+                                                  children: [
+                                                    Text(
+                                                      LocaleProvider.tr(
+                                                        'lyrics_no_connection',
+                                                      ),
+                                                      style: const TextStyle(
+                                                        color: Colors.white70,
+                                                        fontSize: 16,
+                                                      ),
+                                                      textAlign: TextAlign.center,
+                                                    ),
+                                                  ],
+                                                )
+                                              : Text(
+                                                  _apiUnavailable
+                                                      ? LocaleProvider.tr(
+                                                          'lyrics_api_unavailable',
+                                                        )
+                                                      : (_syncedLyrics ??
+                                                          LocaleProvider.tr(
+                                                            'lyrics_not_found',
+                                                          )),
+                                                  style: const TextStyle(
+                                                    color: Colors.white,
+                                                    fontSize: 16,
                                                   ),
-                                              style: const TextStyle(
-                                                color: Colors.white,
-                                                fontSize: 16,
-                                              ),
-                                              textAlign: TextAlign.center,
-                                            )
+                                                  textAlign: TextAlign.center,
+                                                )
                                           : StreamBuilder<Duration>(
                                               stream:
                                                   (audioHandler
@@ -1664,7 +1665,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                       tween: Tween<double>(
                                                         begin: isPlaying
                                                             ? 0.0
-                                                            : 2.5,
+                                                            : 0.0,
                                                         end: isPlaying
                                                             ? 3.0
                                                             : 0.0,
@@ -2493,7 +2494,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                 child: Row(
                                                   children: [
                                                     Icon(
-                                                      Icons.lyrics,
+                                                      Icons.lyrics_outlined,
                                                       color: Theme.of(
                                                         context,
                                                       ).colorScheme.onSurface,
@@ -2703,10 +2704,12 @@ class _TitleMarqueeState extends State<TitleMarquee> {
             text: widget.text,
             style: widget.style!,
             velocity: 30.0,
-            blankSpace: 40.0,
+            blankSpace: 120.0,
             startPadding: 0.0,
             fadingEdgeStartFraction: 0.1,
             fadingEdgeEndFraction: 0.1,
+            showFadingOnlyWhenScrolling: false,
+            pauseAfterRound: const Duration(seconds: 3),
           ),
         ),
       );

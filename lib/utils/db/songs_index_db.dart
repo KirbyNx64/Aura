@@ -135,4 +135,45 @@ class SongsIndexDB {
     result.sort();
     return result;
   }
+
+  /// Actualiza la ruta de una canción en la base de datos
+  Future<void> updateSongPath(String oldPath, String newPath) async {
+    final b = await box;
+    final oldData = b.get(oldPath);
+    if (oldData != null) {
+      // Crear nueva entrada con la nueva ruta
+      final newFolderPath = _getFolderPath(newPath);
+      await b.put(newPath, {'folder_path': newFolderPath});
+      
+      // Eliminar la entrada antigua
+      await b.delete(oldPath);
+    }
+  }
+
+  /// Actualiza todas las rutas de canciones de una carpeta
+  Future<void> updateFolderPaths(String oldFolderPath, String newFolderPath) async {
+    final b = await box;
+    final songsToUpdate = <String, Map>{};
+    
+    // Encontrar todas las canciones de la carpeta antigua
+    for (final entry in b.toMap().entries) {
+      if (entry.value['folder_path'] == oldFolderPath) {
+        final oldSongPath = entry.key as String;
+        songsToUpdate[oldSongPath] = entry.value;
+      }
+    }
+    
+    // Actualizar las rutas
+    for (final entry in songsToUpdate.entries) {
+      final oldPath = entry.key;
+      final newPath = p.join(newFolderPath, p.basename(oldPath));
+      final newFolderPathNormalized = _getFolderPath(newPath);
+      
+      // Agregar nueva entrada
+      await b.put(newPath, {'folder_path': newFolderPathNormalized});
+      
+      // Eliminar entrada antigua
+      await b.delete(oldPath);
+    }
+  }
 }

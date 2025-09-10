@@ -938,7 +938,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
           // Contenido principal
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
               child: StreamBuilder<MediaItem?>(
                 stream: audioHandler?.mediaItem,
                 builder: (context, snapshot) {
@@ -946,10 +946,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                   final mediaItem = snapshot.data;
                   // Calcular espacio inferior considerando overlay de reproducción
                   // (ya no sumamos espacio para la barra de progreso)
-                  double bottomSpace = 0.0;
-                  if (mediaItem != null) {
-                    bottomSpace += 85.0; // Overlay de reproducción
-                  }
+                  double bottomSpace = mediaItem != null ? 100.0 : 0.0;
                   return Column(
                     children: [
                       Row(
@@ -3173,7 +3170,8 @@ class _YtPreviewPlayer extends StatefulWidget {
   State<_YtPreviewPlayer> createState() => _YtPreviewPlayerState();
 }
 
-class _YtPreviewPlayerState extends State<_YtPreviewPlayer> {
+class _YtPreviewPlayerState extends State<_YtPreviewPlayer>
+    with TickerProviderStateMixin {
   final AudioPlayer _player = AudioPlayer();
   bool _loading = false;
   bool _playing = false;
@@ -3183,12 +3181,23 @@ class _YtPreviewPlayerState extends State<_YtPreviewPlayer> {
   late YtMusicResult _currentItem;
   int _loadToken = 0; // Token para cancelar cargas previas
   StreamSubscription<PlayerState>? _playerStateSubscription;
+  
+  // AnimationController para el botón de play/pause
+  late AnimationController _playPauseController;
 
   @override
   void initState() {
     super.initState();
     _currentIndex = widget.currentIndex;
     _currentItem = widget.results[_currentIndex];
+    
+    // Inicializar AnimationController para play/pause
+    _playPauseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 250),
+      value: 0.0, // Empieza en pausa
+    );
+    
     _playerStateSubscription = _player.playerStateStream.listen((state) {
       if (!mounted) return;
       setState(() {
@@ -3197,12 +3206,20 @@ class _YtPreviewPlayerState extends State<_YtPreviewPlayer> {
         // _loading solo debe ser true si está cargando y reproduciendo
         // pero aquí no lo cambiamos salvo que quieras lógica especial
       });
+      
+      // Controlar la animación según el estado
+      if (_playing) {
+        _playPauseController.forward();
+      } else {
+        _playPauseController.reverse();
+      }
     });
   }
 
   @override
   void dispose() {
     _playerStateSubscription?.cancel();
+    _playPauseController.dispose();
     _player.dispose();
     super.dispose();
   }
@@ -3218,6 +3235,8 @@ class _YtPreviewPlayerState extends State<_YtPreviewPlayer> {
         _playing = false;
         _loading = false;
       });
+      // Resetear posición a 0 para la nueva canción
+      _player.seek(Duration.zero);
       // No cargar nada hasta que el usuario presione play
     }
   }
@@ -3233,6 +3252,8 @@ class _YtPreviewPlayerState extends State<_YtPreviewPlayer> {
         _playing = false;
         _loading = false;
       });
+      // Resetear posición a 0 para la nueva canción
+      _player.seek(Duration.zero);
       // No cargar nada hasta que el usuario presione play
     }
   }
@@ -3518,61 +3539,80 @@ class _YtPreviewPlayerState extends State<_YtPreviewPlayer> {
             // Controles
             Row(
               children: [
-                // Play/Pause
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primaryContainer,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: _loading
-                      ? Center(
-                          child: SizedBox(
-                            width: 24,
-                            height: 24,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                _isAmoled(context)
-                                    ? Colors.black
-                                    : Theme.of(
-                                        context,
-                                      ).colorScheme.onPrimaryContainer,
-                              ),
-                            ),
-                          ),
-                        )
-                      : IconButton(
-                          icon: Icon(_playing ? Icons.pause : Icons.play_arrow),
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.onPrimaryContainer,
-                          tooltip: _playing
-                              ? LocaleProvider.tr('pause_preview')
-                              : LocaleProvider.tr('play_preview'),
-                          splashColor: Colors.transparent,
-                          onPressed: _loading
-                              ? null
-                              : () async {
-                                  if (_playing) {
-                                    _pause();
-                                  } else {
-                                    if (_audioUrl == null) {
-                                      _loadAndPlay();
-                                    } else {
-                                      // Si la posición está al final, reinicia
-                                      final pos = _player.position;
-                                      if (_duration != null &&
-                                          pos >= _duration!) {
-                                        await _player.seek(Duration.zero);
-                                      }
-                                      await _player.play();
-                                      // Ya no es necesario setState aquí, el listener lo maneja
-                                    }
-                                  }
-                                },
+                // Play/Pause con diseño del overlay
+                Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    customBorder: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(
+                        _playing ? 13.33 : 20, // mainIconSize / 3 : mainIconSize / 2
+                      ),
+                    ),
+                    splashColor: Colors.transparent,
+                    highlightColor: Colors.transparent,
+                    onTap: _loading
+                        ? null
+                        : () async {
+                            if (_playing) {
+                              _pause();
+                            } else {
+                              if (_audioUrl == null) {
+                                _loadAndPlay();
+                              } else {
+                                // Si la posición está al final, reinicia
+                                final pos = _player.position;
+                                if (_duration != null && pos >= _duration!) {
+                                  await _player.seek(Duration.zero);
+                                }
+                                await _player.play();
+                                // Ya no es necesario setState aquí, el listener lo maneja
+                              }
+                            }
+                          },
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 250),
+                      curve: Curves.easeInOut,
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: colorSchemeNotifier.value == AppColorScheme.amoled
+                                ? Colors.white
+                                : Theme.of(context).brightness == Brightness.dark
+                                    ? Theme.of(context).colorScheme.primaryContainer
+                                    : Theme.of(context).colorScheme.onPrimaryContainer.withValues(alpha: 0.7),
+                        borderRadius: BorderRadius.circular(
+                          _playing ? 13.33 : 20, // mainIconSize / 3 : mainIconSize / 2
                         ),
+                      ),
+                      child: Center(
+                        child: _loading
+                            ? SizedBox(
+                                width: 30,
+                                height: 30,
+                                child: CircularProgressIndicator(
+                                  year2023: false,
+                                  strokeWidth: 2,
+                                  strokeCap: StrokeCap.round,
+                                  color: colorSchemeNotifier.value == AppColorScheme.amoled
+                                          ? Colors.black
+                                          : Theme.of(context).brightness == Brightness.dark
+                                            ? Theme.of(context).colorScheme.onPrimaryContainer
+                                            : Theme.of(context).colorScheme.surfaceContainer,
+                                ),
+                              )
+                            : AnimatedIcon(
+                                icon: AnimatedIcons.play_pause,
+                                progress: _playPauseController,
+                                size: 24,
+                                color: colorSchemeNotifier.value == AppColorScheme.amoled
+                                        ? Colors.black
+                                        : Theme.of(context).brightness == Brightness.dark
+                                          ? Theme.of(context).colorScheme.onPrimaryContainer
+                                          : Theme.of(context).colorScheme.surfaceContainer,
+                              ),
+                      ),
+                    ),
+                  ),
                 ),
                 const SizedBox(width: 8),
                 // Duración
@@ -3635,7 +3675,7 @@ class _YtPreviewPlayerState extends State<_YtPreviewPlayer> {
                   minHeight: 6,
                   backgroundColor: Theme.of(
                     context,
-                  ).colorScheme.outline.withValues(alpha: 0.15),
+                  ).colorScheme.primary.withValues(alpha: 0.3),
                   valueColor: AlwaysStoppedAnimation<Color>(
                     Theme.of(context).colorScheme.primary,
                   ),
@@ -3662,7 +3702,3 @@ class _YtPreviewPlayerState extends State<_YtPreviewPlayer> {
   }
 }
 
-// Helper para detectar tema AMOLED
-bool _isAmoled(BuildContext context) {
-  return colorSchemeNotifier.value == AppColorScheme.amoled;
-}

@@ -4,6 +4,7 @@ import 'package:device_info_plus/device_info_plus.dart';
 import 'package:http/http.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:ota_update/ota_update.dart';
+import 'connectivity_helper.dart';
 
 class OtaUpdateHelper {
   static const String _urlJson =
@@ -11,6 +12,15 @@ class OtaUpdateHelper {
 
   static Future<UpdateInfo?> checkForUpdate() async {
     try {
+      // Verificar conectividad antes de hacer la petición
+      final hasConnection = await ConnectivityHelper.hasInternetConnectionWithTimeout(
+        timeout: const Duration(seconds: 5),
+      );
+      
+      if (!hasConnection) {
+        return null;
+      }
+
       final response = await http.get(Uri.parse(_urlJson));
       if (response.statusCode != 200) return null;
 

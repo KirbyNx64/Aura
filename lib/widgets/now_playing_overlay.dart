@@ -6,7 +6,7 @@ import 'package:music/main.dart'
 import 'package:music/screens/play/player_screen.dart';
 import 'package:music/widgets/hero_cached.dart';
 import 'package:music/utils/audio/background_audio_handler.dart';
-import 'package:marquee/marquee.dart';
+import 'marquee.dart';
 import 'package:music/utils/notifiers.dart';
 import 'package:music/utils/theme_preferences.dart';
 
@@ -306,7 +306,7 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay>
                                           color: colorSchemeNotifier.value == AppColorScheme.amoled
                                               ? Colors.white
                                               : Theme.of(context).brightness == Brightness.dark
-                                                  ? Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.6)
+                                                  ? Theme.of(context).colorScheme.primaryContainer
                                                   : Theme.of(context).colorScheme.onPrimaryContainer.withValues(alpha: 0.7),
                                           borderRadius: BorderRadius.circular(
                                             isPlaying ? (40 / 3) : (40 / 2),
@@ -490,10 +490,12 @@ class _TitleMarqueeState extends State<TitleMarquee> {
             text: widget.text,
             style: textStyle,
             velocity: 30.0,
-            blankSpace: 40.0,
+            blankSpace: 80.0,
             startPadding: 0.0,
             fadingEdgeStartFraction: 0.1,
             fadingEdgeEndFraction: 0.1,
+            showFadingOnlyWhenScrolling: false,
+            pauseAfterRound: const Duration(seconds: 3),
           ),
         ),
       );

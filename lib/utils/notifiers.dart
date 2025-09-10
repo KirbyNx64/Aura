@@ -25,9 +25,9 @@ final colorSchemeNotifier = ValueNotifier<AppColorScheme>(
 
 final ValueNotifier<bool> shortcutsShouldReload = ValueNotifier(false);
 
-final ValueNotifier<bool> audioQualityNotifier = ValueNotifier<bool>(
-  true,
-); // true: alta, false: baja
+final ValueNotifier<String> audioQualityNotifier = ValueNotifier<String>(
+  'high',
+); // 'high', 'medium', 'low'
 
 final ValueNotifier<bool> coverQualityNotifier = ValueNotifier<bool>(
   true,

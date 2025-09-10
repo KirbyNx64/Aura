@@ -75,6 +75,7 @@ class DownloadManager {
   String? _directoryPath;
   bool _usarExplode = false;
   bool _usarFFmpeg = false;
+  String _audioQuality = 'high';
 
   // Estado
   bool _isDownloading = false;
@@ -89,6 +90,7 @@ class DownloadManager {
     _directoryPath = prefs.getString('download_directory');
     _usarExplode = prefs.getBool('download_type_explode') ?? true;
     _usarFFmpeg = prefs.getBool('audio_processor_ffmpeg') ?? false;
+    _audioQuality = prefs.getString('audio_quality') ?? 'high';
   }
 
   // Configurar callbacks
@@ -176,9 +178,8 @@ class DownloadManager {
 
       final audioList = manifest.audioOnly
           .where((s) => s.codec.mimeType == 'audio/mp4' || s.codec.toString().contains('mp4a'))
-          .toList()
-        ..sort((a, b) => b.bitrate.compareTo(a.bitrate));
-      final audioStreamInfo = audioList.isNotEmpty ? audioList.first : null;
+          .toList();
+      final audioStreamInfo = _selectAudioStream(audioList);
 
       if (audioStreamInfo == null) {
         throw Exception(LocaleProvider.tr('no_valid_stream'));
@@ -290,11 +291,33 @@ class DownloadManager {
       throw Exception(LocaleProvider.tr('no_audio_available_desc'));
     }
 
-    // Elegir mejor stream de audio
-    final audio = streamProvider.highestBitrateMp4aAudio;
-
-    if (audio == null) {
+    // Elegir stream de audio según calidad configurada
+    final audioFormats = streamProvider.audioFormats;
+    if (audioFormats == null || audioFormats.isEmpty) {
       throw Exception('No se encontró stream de audio válido.');
+    }
+
+    // Ordenar por bitrate (mayor a menor)
+    final sortedFormats = List<Audio>.from(audioFormats)
+      ..sort((a, b) => b.bitrate.compareTo(a.bitrate));
+    
+    Audio audio;
+    switch (_audioQuality) {
+      case 'high':
+        // Mejor calidad disponible
+        audio = sortedFormats.first;
+        break;
+      case 'medium':
+        // Calidad media - tomar el stream del medio
+        final middleIndex = (sortedFormats.length / 2).floor();
+        audio = sortedFormats[middleIndex];
+        break;
+      case 'low':
+        // Calidad baja - tomar el stream de menor calidad
+        audio = sortedFormats.last;
+        break;
+      default:
+        audio = sortedFormats.first;
     }
 
     final ext = 'm4a';
@@ -777,10 +800,35 @@ class DownloadManager {
     }
   }
 
+  // Método para seleccionar stream de audio según calidad
+  AudioStreamInfo? _selectAudioStream(List<AudioStreamInfo> audioStreams) {
+    if (audioStreams.isEmpty) return null;
+    
+    // Ordenar por bitrate (mayor a menor)
+    final sortedStreams = List<AudioStreamInfo>.from(audioStreams)
+      ..sort((a, b) => b.bitrate.compareTo(a.bitrate));
+    
+    switch (_audioQuality) {
+      case 'high':
+        // Mejor calidad disponible
+        return sortedStreams.first;
+      case 'medium':
+        // Calidad media - tomar el stream del medio
+        final middleIndex = (sortedStreams.length / 2).floor();
+        return sortedStreams[middleIndex];
+      case 'low':
+        // Calidad baja - tomar el stream de menor calidad
+        return sortedStreams.last;
+      default:
+        return sortedStreams.first;
+    }
+  }
+
   // Getters para el estado actual
   bool get isDownloading => _isDownloading;
   bool get isProcessing => _isProcessing;
   String? get directoryPath => _directoryPath;
   bool get usarExplode => _usarExplode;
   bool get usarFFmpeg => _usarFFmpeg;
+  String get audioQuality => _audioQuality;
 } 

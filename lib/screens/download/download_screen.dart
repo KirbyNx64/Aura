@@ -37,10 +37,10 @@ class _DownloadScreenState extends State<DownloadScreen>
   final _urlController = TextEditingController();
   final _focusNode = FocusNode();
   bool _isDownloading = false;
-  bool _isProcessing = false;
 
   bool _usarExplode = false; // true: Explode, false: Directo
   bool _usarFFmpeg = false; // true: FFmpeg, false: AudioTags
+  String _audioQuality = 'high'; // 'high', 'medium', 'low'
 
   double _progress = 0.0;
   String? _directoryPath;
@@ -74,6 +74,7 @@ class _DownloadScreenState extends State<DownloadScreen>
     // Escuchar cambios en la ruta de descargas
     downloadDirectoryNotifier.addListener(_onDownloadDirectoryChanged);
     downloadTypeNotifier.addListener(_onDownloadTypeChanged);
+    audioQualityNotifier.addListener(_onAudioQualityChanged);
     // Inicializar valores desde notifiers
     _loadDownloadPrefs();
   }
@@ -101,6 +102,7 @@ class _DownloadScreenState extends State<DownloadScreen>
     WidgetsBinding.instance.removeObserver(this);
     downloadDirectoryNotifier.removeListener(_onDownloadDirectoryChanged);
     downloadTypeNotifier.removeListener(_onDownloadTypeChanged);
+    audioQualityNotifier.removeListener(_onAudioQualityChanged);
     super.dispose();
   }
 
@@ -113,6 +115,14 @@ class _DownloadScreenState extends State<DownloadScreen>
     setState(() {
       _usarExplode = downloadTypeNotifier.value;
     });
+  }
+
+  void _onAudioQualityChanged() {
+    if (mounted) {
+      setState(() {
+        _audioQuality = audioQualityNotifier.value;
+      });
+    }
   }
 
 
@@ -150,9 +160,12 @@ class _DownloadScreenState extends State<DownloadScreen>
   Future<void> _loadDownloadPrefs() async {
     final prefs = await SharedPreferences.getInstance();
     final explode = prefs.getBool('download_type_explode') ?? true;
+    final audioQuality = prefs.getString('audio_quality') ?? 'high';
     _usarExplode = explode;
     _usarFFmpeg = false; // Always use AudioTags (more efficient)
+    _audioQuality = audioQuality;
     downloadTypeNotifier.value = explode;
+    audioQualityNotifier.value = audioQuality;
     audioProcessorNotifier.value = false; // Always use AudioTags
     setState(() {});
   }
@@ -160,6 +173,54 @@ class _DownloadScreenState extends State<DownloadScreen>
   Future<bool> _getCoverQualitySetting() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getBool('cover_quality_high') ?? true;
+  }
+
+  // Método para seleccionar stream de audio según calidad (para StreamProvider)
+  Audio? _selectAudioStream(List<Audio> audioFormats) {
+    if (audioFormats.isEmpty) return null;
+    
+    // Ordenar por bitrate (mayor a menor)
+    final sortedFormats = List<Audio>.from(audioFormats)
+      ..sort((a, b) => b.bitrate.compareTo(a.bitrate));
+    
+    switch (_audioQuality) {
+      case 'high':
+        // Mejor calidad disponible
+        return sortedFormats.first;
+      case 'medium':
+        // Calidad media - tomar el stream del medio
+        final middleIndex = (sortedFormats.length / 2).floor();
+        return sortedFormats[middleIndex];
+      case 'low':
+        // Calidad baja - tomar el stream de menor calidad
+        return sortedFormats.last;
+      default:
+        return sortedFormats.first;
+    }
+  }
+
+  // Método para seleccionar stream de audio según calidad (para YouTube Explode)
+  AudioStreamInfo? _selectAudioStreamInfo(List<AudioStreamInfo> audioStreams) {
+    if (audioStreams.isEmpty) return null;
+    
+    // Ordenar por bitrate (mayor a menor)
+    final sortedStreams = List<AudioStreamInfo>.from(audioStreams)
+      ..sort((a, b) => b.bitrate.compareTo(a.bitrate));
+    
+    switch (_audioQuality) {
+      case 'high':
+        // Mejor calidad disponible
+        return sortedStreams.first;
+      case 'medium':
+        // Calidad media - tomar el stream del medio
+        final middleIndex = (sortedStreams.length / 2).floor();
+        return sortedStreams[middleIndex];
+      case 'low':
+        // Calidad baja - tomar el stream de menor calidad
+        return sortedStreams.last;
+      default:
+        return sortedStreams.first;
+    }
   }
 
   // Función helper para descargar carátula con configuración de calidad
@@ -308,23 +369,7 @@ class _DownloadScreenState extends State<DownloadScreen>
       
       try {
         // Intentar primero con YouTube Music API
-        videos = await _youtubeMusicService.getPlaylistVideosWithContinuations(playlistId, onVideoFound: (video, totalFound) {
-          // Actualizar UI en tiempo real cuando se encuentra un video
-          if (mounted) {
-            setState(() {
-              _currentVideoIndex = totalFound;
-              _currentTitle = video.title;
-              _currentArtist = video.author;
-            });
-          }
-        });
-        
-        // Actualizar progreso final
-        if (mounted) {
-          setState(() {
-            _currentVideoIndex = videos.length;
-          });
-        }
+        videos = await _youtubeMusicService.getPlaylistVideosWithContinuations(playlistId);
         
         // Si no obtuvimos suficientes videos, intentar con YouTube Explode como fallback
         if (videos.length < _totalVideos && _totalVideos > 0) {
@@ -340,12 +385,6 @@ class _DownloadScreenState extends State<DownloadScreen>
           
           // Combinar videos únicos
           videos.addAll(ytVideos);
-          
-          if (mounted) {
-            setState(() {
-              _currentVideoIndex = videos.length;
-            });
-          }
         }
         
       } catch (e) {
@@ -354,12 +393,6 @@ class _DownloadScreenState extends State<DownloadScreen>
         // Fallback completo a YouTube Explode
         await for (final video in yt.playlists.getVideos(playlistId)) {
           videos.add(video);
-          
-          if (mounted) {
-            setState(() {
-              _currentVideoIndex = videos.length;
-            });
-          }
         }
       }
       
@@ -632,9 +665,13 @@ class _DownloadScreenState extends State<DownloadScreen>
         throw Exception(LocaleProvider.tr('no_audio_available_desc'));
       }
 
-      // Elegir mejor stream de audio
-      final audio = streamProvider.highestBitrateMp4aAudio;
+      // Elegir stream de audio según calidad configurada
+      final audioFormats = streamProvider.audioFormats;
+      if (audioFormats == null || audioFormats.isEmpty) {
+        throw Exception('No se encontró stream de audio válido.');
+      }
 
+      final audio = _selectAudioStream(audioFormats);
       if (audio == null) {
         throw Exception('No se encontró stream de audio válido.');
       }
@@ -945,7 +982,6 @@ class _DownloadScreenState extends State<DownloadScreen>
 
     setState(() {
       _isDownloading = true;
-      _isProcessing = false;
       _progress = 0.0;
       _currentTitle = null;
       _currentArtist = null;
@@ -958,9 +994,8 @@ class _DownloadScreenState extends State<DownloadScreen>
 
       final audioList = manifest.audioOnly
           .where((s) => s.codec.mimeType == 'audio/mp4' || s.codec.toString().contains('mp4a'))
-          .toList()
-        ..sort((a, b) => b.bitrate.compareTo(a.bitrate));
-      final audioStreamInfo = audioList.isNotEmpty ? audioList.first : null;
+          .toList();
+      final audioStreamInfo = _selectAudioStreamInfo(audioList);
 
       if (audioStreamInfo == null) {
         throw Exception(LocaleProvider.tr('no_valid_stream'));
@@ -1066,7 +1101,6 @@ class _DownloadScreenState extends State<DownloadScreen>
       if (mounted) {
         setState(() {
           _isDownloading = false;
-          _isProcessing = false;
           _currentCoverBytes = null;
         });
       }
@@ -1180,7 +1214,6 @@ class _DownloadScreenState extends State<DownloadScreen>
 
     setState(() {
       _isDownloading = true;
-      _isProcessing = false;
       _progress = 0.0;
       _currentTitle = null;
       _currentArtist = null;
@@ -1226,11 +1259,23 @@ class _DownloadScreenState extends State<DownloadScreen>
         return;
       }
 
-      // Elegir mejor stream de audio
-      final audio = streamProvider.highestBitrateMp4aAudio;
+      // Elegir stream de audio según calidad configurada
+      final audioFormats = streamProvider.audioFormats;
+      if (audioFormats == null || audioFormats.isEmpty) {
+        _mostrarAlerta(
+          titulo: 'Audio no disponible',
+          mensaje: 'No se encontró stream de audio válido.',
+        );
+        return;
+      }
 
+      final audio = _selectAudioStream(audioFormats);
       if (audio == null) {
-        throw Exception('No se encontró stream de audio válido.');
+        _mostrarAlerta(
+          titulo: 'Audio no disponible',
+          mensaje: 'No se encontró stream de audio válido.',
+        );
+        return;
       }
 
       final ext = 'm4a';
@@ -1292,7 +1337,6 @@ class _DownloadScreenState extends State<DownloadScreen>
       if (mounted) {
         setState(() {
           _isDownloading = false;
-          _isProcessing = false;
         });
       }
     }
@@ -1545,9 +1589,7 @@ class _DownloadScreenState extends State<DownloadScreen>
     Uint8List bytes, {
     bool isPlaylistDownload = false,
   }) async {
-    setState(() {
-      _isProcessing = true;
-    });
+    // Procesar audio sin cambiar estado de UI
 
     final baseName = title.replaceAll(RegExp(r'[\\/:*?"<>|]'), '').trim();
     final m4aPath = inputPath;
@@ -1613,7 +1655,6 @@ class _DownloadScreenState extends State<DownloadScreen>
     } finally {
       if (mounted) {
         setState(() {
-          _isProcessing = false;
           _isDownloading = false;
           _currentCoverBytes = null;
         });
@@ -1897,17 +1938,15 @@ class _DownloadScreenState extends State<DownloadScreen>
                               fontSize: 16,
                             ),
                             child: (_isDownloading || _isPlaylistDownloading)
-                                ? (_isProcessing
-                                      ? TranslatedText('processing_audio')
-                                      : (_isPlaylist 
-                                          ? TranslatedText('downloading_playlist')
-                                          : Row(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                TranslatedText('downloading'),
-                                                Text(' ${((_progress / 0.6).clamp(0, 1) * 100).toStringAsFixed(0)}%'),
-                                              ],
-                                            )))
+                                ? (_isPlaylist 
+                                    ? TranslatedText('downloading')
+                                    : Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          TranslatedText('downloading'),
+                                          Text(' ${((_progress / 0.6).clamp(0, 1) * 100).toStringAsFixed(0)}%'),
+                                        ],
+                                      ))
                                 : TranslatedText('download_audio'),
                           ),
                           ),
@@ -2014,6 +2053,7 @@ class _DownloadScreenState extends State<DownloadScreen>
                     ),
                     const SizedBox(height: 12),
                     LinearProgressIndicator(
+                      // ignore: deprecated_member_use
                       year2023: false,
                       value: _progress,
                       minHeight: 8,
@@ -2058,56 +2098,18 @@ class _DownloadScreenState extends State<DownloadScreen>
                       ],
                     ),
                     const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        TranslatedText(
-                          'videos_found_so_far',
-                          style: TextStyle(
-                            color: Theme.of(context).colorScheme.onSurfaceVariant,
-                            fontSize: 14,
-                          ),
-                        ),
-                        Text(
-                          ': $_currentVideoIndex',
-                          style: TextStyle(
-                            color: Theme.of(context).colorScheme.onSurfaceVariant,
-                            fontSize: 14,
-                          ),
-                        ),
-                        if (_totalVideos > 0) ...[
-                          Text(
-                            ' / $_totalVideos',
-                            style: TextStyle(
-                              color: Theme.of(context).colorScheme.onSurfaceVariant,
-                              fontSize: 14,
-                            ),
-                          ),
-                        ],
-                      ],
+                    Text(
+                      LocaleProvider.tr('playlist_processing_time_info'),
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        fontSize: 12,
+                        fontStyle: FontStyle.italic,
+                      ),
                     ),
                     const SizedBox(height: 8),
-                    if (_currentTitle != null) ...[
-                      Text(
-                        _currentTitle!,
-                        style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      if (_currentArtist != null) ...[
-                        const SizedBox(height: 4),
-                        Text(
-                          _currentArtist!,
-                          style: TextStyle(
-                            color: Theme.of(context).colorScheme.onSurfaceVariant,
-                            fontSize: 12,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                      const SizedBox(height: 8),
-                    ],
                     LinearProgressIndicator(
                       year2023: false,
-                      value: _totalVideos > 0 ? (_currentVideoIndex / _totalVideos).clamp(0.0, 1.0) : null,
+                      value: null, // Barra de progreso indeterminada
                       minHeight: 8,
                       borderRadius: BorderRadius.circular(8),
                     ),
