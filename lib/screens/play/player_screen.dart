@@ -2655,7 +2655,7 @@ class _TitleMarqueeState extends State<TitleMarquee> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.text != widget.text) {
       setState(() => _showMarquee = false);
-      Future.delayed(const Duration(milliseconds: 1000), () {
+      Future.delayed(const Duration(milliseconds: 3000), () {
         if (mounted) setState(() => _showMarquee = true);
       });
     }
@@ -2664,7 +2664,7 @@ class _TitleMarqueeState extends State<TitleMarquee> {
   @override
   void initState() {
     super.initState();
-    Future.delayed(const Duration(milliseconds: 2000), () {
+    Future.delayed(const Duration(milliseconds: 3000), () {
       if (mounted) setState(() => _showMarquee = true);
     });
   }
