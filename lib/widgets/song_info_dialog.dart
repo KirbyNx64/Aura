@@ -24,6 +24,7 @@ class SongInfoDialog {
         context: context,
         builder: (context) => AlertDialog(
           title: TranslatedText('song_info'),
+          actions: [],
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -77,6 +78,7 @@ class SongInfoDialog {
                   ),
                 ),
               ),
+              actions: [],
               content: SizedBox(
                 width: 400,
                 child: Column(
@@ -366,6 +368,7 @@ class SongInfoDialog {
                   ),
                 ),
               ),
+              actions: [],
               content: SizedBox(
                 width: 400,
                 child: Column(

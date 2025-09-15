@@ -16,6 +16,8 @@ import 'package:mini_music_visualizer/mini_music_visualizer.dart';
 import 'package:music/utils/db/playlist_model.dart' as hive_model;
 import 'package:music/screens/play/player_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:music/widgets/song_info_dialog.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 enum OrdenFavoritos { normal, alfabetico, invertido, ultimoAgregado }
 
@@ -181,6 +183,11 @@ class _FavoritesScreenState extends State<FavoritesScreen>
 
     // Precargar carátulas de favoritos
     unawaited(_preloadArtworksForSongs(favs));
+  }
+
+  /// Función específica para refrescar la lista de favoritos
+  Future<void> _refreshFavorites() async {
+    await _loadFavorites();
   }
 
   Future<void> _preloadArtworksForSongs(List<SongModel> songs) async {
@@ -603,6 +610,14 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                     _isSelecting = true;
                     _selectedSongIds.add(song.id);
                   });
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.info_outline),
+                title: TranslatedText('song_info'),
+                onTap: () async {
+                  Navigator.of(context).pop();
+                  await SongInfoDialog.showFromSong(context, song, colorSchemeNotifier);
                 },
               ),
             ],
@@ -1029,7 +1044,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
         overflow: TextOverflow.ellipsis,
       ),
       trailing: IconButton(
-        icon: Icon(isCurrent && playing ? Icons.pause : Icons.play_arrow),
+        icon: Icon(isCurrent && playing ? Symbols.pause_rounded : Symbols.play_arrow_rounded, grade: 200),
         onPressed: () {
           if (isCurrent) {
             playing
@@ -1071,7 +1086,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
             : Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.favorite_border, size: 28),
+                  Icon(Symbols.favorite_rounded, weight: 600, size: 28),
                   const SizedBox(width: 8),
                   TranslatedText('favorites'),
                 ],
@@ -1126,7 +1141,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
               ]
             : [
                 IconButton(
-                  icon: const Icon(Icons.shuffle, size: 28),
+                  icon: const Icon(Symbols.shuffle, size: 28, weight: 600),
                   tooltip: 'Aleatorio',
                   onPressed: () {
                     final List<SongModel> songsToShow =
@@ -1146,6 +1161,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                 ),
                 PopupMenuButton<OrdenFavoritos>(
                   icon: const Icon(Icons.sort, size: 28),
+                  tooltip: LocaleProvider.tr('filters'),
                   onSelected: (orden) {
                     setState(() {
                       _orden = orden;
@@ -1208,101 +1224,105 @@ class _FavoritesScreenState extends State<FavoritesScreen>
           ),
         ),
       ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
-              child: Builder(
-                builder: (context) {
-                  final List<SongModel> songsToShow =
-                      _searchController.text.isNotEmpty
-                      ? _filteredFavorites
-                      : _favorites;
-                  if (songsToShow.isEmpty) {
-                    return Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.favorite_border,
-                            size: 48,
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.onSurface.withValues(alpha: 0.6),
-                          ),
-                          const SizedBox(height: 16),
-                          TranslatedText(
-                            'no_songs',
-                            style: TextStyle(
-                              fontSize: 14,
+      body: RefreshIndicator(
+        onRefresh: _refreshFavorites,
+        child: SafeArea(
+          child: Column(
+            children: [
+              Expanded(
+                child: Builder(
+                  builder: (context) {
+                    final List<SongModel> songsToShow =
+                        _searchController.text.isNotEmpty
+                        ? _filteredFavorites
+                        : _favorites;
+                    if (songsToShow.isEmpty) {
+                      return Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Symbols.favorite_rounded,
+                              weight: 600,
+                              size: 48,
                               color: Theme.of(
                                 context,
                               ).colorScheme.onSurface.withValues(alpha: 0.6),
                             ),
-                          ),
-                        ],
-                      ),
-                    );
-                  }
-                  return ValueListenableBuilder<MediaItem?>(
-                    valueListenable: _currentMediaItemNotifier,
-                    builder: (context, debouncedMediaItem, child) {
-                      final space = debouncedMediaItem != null ? 100.0 : 0.0;
-                      return Padding(
-                        padding: EdgeInsets.only(bottom: space),
-                        child: ValueListenableBuilder<MediaItem?>(
-                          valueListenable: _immediateMediaItemNotifier,
-                          builder: (context, immediateMediaItem, child) {
-                            return ListView.builder(
-                              itemCount: songsToShow.length,
-                              itemBuilder: (context, index) {
-                                final song = songsToShow[index];
-                                final path = song.data;
-                                final isCurrent =
-                                    (immediateMediaItem?.id != null &&
-                                    path.isNotEmpty &&
-                                    (immediateMediaItem!.id == path ||
-                                        immediateMediaItem.extras?['data'] ==
-                                            path));
-                                final isAmoledTheme =
-                                    colorSchemeNotifier.value ==
-                                    AppColorScheme.amoled;
-
-                                // Solo usar ValueListenableBuilder para la canción actual
-                                if (isCurrent) {
-                                  return ValueListenableBuilder<bool>(
-                                    valueListenable: _isPlayingNotifier,
-                                    builder: (context, playing, child) {
-                                      return _buildOptimizedListTile(
-                                        context,
-                                        song,
-                                        isCurrent,
-                                        playing,
-                                        isAmoledTheme,
-                                      );
-                                    },
-                                  );
-                                } else {
-                                  // Para canciones que no están reproduciéndose, no usar StreamBuilder
-                                  return _buildOptimizedListTile(
-                                    context,
-                                    song,
-                                    isCurrent,
-                                    false, // No playing
-                                    isAmoledTheme,
-                                  );
-                                }
-                              },
-                            );
-                          },
+                            const SizedBox(height: 16),
+                            TranslatedText(
+                              'no_songs',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurface.withValues(alpha: 0.6),
+                              ),
+                            ),
+                          ],
                         ),
                       );
-                    },
-                  );
-                },
+                    }
+                    return ValueListenableBuilder<MediaItem?>(
+                      valueListenable: _currentMediaItemNotifier,
+                      builder: (context, debouncedMediaItem, child) {
+                        final space = debouncedMediaItem != null ? 100.0 : 0.0;
+                        return Padding(
+                          padding: EdgeInsets.only(bottom: space),
+                          child: ValueListenableBuilder<MediaItem?>(
+                            valueListenable: _immediateMediaItemNotifier,
+                            builder: (context, immediateMediaItem, child) {
+                              return ListView.builder(
+                                itemCount: songsToShow.length,
+                                itemBuilder: (context, index) {
+                                  final song = songsToShow[index];
+                                  final path = song.data;
+                                  final isCurrent =
+                                      (immediateMediaItem?.id != null &&
+                                      path.isNotEmpty &&
+                                      (immediateMediaItem!.id == path ||
+                                          immediateMediaItem.extras?['data'] ==
+                                              path));
+                                  final isAmoledTheme =
+                                      colorSchemeNotifier.value ==
+                                      AppColorScheme.amoled;
+
+                                  // Solo usar ValueListenableBuilder para la canción actual
+                                  if (isCurrent) {
+                                    return ValueListenableBuilder<bool>(
+                                      valueListenable: _isPlayingNotifier,
+                                      builder: (context, playing, child) {
+                                        return _buildOptimizedListTile(
+                                          context,
+                                          song,
+                                          isCurrent,
+                                          playing,
+                                          isAmoledTheme,
+                                        );
+                                      },
+                                    );
+                                  } else {
+                                    // Para canciones que no están reproduciéndose, no usar StreamBuilder
+                                    return _buildOptimizedListTile(
+                                      context,
+                                      song,
+                                      isCurrent,
+                                      false, // No playing
+                                      isAmoledTheme,
+                                    );
+                                  }
+                                },
+                              );
+                            },
+                          ),
+                        );
+                      },
+                    );
+                  },
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

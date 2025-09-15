@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:music/widgets/now_playing_overlay.dart';
 import 'package:music/l10n/locale_provider.dart';
 import 'package:music/utils/notifiers.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:music/utils/theme_preferences.dart';
 
 typedef PageBuilderWithTabChange =
@@ -66,18 +67,18 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
     
     return [
       NavigationDestination(
-        icon: Icon(Icons.home_outlined),
-        selectedIcon: Icon(Icons.home, color: iconColor),
+        icon: Icon(Symbols.home, weight: 600),
+        selectedIcon: Icon(Symbols.home, fill: 1, weight: 600, color: iconColor),
         label: LocaleProvider.tr('home'),
       ),
       NavigationDestination(
-        icon: Icon(Icons.search),
-        selectedIcon: Icon(Icons.search, color: iconColor),
+        icon: Icon(Symbols.search, weight: 600),
+        selectedIcon: Icon(Symbols.video_search, weight: 600, color: iconColor),
         label: LocaleProvider.tr('nav_search'),
       ),
       NavigationDestination(
-        icon: Icon(Icons.favorite_border),
-        selectedIcon: Icon(Icons.favorite, color: iconColor),
+        icon: Icon(Symbols.favorite_rounded, weight: 600),
+        selectedIcon: Icon(Symbols.favorite_rounded, weight: 600, fill: 1, color: iconColor),
         label: LocaleProvider.tr('nav_favorites'),
       ),
       NavigationDestination(

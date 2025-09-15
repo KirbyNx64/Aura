@@ -17,6 +17,9 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:music/utils/db/playlist_model.dart';
 import 'package:music/utils/audio/synced_lyrics_service.dart';
 import 'package:music/utils/audio/background_audio_handler.dart';
+import 'package:music/utils/db/songs_index_db.dart';
+import 'package:music/utils/db/artists_db.dart';
+import 'package:on_audio_query/on_audio_query.dart';
 
 // Cambiar de late final a nullable para mejor manejo de errores
 AudioHandler? audioHandler;
@@ -31,6 +34,41 @@ final ValueNotifier<bool> overlayVisibleNotifier = ValueNotifier<bool>(
 
 /// Verifica si el AudioService está inicializando
 bool get isAudioServiceInitializing => _audioHandlerInitializing;
+
+/// Función para realizar la indexación de canciones y artistas (solo la primera vez)
+Future<void> performIndexingIfNeeded() async {
+  try {
+    // Verificar si realmente necesita indexación
+    final songsIndexDB = SongsIndexDB();
+    final needsIndex = await songsIndexDB.needsIndexing();
+    
+    if (!needsIndex) {
+      // print('🎵 La app ya está indexada, no se necesita indexación');
+      return;
+    }
+
+    // print('🎵 Primera vez abriendo la app - Iniciando indexación...');
+    
+    // Obtener el total de canciones
+    final OnAudioQuery audioQuery = OnAudioQuery();
+    final allSongs = await audioQuery.querySongs();
+    // print('🎵 Procesando ${allSongs.length} canciones...');
+
+    // Realizar la indexación de canciones
+    await songsIndexDB.indexAllSongs();
+
+    // print('🎵 Indexando artistas...');
+    
+    // Indexar artistas
+    final artistsDB = ArtistsDB();
+    await artistsDB.indexArtists(allSongs);
+    
+    // print('🎵 Indexación completada exitosamente - La app está lista');
+  } catch (e) {
+    // print('❌ Error durante la indexación: $e');
+    // Continuar de todas formas para no bloquear la app
+  }
+}
 
 /// Obtiene el AudioService de forma segura, esperando si es necesario
 Future<AudioHandler?> getAudioServiceSafely() async {
@@ -219,12 +257,15 @@ void main() async {
     return;
   }
 
-  // Inicializar AudioService ANTES de runApp para que esté listo desde el inicio
+  // Inicializar AudioService ANTES de verificar indexación para que esté disponible siempre
   try {
     await initializeAudioServiceSafely();
   } catch (e) {
     // La app seguirá, pero el audio podría no estar disponible hasta que se intente de nuevo
   }
+
+  // Realizar indexación solo si es la primera vez que se abre la app
+  performIndexingIfNeeded();
 
   // Precargar el SVG en memoria antes de mostrar la app
   try {
@@ -286,7 +327,12 @@ class _PermisosScreenState extends State<PermisosScreen>
         }
 
         if (!mounted) return;
-        // Usa pushAndRemoveUntil para limpiar el stack y evitar problemas de contexto
+        
+        // Realizar indexación solo si es la primera vez que se abre la app
+        performIndexingIfNeeded();
+        
+        // Ir directo a la app
+        if (!mounted) return;
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(
             builder: (_) => MainApp(currentLanguage: languageNotifier.value),

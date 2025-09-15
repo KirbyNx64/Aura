@@ -21,6 +21,16 @@ const Map<String, String> appLocalizationsEs = {
   'change_language': 'Cambiar idioma',
   'spanish': 'Español',
   'english': 'English',
+  'gesture_settings': 'Gestos en el reproductor',
+  'gesture_settings_desc': 'Personaliza los gestos del reproductor',
+  'disable_gestures': 'Gestos en el reproductor',
+  'disable_gestures_desc': 'Configura qué gestos quieres desactivar',
+  'gesture_close_player': 'Cerrar reproductor',
+  'gesture_open_playlist': 'Abrir lista de reproducción',
+  'gesture_change_song': 'Cambiar canción',
+  'gesture_open_player': 'Abrir reproductor',
+  'gesture_settings_title': 'Gestos en el reproductor',
+  'gesture_settings_desc_dialog': 'Activa o desactiva los gestos del reproductor',
 
   // Downloads
   'downloads': 'Descargas',
@@ -58,8 +68,9 @@ const Map<String, String> appLocalizationsEs = {
   'permission_granted': 'Permiso concedido',
   'permission_denied': 'Permiso denegado',
   'permission_granted_desc': 'Ahora tienes acceso a todos los archivos.',
-  'permission_denied_desc':
-      'No se concedió el permiso. Ve a ajustes para otorgarlo manualmente.',
+  'permission_denied_desc': 'No se pudo otorgar el permiso.',
+  'permission_required_for_download': 'Este permiso es obligatorio para descargar canciones.',
+  'grant_permission': 'Otorgar permiso',
   'default_path_set':
       'Ruta predeterminada establecida en la carpeta Música debido a la compatibilidad con Android 9.',
 
@@ -266,6 +277,10 @@ const Map<String, String> appLocalizationsEs = {
   'downloading_playlist': 'Descargando lista de reproducción...',
   'choose_folder': 'Elegir carpeta',
   'folder_ready': 'Carpeta lista',
+  'common_folders': 'Carpetas comunes',
+  'select_common_folder': 'Carpetas comunes',
+  'choose_other_folder': 'Elegir otra carpeta',
+  'no_common_folders': 'No hay carpetas comunes',
   'file_permissions': 'Permisos de archivos',
   'getting_info': 'Obteniendo información...',
   'playlist_detected': 'Lista de reproducción detectada',
@@ -282,6 +297,7 @@ const Map<String, String> appLocalizationsEs = {
   'download_method': 'Descarga:',
   'audio_processing': 'Procesar audio:',
   'folder_not_selected': 'Carpeta no seleccionada',
+  'select_folder': 'Seleccionar carpeta',
   'folder_not_selected_desc':
       'Debes seleccionar una carpeta antes de descargar el audio.',
   'download_accept': 'Aceptar',
@@ -363,6 +379,7 @@ const Map<String, String> appLocalizationsEs = {
   'no_recent_playlists': 'No hay listas de reproducción recientes.',
   'quick_pick_songs': 'selección rápida',
   'quick_access_songs': 'acceso directos',
+  'artists': 'Artistas',
   'recent_songs_title': 'canciones recientes',
   'favorites_title': 'me gusta',
   'confirm_remove_from_playlist':
@@ -380,6 +397,9 @@ const Map<String, String> appLocalizationsEs = {
   'search_on_youtube': 'Buscar en YouTube',
   'could_not_open_youtube': 'No se pudo abrir YouTube',
   'error_searching_youtube': 'Error al buscar en YouTube',
+  'search_artist_on_youtube': 'Buscar artista en YouTube',
+  'search_artist_on_youtube_music': 'Buscar artista en YouTube Music',
+  'search_artist': 'Buscar Artista',
   'quick_access': 'Accesos directos',
   'no_songs_to_show': 'No hay canciones para mostrar aún.',
   'quick_pick': 'Selección rápida',
@@ -564,4 +584,6 @@ const Map<String, String> appLocalizationsEs = {
   'hide_trim_settings': 'Ocultar configuración',
   'file_path': 'Ruta',
   'playlist_processing_time_info': 'El tiempo de procesamiento puede variar según el tamaño de la lista',
+  'view_on_github': 'Ver en GitHub',
+  'filters': 'Filtros',
 };

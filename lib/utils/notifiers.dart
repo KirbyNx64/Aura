@@ -39,3 +39,6 @@ final ValueNotifier<bool> playLoadingNotifier = ValueNotifier(false);
 
 // Notifier para controlar si el overlay puede abrir la pantalla del reproductor
 final ValueNotifier<bool> overlayPlayerNavigationEnabled = ValueNotifier(true);
+
+// Notifier para actualizar las preferencias de gestos
+final ValueNotifier<bool> gesturePreferencesChanged = ValueNotifier(false);

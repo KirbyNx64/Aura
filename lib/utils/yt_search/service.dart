@@ -1487,3 +1487,203 @@ Future<Map<String, dynamic>?> getPlaylistInfo(String playlistId) async {
     return null;
   }
 }
+
+// Función corregida para buscar artistas específicamente
+Future<List<Map<String, dynamic>>> searchArtists(String query, {int limit = 20}) async {
+  // print('🚀 Iniciando búsqueda de artistas para: $query');
+  
+  final data = {
+    ...ytServiceContext,
+    'query': query,
+    'params': getSearchParams('artists', null, false),
+  };
+
+  try {
+    // print('📡 Enviando petición a YouTube Music API...');
+    final response = (await sendRequest("search", data)).data;
+    // print('📡 Respuesta recibida, status: ${response != null ? 'OK' : 'NULL'}');
+    final results = <Map<String, dynamic>>[];
+
+    // print('🔍 Buscando artistas para: $query');
+    // print('🔍 Parámetros de búsqueda: ${data['params']}');
+
+    // Buscar directamente en la estructura de resultados
+    final contents = nav(response, [
+      'contents',
+      'tabbedSearchResultsRenderer',
+      'tabs',
+      0,
+      'tabRenderer',
+      'content',
+      'sectionListRenderer',
+      'contents'
+    ]);
+
+    // print('🔍 Contenidos encontrados: ${contents?.length ?? 0}');
+
+    if (contents is List) {
+      for (var section in contents) {
+        final shelf = section['musicShelfRenderer'];
+        if (shelf != null && shelf['contents'] is List) {
+          // print('🔍 Procesando shelf con ${shelf['contents'].length} items');
+          for (var item in shelf['contents']) {
+            final artist = _parseArtistItem(item);
+            if (artist != null) {
+              // print('🎵 Artista encontrado: ${artist['name']} - Thumb: ${artist['thumbUrl'] != null ? 'Sí' : 'No'}');
+              results.add(artist);
+              if (results.length >= limit) break;
+            }
+          }
+        }
+        if (results.length >= limit) break;
+      }
+    }
+
+    // print('🔍 Total artistas encontrados: ${results.length}');
+    return results.take(limit).toList();
+  } on DioException catch (_) {
+    // print('❌ Error de red buscando artistas: ${e.message}');
+    // print('❌ Tipo de error: ${e.type}');
+    return [];
+  } catch (e) {
+    // print('❌ Error general buscando artistas: $e');
+    return [];
+  }
+}
+
+// Función auxiliar mejorada para parsear un item de artista
+Map<String, dynamic>? _parseArtistItem(Map<String, dynamic> item) {
+  final renderer = item['musicResponsiveListItemRenderer'];
+  if (renderer == null) {
+    // ('❌ No se encontró musicResponsiveListItemRenderer');
+    return null;
+  }
+
+  // Extraer nombre del artista
+  final title = nav(renderer, [
+    'flexColumns',
+    0,
+    'musicResponsiveListItemFlexColumnRenderer',
+    'text',
+    'runs',
+    0,
+    'text'
+  ]);
+
+  if (title == null) {
+    // print('❌ No se encontró título del artista');
+    return null;
+  }
+
+  // print('🔍 Procesando artista: $title');
+
+  // Extraer browseId del artista - buscar en múltiples ubicaciones
+  String? browseId;
+  
+  // Primero intentar desde el título
+  browseId = nav(renderer, [
+    'flexColumns',
+    0,
+    'musicResponsiveListItemFlexColumnRenderer',
+    'text',
+    'runs',
+    0,
+    'navigationEndpoint',
+    'browseEndpoint',
+    'browseId'
+  ])?.toString();
+
+  // Si no está ahí, buscar en el menú
+  if (browseId == null) {
+    final menuItems = nav(renderer, ['menu', 'menuRenderer', 'items']);
+    if (menuItems is List) {
+      for (var menuItem in menuItems) {
+        final endpoint = nav(menuItem, [
+          'menuNavigationItemRenderer',
+          'navigationEndpoint',
+          'browseEndpoint',
+          'browseId'
+        ]);
+        if (endpoint != null) {
+          browseId = endpoint.toString();
+          break;
+        }
+      }
+    }
+  }
+
+  // Extraer información adicional (suscriptores, etc.)
+  String? subscribers;
+  final subtitleRuns = nav(renderer, [
+    'flexColumns',
+    1,
+    'musicResponsiveListItemFlexColumnRenderer',
+    'text',
+    'runs'
+  ]);
+
+  if (subtitleRuns is List && subtitleRuns.isNotEmpty) {
+    for (var run in subtitleRuns) {
+      final text = run['text'];
+      if (text != null && (text.contains('subscriber') || text.contains('suscriptor'))) {
+        subscribers = text.split(' ')[0];
+        break;
+      }
+    }
+  }
+
+  // Extraer thumbnail - buscar en múltiples ubicaciones
+  String? thumbUrl;
+  
+  // Primera ubicación: thumbnail directo
+  var thumbnails = nav(renderer, [
+    'thumbnail',
+    'musicThumbnailRenderer',
+    'thumbnail',
+    'thumbnails'
+  ]);
+
+  // print('🔍 Thumbnails (musicThumbnailRenderer): ${thumbnails != null ? thumbnails.length : 'null'}');
+
+  // Segunda ubicación: thumbnail cropped
+  thumbnails ??= nav(renderer, [
+    'thumbnail',
+    'croppedSquareThumbnailRenderer',
+    'thumbnail',
+    'thumbnails'
+  ]);
+  // print('🔍 Thumbnails (croppedSquareThumbnailRenderer): ${thumbnails != null ? thumbnails.length : 'null'}');
+
+  // Tercera ubicación: buscar en cualquier estructura de thumbnail
+  if (thumbnails == null) {
+    final thumbnail = nav(renderer, ['thumbnail']);
+    // print('🔍 Estructura de thumbnail completa: ${thumbnail?.keys.toList()}');
+    
+    // Intentar diferentes estructuras
+    if (thumbnail is Map) {
+      for (var key in thumbnail.keys) {
+        final subThumb = thumbnail[key];
+        if (subThumb is Map && subThumb.containsKey('thumbnails')) {
+          thumbnails = subThumb['thumbnails'];
+          // print('🔍 Thumbnails encontrados en $key: ${thumbnails?.length}');
+          break;
+        }
+      }
+    }
+  }
+
+  if (thumbnails is List && thumbnails.isNotEmpty) {
+    // Usar la imagen de mayor resolución disponible
+    thumbUrl = thumbnails.last['url'];
+    // ('✅ Thumbnail encontrado: $thumbUrl');
+  } else {
+    // print('❌ No se encontraron thumbnails para $title');
+  }
+
+  return {
+    'name': title,
+    'browseId': browseId,
+    'subscribers': subscribers,
+    'thumbUrl': thumbUrl,
+  };
+}

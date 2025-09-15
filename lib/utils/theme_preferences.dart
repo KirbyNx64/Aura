@@ -176,3 +176,12 @@ class ThemePreferences {
     }
   }
 }
+
+/// Helper function to format folder paths by removing the Android storage prefix
+String formatFolderPath(String path) {
+  const storagePrefix = '/storage/emulated/0';
+  if (path.startsWith(storagePrefix)) {
+    return path.substring(storagePrefix.length);
+  }
+  return path;
+}

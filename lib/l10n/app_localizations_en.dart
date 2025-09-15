@@ -21,6 +21,16 @@ const Map<String, String> appLocalizationsEn = {
   'change_language': 'Change language',
   'spanish': 'Spanish',
   'english': 'English',
+  'gesture_settings': 'Player gestures',
+  'gesture_settings_desc': 'Customize player gestures',
+  'disable_gestures': 'Player gestures',
+  'disable_gestures_desc': 'Configure which gestures you want to disable',
+  'gesture_close_player': 'Close player',
+  'gesture_open_playlist': 'Open playlist',
+  'gesture_change_song': 'Change song',
+  'gesture_open_player': 'Open player',
+  'gesture_settings_title': 'Player gestures',
+  'gesture_settings_desc_dialog': 'Enable or disable player gestures',
 
   // Downloads
   'downloads': 'Downloads',
@@ -58,8 +68,9 @@ const Map<String, String> appLocalizationsEn = {
   'permission_granted': 'Permission granted',
   'permission_denied': 'Permission denied',
   'permission_granted_desc': 'You now have access to all files.',
-  'permission_denied_desc':
-      'Permission not granted. Go to settings to grant it manually.',
+  'permission_denied_desc': 'Could not grant permission.',
+  'permission_required_for_download': 'This permission is required to download songs.',
+  'grant_permission': 'Grant permission',
   'default_path_set':
       'Default path set to Music folder due to Android 9 compatibility.',
 
@@ -201,6 +212,9 @@ const Map<String, String> appLocalizationsEn = {
   'search_on_youtube': 'Search on YouTube',
   'could_not_open_youtube': 'Could not open YouTube',
   'error_searching_youtube': 'Error searching on YouTube',
+  'search_artist_on_youtube': 'Search artist on YouTube',
+  'search_artist_on_youtube_music': 'Search artist on YouTube Music',
+  'search_artist': 'Search Artist',
   'select': 'Select',
   'reorder_manually': 'Reorder',
   'edit_date_newest_first': 'Edit date (ascending)',
@@ -264,6 +278,10 @@ const Map<String, String> appLocalizationsEn = {
   'downloading_playlist': 'Downloading playlist...',
   'choose_folder': 'Choose folder',
   'folder_ready': 'Folder ready',
+  'common_folders': 'Common folders',
+  'select_common_folder': 'Common folders',
+  'choose_other_folder': 'Choose other folder',
+  'no_common_folders': 'No common folders',
   'file_permissions': 'File permissions',
   'getting_info': 'Getting information...',
   'playlist_detected': 'Playlist detected',
@@ -280,6 +298,7 @@ const Map<String, String> appLocalizationsEn = {
   'download_method': 'Download:',
   'audio_processing': 'Process audio:',
   'folder_not_selected': 'Folder not selected',
+  'select_folder': 'Select folder',
   'folder_not_selected_desc':
       'You must select a folder before downloading audio.',
   'download_accept': 'Accept',
@@ -362,6 +381,7 @@ const Map<String, String> appLocalizationsEn = {
   'no_recent_playlists': 'No recent playlists.',
   'quick_pick_songs': 'quick pick',
   'quick_access_songs': 'quick access',
+  'artists': 'Artists',
   'recent_songs_title': 'recent songs',
   'playing_from': 'Playing from ',
   'favorites_title': 'favorites',
@@ -548,4 +568,6 @@ const Map<String, String> appLocalizationsEn = {
   'hide_trim_settings': 'Hide settings',
   'file_path': 'Path',
   'playlist_processing_time_info': 'Processing time may vary depending on the list size',
+  'view_on_github': 'View on GitHub',
+  'filters': 'Filters',
 };

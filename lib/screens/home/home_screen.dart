@@ -18,10 +18,16 @@ import 'package:music/utils/theme_preferences.dart';
 import 'package:music/l10n/locale_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:music/utils/db/shortcuts_db.dart';
+import 'package:music/utils/db/songs_index_db.dart';
+import 'package:music/utils/db/artists_db.dart';
+import 'package:music/utils/db/artist_images_cache_db.dart';
+import 'package:music/utils/yt_search/service.dart';
 import 'package:mini_music_visualizer/mini_music_visualizer.dart';
 import 'package:music/screens/play/player_screen.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:music/utils/song_info_dialog.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'dart:async';
 
 enum OrdenCancionesPlaylist { normal, alfabetico, invertido, ultimoAgregado }
@@ -80,13 +86,43 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   final Set<int> _selectedPlaylistSongIds = {};
 
   List<SongModel> _shortcutSongs = [];
+  List<SongModel> _randomSongs = []; // Canciones aleatorias para llenar espacios vacíos
   List<SongModel> _shuffledQuickPick = [];
+  bool _randomSongsLoaded = false; // Bandera para evitar cargas duplicadas
+  List<Map<String, dynamic>> _artists = []; // Lista de artistas populares
 
   // Cache para los widgets de accesos directos para evitar reconstrucciones
   final Map<String, Widget> _shortcutWidgetCache = {};
 
   // Cache para los widgets de selección rápida para evitar reconstrucciones
   final Map<String, Widget> _quickPickWidgetCache = {};
+
+  // Cache para los widgets de artistas para evitar reconstrucciones
+  final Map<String, Widget> _artistWidgetCache = {};
+  final Map<String, Uint8List?> _artworkCache = {};
+
+  Future<Uint8List?> _getCachedArtwork(int songId) async {
+    final cacheKey = 'artwork_$songId';
+    
+    if (_artworkCache.containsKey(cacheKey)) {
+      return _artworkCache[cacheKey];
+    }
+    
+    try {
+      final artwork = await OnAudioQuery().queryArtwork(
+        songId,
+        ArtworkType.AUDIO,
+        format: ArtworkFormat.JPEG,
+        size: 200,
+      );
+      
+      _artworkCache[cacheKey] = artwork;
+      return artwork;
+    } catch (e) {
+      _artworkCache[cacheKey] = null;
+      return null;
+    }
+  }
 
   Future<void> _handleAddToPlaylistSingle(
     BuildContext context,
@@ -186,14 +222,17 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   // Devuelve la lista de accesos directos para mostrar en quick_access
           List<SongModel> get _accessDirectSongs {
           final shortcutPaths = _shortcutSongs.map((s) => s.data).toList();
+          final randomPaths = _randomSongs.map((s) => s.data).toList();
+          final allUsedPaths = {...shortcutPaths, ...randomPaths};
           
           // Mezclar las canciones recientes de forma aleatoria
           final shuffledRecents = List<SongModel>.from(_recentSongs)..shuffle();
           
           final List<SongModel> combined = [
             ..._shortcutSongs,
-            ..._mostPlayed.where((s) => !shortcutPaths.contains(s.data)).take(18),
-            ...shuffledRecents.where((s) => !shortcutPaths.contains(s.data) &&
+            ..._mostPlayed.where((s) => !allUsedPaths.contains(s.data)).take(18),
+            ..._randomSongs,
+            ...shuffledRecents.where((s) => !allUsedPaths.contains(s.data) &&
                                           !_mostPlayed.any((mp) => mp.data == s.data)),
           ];
           return combined.take(100).toList();
@@ -203,14 +242,15 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _loadOrderFilter().then((_) {
-      _loadAllSongs();
-      _loadMostPlayed().then((_) async {
-        await _loadShortcuts();
-        await _loadRecentsData();
-        _initQuickPickPages();
-        setState(() {});
-      });
+    _loadOrderFilter().then((_) async {
+      await _loadAllSongs();
+      await _loadMostPlayed();
+      await _loadShortcuts();
+      await _loadArtists();
+      await _loadRecentsData();
+      await _fillQuickPickWithRandomSongs();
+      _initQuickPickPages();
+      setState(() {});
       _loadPlaylists();
     });
     playlistsShouldReload.addListener(_onPlaylistsShouldReload);
@@ -342,21 +382,64 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   // Modificar _initQuickPickPages para usar _pinnedSongs y _mostPlayed
   void _initQuickPickPages() {
     _quickPickPages.clear();
-    // Primero los accesos directos, luego las más escuchadas sin repetir
-    final shortcutPaths = _shortcutSongs.map((s) => s.data).toList();
-    final List<SongModel> shortcutOrdered = [];
-    for (final path in shortcutPaths) {
-      try {
-        final song = _shortcutSongs.firstWhere((s) => s.data == path);
-        shortcutOrdered.add(song);
-      } catch (_) {}
+    
+    // print('🎵 Inicializando QuickPick - Accesos directos: ${_shortcutSongs.length}, Más escuchadas: ${_mostPlayed.length}, Aleatorias: ${_randomSongs.length}, AllSongs: ${allSongs.length}');
+    
+    // Inicializar la selección rápida mezclada
+    _shuffleQuickPick();
+    
+    // Prioridad: 1) Accesos directos fijos, 2) Canciones más escuchadas, 3) Canciones aleatorias
+    final shortcutPaths = _shortcutSongs.map((s) => s.data).toSet();
+    final randomPaths = _randomSongs.map((s) => s.data).toSet();
+    final allUsedPaths = {...shortcutPaths, ...randomPaths};
+    
+    final List<SongModel> combined = [];
+    
+    // 1. Agregar accesos directos fijos
+    for (final song in _shortcutSongs) {
+      if (!allUsedPaths.contains(song.data)) {
+        combined.add(song);
+        allUsedPaths.add(song.data);
+      }
     }
-    final List<SongModel> combined = [
-      ...shortcutOrdered,
-      ..._mostPlayed.where((s) => !shortcutPaths.contains(s.data)),
-    ];
+    // print('🎵 Después de accesos directos: ${combined.length} canciones');
+    
+    // 2. Agregar canciones más escuchadas que no estén ya en uso
+    for (final song in _mostPlayed) {
+      if (!allUsedPaths.contains(song.data) && combined.length < 18) {
+        combined.add(song);
+        allUsedPaths.add(song.data);
+      }
+    }
+    // print('🎵 Después de más escuchadas: ${combined.length} canciones');
+    
+    // 3. Si aún no tenemos 18 canciones, llenar con canciones aleatorias de _shuffledQuickPick
+    if (combined.length < 18) {
+      for (final song in _shuffledQuickPick) {
+        if (!allUsedPaths.contains(song.data) && combined.length < 18) {
+          combined.add(song);
+          allUsedPaths.add(song.data);
+        }
+      }
+    }
+    // print('🎵 Después de shuffledQuickPick: ${combined.length} canciones');
+    
+    // 4. Si aún no tenemos 18 canciones, llenar con canciones aleatorias de allSongs
+    if (combined.length < 18 && allSongs.isNotEmpty) {
+      final availableSongs = allSongs
+          .where((s) => !allUsedPaths.contains(s.data))
+          .toList();
+      availableSongs.shuffle();
+      
+      final neededSongs = 18 - combined.length;
+      combined.addAll(availableSongs.take(neededSongs));
+      // print('🎵 Después de allSongs fallback: ${combined.length} canciones');
+    }
+    
+    // Asegurar que tenemos exactamente 18 canciones o las que estén disponibles
     final limited = combined.take(18).toList();
-    // Divide la lista en páginas de 6
+    
+    // Dividir la lista en páginas de 6
     for (int i = 0; i < 3; i++) {
       final start = i * 6;
       final end = (start + 6).clamp(0, limited.length);
@@ -369,6 +452,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   // Cuando se fije o desfije una canción, recargar accesos directos
   Future<void> refreshPinnedSongs() async {
     await _loadPinnedSongs();
+    await _fillQuickPickWithRandomSongs(forceReload: true);
     _initQuickPickPages();
     setState(() {});
   }
@@ -392,12 +476,14 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       } catch (_) {}
     }
 
+    // Cargar accesos directos reales
     for (final path in shortcutPaths) {
       try {
         final song = songsSource.firstWhere((s) => s.data == path);
         shortcutSongs.add(song);
       } catch (_) {}
     }
+
     if (mounted) {
       setState(() {
         // Invalida widgets cacheados para que reflejen el estado de fijado
@@ -405,15 +491,652 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         _shortcutSongs = shortcutSongs;
       });
     }
-    _shuffleQuickPick();
+    
+    // Las canciones aleatorias se cargan solo una vez en initState
+  }
+
+  Future<void> _loadArtists({bool forceRefresh = false}) async {
+    try {
+      // print('🎵 Cargando artistas...');
+      final artistsDB = ArtistsDB();
+      
+      // Intentar cargar artistas existentes primero
+      List<Map<String, dynamic>> artists = await artistsDB.getTopArtists(limit: 20);
+      // print('🎵 Artistas encontrados en DB: ${artists.length}');
+      
+      // Si no hay artistas y hay canciones disponibles, o si se fuerza el refresh, indexar
+      if ((artists.isEmpty && allSongs.isNotEmpty) || forceRefresh) {
+        // print('🎵 ${forceRefresh ? 'Forzando' : 'No hay artistas, '}indexando con ${allSongs.length} canciones...');
+        await artistsDB.indexArtists(allSongs);
+        artists = await artistsDB.getTopArtists(limit: 20);
+        // print('🎵 Artistas después de indexar: ${artists.length}');
+      }
+      
+      // Mostrar artistas inmediatamente en la UI
+      if (mounted && artists.isNotEmpty) {
+        // print('🎵 Mostrando ${artists.length} artistas en UI');
+        setState(() {
+          _artists = artists;
+        });
+        
+        // Enriquecer artistas con imágenes de YouTube Music en segundo plano
+        _enrichArtistsWithYTImages(artists);
+      } else if (mounted) {
+        // print('🎵 No hay artistas para mostrar');
+        setState(() {
+          _artists = [];
+        });
+      }
+    } catch (e) {
+      // print('🎵 Error cargando artistas: $e');
+      // En caso de error, mantener la lista vacía
+      if (mounted) {
+        setState(() {
+          _artists = [];
+        });
+      }
+    }
+  }
+
+  // Función para enriquecer artistas con imágenes de YouTube Music usando cache persistente
+  Future<void> _enrichArtistsWithYTImages(List<Map<String, dynamic>> artists) async {
+    try {
+      // print('🎵 Enriqueciendo ${artists.length} artistas con imágenes de YouTube Music...');
+      
+      // Primero, intentar cargar desde cache
+      final artistNames = artists.map((a) => a['name'] as String).toList();
+      final cachedImages = await ArtistImagesCacheDB.getCachedArtistImages(artistNames);
+      
+      // print('📦 Imágenes encontradas en cache: ${cachedImages.length}');
+      
+      // Crear mapa de cache para búsqueda rápida
+      final cacheMap = <String, Map<String, dynamic>>{};
+      for (final cached in cachedImages) {
+        cacheMap[cached['name']] = cached;
+      }
+      
+      // Aplicar imágenes desde cache
+      bool hasUpdates = false;
+      for (int i = 0; i < artists.length; i++) {
+        final artist = artists[i];
+        final artistName = artist['name'];
+        
+        if (cacheMap.containsKey(artistName)) {
+          final cached = cacheMap[artistName]!;
+          // print('📦 Usando imagen desde cache para: $artistName');
+          
+          artists[i] = {
+            ...artist,
+            'thumbUrl': cached['thumbUrl'],
+            'browseId': cached['browseId'],
+            'subscribers': cached['subscribers'],
+          };
+          hasUpdates = true;
+        }
+      }
+      
+      // Actualizar UI con imágenes del cache
+      if (hasUpdates && mounted) {
+        setState(() {
+          _artists = List.from(artists);
+        });
+        _artistWidgetCache.clear();
+        // print('🔄 UI actualizada con imágenes del cache');
+      }
+      
+      // Si no hay actualizaciones del cache, actualizar la UI de todos modos para mostrar los artistas
+      if (!hasUpdates && mounted) {
+        setState(() {
+          _artists = List.from(artists);
+        });
+        _artistWidgetCache.clear();
+        // print('🔄 UI actualizada sin imágenes del cache');
+      }
+      
+      // Buscar imágenes faltantes en YouTube Music
+      final artistsToSearch = <int>[];
+      for (int i = 0; i < artists.length; i++) {
+        if (!cacheMap.containsKey(artists[i]['name'])) {
+          artistsToSearch.add(i);
+        }
+      }
+      
+      // print('🔍 Artistas a buscar en YouTube Music: ${artistsToSearch.length}');
+      
+      for (final i in artistsToSearch) {
+        final artist = artists[i];
+        final artistName = artist['name'];
+        
+        // print('🔍 Buscando imagen para: $artistName');
+        
+        try {
+          // Buscar el artista en YouTube Music con timeout
+          final ytArtists = await searchArtists(artistName, limit: 1)
+              .timeout(const Duration(seconds: 10));
+          // print('🔍 Resultado de búsqueda para $artistName: ${ytArtists.length} artistas encontrados');
+        
+          if (ytArtists.isNotEmpty) {
+            final ytArtist = ytArtists.first;
+            // print('✅ Encontrado en YT: ${ytArtist['name']} - Thumb: ${ytArtist['thumbUrl'] != null ? 'Sí' : 'No'}');
+            
+            // Guardar en cache persistente
+            await ArtistImagesCacheDB.cacheArtistImage(
+              artistName: artistName,
+              thumbUrl: ytArtist['thumbUrl'],
+              browseId: ytArtist['browseId'],
+              subscribers: ytArtist['subscribers'],
+            );
+            
+            // Actualizar el artista con la información de YouTube Music
+            artists[i] = {
+              ...artist,
+              'thumbUrl': ytArtist['thumbUrl'],
+              'browseId': ytArtist['browseId'],
+              'subscribers': ytArtist['subscribers'],
+            };
+            
+            // Actualizar la UI inmediatamente cuando se encuentra una imagen
+            if (mounted) {
+              // print('🔄 Actualizando UI para ${artistName} con imagen: ${ytArtist['thumbUrl']}');
+              setState(() {
+                _artists = List.from(artists);
+              });
+              
+              // Limpiar cache para forzar reconstrucción del widget
+              _artistWidgetCache.clear();
+              // print('🗑️ Cache de artistas limpiado');
+            }
+          } else {
+            // print('❌ No se encontró en YouTube Music: $artistName');
+            
+            // Guardar en cache como "no encontrado" para evitar búsquedas repetidas
+            await ArtistImagesCacheDB.cacheArtistImage(
+              artistName: artistName,
+              thumbUrl: null,
+              browseId: null,
+              subscribers: null,
+            );
+          }
+        } on TimeoutException {
+          // print('⏰ Timeout buscando $artistName en YouTube Music');
+        } catch (e) {
+          // print('❌ Error buscando $artistName en YouTube Music: $e');
+        }
+        
+        // Pequeña pausa para evitar rate limiting
+        await Future.delayed(const Duration(milliseconds: 100));
+      }
+      
+      // Limpiar cache expirado
+      final cleanedCount = await ArtistImagesCacheDB.cleanExpiredCache();
+      if (cleanedCount > 0) {
+        // print('🧹 Limpiados $cleanedCount elementos expirados del cache');
+      }
+      
+      // print('🎵 Enriquecimiento completado');
+    } catch (e) {
+      // print('🎵 Error enriqueciendo artistas con imágenes de YT: $e');
+      // Continuar sin las imágenes si hay error
+    }
+  }
+
+  /// Fuerza la recarga de artistas (útil cuando se actualiza la biblioteca)
+  /*Future<void> _reloadArtists() async {
+    try {
+      // print('🔄 Recargando artistas...');
+      final artistsDB = ArtistsDB();
+      
+      // Forzar reindexación
+      if (allSongs.isNotEmpty) {
+        await artistsDB.forceReindex(allSongs);
+      }
+      
+      final artists = await artistsDB.getTopArtists(limit: 20);
+      // print('🔄 Artistas recargados: ${artists.length}');
+      
+      if (mounted) {
+        // Limpiar cache de artistas para forzar reconstrucción
+        _artistWidgetCache.clear();
+        setState(() {
+          _artists = artists;
+        });
+        
+        // Enriquecer con imágenes en segundo plano
+        if (artists.isNotEmpty) {
+          _enrichArtistsWithYTImages(artists);
+        }
+      }
+    } catch (e) {
+      // print('❌ Error recargando artistas: $e');
+      if (mounted) {
+        setState(() {
+          _artists = [];
+        });
+      }
+    }
+  }*/
+
+  // Mostrar modal con canciones del artista
+  Future<void> _showArtistSongsModal(BuildContext context, String artistName, List<SongModel> songs) async {
+    // Obtener información del artista desde el cache
+    final artistInfo = await ArtistImagesCacheDB.getCachedArtistImage(artistName);
+    
+    if (!context.mounted) return;
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        height: MediaQuery.of(context).size.height * 0.7,
+        decoration: BoxDecoration(
+          color: Theme.of(context).scaffoldBackgroundColor,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          children: [
+            // Handle bar
+            Container(
+              margin: const EdgeInsets.only(top: 12),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            
+            // Header
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: Row(
+                children: [
+                  Container(
+                    width: 60,
+                    height: 60,
+                    decoration: const BoxDecoration(
+                      shape: BoxShape.circle,
+                    ),
+                    child: ClipOval(
+                      child: artistInfo?['thumbUrl'] != null
+                          ? Image.network(
+                              artistInfo!['thumbUrl'],
+                              width: 60,
+                              height: 60,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) {
+                                return Container(
+                                  decoration: BoxDecoration(
+                                    color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                                  ),
+                                  child: Icon(
+                                    Icons.person,
+                                    size: 30,
+                                    color: Theme.of(context).colorScheme.primary,
+                                  ),
+                                );
+                              },
+                              loadingBuilder: (context, child, loadingProgress) {
+                                if (loadingProgress == null) return child;
+                                return Container(
+                                  decoration: BoxDecoration(
+                                    color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                                  ),
+                                  child: Center(
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      value: loadingProgress.expectedTotalBytes != null
+                                          ? loadingProgress.cumulativeBytesLoaded /
+                                              loadingProgress.expectedTotalBytes!
+                                          : null,
+                                    ),
+                                  ),
+                                );
+                              },
+                            )
+                          : QueryArtworkWidget(
+                              id: songs.isNotEmpty ? songs.first.id : -1,
+                              type: ArtworkType.AUDIO,
+                              nullArtworkWidget: Container(
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                                ),
+                                child: Icon(
+                                  Icons.person,
+                                  size: 30,
+                                  color: Theme.of(context).colorScheme.primary,
+                                ),
+                              ),
+                            ),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          artistName,
+                          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        Text(
+                          '${songs.length} ${LocaleProvider.tr('songs')}',
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  InkWell(
+                    onTap: () {
+                      _showArtistSearchOptions(artistName);
+                    },
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).brightness == Brightness.dark
+                          ? Theme.of(context).colorScheme.primaryContainer
+                          : Theme.of(context).colorScheme.onPrimaryContainer.withValues(alpha: 0.7),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.search,
+                            size: 20,
+                            color: Theme.of(context).brightness == Brightness.dark
+                              ? Theme.of(context).colorScheme.onPrimaryContainer
+                              : Theme.of(context).colorScheme.surfaceContainer,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            LocaleProvider.tr('search'),
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14,
+                              color: Theme.of(context).brightness == Brightness.dark
+                                ? Theme.of(context).colorScheme.onPrimaryContainer
+                                : Theme.of(context).colorScheme.surfaceContainer,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            
+            // Songs list
+            Expanded(
+              child: StreamBuilder<MediaItem?>(
+                stream: audioHandler?.mediaItem,
+                initialData: audioHandler?.mediaItem.valueOrNull,
+                builder: (context, snapshot) {
+                  final currentMediaItem = snapshot.data;
+                  
+                  return ListView.builder(
+                    padding: const EdgeInsets.symmetric(horizontal: 0),
+                    itemCount: songs.length,
+                    itemBuilder: (context, index) {
+                      final song = songs[index];
+                      // Usar la misma lógica que _PlaylistListView para detectar la canción actual
+                      final isCurrent = currentMediaItem != null && 
+                          currentMediaItem.extras?['data'] == song.data;
+                      final isAmoledTheme = colorSchemeNotifier.value == AppColorScheme.amoled;
+                      
+                      return Container(
+                        margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: isCurrent
+                              ? (isAmoledTheme
+                                  ? Colors.white.withValues(alpha: 0.15)
+                                  : Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.8))
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: ListTile(
+                          leading: FutureBuilder<Uint8List?>(
+                            future: _getCachedArtwork(song.id),
+                            builder: (context, snapshot) {
+                              if (snapshot.hasData && snapshot.data != null) {
+                                return Container(
+                                  width: 50,
+                                  height: 50,
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(8),
+                                    image: DecorationImage(
+                                      image: MemoryImage(snapshot.data!),
+                                      fit: BoxFit.cover,
+                                    ),
+                                  ),
+                                );
+                              } else {
+                                return Container(
+                                  width: 50,
+                                  height: 50,
+                                  decoration: BoxDecoration(
+                                    color: Theme.of(context).colorScheme.surfaceContainer,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Icon(
+                                    Icons.music_note,
+                                    size: 25, // 50 * 0.5
+                                    color: Theme.of(context).colorScheme.onSurface,
+                                  ),
+                                );
+                              }
+                            },
+                          ),
+                          title: Text(
+                            song.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
+                              color: isCurrent
+                                  ? (isAmoledTheme
+                                        ? Colors.white
+                                        : Theme.of(context).colorScheme.primary)
+                                  : null,
+                            ),
+                          ),
+                          subtitle: Text(
+                            song.artist ?? LocaleProvider.tr('unknown_artist'),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: isCurrent
+                                  ? (isAmoledTheme
+                                        ? Colors.white
+                                        : Theme.of(context).colorScheme.primary)
+                                  : null,
+                            ),
+                          ),
+                          tileColor: Colors.transparent,
+                          splashColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                          onTap: () async {
+                            await _playSongAndOpenPlayer(
+                              song,
+                              songs,
+                              queueSource: '${LocaleProvider.tr('artist')}: $artistName',
+                            );
+                            if (context.mounted) {
+                              Navigator.of(context).pop();
+                            }
+                          },
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Widget para mostrar un artista en círculo
+  Widget _buildArtistWidget(Map<String, dynamic> artist, BuildContext context) {
+    final String artistKey = 'artist_${artist['name']}_${artist['song_count']}_${artist['thumbUrl'] ?? 'no_image'}';
+    
+    // print('🎨 Construyendo widget para ${artist['name']} - ThumbUrl: ${artist['thumbUrl'] != null ? 'Sí' : 'No'}');
+    
+    Widget artistWidget;
+    if (_artistWidgetCache.containsKey(artistKey)) {
+      // print('📦 Usando widget desde cache para ${artist['name']}');
+      artistWidget = _artistWidgetCache[artistKey]!;
+    } else {
+      // print('🆕 Creando nuevo widget para ${artist['name']}');
+      artistWidget = AnimatedTapButton(
+        onTap: () async {
+          // Obtener canciones del artista
+          final artistsDB = ArtistsDB();
+          final artistSongs = await artistsDB.getArtistSongs(artist['name']);
+          
+          // Convertir rutas a SongModel
+          final List<SongModel> songs = [];
+          for (final path in artistSongs) {
+            try {
+              final song = allSongs.firstWhere((s) => s.data == path);
+              songs.add(song);
+            } catch (_) {}
+          }
+          
+          if (songs.isNotEmpty && mounted) {
+            await _playSongAndOpenPlayer(
+              songs.first,
+              songs,
+              queueSource: '${LocaleProvider.tr('artist')}: ${artist['name']}',
+            );
+          }
+        },
+        onLongPress: () async {
+          HapticFeedback.mediumImpact();
+          if (!context.mounted) return;
+          
+          // Obtener canciones del artista
+          final artistsDB = ArtistsDB();
+          final artistSongs = await artistsDB.getArtistSongs(artist['name']);
+          
+          // Convertir rutas a SongModel
+          final List<SongModel> songs = [];
+          for (final path in artistSongs) {
+            try {
+              final song = allSongs.firstWhere((s) => s.data == path);
+              songs.add(song);
+            } catch (_) {}
+          }
+          
+          if (songs.isNotEmpty && mounted) {
+            if (!context.mounted) return;
+            await _showArtistSongsModal(context, artist['name'], songs);
+          }
+        },
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 80,
+              height: 80,
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+              ),
+              child: ClipOval(
+                child: artist['thumbUrl'] != null
+                    ? Image.network(
+                        artist['thumbUrl'],
+                        width: 80,
+                        height: 80,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Container(
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                            ),
+                            child: Center(
+                              child: Icon(
+                                Icons.person,
+                                size: 40,
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                            ),
+                          );
+                        },
+                        loadingBuilder: (context, child, loadingProgress) {
+                          if (loadingProgress == null) return child;
+                          return Container(
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                            ),
+                            child: Center(
+                              child: CircularProgressIndicator(
+                                strokeWidth: 3,
+                                value: loadingProgress.expectedTotalBytes != null
+                                    ? loadingProgress.cumulativeBytesLoaded /
+                                        loadingProgress.expectedTotalBytes!
+                                    : null,
+                              ),
+                            ),
+                          );
+                        },
+                      )
+                    : Container(
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                        ),
+                        child: Center(
+                          child: Icon(
+                            Icons.person,
+                            size: 40,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                        ),
+                      ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: 80,
+              child: Text(
+                artist['name'],
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  fontWeight: FontWeight.w500,
+                  fontSize: 14,
+                  color: colorSchemeNotifier.value == AppColorScheme.amoled ? Colors.white : null,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+      
+      _artistWidgetCache[artistKey] = artistWidget;
+    }
+    
+    return artistWidget;
   }
 
   Future<void> refreshShortcuts() async {
     await _loadShortcuts();
+    await _fillQuickPickWithRandomSongs(forceReload: true);
     _initQuickPickPages();
     // Limpiar cache cuando se actualizan los shortcuts
     _shortcutWidgetCache.clear();
     _quickPickWidgetCache.clear();
+    _artistWidgetCache.clear();
     setState(() {});
   }
 
@@ -705,8 +1428,8 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                     : Theme.of(context).colorScheme.surfaceContainer,
                                 ),
                                 const SizedBox(width: 8),
-                                Text(
-                                  'Buscar',
+                                TranslatedText(
+                                  'search',
                                   style: TextStyle(
                                     fontWeight: FontWeight.w600,
                                     fontSize: 14,
@@ -747,7 +1470,8 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     ),
                   ListTile(
                     leading: Icon(
-                      isFavorite ? Icons.delete_outline : Icons.favorite_border,
+                      isFavorite ? Icons.delete_outline : Symbols.favorite_rounded,
+                      weight: isFavorite ? null : 600,
                     ),
                     title: TranslatedText(
                       isFavorite ? 'remove_from_favorites' : 'add_to_favorites',
@@ -773,6 +1497,14 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       if (!context.mounted) return;
                       Navigator.of(context).pop();
                       await _handleAddToPlaylistSingle(context, song);
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.info_outline),
+                    title: TranslatedText('song_info'),
+                    onTap: () async {
+                      Navigator.of(context).pop();
+                      await SongInfoDialog.showFromSong(context, song, colorSchemeNotifier);
                     },
                   ),
                 ],
@@ -981,6 +1713,8 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Future<void> _loadPlaylistSongs(Map<String, dynamic> playlist) async {
     final songs = await PlaylistsDB().getSongsFromPlaylist(playlist['id']);
+    // Limpiar cache de artistas para forzar reconstrucción con contexto correcto
+    _artistWidgetCache.clear();
     setState(() {
       _originalPlaylistSongs = List.from(songs);
       _selectedPlaylist = playlist;
@@ -991,6 +1725,20 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
     // Precargar carátulas de la playlist
     unawaited(_preloadArtworksForSongs(songs));
+  }
+
+  /// Función específica para refrescar las canciones de la playlist actual
+  Future<void> _refreshPlaylistSongs() async {
+    if (_selectedPlaylist != null) {
+      final songs = await PlaylistsDB().getSongsFromPlaylist(_selectedPlaylist!['id']);
+      setState(() {
+        _originalPlaylistSongs = List.from(songs);
+      });
+      _ordenarCancionesPlaylist();
+
+      // Precargar carátulas de la playlist
+      unawaited(_preloadArtworksForSongs(songs));
+    }
   }
 
   Future<void> _loadMostPlayed() async {
@@ -1125,6 +1873,8 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
     // print('Pop manejado por home');
     if (_showingRecents || _showingPlaylistSongs) {
+      // Limpiar cache de artistas para forzar reconstrucción con contexto correcto
+      _artistWidgetCache.clear();
       setState(() {
         _showingRecents = false;
         _showingPlaylistSongs = false;
@@ -1221,17 +1971,35 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
 
     // Activar indicador de carga
+    // print('🟢 Activando loading...');
     playLoadingNotifier.value = true;
+    // print('🟢 Loading activado: ${playLoadingNotifier.value}');
 
     // Reproducir la canción después de un breve delay para que se abra la pantalla
-    Future.delayed(const Duration(milliseconds: 400), () {
-      if (mounted) {
-        _playSong(song, queue, queueSource: queueSource);
-        // Desactivar indicador de carga después de reproducir
-        Future.delayed(const Duration(milliseconds: 200), () {
-          playLoadingNotifier.value = false;
-        });
+    Future.delayed(const Duration(milliseconds: 400), () async {
+      try {
+        if (mounted) {
+          // Primero reproducir la canción
+          await _playSong(song, queue, queueSource: queueSource);
+          
+          // Luego agregar las canciones aleatorias al reproductor (si es necesario)
+          if (queueSource == LocaleProvider.tr('quick_access_songs') || 
+              queueSource == LocaleProvider.tr('quick_pick_songs')) {
+            // Esperar un poco para que la reproducción se estabilice
+            await Future.delayed(const Duration(milliseconds: 200));
+            await _addRandomSongsToPlayerQueue(queue);
+          }
+        }
+      } catch (e) {
+        // print('Error en reproducción: $e');
       }
+    });
+    
+    // Desactivar loading después de un tiempo fijo (más confiable)
+    Future.delayed(const Duration(milliseconds: 800), () {
+      // print('🔴 Desactivando loading...');
+      playLoadingNotifier.value = false;
+      // print('🔴 Loading desactivado: ${playLoadingNotifier.value}');
     });
   }
 
@@ -1414,8 +2182,8 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                 : Theme.of(context).colorScheme.surfaceContainer,
                             ),
                             const SizedBox(width: 8),
-                            Text(
-                              'Buscar',
+                            TranslatedText(
+                              'search',
                               style: TextStyle(
                                 fontWeight: FontWeight.w600,
                                 fontSize: 14,
@@ -1444,7 +2212,8 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               ),
               ListTile(
                 leading: Icon(
-                  isFavorite ? Icons.delete_outline : Icons.favorite_border,
+                  isFavorite ? Icons.delete_outline : Symbols.favorite_rounded,
+                  weight: isFavorite ? null : 600,
                 ),
                 title: TranslatedText(
                   isFavorite ? 'remove_from_favorites' : 'add_to_favorites',
@@ -1467,6 +2236,14 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   if (!context.mounted) return;
                   Navigator.of(context).pop();
                   await _handleAddToPlaylistSingle(context, song);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.info_outline),
+                title: TranslatedText('song_info'),
+                onTap: () async {
+                  Navigator.of(context).pop();
+                  await SongInfoDialog.showFromSong(context, song, colorSchemeNotifier);
                 },
               ),
             ],
@@ -1676,12 +2453,187 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   void _shuffleQuickPick() {
     final shortcutPaths = _shortcutSongs.map((s) => s.data).toSet();
-    _shuffledQuickPick = _mostPlayed
-        .where((s) => !shortcutPaths.contains(s.data))
-        .toList();
-    _shuffledQuickPick.shuffle();
+    final randomPaths = _randomSongs.map((s) => s.data).toSet();
+    final allUsedPaths = {...shortcutPaths, ...randomPaths};
+    
+    // Crear una lista combinada con canciones más escuchadas y aleatorias
+    final List<SongModel> combinedSongs = [];
+    
+    // Agregar canciones más escuchadas que no estén ya en uso
+    for (final song in _mostPlayed) {
+      if (!allUsedPaths.contains(song.data)) {
+        combinedSongs.add(song);
+        allUsedPaths.add(song.data);
+      }
+    }
+    
+    // Agregar canciones aleatorias que no estén ya en uso
+    for (final song in _randomSongs) {
+      if (!allUsedPaths.contains(song.data)) {
+        combinedSongs.add(song);
+        allUsedPaths.add(song.data);
+      }
+    }
+    
+    // Si no hay suficientes canciones, usar canciones de allSongs
+    if (combinedSongs.length < 50 && allSongs.isNotEmpty) {
+      final availableSongs = allSongs
+          .where((s) => !allUsedPaths.contains(s.data))
+          .toList();
+      availableSongs.shuffle();
+      
+      final neededSongs = 50 - combinedSongs.length;
+      combinedSongs.addAll(availableSongs.take(neededSongs));
+    }
+    
+    // Mezclar todas las canciones
+    combinedSongs.shuffle();
+    _shuffledQuickPick = combinedSongs;
+    
     // Limpiar cache de selección rápida cuando se actualiza la lista
     _quickPickWidgetCache.clear();
+  }
+
+  // Función para agregar 50 canciones aleatorias SOLO al reproductor (no visualmente)
+  Future<void> _addRandomSongsToPlayerQueue(List<SongModel> currentQueue) async {
+    try {
+      final songsIndexDB = SongsIndexDB();
+      
+      // Obtener canciones aleatorias frescas de la base de datos
+      final randomPaths = await songsIndexDB.getRandomSongs(limit: 50);
+      
+      // Convertir rutas a SongModel y filtrar duplicados
+      final Set<String> usedPaths = currentQueue.map((s) => s.data).toSet();
+      // También excluir canciones que ya están en accesos directos fijos
+      final shortcutPaths = _shortcutSongs.map((s) => s.data).toSet();
+      // Y excluir también las canciones más escuchadas
+      final mostPlayedPaths = _mostPlayed.map((s) => s.data).toSet();
+      usedPaths.addAll(shortcutPaths);
+      usedPaths.addAll(mostPlayedPaths);
+      
+      final List<SongModel> randomSongsForPlayer = [];
+      
+      for (final path in randomPaths) {
+        if (!usedPaths.contains(path) && randomSongsForPlayer.length < 50) {
+          try {
+            final song = allSongs.firstWhere((s) => s.data == path);
+            randomSongsForPlayer.add(song);
+            usedPaths.add(path);
+          } catch (_) {
+            // Si no se encuentra en allSongs, intentar obtenerla de la base de datos
+            try {
+              final query = OnAudioQuery();
+              final songs = await query.querySongs();
+              final foundSong = songs.firstWhere((s) => s.data == path);
+              randomSongsForPlayer.add(foundSong);
+              usedPaths.add(path);
+            } catch (_) {}
+          }
+        }
+      }
+      
+      // Agregar las canciones aleatorias al final de la cola actual del reproductor
+      if (randomSongsForPlayer.isNotEmpty) {
+        final audioHandler = await _getAudioHandler();
+        if (audioHandler != null) {
+          // Agregar las canciones aleatorias al final de la cola
+          await audioHandler.addSongsToQueueEnd(randomSongsForPlayer);
+          // print('✅ Agregadas ${randomSongsForPlayer.length} canciones aleatorias al reproductor');
+        }
+      } else {
+        // print('⚠️ No se encontraron canciones aleatorias para agregar');
+      }
+      
+    } catch (e) {
+      // En caso de error, no hacer nada para no interrumpir la reproducción
+      // print('❌ Error agregando canciones aleatorias al reproductor: $e');
+    }
+  }
+
+  // Función para llenar la selección rápida con canciones aleatorias adicionales
+  Future<void> _fillQuickPickWithRandomSongs({bool forceReload = false}) async {
+    // Evitar cargas duplicadas a menos que se fuerce la recarga
+    if (_randomSongsLoaded && !forceReload) return;
+    
+    // Si se fuerza la recarga, resetear la bandera
+    if (forceReload) {
+      _randomSongsLoaded = false;
+    }
+    
+    try {
+      final songsIndexDB = SongsIndexDB();
+      
+      // Obtener canciones aleatorias de la base de datos
+      final randomPaths = await songsIndexDB.getRandomSongs(limit: 50);
+      // print('🎵 Obtenidas ${randomPaths.length} canciones aleatorias de la DB');
+      
+      // Convertir rutas a SongModel y filtrar duplicados
+      final Set<String> usedPaths = _shuffledQuickPick.map((s) => s.data).toSet();
+      final List<SongModel> newRandomSongs = [];
+      
+      for (final path in randomPaths) {
+        if (!usedPaths.contains(path) && newRandomSongs.length < 50) {
+          try {
+            final song = allSongs.firstWhere((s) => s.data == path);
+            newRandomSongs.add(song);
+            usedPaths.add(path);
+          } catch (_) {
+            // Si no se encuentra en allSongs, intentar obtenerla de la base de datos
+            try {
+              final query = OnAudioQuery();
+              final songs = await query.querySongs();
+              final foundSong = songs.firstWhere((s) => s.data == path);
+              newRandomSongs.add(foundSong);
+              usedPaths.add(path);
+            } catch (_) {}
+          }
+        }
+      }
+      
+      // print('🎵 Canciones aleatorias convertidas: ${newRandomSongs.length}');
+      
+      // Si no se obtuvieron suficientes canciones de la base de datos, usar allSongs como fallback
+      if (newRandomSongs.length < 30 && allSongs.isNotEmpty) {
+        final availableSongs = allSongs
+            .where((s) => !usedPaths.contains(s.data))
+            .toList();
+        availableSongs.shuffle();
+        
+        final neededSongs = 50 - newRandomSongs.length;
+        newRandomSongs.addAll(availableSongs.take(neededSongs));
+        // print('🎵 Agregadas ${neededSongs} canciones de allSongs como fallback');
+      }
+      
+      // Actualizar _randomSongs con las nuevas canciones aleatorias
+      if (mounted) {
+        setState(() {
+          _randomSongs = newRandomSongs;
+          _randomSongsLoaded = true; // Marcar como cargado
+        });
+        // print('🎵 Total de canciones aleatorias cargadas: ${_randomSongs.length}');
+      }
+      
+      // Limpiar cache de selección rápida cuando se actualiza la lista
+      _quickPickWidgetCache.clear();
+      
+    } catch (e) {
+      // print('❌ Error cargando canciones aleatorias: $e');
+      // En caso de error, usar canciones de allSongs como fallback
+      if (allSongs.isNotEmpty) {
+        final availableSongs = allSongs
+            .where((s) => !_shuffledQuickPick.any((existing) => existing.data == s.data))
+            .toList();
+        availableSongs.shuffle();
+        
+        if (mounted) {
+          setState(() {
+            _randomSongs = availableSongs.take(50).toList();
+            _randomSongsLoaded = true; // Marcar como cargado
+          });
+          // print('🎵 Usando fallback con ${_randomSongs.length} canciones de allSongs');
+        }
+      }
+    }
   }
 
   String _formatArtistWithDuration(SongModel song) {
@@ -1733,6 +2685,8 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     : IconButton(
                         icon: const Icon(Icons.arrow_back),
                         onPressed: () {
+                          // Limpiar cache de artistas para forzar reconstrucción con contexto correcto
+                          _artistWidgetCache.clear();
                           setState(() {
                             _showingRecents = false;
                             _showingPlaylistSongs = false;
@@ -1852,7 +2806,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           : _removeFromPlaylistMassive,
                     ),
                     IconButton(
-                      icon: const Icon(Icons.favorite_border),
+                      icon: const Icon(Symbols.favorite_rounded, weight: 600),
                       tooltip: LocaleProvider.tr('add_to_favorites'),
                       onPressed: _selectedPlaylistSongIds.isEmpty
                           ? null
@@ -1895,7 +2849,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     ),
                   ] else ...[
                     IconButton(
-                      icon: const Icon(Icons.shuffle, size: 28),
+                      icon: const Icon(Symbols.shuffle, size: 28, weight: 600),
                       tooltip: LocaleProvider.tr('shuffle'),
                       onPressed: () {
                         final List<SongModel> songsToShow =
@@ -1922,6 +2876,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     ),
                     PopupMenuButton<OrdenCancionesPlaylist>(
                       icon: const Icon(Icons.sort, size: 28),
+                      tooltip: LocaleProvider.tr('filters'),
                       onSelected: (orden) {
                         setState(() {
                           _ordenCancionesPlaylist = orden;
@@ -2145,8 +3100,9 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                         trailing: IconButton(
                                           icon: Icon(
                                             isCurrent && playing
-                                                ? Icons.pause
-                                                : Icons.play_arrow,
+                                                ? Symbols.pause_rounded
+                                                : Symbols.play_arrow_rounded,
+                                          grade: 200,
                                           ),
                                           onPressed: () {
                                             if (isCurrent) {
@@ -2314,8 +3270,8 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                                           : Theme.of(context).colorScheme.surfaceContainer,
                                                                       ),
                                                                       const SizedBox(width: 8),
-                                                                      Text(
-                                                                        'Buscar',
+                                                                      TranslatedText(
+                                                                        'search',
                                                                         style: TextStyle(
                                                                           fontWeight: FontWeight.w600,
                                                                           fontSize: 14,
@@ -2399,6 +3355,14 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                                   song.data,
                                                                 );
                                                             await _loadRecents();
+                                                          },
+                                                        ),
+                                                        ListTile(
+                                                          leading: const Icon(Icons.info_outline),
+                                                          title: TranslatedText('song_info'),
+                                                          onTap: () async {
+                                                            Navigator.of(context).pop();
+                                                            await SongInfoDialog.showFromSong(context, song, colorSchemeNotifier);
                                                           },
                                                         ),
                                                       ],
@@ -2488,7 +3452,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                       overflow: TextOverflow.ellipsis,
                                     ),
                                     trailing: IconButton(
-                                      icon: const Icon(Icons.play_arrow),
+                                      icon: const Icon(Symbols.play_arrow_rounded, grade: 200),
                                       onPressed: () {
                                         // Precargar la carátula antes de reproducir
                                         unawaited(_preloadArtworkForSong(song));
@@ -2637,8 +3601,8 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                                       : Theme.of(context).colorScheme.surfaceContainer,
                                                                   ),
                                                                   const SizedBox(width: 8),
-                                                                  Text(
-                                                                    'Buscar',
+                                                                  TranslatedText(
+                                                                    'search',
                                                                     style: TextStyle(
                                                                       fontWeight: FontWeight.w600,
                                                                       fontSize: 14,
@@ -2723,6 +3687,14 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                         await _loadRecents();
                                                       },
                                                     ),
+                                                    ListTile(
+                                                      leading: const Icon(Icons.info_outline),
+                                                      title: TranslatedText('song_info'),
+                                                      onTap: () async {
+                                                        Navigator.of(context).pop();
+                                                        await SongInfoDialog.showFromSong(context, song, colorSchemeNotifier);
+                                                      },
+                                                    ),
                                                   ],
                                                 );
                                               },
@@ -2740,7 +3712,9 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       },
                     )
                   : _showingPlaylistSongs
-                  ? Builder(
+                  ? RefreshIndicator(
+                      onRefresh: _refreshPlaylistSongs,
+                      child: Builder(
                       builder: (context) {
                         final List<SongModel> songsToShow =
                             _searchPlaylistController.text.isNotEmpty
@@ -2948,8 +3922,8 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                                         : Theme.of(context).colorScheme.surfaceContainer,
                                                                     ),
                                                                     const SizedBox(width: 8),
-                                                                    Text(
-                                                                      'Buscar',
+                                                                    TranslatedText(
+                                                                      'search',
                                                                       style: TextStyle(
                                                                         fontWeight: FontWeight.w600,
                                                                         fontSize: 14,
@@ -3111,6 +4085,14 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                           });
                                                         },
                                                       ),
+                                                      ListTile(
+                                                        leading: const Icon(Icons.info_outline),
+                                                        title: TranslatedText('song_info'),
+                                                        onTap: () async {
+                                                          Navigator.of(context).pop();
+                                                          await SongInfoDialog.showFromSong(context, song, colorSchemeNotifier);
+                                                        },
+                                                      ),
                                                     ],
                                                   ),
                                                 ),
@@ -3225,8 +4207,9 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                         trailing: IconButton(
                                           icon: Icon(
                                             isCurrent && playing
-                                                ? Icons.pause
-                                                : Icons.play_arrow,
+                                                ? Symbols.pause_rounded
+                                                : Symbols.play_arrow_rounded,
+                                          grade: 200,
                                           ),
                                           onPressed: () {
                                             if (isCurrent) {
@@ -3422,8 +4405,8 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                                     : Theme.of(context).colorScheme.surfaceContainer,
                                                                 ),
                                                                 const SizedBox(width: 8),
-                                                                Text(
-                                                                  'Buscar',
+                                                                TranslatedText(
+                                                                  'search',
                                                                   style: TextStyle(
                                                                     fontWeight: FontWeight.w600,
                                                                     fontSize: 14,
@@ -3464,8 +4447,8 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                     leading: Icon(
                                                       isFav
                                                           ? Icons.delete_outline
-                                                          : Icons
-                                                                .favorite_border,
+                                                          : Symbols.favorite_rounded,
+                                                      weight: isFav ? null : 600,
                                                     ),
                                                     title: TranslatedText(
                                                       isFav
@@ -3575,6 +4558,14 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                         _selectedPlaylistSongIds
                                                             .add(song.id);
                                                       });
+                                                    },
+                                                  ),
+                                                  ListTile(
+                                                    leading: const Icon(Icons.info_outline),
+                                                    title: TranslatedText('song_info'),
+                                                    onTap: () async {
+                                                      Navigator.of(context).pop();
+                                                      await SongInfoDialog.showFromSong(context, song, colorSchemeNotifier);
                                                     },
                                                   ),
                                                 ],
@@ -3689,8 +4680,9 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                     trailing: IconButton(
                                       icon: Icon(
                                         isCurrent && playing
-                                            ? Icons.pause
-                                            : Icons.play_arrow,
+                                            ? Symbols.pause_rounded
+                                            : Symbols.play_arrow_rounded,
+                                          grade: 200,
                                       ),
                                       onPressed: () {
                                         if (isCurrent) {
@@ -3722,24 +4714,30 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                             borderRadius: BorderRadius.circular(16),
                                           )
                                         : null,
-                                  );
-                                }
-                              },
-                            );
-                          },
-                        );
-                      },
+                                    );
+                                  }
+                                },
+                              );
+                            },
+                          );
+                        },
+                      ),
                     )
                   : RefreshIndicator(
                       onRefresh: () async {
+                        // print('🔄 Iniciando refresh completo...');
                         // Actualizar accesos directos y selección rápida
                         await _loadAllSongs();
                         await _loadMostPlayed();
                         await _loadShortcuts();
+                        await _loadArtists(forceRefresh: true); // Forzar reindexación de artistas
+                        await _fillQuickPickWithRandomSongs(forceReload: true);
                         _initQuickPickPages();
                         // Limpiar cache para forzar reconstrucción
                         _shortcutWidgetCache.clear();
                         _quickPickWidgetCache.clear();
+                        // print('🔄 Refresh completado');
+                        _artistWidgetCache.clear();
                         setState(() {});
                       },
                       child: SingleChildScrollView(
@@ -3971,6 +4969,44 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                 ),
                               ),
                             ),
+                            // Sección de Artistas
+                              const SizedBox(height: 32),
+
+                              // Solo mostrar la sección de artistas si hay artistas disponibles
+                              if (_artists.isNotEmpty) ...[
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 20,
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      const TranslatedText(
+                                        'artists',
+                                        style: TextStyle(
+                                          fontSize: 20,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                                SizedBox(
+                                  height: 120,
+                                  child: ListView.builder(
+                                    scrollDirection: Axis.horizontal,
+                                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                                    itemCount: _artists.length,
+                                    itemBuilder: (context, index) {
+                                      final artist = _artists[index];
+                                      return Padding(
+                                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                                        child: _buildArtistWidget(artist, context),
+                                      );
+                                    },
+                                  ),
+                                ),
+                              ],
                             // Solo mostrar la sección de selección rápida si hay canciones disponibles
                             if (limitedQuickPick.isNotEmpty) ...[
                               const SizedBox(height: 32),
@@ -4360,6 +5396,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                       }
                                                     },
                                                   ),
+
                                                 ],
                                               ),
                                             ),
@@ -4663,6 +5700,217 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     } catch (e) {
       // ignore: avoid_print
     }
+  }
+
+  // Función para buscar el artista en YouTube
+  Future<void> _searchArtistOnYouTube(String artistName) async {
+    try {
+      // Codificar la consulta para la URL
+      final encodedQuery = Uri.encodeComponent(artistName);
+      final youtubeSearchUrl =
+          'https://www.youtube.com/results?search_query=$encodedQuery';
+
+      // Intentar abrir YouTube en el navegador o en la app
+      final url = Uri.parse(youtubeSearchUrl);
+
+      if (await canLaunchUrl(url)) {
+        await launchUrl(url, mode: LaunchMode.externalApplication);
+      } else {
+        // ignore: use_build_context_synchronously
+      }
+    } catch (e) {
+      // ignore: avoid_print
+    }
+  }
+
+  // Función para buscar el artista en YouTube Music
+  Future<void> _searchArtistOnYouTubeMusic(String artistName) async {
+    try {
+      // Codificar la consulta para la URL
+      final encodedQuery = Uri.encodeComponent(artistName);
+      
+      // URL correcta para búsqueda en YouTube Music
+      final ytMusicSearchUrl = 'https://music.youtube.com/search?q=$encodedQuery';
+
+      // Intentar abrir YouTube Music en el navegador o en la app
+      final url = Uri.parse(ytMusicSearchUrl);
+
+      if (await canLaunchUrl(url)) {
+        await launchUrl(url, mode: LaunchMode.externalApplication);
+      } else {
+        // ignore: use_build_context_synchronously
+      }
+    } catch (e) {
+      // ignore: avoid_print
+    }
+  }
+
+  // Función para mostrar opciones de búsqueda del artista
+  Future<void> _showArtistSearchOptions(String artistName) async {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return ValueListenableBuilder<AppColorScheme>(
+          valueListenable: colorSchemeNotifier,
+          builder: (context, colorScheme, child) {
+            final isAmoled = colorScheme == AppColorScheme.amoled;
+            final isDark = Theme.of(context).brightness == Brightness.dark;
+            
+            return AlertDialog(
+              title: Center(
+                child: TranslatedText(
+                  'search_artist',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(height: 18),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Row(
+                        children: [
+                          SizedBox(width: 4),
+                          TranslatedText(
+                            'search_options',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Theme.of(context).colorScheme.onSurface,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    SizedBox(height: 20),
+                    // Tarjeta de YouTube
+                    InkWell(
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        _searchArtistOnYouTube(artistName);
+                      },
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        width: double.infinity,
+                        padding: EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: isAmoled && isDark
+                              ? Colors.white.withValues(alpha: 0.1)
+                              : Theme.of(context).colorScheme.secondaryContainer,
+                          borderRadius: BorderRadius.only(
+                            topLeft: Radius.circular(16),
+                            topRight: Radius.circular(16),
+                            bottomLeft: Radius.circular(4),
+                            bottomRight: Radius.circular(4),
+                          ),
+                          border: Border.all(
+                            color: isAmoled && isDark
+                                ? Colors.white.withValues(alpha: 0.2)
+                                : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
+                            width: 1,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Image.asset(
+                                'assets/icon/Youtube_logo.png',
+                                width: 30,
+                                height: 30,
+                              ),
+                            ),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'YouTube',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: isAmoled && isDark
+                                      ? Colors.white
+                                      : Theme.of(context).colorScheme.onSurface,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: 4),
+                    // Tarjeta de YouTube Music
+                    InkWell(
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        _searchArtistOnYouTubeMusic(artistName);
+                      },
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        width: double.infinity,
+                        padding: EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: isAmoled && isDark
+                              ? Colors.white.withValues(alpha: 0.1)
+                              : Theme.of(context).colorScheme.secondaryContainer,
+                          borderRadius: BorderRadius.only(
+                            topLeft: Radius.circular(4),
+                            topRight: Radius.circular(4),
+                            bottomLeft: Radius.circular(16),
+                            bottomRight: Radius.circular(16),
+                          ),
+                          border: Border.all(
+                            color: isAmoled && isDark
+                                ? Colors.white.withValues(alpha: 0.2)
+                                : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
+                            width: 1,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Image.asset(
+                                'assets/icon/Youtube_Music_icon.png',
+                                width: 30,
+                                height: 30,
+                              ),
+                            ),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'YT Music',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: isAmoled && isDark
+                                      ? Colors.white
+                                      : Theme.of(context).colorScheme.onSurface,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   // Función para mostrar opciones de búsqueda

@@ -176,4 +176,45 @@ class SongsIndexDB {
       await b.delete(oldPath);
     }
   }
+
+  /// Obtiene canciones aleatorias de la base de datos, excluyendo carpetas de WhatsApp
+  Future<List<String>> getRandomSongs({int limit = 18}) async {
+    final b = await box;
+    final allPaths = b.keys.cast<String>().toList();
+    
+    if (allPaths.isEmpty) return [];
+    
+    // Patrones de carpetas de WhatsApp a excluir
+    final whatsappPatterns = [
+      'whatsapp',
+      'whatsapp audio',
+      'whatsapp voice notes',
+      'whatsapp media',
+      'whatsapp images',
+      'whatsapp documents',
+      'whatsapp video',
+      'whatsapp antrim',
+      'whatsapp business',
+      'whatsapp business media',
+      'whatsapp business audio',
+      'whatsapp business voice notes',
+      'whatsapp business images',
+      'whatsapp business documents',
+      'whatsapp business video',
+      'whatsapp business antrim',
+    ];
+    
+    // Filtrar canciones que NO estén en carpetas de WhatsApp
+    final filteredPaths = allPaths.where((path) {
+      final folderPath = _getFolderPath(path);
+      return !whatsappPatterns.any((pattern) => 
+        folderPath.contains(pattern.toLowerCase()));
+    }).toList();
+    
+    if (filteredPaths.isEmpty) return [];
+    
+    // Mezclar la lista y tomar el límite especificado
+    filteredPaths.shuffle();
+    return filteredPaths.take(limit).toList();
+  }
 }

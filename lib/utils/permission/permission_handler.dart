@@ -44,3 +44,22 @@ Future<bool> pedirPermisosMedia() async {
     return storageReq.isGranted;
   }
 }
+
+/// Verifica si se tienen permisos de acceso a todos los archivos
+/// Necesario para Android 11+ para poder descargar archivos
+Future<bool> verificarPermisosTodosLosArchivos() async {
+  if (!Platform.isAndroid) return true;
+
+  final androidInfo = await DeviceInfoPlugin().androidInfo;
+  final sdkInt = androidInfo.version.sdkInt;
+
+  if (sdkInt >= 30) {
+    // Android 11+ - necesita MANAGE_EXTERNAL_STORAGE
+    final manageStorage = await Permission.manageExternalStorage.status;
+    return manageStorage.isGranted;
+  } else {
+    // Android 10 o menor - solo necesita storage
+    final storage = await Permission.storage.status;
+    return storage.isGranted;
+  }
+}

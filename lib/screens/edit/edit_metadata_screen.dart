@@ -363,6 +363,7 @@ class _EditMetadataScreenState extends State<EditMetadataScreen> {
               ),
             ),
             icon: const Icon(Icons.info_outline, size: 26),
+            tooltip: LocaleProvider.tr('information'),
           ),
         ],
       ),

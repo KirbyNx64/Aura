@@ -4,6 +4,8 @@ import 'package:music/utils/download_manager.dart';
 import 'package:music/utils/yt_search/service.dart';
 import 'package:music/l10n/locale_provider.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:music/utils/permission/permission_handler.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'dart:async';
 
 // Clase para manejar la cola de descargas
@@ -289,18 +291,25 @@ class _SimpleDownloadButtonState extends State<SimpleDownloadButton> {
   }
 
   void _checkDownloadState() {
-    // Verificar si esta canción específica está siendo descargada
+    // Verificar si esta canción específica está siendo descargada o en cola
     final downloadQueue = DownloadQueue();
     final currentTask = downloadQueue.currentTask;
+    final queue = downloadQueue.queue;
     
-    if (currentTask != null && 
-        currentTask.videoId == widget.item.videoId) {
-      // Esta canción está siendo descargada
+    // Verificar si está siendo descargada actualmente
+    bool isCurrentlyDownloading = currentTask != null && 
+        currentTask.videoId == widget.item.videoId;
+    
+    // Verificar si está en la cola de descargas pendientes
+    bool isInQueue = queue.any((task) => task.videoId == widget.item.videoId);
+    
+    if (isCurrentlyDownloading || isInQueue) {
+      // Esta canción está siendo descargada o está en cola
       if (!_isDownloading && !_isProcessing) {
         _startDownloadAnimation();
       }
     } else {
-      // Esta canción no está siendo descargada
+      // Esta canción no está siendo descargada ni en cola
       if (_isDownloading || _isProcessing) {
         _stopDownloadAnimation();
       }
@@ -308,9 +317,18 @@ class _SimpleDownloadButtonState extends State<SimpleDownloadButton> {
   }
 
   void _startDownloadAnimation() {
+    final downloadQueue = DownloadQueue();
+    final currentTask = downloadQueue.currentTask;
+    final queue = downloadQueue.queue;
+    
+    // Determinar si está descargándose o en cola
+    bool isCurrentlyDownloading = currentTask != null && 
+        currentTask.videoId == widget.item.videoId;
+    bool isInQueue = queue.any((task) => task.videoId == widget.item.videoId);
+    
     setState(() {
-      _isDownloading = true;
-      _isProcessing = false;
+      _isDownloading = isCurrentlyDownloading;
+      _isProcessing = isInQueue && !isCurrentlyDownloading;
     });
   }
 
@@ -319,6 +337,43 @@ class _SimpleDownloadButtonState extends State<SimpleDownloadButton> {
       _isDownloading = false;
       _isProcessing = false;
     });
+  }
+
+  /// Muestra un diálogo obligatorio para otorgar permisos de acceso a todos los archivos
+  /// Retorna true si se otorgaron los permisos, false si se canceló
+  Future<bool> _mostrarDialogoPermisos(BuildContext context) async {
+    bool permisoOtorgado = false;
+    
+    await showDialog(
+      context: context,
+      barrierDismissible: false, // No se puede cerrar tocando fuera
+      builder: (context) => AlertDialog(
+        title: Text(LocaleProvider.tr('grant_all_files_permission')),
+        content: Text(
+          '${LocaleProvider.tr('grant_all_files_permission_desc')}\n\n${LocaleProvider.tr('permission_required_for_download')}'
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              permisoOtorgado = false;
+              Navigator.of(context).pop();
+            },
+            child: Text(LocaleProvider.tr('cancel')),
+          ),
+          TextButton(
+            onPressed: () async {
+              final status = await Permission.manageExternalStorage.request();
+              permisoOtorgado = status.isGranted;
+              if (!context.mounted) return;
+              Navigator.of(context).pop();
+            },
+            child: Text(LocaleProvider.tr('grant_permission')),
+          ),
+        ],
+      ),
+    );
+    
+    return permisoOtorgado;
   }
 
   @override
@@ -338,6 +393,19 @@ class _SimpleDownloadButtonState extends State<SimpleDownloadButton> {
                   // Navigator.pop(context); // Ya no cerramos el modal al descargar
                   // Usar un pequeño delay para asegurar que el modal se cierre antes de iniciar la descarga
                   await Future.delayed(const Duration(milliseconds: 100));
+                  
+                  // Verificar permisos de acceso a todos los archivos antes de descargar
+                  final tienePermisos = await verificarPermisosTodosLosArchivos();
+                  if (!tienePermisos) {
+                    if (context.mounted) {
+                      _stopDownloadAnimation();
+                      final permisoOtorgado = await _mostrarDialogoPermisos(context);
+                      if (!permisoOtorgado) {
+                        return; // Cancelar descarga si no se otorgan los permisos
+                      }
+                    }
+                  }
+                  
                   // Verificar conexión a internet antes de descargar
                   final List<ConnectivityResult> connectivityResult = await Connectivity().checkConnectivity();
                   if (connectivityResult.contains(ConnectivityResult.none)) {
@@ -346,12 +414,12 @@ class _SimpleDownloadButtonState extends State<SimpleDownloadButton> {
                       showDialog(
                         context: context,
                         builder: (context) => AlertDialog(
-                          title: TranslatedText('error'),
-                          content: TranslatedText('no_internet_connection'),
+                          title: Text(LocaleProvider.tr('error')),
+                          content: Text(LocaleProvider.tr('no_internet_connection')),
                           actions: [
                             TextButton(
                               onPressed: () => Navigator.of(context).pop(),
-                              child: TranslatedText('ok'),
+                              child: Text(LocaleProvider.tr('ok')),
                             ),
                           ],
                         ),
@@ -371,10 +439,10 @@ class _SimpleDownloadButtonState extends State<SimpleDownloadButton> {
                   }
                 }
               : null,
-                                             child: Tooltip(
+              child: Tooltip(
                message: _isDownloading || _isProcessing
-                   ? (_isDownloading ? LocaleProvider.tr('downloading') : LocaleProvider.tr('processing'))
-                   : LocaleProvider.tr('download_audio'),
+                  ? (_isDownloading ? LocaleProvider.tr('downloading') : LocaleProvider.tr('add_to_queue'))
+                  : LocaleProvider.tr('download_audio'),
                           child: Icon(
                 _isDownloading || _isProcessing ? Icons.downloading : Icons.download,
                 color: Theme.of(context).colorScheme.onPrimaryContainer,

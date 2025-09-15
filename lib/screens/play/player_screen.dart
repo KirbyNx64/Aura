@@ -17,12 +17,15 @@ import 'package:music/utils/audio/synced_lyrics_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'dart:async';
+import 'dart:math';
 import 'package:scroll_to_index/scroll_to_index.dart';
 import 'package:music/l10n/locale_provider.dart';
 import 'package:music/utils/theme_preferences.dart';
 import 'package:music/widgets/song_info_dialog.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'dart:io';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:music/utils/gesture_preferences.dart';
 
 final OnAudioQuery _audioQuery = OnAudioQuery();
 
@@ -84,12 +87,13 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
   final ValueNotifier<bool> _artworkLoadingNotifier = ValueNotifier<bool>(
     false,
   );
+
+  // Preferencias de gestos
+  bool _disableClosePlayerGesture = false;
+  bool _disableOpenPlaylistGesture = false;
+  bool _disableChangeSongGesture = false;
   String? _lastArtworkSongId;
 
-  late AnimationController _favController;
-  late Animation<double> _favAnimation;
-  bool _lastIsFav = false;
-  late AnimationController _playPauseController;
 
   // Flag para usar initialArtworkUri solo en el primer build
   // bool _usedInitialArtwork = false;
@@ -519,21 +523,22 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
   @override
   void initState() {
     super.initState();
-    _favController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 400),
-    );
-    _favAnimation = Tween<double>(begin: 1.0, end: 1.25).animate(
-      CurvedAnimation(parent: _favController, curve: Curves.elasticOut),
-    );
-    _playPauseController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 250),
-      value: 0.0, // Empieza en pausa 
-    );
     _prefsFuture = SharedPreferences.getInstance();
+    _loadGesturePreferences();
     // Eliminado: _loadQueueSource();
     // Eliminado: (audioHandler as MyAudioHandler).queueSourceNotifier.addListener(_onQueueSourceChanged);
+  }
+
+  /// Carga las preferencias de gestos
+  Future<void> _loadGesturePreferences() async {
+    final preferences = await GesturePreferences.getAllGesturePreferences();
+    if (mounted) {
+      setState(() {
+        _disableClosePlayerGesture = preferences['closePlayer'] ?? false;
+        _disableOpenPlaylistGesture = preferences['openPlaylist'] ?? false;
+        _disableChangeSongGesture = preferences['changeSong'] ?? false;
+      });
+    }
   }
 
   /// Maneja el cambio de carátula cuando cambia la canción
@@ -584,8 +589,6 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
   void dispose() {
     _seekDebounceTimer?.cancel();
     _lyricsScrollController.dispose();
-    _favController.dispose();
-    _playPauseController.dispose();
     _dragValueSecondsNotifier.dispose();
     _artworkLoadingNotifier.dispose();
     // Eliminado: (audioHandler as MyAudioHandler).queueSourceNotifier.removeListener(_onQueueSourceChanged);
@@ -665,7 +668,11 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                           vertical: 8,
                         ),
                         decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.primaryContainer,
+                          color: Theme.of(
+                                context,
+                            ).brightness == Brightness.dark
+                            ? Theme.of(context).colorScheme.primaryContainer
+                            : Theme.of(context).colorScheme.onPrimaryContainer.withValues(alpha: 0.7),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Row(
@@ -674,15 +681,23 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                             Icon(
                               Icons.search,
                               size: 20,
-                              color: Theme.of(context).colorScheme.onPrimaryContainer,
+                              color: Theme.of(
+                                context,
+                              ).brightness == Brightness.dark
+                              ? Theme.of(context).colorScheme.onPrimaryContainer
+                              : Theme.of(context).colorScheme.surfaceContainer,
                             ),
                             const SizedBox(width: 8),
-                            Text(
-                              'Buscar',
+                            TranslatedText(
+                              'search',
                               style: TextStyle(
                                 fontWeight: FontWeight.w600,
                                 fontSize: 14,
-                                color: Theme.of(context).colorScheme.onPrimaryContainer,
+                                color: Theme.of(
+                                    context,
+                                ).brightness == Brightness.dark
+                                ? Theme.of(context).colorScheme.onPrimaryContainer
+                                : Theme.of(context).colorScheme.surfaceContainer,
                               ),
                             ),
                           ],
@@ -694,7 +709,8 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
               ),
               ListTile(
                 leading: Icon(
-                  isFav ? Icons.delete_outline : Icons.favorite_border,
+                  isFav ? Icons.delete_outline : Symbols.favorite_rounded,
+                  weight: isFav ? null : 600,
                 ),
                 title: Text(
                   isFav
@@ -1111,15 +1127,19 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     return GestureDetector(
       onVerticalDragUpdate: (details) {
         if (details.primaryDelta != null && details.primaryDelta! > 6) {
-          Navigator.of(context).maybePop(); // Deslizar hacia abajo: cerrar
+          // Deslizar hacia abajo: cerrar (solo si no está desactivado)
+          if (!_disableClosePlayerGesture) {
+            Navigator.of(context).maybePop();
+          }
         } else if (details.primaryDelta != null && details.primaryDelta! < -6) {
-          // Deslizar hacia arriba: mostrar lista de reproducción
-          showModalBottomSheet(
-            context: context,
-            backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-            isScrollControlled: true,
-            // Asegurar que el modal respete la barra de estado
-            useSafeArea: true,
+          // Deslizar hacia arriba: mostrar lista de reproducción (solo si no está desactivado)
+          if (!_disableOpenPlaylistGesture) {
+            showModalBottomSheet(
+              context: context,
+              backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+              isScrollControlled: true,
+              // Asegurar que el modal respete la barra de estado
+              useSafeArea: true,
             builder: (context) {
               final queue = audioHandler?.queue.value;
               // Usar el área disponible excluyendo la barra de estado
@@ -1154,6 +1174,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
               );
             },
           );
+        }
         }
       },
       child: StreamBuilder<MediaItem?>(
@@ -1312,7 +1333,8 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                   behavior: HitTestBehavior.opaque,
                                   onHorizontalDragEnd: (details) {
                                     // Detectar la dirección del deslizamiento horizontal solo en la carátula
-                                    if (details.primaryVelocity != null) {
+                                    // Solo si el gesto de cambiar canción no está desactivado
+                                    if (!_disableChangeSongGesture && details.primaryVelocity != null) {
                                       if (details.primaryVelocity! > 0) {
                                         // Deslizar hacia la derecha: canción anterior
                                         audioHandler?.skipToPrevious();
@@ -1486,7 +1508,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                 ),
                           ),
                         ),
-                        SizedBox(height: height * 0.01),
+                        SizedBox(height: height * 0.001),
                         SizedBox(
                           width: width * 0.85,
                           child: Row(
@@ -1514,10 +1536,6 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                               Builder(
                                 builder: (context) {
                                   final isFav = _isCurrentFavorite;
-                                  if (_lastIsFav != isFav) {
-                                    _favController.forward(from: 0.0);
-                                    _lastIsFav = isFav;
-                                  }
                                   return ValueListenableBuilder<bool>(
                                     valueListenable: playLoadingNotifier,
                                     builder: (context, isLoading, _) {
@@ -1569,17 +1587,16 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                             }
                                           }());
                                         },
-                                        child: ScaleTransition(
-                                          scale: _favAnimation,
-                                          child: Icon(
-                                            isFav
-                                                ? Icons.favorite
-                                                : Icons.favorite_border,
-                                            size: 32,
-                                            color: Theme.of(
-                                              context,
-                                            ).colorScheme.onSurface,
-                                          ),
+                                        child: Icon(
+                                          isFav
+                                              ? Symbols.favorite_rounded
+                                              : Symbols.favorite_border_rounded,
+                                          grade: 200,
+                                          fill: isFav ? 1 : 0,
+                                          size: 32,
+                                          color: Theme.of(
+                                            context,
+                                          ).colorScheme.onSurface,
                                         ),
                                       );
                                     },
@@ -1828,19 +1845,19 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                             Color repeatColor;
                             switch (repeatMode) {
                               case AudioServiceRepeatMode.one:
-                                repeatIcon = Icons.repeat_one;
+                                repeatIcon = Symbols.repeat_one;
                                 repeatColor = Theme.of(
                                   context,
                                 ).colorScheme.primary;
                                 break;
                               case AudioServiceRepeatMode.all:
-                                repeatIcon = Icons.repeat;
+                                repeatIcon = Symbols.repeat;
                                 repeatColor = Theme.of(
                                   context,
                                 ).colorScheme.primary;
                                 break;
                               default:
-                                repeatIcon = Icons.repeat;
+                                repeatIcon = Symbols.repeat;
                                 repeatColor =
                                     Theme.of(context).brightness ==
                                         Brightness.light
@@ -1856,12 +1873,6 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                             ).colorScheme.onSurface);
                             }
 
-                            // Controla la animación según el estado
-                            if (isPlaying) {
-                              _playPauseController.forward();
-                            } else {
-                              _playPauseController.reverse();
-                            }
 
                             return LayoutBuilder(
                               builder: (context, constraints) {
@@ -1931,7 +1942,8 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                               ),
                                                               child: IconButton(
                                                                 icon: const Icon(
-                                                                  Icons.shuffle,
+                                                                  Symbols.shuffle,
+                                                                  weight: 600,
                                                                 ),
                                                                 color: Colors
                                                                     .white,
@@ -1955,7 +1967,8 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                             )
                                                           : IconButton(
                                                               icon: const Icon(
-                                                                Icons.shuffle,
+                                                                Symbols.shuffle,
+                                                                grade: 200,
                                                               ),
                                                               color: isShuffle
                                                                   ? Theme.of(
@@ -2011,7 +2024,8 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                             ),
                                                       IconButton(
                                                         icon: const Icon(
-                                                          Icons.skip_previous,
+                                                          Symbols.skip_previous_rounded,
+                                                          grade: 200,
                                                         ),
                                                         color:
                                                             Theme.of(
@@ -2135,13 +2149,11 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                                                 ).colorScheme.surface,
                                                                         ),
                                                                       )
-                                                                    : AnimatedIcon(
-                                                                        icon: AnimatedIcons
-                                                                            .play_pause,
-                                                                        progress:
-                                                                            _playPauseController,
+                                                                    : Icon(
+                                                                        isPlaying ? Symbols.pause_rounded : Symbols.play_arrow_rounded,
                                                                         size:
                                                                             playIconSize,
+                                                                        grade: 200,
                                                                         color:
                                                                             Theme.of(
                                                                                   context,
@@ -2163,7 +2175,8 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                       ),
                                                       IconButton(
                                                         icon: const Icon(
-                                                          Icons.skip_next,
+                                                          Symbols.skip_next_rounded,
+                                                          grade: 200,
                                                         ),
                                                         color:
                                                             Theme.of(
@@ -2248,6 +2261,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                           : IconButton(
                                                               icon: Icon(
                                                                 repeatIcon,
+                                                                grade: 200,
                                                               ),
                                                               color:
                                                                   repeatColor,
@@ -3076,6 +3090,7 @@ class _PlaylistListView extends StatefulWidget {
 
 class _PlaylistListViewState extends State<_PlaylistListView> {
   late final ScrollController _scrollController;
+  bool _isShuffling = false;
 
   @override
   void initState() {
@@ -3097,6 +3112,86 @@ class _PlaylistListViewState extends State<_PlaylistListView> {
   void dispose() {
     _scrollController.dispose();
     super.dispose();
+  }
+
+  Widget _buildCurrentSongArtwork(MediaItem mediaItem) {
+    final artUri = mediaItem.artUri;
+    if (artUri != null) {
+      final scheme = artUri.scheme.toLowerCase();
+
+      // Si es un archivo local
+      if (scheme == 'file' || scheme == 'content') {
+        try {
+          return Image.file(
+            File(artUri.toFilePath()),
+            width: 50,
+            height: 50,
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) {
+              return _buildFallbackIcon();
+            },
+          );
+        } catch (e) {
+          return _buildFallbackIcon();
+        }
+      }
+      // Si es una URL remota
+      else if (scheme == 'http' || scheme == 'https') {
+        return Image.network(
+          artUri.toString(),
+          width: 50,
+          height: 50,
+          fit: BoxFit.cover,
+          cacheWidth: 200,
+          cacheHeight: 200,
+          errorBuilder: (context, error, stackTrace) {
+            return _buildFallbackIcon();
+          },
+        );
+      }
+    }
+
+    // Si no hay artUri o no se puede cargar, intentar cargar desde la base de datos local
+    final songId = mediaItem.extras?['songId'];
+    final songPath = mediaItem.extras?['data'];
+    
+    if (songId != null && songPath != null) {
+      return FutureBuilder<Uri?>(
+        future: getOrCacheArtwork(songId, songPath),
+        builder: (context, snapshot) {
+          if (snapshot.hasData && snapshot.data != null) {
+            return Image.file(
+              File(snapshot.data!.toFilePath()),
+              width: 50,
+              height: 50,
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) {
+                return _buildFallbackIcon();
+              },
+            );
+          }
+          return _buildFallbackIcon();
+        },
+      );
+    }
+
+    return _buildFallbackIcon();
+  }
+
+  Widget _buildFallbackIcon() {
+    return Container(
+      width: 50,
+      height: 50,
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainer,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Icon(
+        Icons.music_note,
+        size: 25,
+        color: Theme.of(context).colorScheme.onSurface,
+      ),
+    );
   }
 
   @override
@@ -3146,6 +3241,7 @@ class _PlaylistListViewState extends State<_PlaylistListView> {
                               : Theme.of(context).colorScheme.primary)
                         : null,
                   ),
+                  overflow: TextOverflow.ellipsis,
                 ),
                 subtitle: Text(
                   item.artist ?? LocaleProvider.tr('unknown_artist'),
@@ -3154,7 +3250,7 @@ class _PlaylistListViewState extends State<_PlaylistListView> {
                 selected: isCurrent,
                 selectedTileColor: isCurrent
                     ? (isAmoledTheme
-                        ? Colors.white.withValues(alpha: 0.15)
+                        ? null
                         : Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.8))
                     : null,
                 shape: isCurrent
@@ -3187,7 +3283,6 @@ class _PlaylistListViewState extends State<_PlaylistListView> {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             child: Column(
               children: [
-                const SizedBox(height: 12),
                 Container(
                   width: 40,
                   height: 5,
@@ -3197,13 +3292,84 @@ class _PlaylistListViewState extends State<_PlaylistListView> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                Text(
-                  LocaleProvider.tr('playlist'),
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
+                // Información de la canción actual
+                if (widget.currentMediaItem != null)
+                  Row(
+                    children: [
+                      // Carátula de la canción actual
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: SizedBox(
+                          width: 54,
+                          height: 54,
+                          child: _buildCurrentSongArtwork(widget.currentMediaItem!),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      // Título y artista de la canción actual
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            TitleMarquee(
+                              text: widget.currentMediaItem!.title,
+                              maxWidth: MediaQuery.of(context).size.width - 150,
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+
+                            Text(
+                              widget.currentMediaItem!.artist ??
+                                  LocaleProvider.tr('unknown_artist'),
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: Theme.of(context).textTheme.bodyMedium?.color?.withValues(alpha: 1),
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      // Ícono de aleatorio
+                      InkWell(
+                        onTap: _isShuffling ? null : () async {
+                          if (widget.queue.isNotEmpty && !_isShuffling) {
+                            setState(() {
+                              _isShuffling = true;
+                            });
+                            
+                            final random = Random();
+                            final randomIndex = random.nextInt(widget.queue.length);
+                            audioHandler?.skipToQueueItem(randomIndex);
+                            
+                            // Delay de 500ms antes de permitir otro toque
+                            await Future.delayed(const Duration(milliseconds: 500));
+                            
+                            if (mounted) {
+                              setState(() {
+                                _isShuffling = false;
+                              });
+                            }
+                          }
+                        },
+                        borderRadius: BorderRadius.circular(20),
+                        child: Container(
+                          padding: const EdgeInsets.all(8),
+                          child: Icon(
+                            Symbols.shuffle,
+                            size: 32,
+                            color: Theme.of(context).colorScheme.onSurface,
+                            weight: 600,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ),
                 const SizedBox(height: 12),
               ],
             ),
@@ -3315,3 +3481,4 @@ class _ArtworkListTileState extends State<ArtworkListTile> {
     );
   }
 }
+

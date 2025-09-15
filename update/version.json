@@ -1,9 +1,9 @@
 {
-  "version": "1.5.0",
+  "version": "1.5.1",
   "apk_urls": {
-    "arm64-v8a": "https://github.com/KirbyNx64/Aura/releases/download/v1.5.0/AuraMusic-v1.5.0-arm64-v8a.apk",
-    "armeabi-v7a": "https://github.com/KirbyNx64/Aura/releases/download/v1.5.0/AuraMusic-v1.5.0-armeabi-v7a.apk",
-    "x86_64": "https://github.com/KirbyNx64/Aura/releases/download/v1.5.0/AuraMusic-v1.5.0-x86_64.apk"
+    "arm64-v8a": "https://github.com/KirbyNx64/Aura/releases/download/v1.5.1/AuraMusic-v1.5.1-arm64-v8a.apk",
+    "armeabi-v7a": "https://github.com/KirbyNx64/Aura/releases/download/v1.5.1/AuraMusic-v1.5.1-armeabi-v7a.apk",
+    "x86_64": "https://github.com/KirbyNx64/Aura/releases/download/v1.5.1/AuraMusic-v1.5.1-x86_64.apk"
   },
-  "changelog": "• Es posible que no se actualice correctamente vía OTA. Descarga manual desde: https://github.com/KirbyNx64/Aura/releases/tag/v1.5.0\n\n• Ahora puedes seleccionar la calidad de audio al descargar canciones.\n\n• Se añadió la opción de editar metadatos de canciones descargadas.\n\n• Mejoras visuales en la interfaz.\n\n• Pequeñas optimizaciones internas de rendimiento."
+  "changelog": "• Es posible que no se actualice correctamente vía OTA. Descarga manual desde: https://github.com/KirbyNx64/Aura/releases/tag/v1.5.1\n\n• Ajustes visuales en la interfaz.\n\n• Ahora puedes activar o desactivar los gestos del reproductor.\n\n• Nueva sección de Artistas en la pantalla de inicio.\n\n• Al seleccionar la carpeta de guardado se mostrarán primero las carpetas más utilizadas.\n\n• En la barra de reproducción de la preview de canciones en YouTube Search ahora se muestra el progreso de carga de la canción.\n\n• Los streams de audio ahora se guardan en una base de datos y solo se reutilizan cuando están disponibles.\n\n• Se actualizaron dependencias de la app para mayor estabilidad y compatibilidad.\n\n• Otros cambios menores y correcciones internas."
 }

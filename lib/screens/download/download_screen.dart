@@ -18,12 +18,15 @@ import 'package:device_info_plus/device_info_plus.dart';
 import 'package:dio/dio.dart';
 import 'package:music/screens/download/stream_provider.dart';
 import 'package:audiotags/audiotags.dart';
+import 'package:music/utils/theme_preferences.dart';
 // import 'package:path/path.dart' as p;
 // import 'package:music/main.dart';
 import 'package:image/image.dart' as img;
 import 'package:music/l10n/locale_provider.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:music/utils/yt_search/youtube_music_service.dart';
+import 'package:music/utils/permission/permission_handler.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 class DownloadScreen extends StatefulWidget {
   const DownloadScreen({super.key});
@@ -472,6 +475,18 @@ class _DownloadScreenState extends State<DownloadScreen>
   Future<void> _downloadPlaylist() async {
     if (_playlistVideos.isEmpty) return;
 
+    // Verificar permisos de acceso a todos los archivos antes de descargar playlist
+    final tienePermisos = await verificarPermisosTodosLosArchivos();
+    if (!tienePermisos) {
+      if (context.mounted) {
+        if (!mounted) return;
+        final permisoOtorgado = await _mostrarDialogoPermisos(context);
+        if (!permisoOtorgado) {
+          return; // Cancelar descarga si no se otorgan los permisos
+        }
+      }
+    }
+
     setState(() {
       _isPlaylistDownloading = true;
       _downloadedVideos = 0;
@@ -739,6 +754,220 @@ class _DownloadScreenState extends State<DownloadScreen>
     await prefs.setString('download_directory', path);
   }
 
+  // Métodos para manejar carpetas más usadas
+  Future<void> _incrementFolderUsage(String path) async {
+    final prefs = await SharedPreferences.getInstance();
+    Map<String, int> folderUsage = {};
+    
+    // Obtener el mapa actual de uso de carpetas
+    final usageList = prefs.getStringList('folder_usage') ?? [];
+    
+    if (usageList.isNotEmpty) {
+      // Convertir la lista de vuelta a un mapa
+      for (int i = 0; i < usageList.length - 1; i += 2) {
+        final path = usageList[i];
+        final usage = int.tryParse(usageList[i + 1]) ?? 0;
+        folderUsage[path] = usage;
+      }
+    }
+    
+    // Incrementar el contador para esta carpeta
+    folderUsage[path] = (folderUsage[path] ?? 0) + 1;
+    
+    // Guardar como lista de pares key-value
+    final List<String> newUsageList = [];
+    folderUsage.forEach((key, value) {
+      newUsageList.add(key);
+      newUsageList.add(value.toString());
+    });
+    
+    await prefs.setStringList('folder_usage', newUsageList);
+  }
+
+  Future<List<String>> _getMostUsedFolders() async {
+    final prefs = await SharedPreferences.getInstance();
+    final usageList = prefs.getStringList('folder_usage') ?? [];
+    
+    if (usageList.isEmpty) return [];
+    
+    // Convertir la lista de vuelta a un mapa
+    Map<String, int> folderUsage = {};
+    for (int i = 0; i < usageList.length - 1; i += 2) {
+      final path = usageList[i];
+      final usage = int.tryParse(usageList[i + 1]) ?? 0;
+      folderUsage[path] = usage;
+    }
+    
+    // Ordenar por uso (mayor a menor) y tomar las 5 más usadas
+    final sortedFolders = folderUsage.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    
+    return sortedFolders.take(5).map((e) => e.key).toList();
+  }
+
+  Future<void> _selectFolder(String path) async {
+    setState(() => _directoryPath = path);
+    await _saveDirectory(path);
+    downloadDirectoryNotifier.value = path;
+    await _incrementFolderUsage(path);
+  }
+
+  Future<void> _showFolderSelectionDialog() async {
+    final commonFolders = await _getMostUsedFolders();
+    
+    if (!mounted) return;
+    
+    showDialog(
+      context: context,
+      builder: (context) {
+        return ValueListenableBuilder<AppColorScheme>(
+          valueListenable: colorSchemeNotifier,
+          builder: (context, colorScheme, child) {
+            final isAmoled = colorScheme == AppColorScheme.amoled;
+            final isDark = Theme.of(context).brightness == Brightness.dark;
+            
+            return AlertDialog(
+              title: TranslatedText('select_common_folder'),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (commonFolders.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Text(
+                          LocaleProvider.tr('no_common_folders'),
+                          style: Theme.of(context).textTheme.bodyMedium,
+                          textAlign: TextAlign.center,
+                        ),
+                      )
+                    else
+                      ...commonFolders.map((folder) => ListTile(
+                        leading: const Icon(Icons.folder),
+                        title: Text(
+                          folder.split('/').last.isEmpty ? folder : folder.split('/').last,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        subtitle: Text(
+                          formatFolderPath(folder),
+                          style: Theme.of(context).textTheme.bodySmall,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        onTap: () {
+                          Navigator.of(context).pop();
+                          _selectFolder(folder);
+                        },
+                      )),
+                    if (commonFolders.isNotEmpty) SizedBox(height: 16),
+                    // Botón para elegir otra carpeta con diseño especial
+                    InkWell(
+                      onTap: () async {
+                        Navigator.of(context).pop();
+                        await _pickNewFolder();
+                      },
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        width: double.infinity,
+                        padding: EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: (isAmoled && isDark
+                              ? Colors.white.withValues(alpha: 0.2)
+                              : Theme.of(context).colorScheme.primaryContainer),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: (isAmoled && isDark
+                                ? Colors.white.withValues(alpha: 0.4)
+                                : Theme.of(context).colorScheme.primary.withValues(alpha: 0.3)),
+                            width: 2,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(12),
+                                color: (isAmoled && isDark
+                                    ? Colors.white.withValues(alpha: 0.2)
+                                    : Theme.of(context).colorScheme.primary.withValues(alpha: 0.1)),
+                              ),
+                              child: Icon(
+                                Icons.folder_open,
+                                size: 30,
+                                color: (isAmoled && isDark
+                                    ? Colors.white
+                                    : Theme.of(context).colorScheme.primary),
+                              ),
+                            ),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                LocaleProvider.tr('choose_other_folder'),
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: (isAmoled && isDark
+                                      ? Colors.white
+                                      : Theme.of(context).colorScheme.primary),
+                                ),
+                              ),
+                            ),
+                            Icon(
+                              Icons.arrow_forward_ios,
+                              size: 20,
+                              color: (isAmoled && isDark
+                                  ? Colors.white
+                                  : Theme.of(context).colorScheme.primary),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _pickNewFolder() async {
+    final androidInfo = await DeviceInfoPlugin().androidInfo;
+    final sdkInt = androidInfo.version.sdkInt;
+
+    // Si es Android 9 (API 28) o inferior, usar carpeta Música por defecto
+    if (sdkInt <= 28) {
+      final path = await _getDefaultMusicDir();
+      setState(() => _directoryPath = path);
+      await _saveDirectory(path);
+      downloadDirectoryNotifier.value = path;
+      await _incrementFolderUsage(path);
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text(LocaleProvider.tr('information')),
+          content: Text(LocaleProvider.tr('android_9_or_lower')),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text(LocaleProvider.tr('ok')),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    final String? path = await getDirectoryPath();
+    if (path != null) {
+      await _selectFolder(path);
+    }
+  }
+
   // Future<bool> _ensurePermissions() async {
   //   if (!Platform.isAndroid) return true;
   //   if (await Permission.storage.isGranted) return true;
@@ -775,11 +1004,8 @@ class _DownloadScreenState extends State<DownloadScreen>
       return;
     }
 
-    final String? path = await getDirectoryPath();
-    if (path != null) {
-      setState(() => _directoryPath = path);
-      await _saveDirectory(path);
-    }
+    // Mostrar diálogo con carpetas más usadas
+    await _showFolderSelectionDialog();
   }
 
   Future<String> _getDefaultMusicDir() async {
@@ -967,11 +1193,30 @@ class _DownloadScreenState extends State<DownloadScreen>
           context: context,
           builder: (context) => AlertDialog(
             title: Text(LocaleProvider.tr('folder_not_selected')),
-            content: Text(LocaleProvider.tr('folder_not_selected_desc')),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(LocaleProvider.tr('folder_not_selected_desc')),
+                const SizedBox(height: 16),
+                // Botón para seleccionar carpeta
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () async {
+                      Navigator.of(context).pop(); // Cerrar diálogo
+                      await _pickDirectory(); // Abrir selector de carpetas
+                    },
+                    icon: const Icon(Icons.folder_open),
+                    label: Text(LocaleProvider.tr('select_folder')),
+                  ),
+                ),
+              ],
+            ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(context).pop(),
-                child: Text(LocaleProvider.tr('download_accept')),
+                child: Text(LocaleProvider.tr('ok')),
               ),
             ],
           ),
@@ -1362,21 +1607,79 @@ class _DownloadScreenState extends State<DownloadScreen>
   //   return packageInfo.packageName;
   // }
 
-  void _mostrarAlerta({required String titulo, required String mensaje}) {
+  void _mostrarAlerta({required String titulo, required String mensaje, bool mostrarBotonCarpeta = false}) {
     if (!mounted) return;
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
         title: Text(titulo),
-        content: Text(mensaje),
+        content: mostrarBotonCarpeta 
+          ? Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(mensaje),
+                const SizedBox(height: 16),
+                // Botón para seleccionar carpeta
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () async {
+                      Navigator.of(context).pop(); // Cerrar diálogo
+                      await _pickDirectory(); // Abrir selector de carpetas
+                    },
+                    icon: const Icon(Icons.folder_open),
+                    label: Text(LocaleProvider.tr('select_folder')),
+                  ),
+                ),
+              ],
+            )
+          : Text(mensaje),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: Text(LocaleProvider.tr('ok')),
+            child: Text(LocaleProvider.tr('cancel')),
           ),
         ],
       ),
     );
+  }
+
+  /// Muestra un diálogo obligatorio para otorgar permisos de acceso a todos los archivos
+  /// Retorna true si se otorgaron los permisos, false si se canceló
+  Future<bool> _mostrarDialogoPermisos(BuildContext context) async {
+    bool permisoOtorgado = false;
+    
+    await showDialog(
+      context: context,
+      barrierDismissible: false, // No se puede cerrar tocando fuera
+      builder: (context) => AlertDialog(
+        title: Text(LocaleProvider.tr('grant_all_files_permission')),
+        content: Text(
+          '${LocaleProvider.tr('grant_all_files_permission_desc')}\n\n${LocaleProvider.tr('permission_required_for_download')}'
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              permisoOtorgado = false;
+              Navigator.of(context).pop();
+            },
+            child: Text(LocaleProvider.tr('cancel')),
+          ),
+          TextButton(
+            onPressed: () async {
+              final status = await Permission.manageExternalStorage.request();
+              permisoOtorgado = status.isGranted;
+              if (!context.mounted) return;
+              Navigator.of(context).pop();
+            },
+            child: Text(LocaleProvider.tr('grant_permission')),
+          ),
+        ],
+      ),
+    );
+    
+    return permisoOtorgado;
   }
 
   /*
@@ -1886,6 +2189,17 @@ class _DownloadScreenState extends State<DownloadScreen>
                                                   onTap: (_isDownloading || _isPlaylistDownloading)
                             ? null
                             : () async {
+                                // Verificar permisos de acceso a todos los archivos antes de descargar
+                                final tienePermisos = await verificarPermisosTodosLosArchivos();
+                                if (!tienePermisos) {
+                                  if (context.mounted) {
+                                    final permisoOtorgado = await _mostrarDialogoPermisos(context);
+                                    if (!permisoOtorgado) {
+                                      return; // Cancelar descarga si no se otorgan los permisos
+                                    }
+                                  }
+                                }
+                                
                                 // Verificar conexión a internet antes de descargar
                                 final List<ConnectivityResult> connectivityResult = await Connectivity().checkConnectivity();
                                 if (connectivityResult.contains(ConnectivityResult.none)) {
@@ -1914,6 +2228,7 @@ class _DownloadScreenState extends State<DownloadScreen>
                                   _mostrarAlerta(
                                     titulo: LocaleProvider.tr('folder_not_selected'),
                                     mensaje: LocaleProvider.tr('folder_not_selected_desc'),
+                                    mostrarBotonCarpeta: true,
                                   );
                                   return;
                                 }

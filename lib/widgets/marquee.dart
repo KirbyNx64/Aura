@@ -14,7 +14,7 @@ class _IntegralCurve extends Curve {
   /// Delta for integrating.
   static double delta = 0.01;
 
-  _IntegralCurve._(this.original, this.integral, this._values);
+  const _IntegralCurve._(this.original, this.integral, this._values);
 
   /// The original curve that was integrated.
   final Curve original;
@@ -47,9 +47,14 @@ class _IntegralCurve extends Curve {
 
   /// Transforms a value to the normalized integrated value of the [original]
   /// curve.
+  @override
   double transform(double t) {
     if (t < 0) return 0.0;
-    for (final key in _values.keys) if (key > t) return _values[key]!;
+    for (final key in _values.keys) {
+      if (key > t) {
+        return _values[key]!;
+      }
+    }
     return 1.0;
   }
 }

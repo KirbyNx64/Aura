@@ -14,6 +14,7 @@ import 'package:music/utils/db/mostplayer_db.dart';
 import 'package:music/utils/db/shortcuts_db.dart';
 import 'package:music/utils/db/artwork_db.dart';
 import 'package:music/utils/db/songs_index_db.dart';
+import 'package:music/utils/db/artists_db.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:music/utils/notifiers.dart';
@@ -22,6 +23,10 @@ import 'package:music/l10n/locale_provider.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'dart:convert';
 import 'package:music/utils/db/playlist_model.dart' as hive_model;
+import 'package:url_launcher/url_launcher.dart';
+import 'package:icons_plus/icons_plus.dart' as icons_plus;
+import 'package:material_symbols_icons/symbols.dart';
+import 'package:music/widgets/gesture_settings_dialog.dart';
 
 class SettingsScreen extends StatefulWidget {
   final void Function(AppThemeMode)? setThemeMode;
@@ -1042,6 +1047,215 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _refreshAvailableSpace();
   }
 
+  // Métodos para manejar carpetas más usadas
+  Future<void> _incrementFolderUsage(String path) async {
+    final prefs = await SharedPreferences.getInstance();
+    Map<String, int> folderUsage = {};
+    
+    // Obtener el mapa actual de uso de carpetas
+    final usageList = prefs.getStringList('folder_usage') ?? [];
+    
+    if (usageList.isNotEmpty) {
+      // Convertir la lista de vuelta a un mapa
+      for (int i = 0; i < usageList.length - 1; i += 2) {
+        final path = usageList[i];
+        final usage = int.tryParse(usageList[i + 1]) ?? 0;
+        folderUsage[path] = usage;
+      }
+    }
+    
+    // Incrementar el contador para esta carpeta
+    folderUsage[path] = (folderUsage[path] ?? 0) + 1;
+    
+    // Guardar como lista de pares key-value
+    final List<String> newUsageList = [];
+    folderUsage.forEach((key, value) {
+      newUsageList.add(key);
+      newUsageList.add(value.toString());
+    });
+    
+    await prefs.setStringList('folder_usage', newUsageList);
+  }
+
+  Future<List<String>> _getMostUsedFolders() async {
+    final prefs = await SharedPreferences.getInstance();
+    final usageList = prefs.getStringList('folder_usage') ?? [];
+    
+    if (usageList.isEmpty) return [];
+    
+    // Convertir la lista de vuelta a un mapa
+    Map<String, int> folderUsage = {};
+    for (int i = 0; i < usageList.length - 1; i += 2) {
+      final path = usageList[i];
+      final usage = int.tryParse(usageList[i + 1]) ?? 0;
+      folderUsage[path] = usage;
+    }
+    
+    // Ordenar por uso (mayor a menor) y tomar las 5 más usadas
+    final sortedFolders = folderUsage.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    
+    return sortedFolders.take(5).map((e) => e.key).toList();
+  }
+
+  Future<void> _selectFolder(String path) async {
+    await _setDownloadDirectory(path);
+    await _incrementFolderUsage(path);
+  }
+
+  Future<void> _showFolderSelectionDialog() async {
+    final commonFolders = await _getMostUsedFolders();
+    
+    if (!mounted) return;
+    
+    showDialog(
+      context: context,
+      builder: (context) {
+        return ValueListenableBuilder<AppColorScheme>(
+          valueListenable: colorSchemeNotifier,
+          builder: (context, colorScheme, child) {
+            final isAmoled = colorScheme == AppColorScheme.amoled;
+            final isDark = Theme.of(context).brightness == Brightness.dark;
+            
+            return AlertDialog(
+              title: TranslatedText('select_common_folder'),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (commonFolders.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Text(
+                          LocaleProvider.tr('no_common_folders'),
+                          style: Theme.of(context).textTheme.bodyMedium,
+                          textAlign: TextAlign.center,
+                        ),
+                      )
+                    else
+                      ...commonFolders.map((folder) => ListTile(
+                        leading: const Icon(Icons.folder),
+                        title: Text(
+                          folder.split('/').last.isEmpty ? folder : folder.split('/').last,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        subtitle: Text(
+                          formatFolderPath(folder),
+                          style: Theme.of(context).textTheme.bodySmall,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        onTap: () {
+                          Navigator.of(context).pop();
+                          _selectFolder(folder);
+                        },
+                      )),
+                    if (commonFolders.isNotEmpty) SizedBox(height: 16),
+                    // Botón para elegir otra carpeta con diseño especial
+                    InkWell(
+                      onTap: () async {
+                        Navigator.of(context).pop();
+                        await _pickNewFolder();
+                      },
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        width: double.infinity,
+                        padding: EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: (isAmoled && isDark
+                              ? Colors.white.withValues(alpha: 0.2)
+                              : Theme.of(context).colorScheme.primaryContainer),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: (isAmoled && isDark
+                                ? Colors.white.withValues(alpha: 0.4)
+                                : Theme.of(context).colorScheme.primary.withValues(alpha: 0.3)),
+                            width: 2,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(12),
+                                color: (isAmoled && isDark
+                                    ? Colors.white.withValues(alpha: 0.2)
+                                    : Theme.of(context).colorScheme.primary.withValues(alpha: 0.1)),
+                              ),
+                              child: Icon(
+                                Icons.folder_open,
+                                size: 30,
+                                color: (isAmoled && isDark
+                                    ? Colors.white
+                                    : Theme.of(context).colorScheme.primary),
+                              ),
+                            ),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                LocaleProvider.tr('choose_other_folder'),
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: (isAmoled && isDark
+                                      ? Colors.white
+                                      : Theme.of(context).colorScheme.primary),
+                                ),
+                              ),
+                            ),
+                            Icon(
+                              Icons.arrow_forward_ios,
+                              size: 20,
+                              color: (isAmoled && isDark
+                                  ? Colors.white
+                                  : Theme.of(context).colorScheme.primary),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _pickNewFolder() async {
+    try {
+      final String? path = await getDirectoryPath();
+      if (path != null && path.isNotEmpty) {
+        await _selectFolder(path);
+      }
+    } catch (e) {
+      // Fallback error handling
+      if (Platform.isAndroid) {
+        const defaultPath = '/storage/emulated/0/Music';
+        await _selectFolder(defaultPath);
+
+        if (mounted) {
+          showDialog(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: Text(LocaleProvider.tr('information')),
+              content: Text(LocaleProvider.tr('default_path_set')),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: Text(LocaleProvider.tr('ok')),
+                ),
+              ],
+            ),
+          );
+        }
+      }
+    }
+  }
+
   Future<void> _pickDownloadDirectory() async {
     if (Platform.isAndroid) {
       // Check Android version
@@ -1072,51 +1286,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       }
     }
 
-    // For Android 10+ and other platforms, use file selector
-    try {
-      final String? path = await getDirectoryPath();
-      if (path != null && path.isNotEmpty) {
-        await _setDownloadDirectory(path);
-      }
-    } catch (e) {
-      // Fallback error handling
-      if (Platform.isAndroid) {
-        const defaultPath = '/storage/emulated/0/Music';
-        await _setDownloadDirectory(defaultPath);
-
-        if (mounted) {
-          showDialog(
-            context: context,
-            builder: (context) => AlertDialog(
-              title: Text(LocaleProvider.tr('information')),
-              content: Text(LocaleProvider.tr('default_path_set')),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: Text(LocaleProvider.tr('ok')),
-                ),
-              ],
-            ),
-          );
-        }
-      } else {
-        if (mounted) {
-          showDialog(
-            context: context,
-            builder: (context) => AlertDialog(
-              title: Text(LocaleProvider.tr('error')),
-              content: Text('${LocaleProvider.tr('error')}: $e'),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: Text(LocaleProvider.tr('ok')),
-                ),
-              ],
-            ),
-          );
-        }
-      }
-    }
+    // Mostrar diálogo con carpetas más usadas
+    await _showFolderSelectionDialog();
   }
 
   Future<void> _loadDownloadType() async {
@@ -2323,6 +2494,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  void _showGestureSettingsDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => const GestureSettingsDialog(),
+    );
+  }
+
   // Función para mostrar confirmación de eliminación de letras con el mismo diseño
   Future<void> _showDeleteLyricsConfirmation() async {
     showDialog<bool>(
@@ -2703,6 +2881,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           IconButton(
             icon: const Icon(Icons.info_outline, size: 26),
             onPressed: () => _showInfoDialog(context),
+            tooltip: LocaleProvider.tr('information'),
           ),
         ],
       ),
@@ -2775,8 +2954,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
               borderRadius: BorderRadius.only(
                 topLeft: Radius.circular(4),
                 topRight: Radius.circular(4),
-                bottomLeft: Radius.circular(16),
-                bottomRight: Radius.circular(16),
+                bottomLeft: Radius.circular(4),
+                bottomRight: Radius.circular(4),
               ),
             ),
             child: Column(
@@ -2793,6 +2972,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ],
             ),
           ),
+          const SizedBox(height: 4),
+          Card(
+            margin: EdgeInsets.zero,
+            shape: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(4),
+                topRight: Radius.circular(4),
+                bottomLeft: Radius.circular(16),
+                bottomRight: Radius.circular(16),
+              ),
+            ),
+          child: Column(
+            children: [
+              ListTile(
+                leading: const Icon(Icons.touch_app),
+                title: TranslatedText('gesture_settings'),
+                subtitle: TranslatedText('gesture_settings_desc', style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7))),
+                onTap: () => _showGestureSettingsDialog(context),
+              ),
+            ],
+          ),
+        ),
           const SizedBox(height: 24),
 
           // Descargas
@@ -2957,7 +3158,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: Column(
               children: [
                 ListTile(
-                  leading: const Icon(Icons.image),
+                  leading: const Icon(Symbols.add_photo_alternate, weight: 600),
                   title: TranslatedText('cover_quality'),
                   subtitle: TranslatedText(
                     'cover_quality_desc',
@@ -3327,9 +3528,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           24,
                           8,
                         ),
-                        content: Column(
-                          mainAxisSize: MainAxisSize.min,
+                        content: Stack(
                           children: [
+                            Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
                             ClipRRect(
                               borderRadius: BorderRadius.circular(16),
                               child: Image.asset(
@@ -3349,21 +3552,103 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              '${LocaleProvider.tr('version')}: v1.5.0',
+                              '${LocaleProvider.tr('version')}: v1.5.1',
                               style: const TextStyle(fontSize: 15),
                               textAlign: TextAlign.center,
                             ),
                             const SizedBox(height: 12),
-                            Text(
-                              LocaleProvider.tr('app_description'),
-                              textAlign: TextAlign.center,
+                            Container(
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).colorScheme.surfaceContainer,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
+                                  width: 1,
+                                ),
+                              ),
+                              child: Text(
+                                LocaleProvider.tr('app_description'),
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  height: 1.5,
+                                  color: Theme.of(context).colorScheme.onSurface,
+                                ),
+                              ),
+                            ),
+                              ],
+                            ),
+                            // Ícono de GitHub en la esquina superior derecha
+                            Positioned(
+                              top: 0,
+                              right: 0,
+                              child: IconButton(
+                                onPressed: () async {
+                                  final Uri url = Uri.parse('https://github.com/KirbyNx64/Aura');
+                                  if (await canLaunchUrl(url)) {
+                                    await launchUrl(url, mode: LaunchMode.externalApplication);
+                                  }
+                                },
+                                icon: Icon(
+                                  icons_plus.Bootstrap.github,
+                                  size: 44,
+                                ),
+                                tooltip: LocaleProvider.tr('view_on_github'),
+                              ),
                             ),
                           ],
                         ),
                         actions: [
-                          TextButton(
-                            onPressed: () => Navigator.of(context).pop(),
-                            child: Text(LocaleProvider.tr('cancel')),
+                          SizedBox(height: 8),
+                          // Tarjeta de cancelar
+                          InkWell(
+                            onTap: () => Navigator.of(context).pop(),
+                            borderRadius: BorderRadius.circular(16),
+                            child: Container(
+                              width: double.infinity,
+                              padding: EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).colorScheme.primaryContainer,
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
+                                  width: 2,
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    padding: EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(12),
+                                      color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                                    ),
+                                    child: Icon(
+                                      Icons.check_circle,
+                                      size: 30,
+                                      color: Theme.of(context).colorScheme.primary,
+                                    ),
+                                  ),
+                                  SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          LocaleProvider.tr('ok'),
+                                          style: TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w600,
+                                            color: Theme.of(context).colorScheme.primary,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
                           ),
                         ],
                       ),
@@ -3735,6 +4020,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       
       final boxSongs = await SongsIndexDB().box;
       await boxSongs.clear();
+      
+      final artistsDB = ArtistsDB();
+      await artistsDB.clear();
       
       await ArtworkDB.clearCache();
       

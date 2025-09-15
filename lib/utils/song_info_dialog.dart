@@ -42,12 +42,6 @@ class SongInfoDialog {
               ),
             ],
           ),
-          actions: [
-            TextButton(
-              child: TranslatedText('ok'),
-              onPressed: () => Navigator.of(context).pop(),
-            ),
-          ],
         ),
       );
       return;
@@ -132,12 +126,6 @@ class SongInfoDialog {
                   ],
                 ),
               ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: TranslatedText('ok'),
-                ),
-              ],
             );
           },
         );
@@ -251,11 +239,25 @@ class SongInfoDialog {
               ],
             ),
             const SizedBox(height: 16),
-            // Información del archivo
-            _InfoItem(
-              icon: Icons.folder,
-              label: LocaleProvider.tr('file_path'),
-              value: mediaItem.extras?['data'] ?? 'N/A',
+            // Información del archivo y formato
+            Row(
+              children: [
+                Expanded(
+                  child: _InfoItem(
+                    icon: Icons.audiotrack,
+                    label: LocaleProvider.tr('audio_format'),
+                    value: _getAudioFormat(mediaItem.extras?['data'] ?? ''),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: _InfoItem(
+                    icon: Icons.folder,
+                    label: LocaleProvider.tr('file_path'),
+                    value: mediaItem.extras?['data'] ?? 'N/A',
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -275,6 +277,46 @@ class SongInfoDialog {
     final minutes = duration.inMinutes;
     final seconds = duration.inSeconds % 60;
     return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+  }
+
+  static String _getAudioFormat(String filePath) {
+    if (filePath.isEmpty) return 'N/A';
+    
+    final extension = filePath.split('.').last.toLowerCase();
+    
+    switch (extension) {
+      case 'mp3':
+        return 'MP3';
+      case 'm4a':
+        return 'M4A';
+      case 'aac':
+        return 'AAC';
+      case 'flac':
+        return 'FLAC';
+      case 'wav':
+        return 'WAV';
+      case 'ogg':
+        return 'OGG';
+      case 'opus':
+        return 'OPUS';
+      case 'wma':
+        return 'WMA';
+      case 'aiff':
+      case 'aif':
+        return 'AIFF';
+      case 'alac':
+        return 'ALAC';
+      case 'ape':
+        return 'APE';
+      case 'dsd':
+        return 'DSD';
+      case 'dff':
+        return 'DFF';
+      case 'dsf':
+        return 'DSF';
+      default:
+        return extension.toUpperCase();
+    }
   }
 
   // Función sobrecargada para SongModel
@@ -367,12 +409,6 @@ class SongInfoDialog {
                   ],
                 ),
               ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: TranslatedText('ok'),
-                ),
-              ],
             );
           },
         );
@@ -484,11 +520,25 @@ class SongInfoDialog {
               ],
             ),
             const SizedBox(height: 16),
-            // Información del archivo
-            _InfoItem(
-              icon: Icons.folder,
-              label: LocaleProvider.tr('file_path'),
-              value: song.data,
+            // Información del archivo y formato
+            Row(
+              children: [
+                Expanded(
+                  child: _InfoItem(
+                    icon: Icons.audiotrack,
+                    label: LocaleProvider.tr('audio_format'),
+                    value: _getAudioFormat(song.data),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: _InfoItem(
+                    icon: Icons.folder,
+                    label: LocaleProvider.tr('file_path'),
+                    value: song.data,
+                  ),
+                ),
+              ],
             ),
           ],
         ),

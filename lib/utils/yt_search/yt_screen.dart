@@ -13,10 +13,11 @@ import 'package:device_info_plus/device_info_plus.dart';
 import 'package:music/utils/notifiers.dart';
 import 'package:music/utils/theme_preferences.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:just_audio/just_audio.dart';
-import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
+import 'package:music/utils/yt_search/stream_provider.dart';
 import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -660,6 +661,64 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
     queueLengthNotifier.value = downloadQueue.queueLength;
   }
 
+  // Métodos para manejar carpetas más usadas
+  Future<void> _incrementFolderUsage(String path) async {
+    final prefs = await SharedPreferences.getInstance();
+    Map<String, int> folderUsage = {};
+    
+    // Obtener el mapa actual de uso de carpetas
+    final usageList = prefs.getStringList('folder_usage') ?? [];
+    
+    if (usageList.isNotEmpty) {
+      // Convertir la lista de vuelta a un mapa
+      for (int i = 0; i < usageList.length - 1; i += 2) {
+        final path = usageList[i];
+        final usage = int.tryParse(usageList[i + 1]) ?? 0;
+        folderUsage[path] = usage;
+      }
+    }
+    
+    // Incrementar el contador para esta carpeta
+    folderUsage[path] = (folderUsage[path] ?? 0) + 1;
+    
+    // Guardar como lista de pares key-value
+    final List<String> newUsageList = [];
+    folderUsage.forEach((key, value) {
+      newUsageList.add(key);
+      newUsageList.add(value.toString());
+    });
+    
+    await prefs.setStringList('folder_usage', newUsageList);
+  }
+
+  Future<List<String>> _getMostUsedFolders() async {
+    final prefs = await SharedPreferences.getInstance();
+    final usageList = prefs.getStringList('folder_usage') ?? [];
+    
+    if (usageList.isEmpty) return [];
+    
+    // Convertir la lista de vuelta a un mapa
+    Map<String, int> folderUsage = {};
+    for (int i = 0; i < usageList.length - 1; i += 2) {
+      final path = usageList[i];
+      final usage = int.tryParse(usageList[i + 1]) ?? 0;
+      folderUsage[path] = usage;
+    }
+    
+    // Ordenar por uso (mayor a menor) y tomar las 5 más usadas
+    final sortedFolders = folderUsage.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    
+    return sortedFolders.take(5).map((e) => e.key).toList();
+  }
+
+  Future<void> _selectFolder(String path) async {
+    downloadDirectoryNotifier.value = path;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('download_directory', path);
+    await _incrementFolderUsage(path);
+  }
+
   Future<void> _pickDirectory() async {
     final androidInfo = await DeviceInfoPlugin().androidInfo;
     final sdkInt = androidInfo.version.sdkInt;
@@ -687,11 +746,136 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
       return;
     }
 
+    // Mostrar diálogo con carpetas más usadas
+    await _showFolderSelectionDialog();
+  }
+
+  Future<void> _showFolderSelectionDialog() async {
+    final commonFolders = await _getMostUsedFolders();
+    
+    if (!mounted) return;
+    
+    showDialog(
+      context: context,
+      builder: (context) {
+        return ValueListenableBuilder<AppColorScheme>(
+          valueListenable: colorSchemeNotifier,
+          builder: (context, colorScheme, child) {
+            final isAmoled = colorScheme == AppColorScheme.amoled;
+            final isDark = Theme.of(context).brightness == Brightness.dark;
+            
+            return AlertDialog(
+              title: TranslatedText('select_common_folder'),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (commonFolders.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Text(
+                          LocaleProvider.tr('no_common_folders'),
+                          style: Theme.of(context).textTheme.bodyMedium,
+                          textAlign: TextAlign.center,
+                        ),
+                      )
+                    else
+                      ...commonFolders.map((folder) => ListTile(
+                        leading: const Icon(Icons.folder),
+                        title: Text(
+                          folder.split('/').last.isEmpty ? folder : folder.split('/').last,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        subtitle: Text(
+                          formatFolderPath(folder),
+                          style: Theme.of(context).textTheme.bodySmall,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        onTap: () {
+                          Navigator.of(context).pop();
+                          _selectFolder(folder);
+                        },
+                      )),
+                    if (commonFolders.isNotEmpty) SizedBox(height: 16),
+                    // Botón para elegir otra carpeta con diseño especial
+                    InkWell(
+                      onTap: () async {
+                        Navigator.of(context).pop();
+                        await _pickNewFolder();
+                      },
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        width: double.infinity,
+                        padding: EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: (isAmoled && isDark
+                              ? Colors.white.withValues(alpha: 0.2)
+                              : Theme.of(context).colorScheme.primaryContainer),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: (isAmoled && isDark
+                                ? Colors.white.withValues(alpha: 0.4)
+                                : Theme.of(context).colorScheme.primary.withValues(alpha: 0.3)),
+                            width: 2,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(12),
+                                color: (isAmoled && isDark
+                                    ? Colors.white.withValues(alpha: 0.2)
+                                    : Theme.of(context).colorScheme.primary.withValues(alpha: 0.1)),
+                              ),
+                              child: Icon(
+                                Icons.folder_open,
+                                size: 30,
+                                color: (isAmoled && isDark
+                                    ? Colors.white
+                                    : Theme.of(context).colorScheme.primary),
+                              ),
+                            ),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                LocaleProvider.tr('choose_other_folder'),
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: (isAmoled && isDark
+                                      ? Colors.white
+                                      : Theme.of(context).colorScheme.primary),
+                                ),
+                              ),
+                            ),
+                            Icon(
+                              Icons.arrow_forward_ios,
+                              size: 20,
+                              color: (isAmoled && isDark
+                                  ? Colors.white
+                                  : Theme.of(context).colorScheme.primary),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _pickNewFolder() async {
     final String? path = await getDirectoryPath();
     if (path != null && path.isNotEmpty) {
-      downloadDirectoryNotifier.value = path;
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('download_directory', path);
+      await _selectFolder(path);
     }
   }
 
@@ -1047,7 +1231,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                   borderRadius: BorderRadius.circular(8),
                                   color: isAmoled && isDark
                                       ? Colors.white // Color personalizado para amoled
-                                      : Theme.of(context).colorScheme.secondaryContainer,
+                                      : Theme.of(context).colorScheme.primaryContainer,
                                   child: InkWell(
                                     borderRadius: BorderRadius.circular(8),
                                     onTap: _loading ? null : _search,
@@ -1078,7 +1262,9 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                         Text(_error!, style: const TextStyle(color: Colors.red))
                       else if (_loading)
                         const Expanded(
-                          child: Center(child: CircularProgressIndicator()),
+                          child: Center(child: CircularProgressIndicator(
+                            year2023: false,
+                          )),
                         )
                       else if (_noInternet)
                         Expanded(
@@ -1222,6 +1408,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                       child:
                                                           CircularProgressIndicator(
                                                             strokeWidth: 2,
+                                                            year2023: false,
                                                           ),
                                                     ),
                                                     const SizedBox(width: 12),
@@ -1458,6 +1645,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                       child:
                                                           CircularProgressIndicator(
                                                             strokeWidth: 2,
+                                                            year2023: false,
                                                           ),
                                                     ),
                                                     const SizedBox(width: 12),
@@ -1682,24 +1870,36 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                   ),
                                                 ),
                                               ),
-                                            Column(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
-                                              children: [
-                                                Text(
-                                                  _currentAlbum!['title'] ?? '',
-                                                  style: Theme.of(
-                                                    context,
-                                                  ).textTheme.titleMedium,
-                                                ),
-                                                Text(
-                                                  _currentAlbum!['artist'] ??
-                                                      '',
-                                                  style: Theme.of(
-                                                    context,
-                                                  ).textTheme.bodySmall,
-                                                ),
-                                              ],
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    _currentAlbum!['title'] ?? '',
+                                                    style: Theme.of(
+                                                      context,
+                                                    ).textTheme.titleMedium,
+                                                    maxLines: 1,
+                                                    overflow: TextOverflow.ellipsis,
+                                                  ),
+                                                  Text(
+                                                    _currentAlbum!['artist'] ??
+                                                        '',
+                                                    style: Theme.of(
+                                                      context,
+                                                    ).textTheme.bodySmall,
+                                                    maxLines: 1,
+                                                    overflow: TextOverflow.ellipsis,
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                            const SizedBox(width: 2),
+                                            const Icon(
+                                              Icons.arrow_forward_ios,
+                                              size: 16,
+                                              color: Colors.transparent,
                                             ),
                                           ],
                                         ],
@@ -1708,7 +1908,9 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                       if (_loadingAlbumSongs)
                                         const Expanded(
                                           child: Center(
-                                            child: CircularProgressIndicator(),
+                                            child: CircularProgressIndicator(
+                                              year2023: false,
+                                            ),
                                           ),
                                         )
                                       else if (_albumSongs.isEmpty)
@@ -2020,7 +2222,9 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                       if (_loadingPlaylistSongs)
                                         const Expanded(
                                           child: Center(
-                                            child: CircularProgressIndicator(),
+                                            child: CircularProgressIndicator(
+                                              year2023: false,
+                                            ),
                                           ),
                                         )
                                       else if (_playlistSongs.isEmpty)
@@ -2309,6 +2513,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                       child:
                                                           CircularProgressIndicator(
                                                             strokeWidth: 2,
+                                                            year2023: false,
                                                           ),
                                                     ),
                                                     const SizedBox(width: 12),
@@ -3182,8 +3387,6 @@ class _YtPreviewPlayerState extends State<_YtPreviewPlayer>
   int _loadToken = 0; // Token para cancelar cargas previas
   StreamSubscription<PlayerState>? _playerStateSubscription;
   
-  // AnimationController para el botón de play/pause
-  late AnimationController _playPauseController;
 
   @override
   void initState() {
@@ -3191,12 +3394,6 @@ class _YtPreviewPlayerState extends State<_YtPreviewPlayer>
     _currentIndex = widget.currentIndex;
     _currentItem = widget.results[_currentIndex];
     
-    // Inicializar AnimationController para play/pause
-    _playPauseController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 250),
-      value: 0.0, // Empieza en pausa
-    );
     
     _playerStateSubscription = _player.playerStateStream.listen((state) {
       if (!mounted) return;
@@ -3207,19 +3404,12 @@ class _YtPreviewPlayerState extends State<_YtPreviewPlayer>
         // pero aquí no lo cambiamos salvo que quieras lógica especial
       });
       
-      // Controlar la animación según el estado
-      if (_playing) {
-        _playPauseController.forward();
-      } else {
-        _playPauseController.reverse();
-      }
     });
   }
 
   @override
   void dispose() {
     _playerStateSubscription?.cancel();
-    _playPauseController.dispose();
     _player.dispose();
     super.dispose();
   }
@@ -3312,10 +3502,9 @@ class _YtPreviewPlayerState extends State<_YtPreviewPlayer>
       if (audioHandler?.playbackState.value.playing ?? false) {
         await audioHandler?.pause();
       }
-      final yt = YoutubeExplode();
-      final manifest = await yt.videos.streamsClient.getManifest(
-        _currentItem.videoId!,
-      );
+      
+      // Usar StreamService con cache
+      final audioUrl = await StreamService.getBestAudioUrl(_currentItem.videoId!);
       if (thisLoad != _loadToken) {
         await _player.stop();
         _audioUrl = null;
@@ -3327,20 +3516,11 @@ class _YtPreviewPlayerState extends State<_YtPreviewPlayer>
         });
         return; // Cancelado
       }
-      final audio =
-          manifest.audioOnly
-              .where(
-                (s) =>
-                    s.codec.mimeType == 'audio/mp4' ||
-                    s.codec.toString().contains('mp4a'),
-              )
-              .toList()
-            ..sort((a, b) => b.bitrate.compareTo(a.bitrate));
-      final audioStreamInfo = audio.isNotEmpty ? audio.first : null;
-      if (audioStreamInfo == null) {
+      
+      if (audioUrl == null) {
         throw Exception('No se encontró stream de audio válido.');
       }
-      _audioUrl = audioStreamInfo.url.toString();
+      _audioUrl = audioUrl;
       if (thisLoad != _loadToken) {
         await _player.stop();
         _audioUrl = null;
@@ -3600,9 +3780,9 @@ class _YtPreviewPlayerState extends State<_YtPreviewPlayer>
                                             : Theme.of(context).colorScheme.surfaceContainer,
                                 ),
                               )
-                            : AnimatedIcon(
-                                icon: AnimatedIcons.play_pause,
-                                progress: _playPauseController,
+                            : Icon(
+                                _playing ? Symbols.pause_rounded : Symbols.play_arrow_rounded,
+                                grade: 200,
                                 size: 24,
                                 color: colorSchemeNotifier.value == AppColorScheme.amoled
                                         ? Colors.black
@@ -3631,14 +3811,14 @@ class _YtPreviewPlayerState extends State<_YtPreviewPlayer>
                 ),
                 // Botón anterior
                 IconButton(
-                  icon: const Icon(Icons.skip_previous),
+                  icon: const Icon(Symbols.skip_previous_rounded, grade: 200),
                   onPressed: (!_loading && _currentIndex > 0)
                       ? _playPrevious
                       : null,
                 ),
                 // Botón siguiente
                 IconButton(
-                  icon: const Icon(Icons.skip_next),
+                  icon: const Icon(Symbols.skip_next_rounded, grade: 200),
                   onPressed:
                       (!_loading && _currentIndex < widget.results.length - 1)
                       ? _playNext
@@ -3650,35 +3830,91 @@ class _YtPreviewPlayerState extends State<_YtPreviewPlayer>
             const SizedBox(height: 8),
             StreamBuilder<Duration>(
               stream: _player.positionStream,
-              builder: (context, snapshot) {
-                if (_duration == null) {
-                  return LinearProgressIndicator(
-                    year2023: false,
-                    value: 0.0,
-                    minHeight: 6,
-                    backgroundColor: Theme.of(
-                      context,
-                    ).colorScheme.primary.withValues(alpha: 0.3),
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                      Theme.of(context).colorScheme.primary,
-                    ),
-                  );
-                }
-                final pos = snapshot.data ?? Duration.zero;
-                final progress = _duration!.inMilliseconds > 0
-                    ? pos.inMilliseconds / _duration!.inMilliseconds
-                    : 0.0;
-                return LinearProgressIndicator(
-                  year2023: false,
-                  borderRadius: BorderRadius.circular(8),
-                  value: progress.clamp(0.0, 1.0),
-                  minHeight: 6,
-                  backgroundColor: Theme.of(
-                    context,
-                  ).colorScheme.primary.withValues(alpha: 0.3),
-                  valueColor: AlwaysStoppedAnimation<Color>(
-                    Theme.of(context).colorScheme.primary,
-                  ),
+              builder: (context, positionSnapshot) {
+                return StreamBuilder<Duration>(
+                  stream: _player.bufferedPositionStream,
+                  builder: (context, bufferedSnapshot) {
+                    if (_duration == null) {
+                      return LinearProgressIndicator(
+                        value: 0.0,
+                        minHeight: 8,
+                        borderRadius: BorderRadius.circular(8),
+                        backgroundColor: Theme.of(
+                          context,
+                        ).colorScheme.primary.withValues(alpha: 0.2),
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          Theme.of(context).colorScheme.primary,
+                        ),
+                      );
+                    }
+                    
+                    final pos = positionSnapshot.data ?? Duration.zero;
+                    final buffered = bufferedSnapshot.data ?? Duration.zero;
+                    final total = _duration!.inMilliseconds;
+                    
+                    final progress = total > 0
+                        ? pos.inMilliseconds / total
+                        : 0.0;
+                    final bufferedProgress = total > 0
+                        ? buffered.inMilliseconds / total
+                        : 0.0;
+                    
+                    return LayoutBuilder(
+                      builder: (context, constraints) {
+                        return GestureDetector(
+                          onTapDown: (details) {
+                            if (_duration != null && _duration!.inMilliseconds > 0) {
+                              final tapPosition = details.localPosition.dx;
+                              final tapProgress = tapPosition / constraints.maxWidth;
+                              final newPosition = Duration(
+                                milliseconds: (_duration!.inMilliseconds * tapProgress.clamp(0.0, 1.0)).round(),
+                              );
+                              _player.seek(newPosition);
+                            }
+                          },
+                          child: Container(
+                            height: 8,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(8),
+                              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
+                            ),
+                            child: Stack(
+                              children: [
+                                // Progreso de carga (buffered) - fondo más claro
+                                if (bufferedProgress > 0)
+                                  Positioned(
+                                    left: 0,
+                                    top: 0,
+                                    bottom: 0,
+                                    width: constraints.maxWidth * bufferedProgress.clamp(0.0, 1.0),
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(8),
+                                        color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5),
+                                      ),
+                                    ),
+                                  ),
+                                // Progreso de reproducción - más visible
+                                if (progress > 0)
+                                  Positioned(
+                                    left: 0,
+                                    top: 0,
+                                    bottom: 0,
+                                    width: constraints.maxWidth * progress.clamp(0.0, 1.0),
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(8),
+                                        color: Theme.of(context).colorScheme.primary,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    );
+                  },
                 );
               },
             ),

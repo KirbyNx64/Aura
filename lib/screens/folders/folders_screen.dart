@@ -22,6 +22,7 @@ import 'package:music/screens/play/player_screen.dart';
 import 'package:music/utils/db/playlist_model.dart' as hive_model;
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:media_scanner/media_scanner.dart';
 import 'package:music/widgets/song_info_dialog.dart';
 
@@ -184,7 +185,7 @@ class _FoldersScreenState extends State<FoldersScreen>
         if (paths.isNotEmpty) {
           nuevoMapa[folder] = paths;
           // Obtener el nombre original de la carpeta sin normalizar
-          final originalFolderName = _getOriginalFolderName(folder);
+          final originalFolderName = await _getOriginalFolderName(folder);
           nuevosDisplayNames[folder] = originalFolderName;
         }
       }
@@ -379,7 +380,7 @@ class _FoldersScreenState extends State<FoldersScreen>
       if (paths.isNotEmpty) {
         agrupado[folder] = paths;
         // Obtener el nombre original de la carpeta sin normalizar
-        final originalFolderName = _getOriginalFolderName(folder);
+        final originalFolderName = await _getOriginalFolderName(folder);
         displayNames[folder] = originalFolderName;
       }
     }
@@ -396,20 +397,37 @@ class _FoldersScreenState extends State<FoldersScreen>
   }
 
   /// Obtiene el nombre original de la carpeta sin normalizar
-  String _getOriginalFolderName(String normalizedFolderPath) {
-    // Revertir la normalización para obtener el nombre original
-    var originalPath = normalizedFolderPath;
-
-    // Convertir de vuelta a la ruta original (sin minúsculas)
-    final segments = originalPath.split(RegExp(r'[\\/]'));
-    final folderName = segments.last;
-
-    // Capitalizar la primera letra para que se vea mejor
-    if (folderName.isNotEmpty) {
-      return folderName[0].toUpperCase() + folderName.substring(1);
+  Future<String> _getOriginalFolderName(String normalizedFolderPath) async {
+    // Buscar en las canciones de esta carpeta para obtener el nombre real
+    final paths = songPathsByFolder[normalizedFolderPath] ?? [];
+    if (paths.isNotEmpty) {
+      // Usar la primera canción para obtener el directorio real
+      try {
+        final firstSongPath = paths.first;
+        final directory = Directory(p.dirname(firstSongPath));
+        return directory.path.split(RegExp(r'[\\/]')).last;
+      } catch (e) {
+        // Fallback: usar el último segmento de la ruta normalizada
+        final segments = normalizedFolderPath.split(RegExp(r'[\\/]'));
+        return segments.last;
+      }
     }
-
-    return folderName;
+    
+    // Si no hay canciones en songPathsByFolder, intentar obtenerlas directamente
+    try {
+      final paths = await SongsIndexDB().getSongsFromFolder(normalizedFolderPath);
+      if (paths.isNotEmpty) {
+        final firstSongPath = paths.first;
+        final directory = Directory(p.dirname(firstSongPath));
+        return directory.path.split(RegExp(r'[\\/]')).last;
+      }
+    } catch (e) {
+      // Fallback: usar el último segmento de la ruta normalizada
+    }
+    
+    // Fallback: usar el último segmento de la ruta normalizada
+    final segments = normalizedFolderPath.split(RegExp(r'[\\/]'));
+    return segments.last;
   }
 
   void _handleLongPress(BuildContext context, SongModel song) async {
@@ -536,7 +554,8 @@ class _FoldersScreenState extends State<FoldersScreen>
                   ),
                   ListTile(
                     leading: Icon(
-                      isFavorite ? Icons.delete_outline : Icons.favorite_border,
+                      isFavorite ? Icons.delete_outline : Symbols.favorite_rounded,
+                      weight: isFavorite ? null : 600,
                     ),
                     title: TranslatedText(
                       isFavorite ? 'remove_from_favorites' : 'add_to_favorites',
@@ -2134,6 +2153,7 @@ class _FoldersScreenState extends State<FoldersScreen>
             actions: [
               IconButton(
                 icon: const Icon(Icons.info_outline, size: 28),
+                tooltip: LocaleProvider.tr('information'),
                 onPressed: () {
                   showDialog(
                     context: context,
@@ -2399,7 +2419,7 @@ class _FoldersScreenState extends State<FoldersScreen>
                       enabled: _selectedSongPaths.isNotEmpty,
                       child: Row(
                         children: [
-                          const Icon(Icons.favorite_outline),
+                          const Icon(Symbols.favorite_rounded, weight: 600),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(LocaleProvider.tr('add_to_favorites')),
@@ -2463,7 +2483,7 @@ class _FoldersScreenState extends State<FoldersScreen>
                 ),
               ] else ...[
                 IconButton(
-                  icon: const Icon(Icons.shuffle, size: 28),
+                  icon: const Icon(Symbols.shuffle, size: 28, weight: 600),
                   tooltip: LocaleProvider.tr('shuffle'),
                   onPressed: () {
                     if (_displaySongs.isNotEmpty) {
@@ -2475,6 +2495,7 @@ class _FoldersScreenState extends State<FoldersScreen>
                 ),
                 PopupMenuButton<OrdenCarpetas>(
                   icon: const Icon(Icons.sort, size: 28),
+                  tooltip: LocaleProvider.tr('filters'),
                   onSelected: (orden) async {
                     setState(() {
                       _orden = orden;
@@ -2787,8 +2808,9 @@ class _FoldersScreenState extends State<FoldersScreen>
             ? IconButton(
                 icon: Icon(
                   isCurrent
-                      ? (playing ? Icons.pause : Icons.play_arrow)
-                      : Icons.play_arrow,
+                      ? (playing ? Symbols.pause_rounded : Symbols.play_arrow_rounded)
+                      : Symbols.play_arrow_rounded,
+                  grade: 200,
                   color: isCurrent
                       ? Theme.of(context).colorScheme.primary
                       : null,

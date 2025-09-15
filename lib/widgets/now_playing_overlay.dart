@@ -9,6 +9,8 @@ import 'package:music/utils/audio/background_audio_handler.dart';
 import 'marquee.dart';
 import 'package:music/utils/notifiers.dart';
 import 'package:music/utils/theme_preferences.dart';
+import 'package:material_symbols_icons/symbols.dart';
+import 'package:music/utils/gesture_preferences.dart';
 
 class NowPlayingOverlay extends StatefulWidget {
   final bool showBar;
@@ -19,22 +21,21 @@ class NowPlayingOverlay extends StatefulWidget {
   State<NowPlayingOverlay> createState() => _NowPlayingOverlayState();
 }
 
-class _NowPlayingOverlayState extends State<NowPlayingOverlay>
-    with TickerProviderStateMixin {
+class _NowPlayingOverlayState extends State<NowPlayingOverlay> {
   MediaItem? _lastKnownMediaItem;
-  late AnimationController _playPauseController;
   Timer? _temporaryItemTimer;
   Timer? _playingDebounce;
   final ValueNotifier<bool> _isPlayingNotifier = ValueNotifier<bool>(false);
+  
+  // Preferencias de gestos
+  bool _disableOpenPlayerGesture = false;
+  VoidCallback? _gesturePreferencesListener;
 
   @override
   void initState() {
     super.initState();
-    _playPauseController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 150), // Reducido de 350ms a 150ms
-      value: 1.0,
-    );
+    _loadGesturePreferences();
+    _setupGesturePreferencesListener();
 
     // Escuchar cambios en el estado de reproducción con debounce mínimo
     audioHandler?.playbackState.listen((state) {
@@ -52,12 +53,34 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay>
     });
   }
 
+  /// Carga las preferencias de gestos
+  Future<void> _loadGesturePreferences() async {
+    final preferences = await GesturePreferences.getAllGesturePreferences();
+    if (mounted) {
+      setState(() {
+        _disableOpenPlayerGesture = preferences['openPlayer'] ?? false;
+      });
+    }
+  }
+
+  /// Configura el listener para cambios en las preferencias de gestos
+  void _setupGesturePreferencesListener() {
+    _gesturePreferencesListener = () {
+      if (mounted) {
+        _loadGesturePreferences();
+      }
+    };
+    gesturePreferencesChanged.addListener(_gesturePreferencesListener!);
+  }
+
   @override
   void dispose() {
-    _playPauseController.dispose();
     _temporaryItemTimer?.cancel();
     _playingDebounce?.cancel();
     _isPlayingNotifier.dispose();
+    if (_gesturePreferencesListener != null) {
+      gesturePreferencesChanged.removeListener(_gesturePreferencesListener!);
+    }
     super.dispose();
   }
 
@@ -138,7 +161,7 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay>
                     if (!overlayVisibleNotifier.value) {
                       overlayVisibleNotifier.value = true;
                     }
-                    if (isLoading || !navigationEnabled) return;
+                    if (isLoading || !navigationEnabled || _disableOpenPlayerGesture) return;
                     if (details.primaryVelocity != null &&
                         details.primaryVelocity! < 0) {
                       final currentSong = song;
@@ -265,15 +288,6 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay>
                               child: ValueListenableBuilder<bool>(
                                 valueListenable: _isPlayingNotifier,
                                 builder: (context, isPlaying, child) {
-                                  // Sincroniza la animación inmediatamente
-                                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                                    if (isPlaying) {
-                                      _playPauseController.forward();
-                                    } else {
-                                      _playPauseController.reverse();
-                                    }
-                                  });
-                                  
                                   return Material(
                                     color: Colors.transparent,
                                     child: InkWell(
@@ -313,9 +327,9 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay>
                                           ),
                                         ),
                                         child: Center(
-                                          child: AnimatedIcon(
-                                            icon: AnimatedIcons.play_pause,
-                                            progress: _playPauseController,
+                                          child: Icon(
+                                            isPlaying ? Symbols.pause_rounded : Symbols.play_arrow_rounded,
+                                            grade: 200,
                                             size: 28,
                                             color: colorSchemeNotifier.value == AppColorScheme.amoled
                                                 ? Colors.black
