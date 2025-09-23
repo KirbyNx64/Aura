@@ -88,9 +88,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   void _showInfoDialog(BuildContext context) {
+    final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: isAmoled && isDark
+              ? const BorderSide(color: Colors.white, width: 1)
+              : BorderSide.none,
+        ),
         title: Text(LocaleProvider.tr('info')),
         content: Text(LocaleProvider.tr('settings_info')),
         actions: [
@@ -112,8 +121,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
           builder: (context, colorScheme, child) {
             final isAmoled = colorScheme == AppColorScheme.amoled;
             final isDark = Theme.of(context).brightness == Brightness.dark;
-            
+
             return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: isAmoled && isDark
+                    ? const BorderSide(color: Colors.white, width: 1)
+                    : BorderSide.none,
+              ),
               title: Center(
                 child: Text(
                   LocaleProvider.tr('artwork_quality'),
@@ -658,6 +673,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     BuildContext context,
   ) async {
     if (Platform.isAndroid) {
+      final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
+      final isDark = Theme.of(context).brightness == Brightness.dark;
+      
       final status = await Permission.ignoreBatteryOptimizations.status;
       if (!status.isGranted) {
         final intent = AndroidIntent(
@@ -673,6 +691,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
           showDialog(
             context: context,
             builder: (context) => AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: isAmoled && isDark
+                    ? const BorderSide(color: Colors.white, width: 1)
+                    : BorderSide.none,
+              ),
               title: Text(LocaleProvider.tr('information')),
               content: Text(LocaleProvider.tr('battery_optimization_info')),
             ),
@@ -693,6 +717,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
             final isDark = Theme.of(context).brightness == Brightness.dark;
             
             return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: isAmoled && isDark
+                    ? const BorderSide(color: Colors.white, width: 1)
+                    : BorderSide.none,
+              ),
               title: Center(
                 child: TranslatedText(
                   'select_theme',
@@ -1118,6 +1148,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
             final isDark = Theme.of(context).brightness == Brightness.dark;
             
             return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: isAmoled && isDark
+                    ? const BorderSide(color: Colors.white, width: 1)
+                    : BorderSide.none,
+              ),
               title: TranslatedText('select_common_folder'),
               content: SizedBox(
                 width: double.maxFinite,
@@ -1234,6 +1270,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     } catch (e) {
       // Fallback error handling
       if (Platform.isAndroid) {
+        final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
+        if (!mounted) return;
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+        
         const defaultPath = '/storage/emulated/0/Music';
         await _selectFolder(defaultPath);
 
@@ -1241,6 +1281,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
           showDialog(
             context: context,
             builder: (context) => AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: isAmoled && isDark
+                    ? const BorderSide(color: Colors.white, width: 1)
+                    : BorderSide.none,
+              ),
               title: Text(LocaleProvider.tr('information')),
               content: Text(LocaleProvider.tr('default_path_set')),
               actions: [
@@ -1261,7 +1307,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
       // Check Android version
       final androidInfo = await DeviceInfoPlugin().androidInfo;
       final sdkInt = androidInfo.version.sdkInt;
-
+      final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
+      if (!mounted) return;
+      final isDark = Theme.of(context).brightness == Brightness.dark;
+      
       // If Android 9 (API 28) or lower, use default Music folder
       if (sdkInt <= 28) {
         const defaultPath = '/storage/emulated/0/Music';
@@ -1271,6 +1320,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
           showDialog(
             context: context,
             builder: (context) => AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: isAmoled && isDark
+                    ? const BorderSide(color: Colors.white, width: 1)
+                    : BorderSide.none,
+              ),
               title: Text(LocaleProvider.tr('information')),
               content: Text(LocaleProvider.tr('android_9_or_lower')),
               actions: [
@@ -1351,6 +1406,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
             final isDark = Theme.of(context).brightness == Brightness.dark;
             
             return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: isAmoled && isDark
+                    ? const BorderSide(color: Colors.white, width: 1)
+                    : BorderSide.none,
+              ),
               title: Center(
                 child: TranslatedText(
                   'audio_quality',
@@ -1727,6 +1788,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
             final isDark = Theme.of(context).brightness == Brightness.dark;
             
             return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: isAmoled && isDark
+                    ? const BorderSide(color: Colors.white, width: 1)
+                    : BorderSide.none,
+              ),
               title: Center(
                 child: TranslatedText(
                   'cover_quality',
@@ -2023,6 +2090,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
             final isDark = Theme.of(context).brightness == Brightness.dark;
             
             return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: isAmoled && isDark
+                    ? const BorderSide(color: Colors.white, width: 1)
+                    : BorderSide.none,
+              ),
               title: Center(
                 child: TranslatedText(
                   'download_type',
@@ -2263,8 +2336,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
           builder: (context, colorScheme, child) {
             final isAmoled = colorScheme == AppColorScheme.amoled;
             final isDark = Theme.of(context).brightness == Brightness.dark;
-            
+
             return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: isAmoled && isDark
+                    ? const BorderSide(color: Colors.white, width: 1)
+                    : BorderSide.none,
+              ),
               title: Center(
                 child: TranslatedText(
                   'change_language',
@@ -2513,6 +2592,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
             final isDark = Theme.of(context).brightness == Brightness.dark;
             
             return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: isAmoled && isDark
+                    ? const BorderSide(color: Colors.white, width: 1)
+                    : BorderSide.none,
+              ),
               title: Center(
                 child: TranslatedText(
                   'delete_lyrics',
@@ -2694,6 +2779,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
             final isDark = Theme.of(context).brightness == Brightness.dark;
             
             return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: isAmoled && isDark
+                    ? const BorderSide(color: Colors.white, width: 1)
+                    : BorderSide.none,
+              ),
               title: Center(
                 child: TranslatedText(
                   'lyrics_deleted',
@@ -2803,9 +2894,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   void _showColorSelectionDialog(BuildContext context) {
+    final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: isAmoled && isDark
+              ? const BorderSide(color: Colors.white, width: 1)
+              : BorderSide.none,
+        ),
         title: Text(LocaleProvider.tr('select_color')),
         content: SizedBox(
           width: double.maxFinite,
@@ -2865,6 +2965,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -3200,6 +3303,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       showDialog(
                         context: context,
                         builder: (context) => AlertDialog(
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                            side: isAmoled && isDark
+                                ? const BorderSide(color: Colors.white, width: 1)
+                                : BorderSide.none,
+                          ),
                           title: Text(
                             status.isGranted
                                 ? LocaleProvider.tr('permission_granted')
@@ -3302,6 +3411,50 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7)),
                       ),
                       secondary: const Icon(Icons.library_music),
+                      thumbIcon: WidgetStateProperty.resolveWith<Icon?>((Set<WidgetState> states) {
+                        if (states.contains(WidgetState.selected)) {
+                          return const Icon(Icons.check, size: 20);
+                        } else {
+                          return const Icon(Icons.close, size: 20);
+                        }
+                      }),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 4),
+          Card(
+            margin: EdgeInsets.zero,
+            shape: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(4),
+                topRight: Radius.circular(4),
+                bottomLeft: Radius.circular(4),
+                bottomRight: Radius.circular(4),
+              ),
+            ),
+            child: Column(
+              children: [
+                FutureBuilder<SharedPreferences>(
+                  future: SharedPreferences.getInstance(),
+                  builder: (context, snapshot) {
+                    if (!snapshot.hasData) return SizedBox.shrink();
+                    final prefs = snapshot.data!;
+                    final value = prefs.getBool('show_lyrics_on_cover') ?? false;
+                    return SwitchListTile(
+                      value: value,
+                      onChanged: (v) async {
+                        await prefs.setBool('show_lyrics_on_cover', v);
+                        setState(() {});
+                      },
+                      title: Text(LocaleProvider.tr('show_lyrics_on_cover')),
+                      subtitle: Text(
+                        LocaleProvider.tr('show_lyrics_on_cover_desc'),
+                        style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7)),
+                      ),
+                      secondary: const Icon(Symbols.slab_serif, weight: 600),
                       thumbIcon: WidgetStateProperty.resolveWith<Icon?>((Set<WidgetState> states) {
                         if (states.contains(WidgetState.selected)) {
                           return const Icon(Icons.check, size: 20);
@@ -3522,6 +3675,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     showDialog(
                       context: context,
                       builder: (context) => AlertDialog(
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          side: isAmoled && isDark
+                              ? const BorderSide(color: Colors.white, width: 1)
+                              : BorderSide.none,
+                        ),
                         contentPadding: const EdgeInsets.fromLTRB(
                           24,
                           24,
@@ -3552,7 +3711,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              '${LocaleProvider.tr('version')}: v1.5.1',
+                              '${LocaleProvider.tr('version')}: v1.5.2',
                               style: const TextStyle(fontSize: 15),
                               textAlign: TextAlign.center,
                             ),
@@ -3609,10 +3768,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               width: double.infinity,
                               padding: EdgeInsets.all(16),
                               decoration: BoxDecoration(
-                                color: Theme.of(context).colorScheme.primaryContainer,
+                                color: (colorSchemeNotifier.value == AppColorScheme.amoled && Theme.of(context).brightness == Brightness.dark)
+                                    ? Colors.white.withValues(alpha: 0.2)
+                                    : Theme.of(context).colorScheme.primaryContainer,
                                 borderRadius: BorderRadius.circular(16),
                                 border: Border.all(
-                                  color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
+                                  color: (colorSchemeNotifier.value == AppColorScheme.amoled && Theme.of(context).brightness == Brightness.dark)
+                                      ? Colors.white.withValues(alpha: 0.4)
+                                      : Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
                                   width: 2,
                                 ),
                               ),
@@ -3622,12 +3785,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                     padding: EdgeInsets.all(8),
                                     decoration: BoxDecoration(
                                       borderRadius: BorderRadius.circular(12),
-                                      color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                                      color: (colorSchemeNotifier.value == AppColorScheme.amoled && Theme.of(context).brightness == Brightness.dark)
+                                          ? Colors.white.withValues(alpha: 0.2)
+                                          : Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
                                     ),
                                     child: Icon(
                                       Icons.check_circle,
                                       size: 30,
-                                      color: Theme.of(context).colorScheme.primary,
+                                      color: (colorSchemeNotifier.value == AppColorScheme.amoled && Theme.of(context).brightness == Brightness.dark)
+                                          ? Colors.white
+                                          : Theme.of(context).colorScheme.primary,
                                     ),
                                   ),
                                   SizedBox(width: 12),
@@ -3640,7 +3807,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                           style: TextStyle(
                                             fontSize: 16,
                                             fontWeight: FontWeight.w600,
-                                            color: Theme.of(context).colorScheme.primary,
+                                            color: (colorSchemeNotifier.value == AppColorScheme.amoled && Theme.of(context).brightness == Brightness.dark)
+                                                ? Colors.white
+                                                : Theme.of(context).colorScheme.primary,
                                           ),
                                         ),
                                       ],
@@ -3664,6 +3833,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _exportBackup() async {
+    final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
     try {
       // Obtener datos de las bases de datos
       final favorites = await FavoritesDB().getFavorites();
@@ -3696,6 +3868,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: isAmoled && isDark
+                ? const BorderSide(color: Colors.white, width: 1)
+                : BorderSide.none,
+          ),
           title: Text(LocaleProvider.tr('success')),
           content: Text(LocaleProvider.tr('backup_exported')),
         ),
@@ -3705,6 +3883,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
         showDialog(
           context: context,
           builder: (context) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: isAmoled && isDark
+                  ? const BorderSide(color: Colors.white, width: 1)
+                  : BorderSide.none,
+            ),
             title: Text(LocaleProvider.tr('error')),
             content: Text('${LocaleProvider.tr('error')}: $e'),
           ),
@@ -3714,6 +3898,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _importBackup() async {
+    final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
     try {
       final typeGroup = XTypeGroup(label: 'json', extensions: ['json']);
       final filePath = await openFile(acceptedTypeGroups: [typeGroup]);
@@ -3726,6 +3913,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
       final confirmed = await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: isAmoled && isDark
+                ? const BorderSide(color: Colors.white, width: 1)
+                : BorderSide.none,
+          ),
           title: Text(LocaleProvider.tr('import_backup')),
           content: Text(LocaleProvider.tr('import_confirm')),
           actions: [
@@ -3800,6 +3993,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: isAmoled && isDark
+                ? const BorderSide(color: Colors.white, width: 1)
+                : BorderSide.none,
+          ),
           title: Text(LocaleProvider.tr('success')),
           content: Text(LocaleProvider.tr('backup_imported')),
           actions: [
@@ -3815,6 +4014,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
         showDialog(
           context: context,
           builder: (context) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: isAmoled && isDark
+                  ? const BorderSide(color: Colors.white, width: 1)
+                  : BorderSide.none,
+            ),
             title: Text(LocaleProvider.tr('error')),
             content: Text('${LocaleProvider.tr('error')}: $e'),
           ),
@@ -3838,6 +4043,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
               final isDark = Theme.of(context).brightness == Brightness.dark;
               
               return AlertDialog(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  side: isAmoled && isDark
+                      ? const BorderSide(color: Colors.white, width: 1)
+                      : BorderSide.none,
+                ),
                 title: Center(
                   child: Text(
                     LocaleProvider.tr('reset_app_confirm'),
@@ -4052,6 +4263,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
               final isDark = Theme.of(context).brightness == Brightness.dark;
               
               return AlertDialog(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  side: isAmoled && isDark
+                      ? const BorderSide(color: Colors.white, width: 1)
+                      : BorderSide.none,
+                ),
                 title: Center(
                   child: Text(
                     LocaleProvider.tr('success'),
@@ -4163,6 +4380,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 final isDark = Theme.of(context).brightness == Brightness.dark;
                 
                 return AlertDialog(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    side: isAmoled && isDark
+                        ? const BorderSide(color: Colors.white, width: 1)
+                        : BorderSide.none,
+                  ),
                   title: Center(
                     child: Text(
                       LocaleProvider.tr('error'),

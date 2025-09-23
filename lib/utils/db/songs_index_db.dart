@@ -2,6 +2,7 @@ import 'package:hive/hive.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 import 'dart:io';
 import 'package:path/path.dart' as p;
+import 'package:shared_preferences/shared_preferences.dart';
 
 class SongsIndexDB {
   static final SongsIndexDB _instance = SongsIndexDB._internal();
@@ -62,6 +63,12 @@ class SongsIndexDB {
     final OnAudioQuery audioQuery = OnAudioQuery();
     final allSongs = await audioQuery.querySongs();
 
+    // Obtener carpetas ignoradas de preferencias
+    final prefs = await SharedPreferences.getInstance();
+    final ignoredFolders = (prefs.getStringList('ignored_folders') ?? [])
+        .map((e) => _normalizeFolderPath(e))
+        .toSet();
+
     // Obtener todas las rutas actuales en la base de datos
     final dbPaths = b.keys.cast<String>().toSet();
 
@@ -79,10 +86,11 @@ class SongsIndexDB {
       await b.deleteAll(filesToDelete);
     }
 
-    // Agregar archivos nuevos
+    // Agregar archivos nuevos excluyendo carpetas ignoradas
     for (final song in allSongs) {
       if (filesToAdd.contains(song.data)) {
         final folderPath = _getFolderPath(song.data);
+        if (ignoredFolders.contains(folderPath)) continue;
         await b.put(song.data, {'folder_path': folderPath});
       }
     }
@@ -99,9 +107,16 @@ class SongsIndexDB {
     final OnAudioQuery audioQuery = OnAudioQuery();
     final allSongs = await audioQuery.querySongs();
 
+    // Obtener carpetas ignoradas
+    final prefs = await SharedPreferences.getInstance();
+    final ignoredFolders = (prefs.getStringList('ignored_folders') ?? [])
+        .map((e) => _normalizeFolderPath(e))
+        .toSet();
+
     await b.clear();
     for (final song in allSongs) {
       final folderPath = _getFolderPath(song.data);
+      if (ignoredFolders.contains(folderPath)) continue;
       await b.put(song.data, {'folder_path': folderPath});
     }
     _isIndexed = true;
@@ -111,6 +126,32 @@ class SongsIndexDB {
   Future<void> forceReindex() async {
     _isIndexed = false;
     await indexAllSongs();
+  }
+
+  /// Elimina todas las entradas pertenecientes a una carpeta
+  Future<void> deleteFolderEntries(String folderPath) async {
+    final b = await box;
+    final normalized = _normalizeFolderPath(folderPath);
+    final keysToDelete = <String>[];
+    for (final entry in b.toMap().entries) {
+      if ((entry.value['folder_path'] as String) == normalized) {
+        keysToDelete.add(entry.key as String);
+      }
+    }
+    if (keysToDelete.isNotEmpty) {
+      await b.deleteAll(keysToDelete);
+    }
+  }
+
+  String _normalizeFolderPath(String folderPath) {
+    var dirPath = p.normalize(folderPath);
+    if (dirPath.contains('/')) dirPath = dirPath.replaceAll('/', '\\');
+    dirPath = dirPath.trim();
+    if (dirPath.endsWith('\\') && dirPath.length > 3) {
+      dirPath = dirPath.substring(0, dirPath.length - 1);
+    }
+    dirPath = dirPath.toLowerCase();
+    return dirPath;
   }
 
   Future<List<String>> getFolders() async {
@@ -216,5 +257,33 @@ class SongsIndexDB {
     // Mezclar la lista y tomar el límite especificado
     filteredPaths.shuffle();
     return filteredPaths.take(limit).toList();
+  }
+
+  /// Obtiene solo las canciones indexadas que NO están en carpetas ignoradas
+  Future<List<SongModel>> getIndexedSongs() async {
+    final b = await box;
+    final OnAudioQuery audioQuery = OnAudioQuery();
+    final allSongs = await audioQuery.querySongs();
+
+    // Obtener carpetas ignoradas de preferencias
+    final prefs = await SharedPreferences.getInstance();
+    final ignoredFolders = (prefs.getStringList('ignored_folders') ?? [])
+        .map((e) => _normalizeFolderPath(e))
+        .toSet();
+
+    // Filtrar canciones que están indexadas y no están en carpetas ignoradas
+    final indexedPaths = b.keys.cast<String>().toSet();
+    final filteredSongs = <SongModel>[];
+    
+    for (final song in allSongs) {
+      if (indexedPaths.contains(song.data)) {
+        final folderPath = _getFolderPath(song.data);
+        if (!ignoredFolders.contains(folderPath)) {
+          filteredSongs.add(song);
+        }
+      }
+    }
+    
+    return filteredSongs;
   }
 }

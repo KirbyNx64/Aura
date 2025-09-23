@@ -48,6 +48,16 @@ const Map<String, String> appLocalizationsEn = {
   'cover_quality': 'Cover quality',
   'cover_quality_desc': 'Choose the quality of covers when downloading',
   'audio_quality': 'Audio quality',
+  'volume_boost': 'Volume Boost',
+  'volume_boost_desc': 'Increase volume beyond system maximum',
+  'important_information': 'Important Information',
+  'volume_boost_info': '• Effect may vary by device\n• Some devices limit maximum volume\n• If you don\'t notice a difference, it\'s hardware or software limitation\n• High values may cause distortion',
+  'multiplier': 'Multiplier',
+  'effective_volume': 'Effective Volume',
+  'volume_restored_normal': 'Volume restored to normal',
+  'volume_boost_set_to': 'Volume boost set to',
+  'error_applying_volume_boost': 'Error applying volume boost',
+  'error_audiohandler_not_available': 'Error: AudioHandler not available',
   'audio_quality_desc': 'Choose the audio quality when downloading',
   'audio_quality_high': 'High quality',
   'audio_quality_high_desc': 'Best available quality (larger size)',
@@ -79,6 +89,23 @@ const Map<String, String> appLocalizationsEn = {
   'index_songs_on_startup': 'Index song files',
   'index_songs_on_startup_desc':
       'Automatically sync the database with device files',
+  'show_lyrics_on_cover': 'Show lyrics on cover',
+  'show_lyrics_on_cover_desc': 'Display song lyrics directly on the player cover',
+  'api_unavailable': 'API unavailable',
+  'no_connection': 'No connection',
+  'no_lyrics_found': 'No lyrics found',
+  'search_lyrics': 'Search lyrics',
+  'search_lyrics_title': 'Search lyric',
+  'search_lyrics_hint': 'Search by song title or artist...',
+  'search_results': 'Search results',
+  'select_lyrics': 'Select lyrics',
+  'enter_search_term': 'Enter a search term',
+  'preview': 'Preview:',
+  'confirm_apply_lyrics': 'Are you sure you want to apply this lyrics to',
+  'apply': 'Apply',
+  'lyrics_selected': 'Lyrics selected',
+  'lyrics_search_info': 'Search for song lyrics and apply the best found.',
+  'lyrics_selected_desc': 'The lyrics have been successfully assigned to the song.',
   'delete_lyrics': 'Delete song lyrics',
   'delete_lyrics_desc': 'Delete all cached synced lyrics',
   'delete_lyrics_confirm':
@@ -136,6 +163,8 @@ const Map<String, String> appLocalizationsEn = {
   'success': 'Success',
   'download_completed': 'Download completed',
   'download_completed_desc': 'The download has finished successfully.',
+  'image_saved': 'Image saved',
+  'image_saved_desc': 'The image has been saved in gallery successfully.',
   'error': 'Error',
   'are_you_sure': 'Are you sure?',
   // Backup
@@ -163,12 +192,15 @@ const Map<String, String> appLocalizationsEn = {
   'videos': 'Videos',
   'albums': 'Albums',
   'no_results': 'No results',
+  'no_description': 'Description not available',
   'write_song_or_artist': 'Type the name of a song or artist',
   'loading_more': 'Loading more results...',
   'copy_link': 'Copy link',
   'title_unknown': 'Untitled',
   'artist_unknown': 'Unknown artist',
-
+  'go_to_artist': 'Go to artist',
+  'artist_info': 'Artist information',
+  
   // Favorites screen
   'favorites': 'Favorites',
   'select_all': 'Select all',
@@ -228,6 +260,11 @@ const Map<String, String> appLocalizationsEn = {
   'could_not_delete_folder':
       'Could not delete all songs in the folder. \n\nIf you have problems, try granting all files permission.',
   'rename_folder': 'Rename folder',
+  'ignore_folder': 'Ignore folder',
+  'unignore_folder': 'Unignore folder',
+  'ignore_folder_confirm': 'Ignore folder "{folder}"? Its songs will not be shown or indexed.',
+  'folder_ignored_success': 'Folder ignored. Its songs will not be shown.',
+  'folder_unignored_success': 'Folder restored. Re-indexing songs...',
   'folder_name': 'Folder name',
   'enter_folder_name': 'Enter folder name',
   'folder_name_required': 'Folder name is required',
@@ -569,5 +606,16 @@ const Map<String, String> appLocalizationsEn = {
   'file_path': 'Path',
   'playlist_processing_time_info': 'Processing time may vary depending on the list size',
   'view_on_github': 'View on GitHub',
+  'view_artist': 'View artist',
   'filters': 'Filters',
+  
+  // Download messages
+  'download_started_for_elements': 'Download started for @count elements',
+  
+  // Exit confirmation
+  'press_again_to_exit': 'Press again to exit',
+  
+  // Loading messages
+  'loading_music_library': 'Loading music library',
+  'loading_music_library_description': 'We are preparing your music. This may take a few moments...',
 };

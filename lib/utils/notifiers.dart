@@ -42,3 +42,6 @@ final ValueNotifier<bool> overlayPlayerNavigationEnabled = ValueNotifier(true);
 
 // Notifier para actualizar las preferencias de gestos
 final ValueNotifier<bool> gesturePreferencesChanged = ValueNotifier(false);
+
+// Notifier para notificar cuando se actualiza una letra
+final ValueNotifier<String?> lyricsUpdatedNotifier = ValueNotifier<String?>(null);

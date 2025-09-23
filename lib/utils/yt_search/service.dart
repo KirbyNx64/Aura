@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:dio/dio.dart';
 import '../connectivity_helper.dart';
+import '../../l10n/locale_provider.dart';
 
 CancelToken? _searchCancelToken;
 
@@ -35,6 +36,313 @@ class YtMusicResult {
   final String? videoId;
 
   YtMusicResult({this.title, this.artist, this.thumbUrl, this.videoId});
+}
+
+// Búsqueda recursiva de una clave dentro de un árbol Map/List
+dynamic _findObjectByKey(dynamic node, String key) {
+  if (node == null) return null;
+  if (node is Map) {
+    if (node.containsKey(key)) return node[key];
+    for (final v in node.values) {
+      final found = _findObjectByKey(v, key);
+      if (found != null) return found;
+    }
+  } else if (node is List) {
+    for (final item in node) {
+      final found = _findObjectByKey(item, key);
+      if (found != null) return found;
+    }
+  }
+  return null;
+}
+
+// Obtiene información detallada de un artista usando su browseId
+Future<Map<String, dynamic>?> getArtistDetails(String browseId) async {
+  String normalizedId = browseId;
+  if (normalizedId.startsWith('MPLA')) {
+    normalizedId = normalizedId.substring(4);
+  }
+
+  final data = {
+    ...ytServiceContext,
+    'browseId': normalizedId,
+  };
+  // Configurar idioma según la configuración de la app
+  try {
+    final ctx = (data['context'] as Map);
+    final client = (ctx['client'] as Map);
+    // Usar español si está disponible, sino inglés como fallback
+    final locale = languageNotifier.value;
+    client['hl'] = locale.startsWith('es') ? 'es' : 'en';
+  } catch (_) {}
+
+  try {
+    final response = (await sendRequest("browse", data)).data;
+
+    // Header de artista
+    final header = nav(response, ['header', 'musicImmersiveHeaderRenderer']) ??
+        nav(response, ['header', 'musicVisualHeaderRenderer']);
+
+    String? name = header != null ? nav(header, ['title', 'runs', 0, 'text']) : null;
+
+    // results: pestaña single column
+    final results = nav(response, [
+      'contents',
+      'singleColumnBrowseResultsRenderer',
+      'tabs',
+      0,
+      'tabRenderer',
+      'content',
+      'sectionListRenderer',
+      'contents',
+    ]);
+
+    String? description;
+    if (results != null) {
+      final descRenderer = _findObjectByKey(results, 'musicDescriptionShelfRenderer');
+      if (descRenderer is Map) {
+        final runs = nav(descRenderer, ['description', 'runs']);
+        if (runs is List && runs.isNotEmpty) {
+          description = runs.map((r) => r['text']).whereType<String>().join('');
+        }
+      }
+    }
+
+    // Suscriptores
+    String? subscribers = header != null
+        ? nav(header, [
+            'subscriptionButton',
+            'subscribeButtonRenderer',
+            'subscriberCountText',
+            'runs',
+            0,
+            'text'
+          ])
+        : null;
+
+    // Thumbnail - buscar en múltiples ubicaciones para obtener la mejor imagen
+    String? thumbUrl;
+    if (header != null) {
+      // Primera opción: musicThumbnailRenderer (imagen completa)
+      var thumbnails = nav(header, [
+        'thumbnail',
+        'musicThumbnailRenderer',
+        'thumbnail',
+        'thumbnails'
+      ]);
+      
+      // Segunda opción: croppedSquareThumbnailRenderer (imagen cuadrada recortada)
+      thumbnails ??= nav(header, [
+        'thumbnail',
+        'croppedSquareThumbnailRenderer',
+        'thumbnail',
+        'thumbnails'
+      ]);
+      
+      // Tercera opción: buscar en cualquier estructura de thumbnail
+      if (thumbnails == null) {
+        final thumbnail = nav(header, ['thumbnail']);
+        if (thumbnail is Map) {
+          for (var key in thumbnail.keys) {
+            final subThumb = thumbnail[key];
+            if (subThumb is Map && subThumb.containsKey('thumbnails')) {
+              thumbnails = subThumb['thumbnails'];
+              break;
+            }
+          }
+        }
+      }
+      
+      if (thumbnails is List && thumbnails.isNotEmpty) {
+        // Usar la imagen de mayor resolución disponible
+        thumbUrl = thumbnails.last['url'];
+        
+        // Si la URL contiene parámetros de recorte, intentar obtener una sin recortar
+        if (thumbUrl != null && thumbUrl.contains('w120-h120')) {
+          // Intentar obtener una imagen de mayor tamaño
+          for (var i = thumbnails.length - 1; i >= 0; i--) {
+            final url = thumbnails[i]['url'];
+            if (url != null && !url.contains('w120-h120')) {
+              thumbUrl = url;
+              break;
+            }
+          }
+        }
+        
+        // Limpiar parámetros de recorte de la URL si es necesario
+        if (thumbUrl != null) {
+          thumbUrl = _cleanThumbnailUrl(thumbUrl);
+        }
+      }
+    }
+
+    // Debug prints
+    /*
+    if (description != null && description.trim().isNotEmpty) {
+      print('👻 YT Artist description ($normalizedId): '
+          '${description.substring(0, description.length.clamp(0, 400))}'
+          '${description.length > 400 ? '…' : ''}');
+    } else {
+      print('👻 YT Artist description not found for $normalizedId');
+    }
+    */
+
+    return {
+      'name': name,
+      'description': description,
+      'thumbUrl': thumbUrl,
+      'subscribers': subscribers,
+      'browseId': normalizedId,
+    };
+  } catch (_) {
+    return null;
+  }
+}
+
+// Helper: busca por nombre y devuelve info detallada del primer artista
+Future<Map<String, dynamic>?> getArtistInfoByName(String name) async {
+  try {
+    final results = await searchArtists(name, limit: 1);
+    if (results.isEmpty) return null;
+    final first = results.first;
+    final browseId = first['browseId'];
+    if (browseId == null) return null;
+    return await getArtistDetails(browseId);
+  } catch (_) {
+    return null;
+  }
+}
+
+// Helper: limpia parámetros de recorte de URLs de thumbnails
+String _cleanThumbnailUrl(String url) {
+  // Remover parámetros de recorte comunes
+  url = url.replaceAll(RegExp(r'[?&]w\d+-h\d+'), '');
+  url = url.replaceAll(RegExp(r'[?&]crop=\d+'), '');
+  url = url.replaceAll(RegExp(r'[?&]rs=\d+'), '');
+  
+  // Limpiar parámetros dobles
+  url = url.replaceAll(RegExp(r'[?&]{2,}'), '&');
+  url = url.replaceAll(RegExp(r'[?&]$'), '');
+  
+  // Si queda solo ?, removerlo
+  if (url.endsWith('?')) {
+    url = url.substring(0, url.length - 1);
+  }
+  
+  return url;
+}
+
+// ===== Wikipedia Fallback =====
+List<String> _getArtistNameVariations(String name) {
+  // Variaciones genéricas para cualquier artista, ordenadas por probabilidad de éxito
+  // Las más comunes aparecen primero para optimizar las llamadas a la API
+  return [
+    '$name (cantante)',
+    '$name (artista)',
+    '$name (músico)',
+    '$name (música)',
+    '$name (banda)',
+    '$name (grupo musical)',
+    '$name (cantante mexicano)',
+    '$name (cantante mexicana)',
+    '$name (cantante estadounidense)',
+    '$name (cantante español)',
+    '$name (cantante española)',
+    '$name (cantante colombiano)',
+    '$name (cantante colombiana)',
+    '$name (cantante argentino)',
+    '$name (cantante argentina)',
+    '$name (cantante venezolano)',
+    '$name (cantante venezolana)',
+    '$name (cantante puertorriqueño)',
+    '$name (cantante puertorriqueña)',
+    '$name (cantante cubano)',
+    '$name (cantante cubana)',
+    '$name (cantante chileno)',
+    '$name (cantante chilena)',
+    '$name (cantante peruano)',
+    '$name (cantante peruana)',
+  ];
+}
+
+Future<String?> _getWikipediaSummary(String title, {String lang = 'es'}) async {
+  try {
+    final dio = Dio();
+    final encoded = Uri.encodeComponent(title);
+    final url = 'https://$lang.wikipedia.org/api/rest_v1/page/summary/$encoded';
+    final res = await dio.get(
+      url,
+      options: Options(
+        headers: {
+          'accept': 'application/json',
+          'user-agent': userAgent,
+        },
+        validateStatus: (s) => s != null && s >= 200 && s < 500,
+      ),
+    );
+    if (res.statusCode == 200 && res.data is Map) {
+      final map = res.data as Map;
+      
+      // Verificar si es una página de desambiguación
+      final type = map['type']?.toString();
+      if (type == 'disambiguation') {
+        
+        // Intentar variaciones más específicas para artistas
+        final variations = _getArtistNameVariations(title);
+        
+        // Limitar a las primeras 10 variaciones más probables para evitar demasiadas llamadas
+        final limitedVariations = variations.take(10).toList();
+        
+        for (final variation in limitedVariations) {
+          final variationResult = await _getWikipediaSummary(variation, lang: lang);
+          if (variationResult != null && variationResult.trim().isNotEmpty) {
+            return variationResult;
+          }
+        }
+        
+        // Si no se encuentra ninguna variación específica, devolver null
+        return null;
+      }
+      
+      final extract = map['extract']?.toString();
+      if (extract != null && extract.trim().isNotEmpty) {
+        return extract;
+      }
+    }
+  } catch (_) {}
+  return null;
+}
+
+Future<String?> getArtistWikipediaDescription(String name) async {
+  // Obtener el idioma actual de la app
+  final currentLang = languageNotifier.value;
+  final wikiLang = currentLang == 'en' ? 'en' : 'es';
+  
+  String? desc = await _getWikipediaSummary(name, lang: wikiLang);
+  /*
+  if (desc != null && desc.trim().isNotEmpty) {
+    // ignore: avoid_print
+    print('👻 Wikipedia $wikiLang description for "$name": '
+        '${desc.substring(0, desc.length.clamp(0, 300))}${desc.length > 300 ? '…' : ''}');
+    return desc;
+  }
+  */
+  // Si no se encuentra en el idioma principal, intentar con el idioma alternativo
+  if (desc == null || desc.trim().isEmpty) {
+    final fallbackLang = currentLang == 'en' ? 'es' : 'en';
+    desc = await _getWikipediaSummary(name, lang: fallbackLang);
+    /*
+    if (desc != null && desc.trim().isNotEmpty) {
+      // ignore: avoid_print
+      print('👻 Wikipedia $fallbackLang fallback description for "$name": '
+          '${desc.substring(0, desc.length.clamp(0, 300))}${desc.length > 300 ? '…' : ''}');
+    } else {
+      // ignore: avoid_print
+      print('👻 Wikipedia description not found for "$name" ($wikiLang/$fallbackLang)');
+    }
+    */
+  }
+  return desc;
 }
 
 // Función para generar parámetros de búsqueda específicos para canciones
@@ -1529,9 +1837,20 @@ Future<List<Map<String, dynamic>>> searchArtists(String query, {int limit = 20})
           for (var item in shelf['contents']) {
             final artist = _parseArtistItem(item);
             if (artist != null) {
-              // print('🎵 Artista encontrado: ${artist['name']} - Thumb: ${artist['thumbUrl'] != null ? 'Sí' : 'No'}');
-              results.add(artist);
-              if (results.length >= limit) break;
+              // Verificar si ya existe un artista con el mismo nombre y browseId
+              final existingArtist = results.firstWhere(
+                (existing) => existing['name'] == artist['name'] && existing['browseId'] == artist['browseId'],
+                orElse: () => {},
+              );
+              
+              // Solo agregar si no existe ya
+              if (existingArtist.isEmpty) {
+                // print('🎵 Artista encontrado: ${artist['name']} - BrowseId: ${artist['browseId']} - Thumb: ${artist['thumbUrl'] != null ? 'Sí' : 'No'}');
+                results.add(artist);
+                if (results.length >= limit) break;
+              } else {
+                // print('🔄 Artista duplicado ignorado: ${artist['name']} - BrowseId: ${artist['browseId']}');
+              }
             }
           }
         }
@@ -1580,6 +1899,9 @@ Map<String, dynamic>? _parseArtistItem(Map<String, dynamic> item) {
   // Extraer browseId del artista - buscar en múltiples ubicaciones
   String? browseId;
   
+  // Debug: imprimir estructura del renderer
+  // print('🔍 Estructura del renderer para $title: ${renderer.keys.toList()}');
+  
   // Primero intentar desde el título
   browseId = nav(renderer, [
     'flexColumns',
@@ -1593,10 +1915,13 @@ Map<String, dynamic>? _parseArtistItem(Map<String, dynamic> item) {
     'browseId'
   ])?.toString();
 
+  // print('🔍 BrowseId desde título: $browseId');
+
   // Si no está ahí, buscar en el menú
   if (browseId == null) {
     final menuItems = nav(renderer, ['menu', 'menuRenderer', 'items']);
     if (menuItems is List) {
+      // print('🔍 Buscando en menú con ${menuItems.length} items');
       for (var menuItem in menuItems) {
         final endpoint = nav(menuItem, [
           'menuNavigationItemRenderer',
@@ -1606,11 +1931,19 @@ Map<String, dynamic>? _parseArtistItem(Map<String, dynamic> item) {
         ]);
         if (endpoint != null) {
           browseId = endpoint.toString();
+            // print('🔍 BrowseId encontrado en menú: $browseId');
           break;
         }
       }
     }
   }
+  
+  // Buscar en otras ubicaciones posibles
+
+  // Intentar en la estructura completa del renderer si browseId sigue siendo null
+  browseId ??= _findObjectByKey(renderer, 'browseId')?.toString();
+  // print('🔍 BrowseId desde búsqueda recursiva: $browseId');
+
 
   // Extraer información adicional (suscriptores, etc.)
   String? subscribers;

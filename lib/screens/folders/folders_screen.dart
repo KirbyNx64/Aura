@@ -17,6 +17,8 @@ import 'package:music/utils/db/songs_index_db.dart';
 import 'package:music/utils/db/recent_db.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:music/utils/db/shortcuts_db.dart';
+import 'package:music/utils/db/mostplayer_db.dart';
+import 'package:music/screens/artist/artist_screen.dart';
 import 'package:mini_music_visualizer/mini_music_visualizer.dart';
 import 'package:music/screens/play/player_screen.dart';
 import 'package:music/utils/db/playlist_model.dart' as hive_model;
@@ -56,6 +58,9 @@ class _FoldersScreenState extends State<FoldersScreen>
   Map<String, List<String>> songPathsByFolder = {};
   Map<String, String> folderDisplayNames = {};
   String? carpetaSeleccionada;
+  
+  // Cache de carpetas ignoradas para evitar parpadeos
+  Set<String> _ignoredFoldersCache = {};
   List<SongModel> _filteredSongs = [];
   List<SongModel> _displaySongs =
       []; // Canciones que se muestran en la UI (filtradas por búsqueda)
@@ -87,6 +92,7 @@ class _FoldersScreenState extends State<FoldersScreen>
   static const String _orderPrefsKey = 'folders_screen_order_filter';
   static const String _pinnedSongsKey = 'pinned_songs';
   static const String _ignoredSongsKey = 'ignored_songs';
+  static const String _ignoredFoldersKey = 'ignored_folders';
 
   // Utilidades para gestionar canciones fijadas
   Future<List<String>> getPinnedSongs() async {
@@ -143,6 +149,34 @@ class _FoldersScreenState extends State<FoldersScreen>
     final prefs = await SharedPreferences.getInstance();
     final current = prefs.getStringList(_ignoredSongsKey) ?? [];
     return current.contains(songPath);
+  }
+
+  // Utilidades para gestionar carpetas ignoradas
+  Future<List<String>> getIgnoredFolders() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getStringList(_ignoredFoldersKey) ?? [];
+  }
+
+  Future<bool> isFolderIgnored(String folderPath) async {
+    final prefs = await SharedPreferences.getInstance();
+    final current = prefs.getStringList(_ignoredFoldersKey) ?? [];
+    return current.contains(folderPath);
+  }
+
+  Future<void> ignoreFolder(String folderPath) async {
+    final prefs = await SharedPreferences.getInstance();
+    final current = prefs.getStringList(_ignoredFoldersKey) ?? [];
+    if (!current.contains(folderPath)) {
+      current.add(folderPath);
+      await prefs.setStringList(_ignoredFoldersKey, current);
+    }
+  }
+
+  Future<void> unignoreFolder(String folderPath) async {
+    final prefs = await SharedPreferences.getInstance();
+    final current = prefs.getStringList(_ignoredFoldersKey) ?? [];
+    current.remove(folderPath);
+    await prefs.setStringList(_ignoredFoldersKey, current);
   }
 
   void _onFoldersShouldReload() async {
@@ -363,6 +397,7 @@ class _FoldersScreenState extends State<FoldersScreen>
 
   // Al cargar canciones:
   Future<void> cargarCanciones({bool forceIndex = false}) async {
+    if (!mounted) return;
     setState(() {
       _isLoading = true;
     });
@@ -373,17 +408,38 @@ class _FoldersScreenState extends State<FoldersScreen>
       await SongsIndexDB().indexAllSongs();
     }
     final folders = await SongsIndexDB().getFolders();
+    // Incluir también carpetas ignoradas para poder restaurarlas
+    final ignored = await getIgnoredFolders();
+    
+    // Cargar cache de carpetas ignoradas para evitar parpadeos
+    _ignoredFoldersCache = Set<String>.from(ignored);
+    
+    final allFolderKeys = {
+      ...folders,
+      ...ignored,
+    };
     final Map<String, List<String>> agrupado = {};
     final Map<String, String> displayNames = {};
-    for (final folder in folders) {
+    for (final folder in allFolderKeys) {
       final paths = await SongsIndexDB().getSongsFromFolder(folder);
       if (paths.isNotEmpty) {
         agrupado[folder] = paths;
         // Obtener el nombre original de la carpeta sin normalizar
         final originalFolderName = await _getOriginalFolderName(folder);
         displayNames[folder] = originalFolderName;
+      } else {
+        // Si la carpeta está ignorada pero no tiene canciones en el índice,
+        // igual la mostramos con 0 canciones para poder restaurarla.
+        if (ignored.contains(folder)) {
+          agrupado[folder] = [];
+          final originalFolderName = await _getOriginalFolderName(folder);
+          displayNames[folder] = originalFolderName.isNotEmpty
+              ? originalFolderName
+              : folder.split(RegExp(r'[\\/]')).last;
+        }
       }
     }
+    if (!mounted) return;
     setState(() {
       songPathsByFolder = agrupado;
       folderDisplayNames = displayNames;
@@ -706,6 +762,35 @@ class _FoldersScreenState extends State<FoldersScreen>
                       shortcutsShouldReload.value = !shortcutsShouldReload.value;
                     },
                   ),
+                  if ((song.artist ?? '').trim().isNotEmpty)
+                    ListTile(
+                      leading: const Icon(Icons.person_outline),
+                      title: const TranslatedText('go_to_artist'),
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        final name = (song.artist ?? '').trim();
+                        if (name.isEmpty) return;
+                        Navigator.of(context).push(
+                          PageRouteBuilder(
+                            pageBuilder: (context, animation, secondaryAnimation) =>
+                                ArtistScreen(artistName: name),
+                            transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                              const begin = Offset(1.0, 0.0);
+                              const end = Offset.zero;
+                              const curve = Curves.ease;
+                              final tween = Tween(
+                                begin: begin,
+                                end: end,
+                              ).chain(CurveTween(curve: curve));
+                              return SlideTransition(
+                                position: animation.drive(tween),
+                                child: child,
+                              );
+                            },
+                          ),
+                        );
+                      },
+                    ),
                   ListTile(
                     leading: const Icon(Icons.edit),
                     title: TranslatedText('edit_metadata'),
@@ -1165,6 +1250,7 @@ class _FoldersScreenState extends State<FoldersScreen>
   void _onFolderSearchChanged() async {
     final query = quitarDiacriticos(_folderSearchController.text.toLowerCase());
     if (query.isEmpty) {
+      if (!mounted) return;
       setState(() {
         _filteredFolders = [];
       });
@@ -1212,6 +1298,7 @@ class _FoldersScreenState extends State<FoldersScreen>
       }
     }
 
+    if (!mounted) return;
     setState(() {
       _filteredFolders = allMatches.entries.toList();
     });
@@ -1312,6 +1399,12 @@ class _FoldersScreenState extends State<FoldersScreen>
             final isDark = Theme.of(context).brightness == Brightness.dark;
             
             return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: isAmoled && isDark
+                    ? const BorderSide(color: Colors.white, width: 1)
+                    : BorderSide.none,
+              ),
               title: Center(
                 child: TranslatedText(
                   'search_song',
@@ -1482,6 +1575,12 @@ class _FoldersScreenState extends State<FoldersScreen>
             final isDark = Theme.of(context).brightness == Brightness.dark;
             
             return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: isAmoled && isDark
+                    ? const BorderSide(color: Colors.white, width: 1)
+                    : BorderSide.none,
+              ),
               title: Center(
                 child: TranslatedText(
                   'delete_song',
@@ -1523,6 +1622,12 @@ class _FoldersScreenState extends State<FoldersScreen>
                           showDialog(
                             context: context,
                             builder: (context) => AlertDialog(
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                                side: isAmoled && isDark
+                                    ? const BorderSide(color: Colors.white, width: 1)
+                                    : BorderSide.none,
+                              ),
                               title: TranslatedText('error'),
                               content: TranslatedText('could_not_delete_song'),
                               actions: [
@@ -1661,6 +1766,9 @@ class _FoldersScreenState extends State<FoldersScreen>
   // Función para mostrar diálogo de renombrado de carpeta
   Future<void> _showRenameFolderDialog(String folderKey, String currentName) async {
     final TextEditingController nameController = TextEditingController(text: currentName);
+
+    final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     
     showDialog(
       context: context,
@@ -1669,6 +1777,12 @@ class _FoldersScreenState extends State<FoldersScreen>
           valueListenable: colorSchemeNotifier,
           builder: (context, colorScheme, child) {
             return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: isAmoled && isDark
+                    ? const BorderSide(color: Colors.white, width: 1)
+                    : BorderSide.none,
+              ),
               title: Center(
                 child: TranslatedText(
                   'rename_folder',
@@ -1867,6 +1981,12 @@ class _FoldersScreenState extends State<FoldersScreen>
             final isDark = Theme.of(context).brightness == Brightness.dark;
             
             return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: isAmoled && isDark
+                    ? const BorderSide(color: Colors.white, width: 1)
+                    : BorderSide.none,
+              ),
               title: Center(
                 child: TranslatedText(
                   'delete_folder',
@@ -1908,6 +2028,12 @@ class _FoldersScreenState extends State<FoldersScreen>
                           showDialog(
                             context: context,
                             builder: (context) => AlertDialog(
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                                side: isAmoled && isDark
+                                    ? const BorderSide(color: Colors.white, width: 1)
+                                    : BorderSide.none,
+                              ),
                               title: TranslatedText('error'),
                               content: TranslatedText('could_not_delete_folder'),
                               actions: [
@@ -2042,6 +2168,255 @@ class _FoldersScreenState extends State<FoldersScreen>
     );
   }
 
+  Future<void> _removeSongsFromAllDatabases(String folderPath) async {
+    // Obtener todas las canciones de la carpeta antes de eliminarlas
+    final songsInFolder = songPathsByFolder[folderPath] ?? [];
+    
+    // Eliminar de RecentsDB
+    for (final songPath in songsInFolder) {
+      try {
+        await RecentsDB().removeRecent(songPath);
+      } catch (e) {
+        // Ignorar errores si la canción no está en recientes
+      }
+    }
+    
+    // Eliminar de MostPlayedDB
+    for (final songPath in songsInFolder) {
+      try {
+        await MostPlayedDB().removeMostPlayed(songPath);
+      } catch (e) {
+        // Ignorar errores si la canción no está en más reproducidas
+      }
+    }
+    
+    // Eliminar de ShortcutsDB
+    try {
+      final shortcuts = await ShortcutsDB().getShortcuts();
+      final shortcutsToRemove = shortcuts.where((path) => songsInFolder.contains(path)).toList();
+      for (final path in shortcutsToRemove) {
+        await ShortcutsDB().removeShortcut(path);
+      }
+    } catch (e) {
+      // Ignorar errores
+    }
+    
+    // Eliminar de FavoritesDB
+    for (final songPath in songsInFolder) {
+      try {
+        await FavoritesDB().removeFavorite(songPath);
+      } catch (e) {
+        // Ignorar errores si la canción no está en favoritos
+      }
+    }
+  }
+
+  Future<void> _ignoreFolderFlow(String folderKey) async {
+    final folderName = folderDisplayNames[folderKey] ?? '';
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return ValueListenableBuilder<AppColorScheme>(
+          valueListenable: colorSchemeNotifier,
+          builder: (context, colorScheme, child) {
+            
+            final isAmoled = colorScheme == AppColorScheme.amoled;
+            final isDark = Theme.of(context).brightness == Brightness.dark;
+            
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: isAmoled && isDark
+                    ? const BorderSide(color: Colors.white, width: 1)
+                    : BorderSide.none,
+              ),
+              title: Center(
+                child: TranslatedText(
+                  'ignore_folder',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              content: SizedBox(
+                width: 400,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(height: 18),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 4),
+                        child: Text(
+                          LocaleProvider.tr('ignore_folder_confirm').replaceAll('{folder}', folderName),
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Theme.of(context).colorScheme.onSurface,
+                          ),
+                          textAlign: TextAlign.left,
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: 20),
+                    // Tarjeta de confirmar ignorar
+                    InkWell(
+                      onTap: () {
+                        Navigator.of(context).pop(true);
+                      },
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        width: double.infinity,
+                        padding: EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: isAmoled && isDark
+                              ? Colors.orange.withValues(alpha: 0.2) // Color personalizado para amoled
+                              : Theme.of(context).colorScheme.primaryContainer,
+                          borderRadius: BorderRadius.only(
+                            topLeft: Radius.circular(16),
+                            topRight: Radius.circular(16),
+                            bottomLeft: Radius.circular(4),
+                            bottomRight: Radius.circular(4),
+                          ),
+                          border: Border.all(
+                            color: isAmoled && isDark
+                                ? Colors.orange.withValues(alpha: 0.4) // Borde personalizado para amoled
+                                : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
+                            width: 1,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Icon(
+                                Icons.visibility_off,
+                                size: 30,
+                                color: isAmoled && isDark
+                                    ? Colors.orange // Ícono naranja para amoled
+                                    : Theme.of(context).colorScheme.onPrimaryContainer,
+                              ),
+                            ),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                LocaleProvider.tr('ignore_folder'),
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: isAmoled && isDark
+                                      ? Colors.orange // Texto naranja para amoled
+                                      : Theme.of(context).colorScheme.onPrimaryContainer,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: 4),
+                    // Tarjeta de cancelar
+                    InkWell(
+                      onTap: () {
+                        Navigator.of(context).pop(false);
+                      },
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        width: double.infinity,
+                        padding: EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: isAmoled && isDark
+                              ? Colors.white.withValues(alpha: 0.1) // Color personalizado para amoled
+                              : Theme.of(context).colorScheme.secondaryContainer,
+                          borderRadius: BorderRadius.only(
+                            bottomLeft: Radius.circular(16),
+                            bottomRight: Radius.circular(16),
+                            topLeft: Radius.circular(4),
+                            topRight: Radius.circular(4),
+                          ),
+                          border: Border.all(
+                            color: isAmoled && isDark
+                                ? Colors.white.withValues(alpha: 0.2) // Borde personalizado para amoled
+                                : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
+                            width: 1,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Icon(
+                                Icons.cancel_outlined,
+                                size: 30,
+                                color: isAmoled && isDark
+                                    ? Colors.white // Ícono blanco para amoled
+                                    : Theme.of(context).colorScheme.onSurface,
+                              ),
+                            ),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                LocaleProvider.tr('cancel'),
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: isAmoled && isDark
+                                      ? Colors.white // Texto blanco para amoled
+                                      : Theme.of(context).colorScheme.onSurface,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+    if (confirmed != true) return;
+
+    await ignoreFolder(folderKey);
+    
+    // Eliminar canciones de todas las bases de datos
+    await SongsIndexDB().deleteFolderEntries(folderKey);
+    await _removeSongsFromAllDatabases(folderKey);
+
+    if (!mounted) return;
+    setState(() {
+      // Mantener la carpeta visible con 0 canciones para poder restaurarla
+      songPathsByFolder[folderKey] = [];
+      // Actualizar cache de carpetas ignoradas
+      _ignoredFoldersCache.add(folderKey);
+    });
+
+    if (!mounted) return;
+    _showMessage(LocaleProvider.tr('success'), description: LocaleProvider.tr('folder_ignored_success'));
+  }
+
+  Future<void> _unignoreFolderFlow(String folderKey) async {
+    await unignoreFolder(folderKey);
+    await SongsIndexDB().syncDatabase();
+    if (!mounted) return;
+    await cargarCanciones(forceIndex: true);
+    if (!mounted) return;
+    _showMessage(LocaleProvider.tr('success'), description: LocaleProvider.tr('folder_unignored_success'));
+  }
+
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
@@ -2078,10 +2453,11 @@ class _FoldersScreenState extends State<FoldersScreen>
 
   @override
   Widget build(BuildContext context) {
+    final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
     if (_isLoading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator(
-        year2023: false,
-      )));
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
     if (songPathsByFolder.isEmpty) {
       return Scaffold(
@@ -2133,9 +2509,7 @@ class _FoldersScreenState extends State<FoldersScreen>
     }
 
     if (carpetaSeleccionada == null) {
-      return PopScope(
-        canPop: true,
-        child: Scaffold(
+      return Scaffold(
           resizeToAvoidBottomInset: true,
           appBar: AppBar(
             backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -2158,6 +2532,12 @@ class _FoldersScreenState extends State<FoldersScreen>
                   showDialog(
                     context: context,
                     builder: (context) => AlertDialog(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        side: isAmoled && isDark
+                            ? const BorderSide(color: Colors.white, width: 1)
+                            : BorderSide.none,
+                      ),
                       title: TranslatedText('info'),
                       content: TranslatedText('folders_and_songs_info'),
                       actions: [
@@ -2234,77 +2614,84 @@ class _FoldersScreenState extends State<FoldersScreen>
                     final nombre = folderDisplayNames[entry.key]!;
                     final canciones = entry.value;
 
-                    return ListTile(
-                      leading: const Icon(Icons.folder, size: 38),
-                      title: Text(
-                        nombre,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      subtitle: Text(
-                        '${canciones.length} ${LocaleProvider.tr('songs')}',
-                      ),
-                      onTap: () async {
-                        await _loadSongsForFolder(entry);
-                      },
-                      trailing: PopupMenuButton<String>(
-                        onSelected: (value) async {
-                          if (value == 'rename') {
-                            await _showRenameFolderDialog(entry.key, folderDisplayNames[entry.key] ?? '');
-                          } else if (value == 'delete') {
-                            await _showDeleteFolderConfirmation(entry.key, folderDisplayNames[entry.key] ?? '');
-                          }
+                    // Usar cache para evitar parpadeos
+                    final ignored = _ignoredFoldersCache.contains(entry.key);
+                    final opacity = ignored ? 0.4 : 1.0;
+                    return Opacity(
+                      opacity: opacity,
+                      child: ListTile(
+                        leading: const Icon(Icons.folder, size: 38),
+                        title: Text(
+                          nombre,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        subtitle: Text(
+                          '${canciones.length} ${LocaleProvider.tr('songs')}',
+                        ),
+                        onTap: ignored ? null : () async {
+                          await _loadSongsForFolder(entry);
                         },
-                        itemBuilder: (context) => [
-                          PopupMenuItem(
-                            value: 'rename',
-                            child: Row(
-                              children: [
-                                Icon(Icons.edit_outlined),
-                                SizedBox(width: 8),
-                                TranslatedText('rename_folder'),
-                              ],
+                        trailing: PopupMenuButton<String>(
+                          onSelected: (value) async {
+                            if (value == 'rename') {
+                              await _showRenameFolderDialog(entry.key, folderDisplayNames[entry.key] ?? '');
+                            } else if (value == 'delete') {
+                              await _showDeleteFolderConfirmation(entry.key, folderDisplayNames[entry.key] ?? '');
+                            } else if (value == 'toggle_ignore') {
+                              if (ignored) {
+                                await _unignoreFolderFlow(entry.key);
+                              } else {
+                                await _ignoreFolderFlow(entry.key);
+                              }
+                            }
+                          },
+                          itemBuilder: (context) => [
+                            PopupMenuItem(
+                              value: 'rename',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.edit_outlined),
+                                  SizedBox(width: 8),
+                                  TranslatedText('rename_folder'),
+                                ],
+                              ),
                             ),
-                          ),
-                          PopupMenuItem(
-                            value: 'delete',
-                            child: Row(
-                              children: [
-                                Icon(Icons.delete_outline),
-                                SizedBox(width: 8),
-                                TranslatedText('delete_folder'),
-                              ],
+                            PopupMenuItem(
+                              value: 'delete',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.delete_outline),
+                                  SizedBox(width: 8),
+                                  TranslatedText('delete_folder'),
+                                ],
+                              ),
                             ),
-                          ),
-                        ],
+                            PopupMenuItem(
+                              value: 'toggle_ignore',
+                              child: Row(
+                                children: [
+                                  Icon(ignored ? Icons.visibility : Icons.visibility_off),
+                                  SizedBox(width: 8),
+                                  TranslatedText(ignored ? 'unignore_folder' : 'ignore_folder'),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     );
-                  },
-                ),
-                );
+                  
               },
             ),
+          );
+              }
+            ),
           ),
-        ),
-      );
+        );
     }
 
-    return PopScope(
-      canPop: false,
-      onPopInvokedWithResult: (didPop, result) {
-        if (!didPop) {
-          setState(() {
-            carpetaSeleccionada = null;
-            _searchController.clear();
-            _filteredSongs.clear();
-            _displaySongs.clear();
-            // Al salir, limpiar selección múltiple
-            _isSelecting = false;
-            _selectedSongPaths.clear();
-          });
-        }
-      },
-      child: GestureDetector(
+    return GestureDetector(
         behavior: HitTestBehavior.translucent,
         onTap: () {
           FocusScope.of(context).unfocus();
@@ -2328,7 +2715,7 @@ class _FoldersScreenState extends State<FoldersScreen>
                   )
                 : IconButton(
                     icon: const Icon(Icons.arrow_back),
-                    onPressed: () {
+                    onPressed: () async {
                       setState(() {
                         carpetaSeleccionada = null;
                         _searchController.clear();
@@ -2338,6 +2725,8 @@ class _FoldersScreenState extends State<FoldersScreen>
                         _isSelecting = false;
                         _selectedSongPaths.clear();
                       });
+                      // Recargar la lista de carpetas para mostrar el estado actual
+                      await cargarCanciones(forceIndex: false);
                     },
                   ),
             title: _isSelecting
@@ -2677,13 +3066,12 @@ class _FoldersScreenState extends State<FoldersScreen>
                             );
                           },
                         ),
-                );
+                      );
               },
             ),
           ),
         ),
-      ),
-    );
+        );
   }
 
   Widget _buildOptimizedListTile(
@@ -2973,6 +3361,12 @@ class _FoldersScreenState extends State<FoldersScreen>
         final isDark = Theme.of(context).brightness == Brightness.dark;
         
         return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: isAmoled && isDark
+                ? const BorderSide(color: Colors.white, width: 1)
+                : BorderSide.none,
+          ),
           title: Center(
             child: Text(
               LocaleProvider.tr('delete_songs'),
@@ -3692,6 +4086,7 @@ class _FoldersScreenState extends State<FoldersScreen>
 
   // Nueva función para cargar canciones de una carpeta con spinner
   Future<void> _loadSongsForFolder(MapEntry<String, List<String>> entry) async {
+    if (!mounted) return;
     setState(() {
       carpetaSeleccionada = entry.key;
       _searchController.clear();
@@ -3727,12 +4122,14 @@ class _FoldersScreenState extends State<FoldersScreen>
     final songsInFolder = allSongs
         .where((s) => updatedPaths.contains(s.data))
         .toList();
+    if (!mounted) return;
     setState(() {
       _originalSongs = songsInFolder;
     });
     await _ordenarCanciones();
     // Precargar carátulas de las canciones en la carpeta
     unawaited(_preloadArtworksForSongs(songsInFolder));
+    if (!mounted) return;
     setState(() {
       _isLoading = false;
     });
@@ -3744,9 +4141,12 @@ class _FoldersScreenState extends State<FoldersScreen>
   }
 
   void handleInternalPop() {
+    if (!mounted) return;
     setState(() {
       carpetaSeleccionada = null;
     });
+    // Recargar la lista de carpetas para mostrar el estado actual
+    cargarCanciones(forceIndex: false);
   }
 
   // Función para mostrar el selector de carpetas
@@ -4094,6 +4494,12 @@ class _FoldersScreenState extends State<FoldersScreen>
             final isDark = Theme.of(context).brightness == Brightness.dark;
             
             return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: isAmoled && isDark
+                    ? const BorderSide(color: Colors.white, width: 1)
+                    : BorderSide.none,
+              ),
               title: Center(
                 child: Text(
                   title,

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:music/l10n/locale_provider.dart';
 import 'package:music/utils/gesture_preferences.dart';
 import 'package:music/utils/notifiers.dart';
+import 'package:music/utils/theme_preferences.dart';
 
 class GestureSettingsDialog extends StatefulWidget {
   const GestureSettingsDialog({super.key});
@@ -54,7 +55,16 @@ class _GestureSettingsDialogState extends State<GestureSettingsDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
     return AlertDialog(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: isAmoled && isDark
+            ? const BorderSide(color: Colors.white, width: 1)
+            : BorderSide.none,
+      ),
       title: Text(LocaleProvider.tr('gesture_settings_title')),
       content: _isLoading
           ? const SizedBox(

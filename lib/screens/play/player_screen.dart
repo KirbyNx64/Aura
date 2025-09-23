@@ -3,7 +3,7 @@ import 'package:music/widgets/marquee.dart';
 import 'package:music/main.dart';
 import 'package:music/widgets/hero_cached.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:squiggly_slider/slider.dart';
+import 'package:music/widgets/slider.dart';
 // import 'package:http/http.dart' as http;
 // import 'dart:convert';
 import 'package:audio_service/audio_service.dart';
@@ -26,6 +26,8 @@ import 'package:material_symbols_icons/symbols.dart';
 import 'dart:io';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:music/utils/gesture_preferences.dart';
+import 'package:music/screens/artist/artist_screen.dart';
+import 'package:music/screens/play/lyrics_search_screen.dart';
 
 final OnAudioQuery _audioQuery = OnAudioQuery();
 
@@ -93,6 +95,14 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
   bool _disableOpenPlaylistGesture = false;
   bool _disableChangeSongGesture = false;
   String? _lastArtworkSongId;
+  
+  // Control de indicadores de doble toque
+  bool _showDoubleTapIndicators = false;
+  bool _showLeftIndicator = false;
+  bool _showRightIndicator = false;
+  Timer? _hideIndicatorsTimer;
+  late AnimationController _fadeController;
+  late Animation<double> _fadeAnimation;
 
 
   // Flag para usar initialArtworkUri solo en el primer build
@@ -103,6 +113,8 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
       ValueNotifier<double?>(null);
   String? _currentSongDataPath;
   bool _isCurrentFavorite = false;
+  final int _lyricsUpdateCounter = 0;
+  final ValueNotifier<int> _lyricsUpdateNotifier = ValueNotifier<int>(0);
 
   String _formatDuration(Duration duration) {
     final hours = duration.inHours;
@@ -213,9 +225,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                   width: 60,
                   height: 60,
                   alignment: Alignment.center,
-                  child: const CircularProgressIndicator(
-                    year2023: false,
-                  ),
+                  child: const CircularProgressIndicator(),
                 ),
         );
       }
@@ -309,6 +319,12 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
             final isDark = Theme.of(context).brightness == Brightness.dark;
             
             return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: isAmoled && isDark
+                    ? const BorderSide(color: Colors.white, width: 1)
+                    : BorderSide.none,
+              ),
               title: Center(
                 child: TranslatedText(
                   'search_song',
@@ -525,8 +541,41 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     super.initState();
     _prefsFuture = SharedPreferences.getInstance();
     _loadGesturePreferences();
+    _setupLyricsUpdateListener();
+    
+    // Inicializar animación de fade
+    _fadeController = AnimationController(
+      duration: const Duration(milliseconds: 500),
+      vsync: this,
+    );
+    _fadeAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(
+      parent: _fadeController,
+      curve: Curves.easeInOut,
+    ));
+    
     // Eliminado: _loadQueueSource();
     // Eliminado: (audioHandler as MyAudioHandler).queueSourceNotifier.addListener(_onQueueSourceChanged);
+  }
+
+  /// Configura el listener para actualizaciones de letras
+  void _setupLyricsUpdateListener() {
+    lyricsUpdatedNotifier.addListener(_onLyricsUpdated);
+  }
+
+  /// Maneja las actualizaciones de letras
+  void _onLyricsUpdated() {
+    final songId = lyricsUpdatedNotifier.value;
+    if (songId != null) {
+      // Limpiar cache de letras para forzar recarga
+      _lyricsCache.remove(songId);
+      // Limpiar el valor después de un delay para asegurar que el ValueListenableBuilder lo procese
+      Future.delayed(Duration(milliseconds: 200), () {
+        lyricsUpdatedNotifier.value = null;
+      });
+    }
   }
 
   /// Carga las preferencias de gestos
@@ -588,9 +637,13 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
   @override
   void dispose() {
     _seekDebounceTimer?.cancel();
+    _hideIndicatorsTimer?.cancel();
+    _fadeController.dispose();
     _lyricsScrollController.dispose();
     _dragValueSecondsNotifier.dispose();
     _artworkLoadingNotifier.dispose();
+    _lyricsUpdateNotifier.dispose();
+    lyricsUpdatedNotifier.removeListener(_onLyricsUpdated);
     // Eliminado: (audioHandler as MyAudioHandler).queueSourceNotifier.removeListener(_onQueueSourceChanged);
     super.dispose();
   }
@@ -772,6 +825,35 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                   await _showAddToPlaylistDialog(safeContext, mediaItem);
                 },
               ),
+              if ((mediaItem.artist ?? '').trim().isNotEmpty)
+                ListTile(
+                  leading: const Icon(Icons.person_outline),
+                  title: const TranslatedText('go_to_artist'),
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    final name = (mediaItem.artist ?? '').trim();
+                    if (name.isEmpty) return;
+                    Navigator.of(context).push(
+                      PageRouteBuilder(
+                        pageBuilder: (context, animation, secondaryAnimation) =>
+                            ArtistScreen(artistName: name),
+                        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                          const begin = Offset(1.0, 0.0);
+                          const end = Offset.zero;
+                          const curve = Curves.ease;
+                          final tween = Tween(
+                            begin: begin,
+                            end: end,
+                          ).chain(CurveTween(curve: curve));
+                          return SlideTransition(
+                            position: animation.drive(tween),
+                            child: child,
+                          );
+                        },
+                      ),
+                    );
+                  },
+                ),
               FutureBuilder<bool>(
                 future: ShortcutsDB().isShortcut(
                   mediaItem.extras?['data'] ?? '',
@@ -831,16 +913,41 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                 title: Text(LocaleProvider.tr('show_lyrics')),
                 onTap: () async {
                   Navigator.of(context).pop();
-                  if (!_showLyrics) {
-                    setState(() {
-                      _showLyrics = true;
-                    });
-                    await _loadLyrics(mediaItem);
+                  
+                  // Check if lyrics on cover is enabled
+                  final prefs = await SharedPreferences.getInstance();
+                  final showLyricsOnCover = prefs.getBool('show_lyrics_on_cover') ?? false;
+                  
+                  if (showLyricsOnCover) {
+                    // Original behavior: toggle lyrics display on cover
+                    if (!_showLyrics) {
+                      setState(() {
+                        _showLyrics = true;
+                      });
+                      await _loadLyrics(mediaItem);
+                    } else {
+                      setState(() {
+                        _showLyrics = false;
+                      });
+                    }
                   } else {
-                    setState(() {
-                      _showLyrics = false;
-                    });
+                    // New behavior: show lyrics in modal
+                    if (!context.mounted) return;
+                    _showLyricsModal(context, mediaItem);
                   }
+                },
+              ),
+              ValueListenableBuilder<double>(
+                valueListenable: (audioHandler as MyAudioHandler).volumeBoostNotifier,
+                builder: (context, volumeBoost, child) {
+                  return ListTile(
+                    leading: const Icon(Icons.volume_up),
+                    title: Text(LocaleProvider.tr('volume_boost')),
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      _showVolumeBoostDialog(context);
+                    },
+                  );
                 },
               ),
               ListTile(
@@ -1037,6 +1144,200 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     }
   }
 
+  void _showVolumeBoostDialog(BuildContext context) {
+    final currentBoost = (audioHandler as MyAudioHandler).volumeBoost;
+    double tempBoost = currentBoost;
+
+    final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: isAmoled && isDark
+                ? const BorderSide(color: Colors.white, width: 1)
+                : BorderSide.none,
+          ),
+          title: Row(
+            children: [
+              const Icon(Icons.volume_up),
+              const SizedBox(width: 8),
+              Text(LocaleProvider.tr('volume_boost')),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                LocaleProvider.tr('volume_boost_desc'),
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surfaceContainer.withValues(alpha: 0.5),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.info_outline,
+                          size: 16,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          LocaleProvider.tr('important_information'),
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            fontWeight: FontWeight.w600,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      LocaleProvider.tr('volume_boost_info'),
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+                        height: 1.3,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+              Row(
+                children: [
+                  const Icon(Icons.volume_down, size: 20),
+                  Expanded(
+                    child: Slider(
+                      value: tempBoost,
+                      min: 1.0,
+                      max: 3.0,
+                      divisions: 20, // 20 divisiones = incrementos de 0.1
+                      label: '${(tempBoost * 100).toInt()}%',
+                      onChanged: (value) {
+                        setState(() {
+                          tempBoost = value;
+                        });
+                      },
+                    ),
+                  ),
+                  const Icon(Icons.volume_up, size: 20),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surfaceContainer,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          LocaleProvider.tr('multiplier'),
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                        Text(
+                          '${tempBoost}x',
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: tempBoost > 1.0 
+                              ? Theme.of(context).colorScheme.primary
+                              : null,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          LocaleProvider.tr('effective_volume'),
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                        Text(
+                          '${(tempBoost * 100).toInt()}%',
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            fontWeight: FontWeight.w500,
+                            color: tempBoost > 1.0 
+                              ? Theme.of(context).colorScheme.primary
+                              : null,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text(LocaleProvider.tr('cancel')),
+            ),
+            FilledButton(
+              onPressed: () async {
+                try {
+                  // print('🎵 Intentando aplicar volume boost: ${tempBoost}x');
+                  
+                  if (audioHandler == null) {
+                    // print('❌ AudioHandler es null');
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(LocaleProvider.tr('error_audiohandler_not_available')),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                    }
+                    return;
+                  }
+                  
+                  await (audioHandler as MyAudioHandler).setVolumeBoost(tempBoost);
+                  
+                  // print('🎵 Volume boost aplicado exitosamente');
+                  
+                  if (context.mounted) {
+                    Navigator.of(context).pop();
+                  }
+                } catch (e) {
+                  // print('❌ Error en el botón de volume boost: $e');
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('${LocaleProvider.tr('error_applying_volume_boost')}: $e'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                }
+              },
+              child: Text(LocaleProvider.tr('ok')),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _showPlaylistDialog(BuildContext context) {
     final queue = audioHandler?.queue.value;
     // Usar el área disponible excluyendo la barra de estado
@@ -1183,10 +1484,12 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
         builder: (context, snapshot) {
           final mediaItem = snapshot.data;
 
-          // Manejar cambio de carátula cuando cambia la canción
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            _handleArtworkChange(mediaItem);
-          });
+          // Solo manejar cambio de carátula cuando realmente cambia la canción
+          if (mediaItem != null && mediaItem.id != _lastMediaItemId) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              _handleArtworkChange(mediaItem);
+            });
+          }
 
           // Solo procesar si es una canción nueva
           if (mediaItem != null && mediaItem.id != _lastMediaItemId) {
@@ -1228,9 +1531,12 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
           // Usar el MediaItem inicial si no hay uno actual
           final currentMediaItem = mediaItem ?? widget.initialMediaItem;
 
-          return WillPopScope(
-            onWillPop: () async {
-              return !playLoadingNotifier.value;
+          return PopScope(
+            canPop: !playLoadingNotifier.value,
+            onPopInvokedWithResult: (didPop, result) {
+              if (!didPop && !playLoadingNotifier.value) {
+                Navigator.of(context).pop();
+              }
             },
             child: Scaffold(
               appBar: AppBar(
@@ -1344,33 +1650,199 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                       }
                                     }
                                   },
-                                  onTap: () {
-                                    // Toggle lyrics display when tapping the album cover
-                                    setState(() {
-                                      _showLyrics = !_showLyrics;
-                                    });
+                                  onTap: () async {
+                                    // Check if lyrics on cover is enabled
+                                    final prefs = await SharedPreferences.getInstance();
+                                    final showLyricsOnCover = prefs.getBool('show_lyrics_on_cover') ?? false;
+                                    
+                                    if (showLyricsOnCover) {
+                                      // Original behavior: toggle lyrics display on cover
+                                      setState(() {
+                                        _showLyrics = !_showLyrics;
+                                      });
 
-                                    // Always load lyrics when enabling, to ensure they match current song
-                                    if (_showLyrics &&
-                                        !_loadingLyrics &&
-                                        currentMediaItem != null) {
-                                      _loadLyrics(currentMediaItem);
+                                      // Always load lyrics when enabling, to ensure they match current song
+                                      if (_showLyrics &&
+                                          !_loadingLyrics &&
+                                          currentMediaItem != null) {
+                                        _loadLyrics(currentMediaItem);
+                                      }
+                                    }
+                                    // Cuando las letras se muestran en modal, no hacer nada con el tap simple
+                                    // Solo el doble toque funciona para controlar la reproducción
+                                  },
+                                  onDoubleTapDown: (details) async {
+                                    // Solo activar cuando las letras se muestran en modal
+                                    final prefs = await SharedPreferences.getInstance();
+                                    final showLyricsOnCover = prefs.getBool('show_lyrics_on_cover') ?? false;
+                                    
+                                    if (!showLyricsOnCover) {
+                                      // Obtener la posición del tap relativa al centro de la carátula
+                                      if (!context.mounted) return;
+                                      final RenderBox renderBox = context.findRenderObject() as RenderBox;
+                                      final localPosition = renderBox.globalToLocal(details.globalPosition);
+                                      final centerX = renderBox.size.width / 2;
+                                      
+                                      // Obtener la posición actual de reproducción
+                                      final currentPosition = (audioHandler as MyAudioHandler).player.position;
+                                      
+                                      // Cancelar timer anterior si existe
+                                      _hideIndicatorsTimer?.cancel();
+                                      
+                                      if (localPosition.dx < centerX) {
+                                        // Doble toque en el lado izquierdo: retroceder 10 segundos
+                                        setState(() {
+                                          _showDoubleTapIndicators = true;
+                                          _showLeftIndicator = true;
+                                          _showRightIndicator = false;
+                                        });
+                                        
+                                        // Aparecer inmediatamente (sin animación)
+                                        _fadeController.value = 1.0;
+                                        
+                                        final newPosition = currentPosition - const Duration(seconds: 10);
+                                        if (newPosition.inMilliseconds >= 0) {
+                                          audioHandler?.seek(newPosition);
+                                        } else {
+                                          audioHandler?.seek(Duration.zero);
+                                        }
+                                      } else {
+                                        // Doble toque en el lado derecho: avanzar 10 segundos
+                                        setState(() {
+                                          _showDoubleTapIndicators = true;
+                                          _showLeftIndicator = false;
+                                          _showRightIndicator = true;
+                                        });
+                                        
+                                        // Aparecer inmediatamente (sin animación)
+                                        _fadeController.value = 1.0;
+                                        
+                                        final newPosition = currentPosition + const Duration(seconds: 10);
+                                        // No hay límite superior, se puede avanzar más allá de la duración
+                                        audioHandler?.seek(newPosition);
+                                      }
+                                      
+                                      // Iniciar animación de desvanecimiento después de 1.5 segundos
+                                      _hideIndicatorsTimer = Timer(const Duration(milliseconds: 1500), () {
+                                        if (mounted) {
+                                          _fadeController.reverse().then((_) {
+                                            if (mounted) {
+                                              setState(() {
+                                                _showDoubleTapIndicators = false;
+                                                _showLeftIndicator = false;
+                                                _showRightIndicator = false;
+                                              });
+                                            }
+                                          });
+                                        }
+                                      });
                                     }
                                   },
                                   child: RepaintBoundary(
                                     child: ValueListenableBuilder<bool>(
                                       valueListenable: _artworkLoadingNotifier,
                                       builder: (context, isArtworkLoading, child) {
-                                        return ArtworkHeroCached(
-                                          artUri: currentMediaItem!.artUri,
-                                          size: artworkSize,
-                                          borderRadius: BorderRadius.circular(
-                                            artworkSize * 0.06,
-                                          ),
-                                          heroTag:
-                                              'now_playing_artwork_${(currentMediaItem.extras?['songId'] ?? currentMediaItem.id).toString()}',
-                                          showPlaceholderIcon: !_showLyrics,
-                                          isLoading: isArtworkLoading,
+                                        return FutureBuilder<bool>(
+                                          future: SharedPreferences.getInstance().then((prefs) => 
+                                            prefs.getBool('show_lyrics_on_cover') ?? false),
+                                          builder: (context, snapshot) {
+                                            final showLyricsOnCover = snapshot.data ?? false;
+                                            
+                                            return Stack(
+                                              children: [
+                                                ArtworkHeroCached(
+                                                  artUri: currentMediaItem!.artUri,
+                                                  size: artworkSize,
+                                                  borderRadius: BorderRadius.circular(
+                                                    artworkSize * 0.06,
+                                                  ),
+                                                  heroTag:
+                                                      'now_playing_artwork_${(currentMediaItem.extras?['songId'] ?? currentMediaItem.id).toString()}',
+                                                  showPlaceholderIcon: !_showLyrics,
+                                                  isLoading: isArtworkLoading,
+                                                ),
+                                                // Indicadores de doble toque solo cuando las letras se muestran en modal y se ha hecho doble toque
+                                                if (!showLyricsOnCover && _showDoubleTapIndicators)
+                                                  Positioned.fill(
+                                                    child: Container(
+                                                      decoration: BoxDecoration(
+                                                        borderRadius: BorderRadius.circular(
+                                                          artworkSize * 0.06,
+                                                        ),
+                                                      ),
+                                                      child: Stack(
+                                                        children: [
+                                                          // Indicador izquierdo (retroceder) - solo si se tocó el lado izquierdo
+                                                          if (_showLeftIndicator)
+                                                            Positioned(
+                                                              left: 20,
+                                                              top: 0,
+                                                              bottom: 0,
+                                                              child: AnimatedBuilder(
+                                                                animation: _fadeAnimation,
+                                                                builder: (context, child) {
+                                                                  return Opacity(
+                                                                    opacity: _fadeAnimation.value,
+                                                                    child: Center(
+                                                                      child: Container(
+                                                                        width: 50,
+                                                                        height: 50,
+                                                                        decoration: BoxDecoration(
+                                                                          color: Colors.black.withValues(alpha: 0.5),
+                                                                          shape: BoxShape.circle,
+                                                                        ),
+                                                                        child: Center(
+                                                                          child: Icon(
+                                                                            Icons.replay_10,
+                                                                            color: Colors.white,
+                                                                            size: 28,
+                                                                          ),
+                                                                        ),
+                                                                      ),
+                                                                    ),
+                                                                  );
+                                                                },
+                                                              ),
+                                                            ),
+                                                          // Indicador derecho (avanzar) - solo si se tocó el lado derecho
+                                                          if (_showRightIndicator)
+                                                            Positioned(
+                                                              right: 20,
+                                                              top: 0,
+                                                              bottom: 0,
+                                                              child: AnimatedBuilder(
+                                                                animation: _fadeAnimation,
+                                                                builder: (context, child) {
+                                                                  return Opacity(
+                                                                    opacity: _fadeAnimation.value,
+                                                                    child: Center(
+                                                                      child: Container(
+                                                                        width: 50,
+                                                                        height: 50,
+                                                                        decoration: BoxDecoration(
+                                                                          color: Colors.black.withValues(alpha: 0.5),
+                                                                          shape: BoxShape.circle,
+                                                                        ),
+                                                                        child: Center(
+                                                                          child: Icon(
+                                                                            Icons.forward_10,
+                                                                            color: Colors.white,
+                                                                            size: 28,
+                                                                          ),
+                                                                        ),
+                                                                      ),
+                                                                    ),
+                                                                  );
+                                                                },
+                                                              ),
+                                                            ),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                  ),
+                                              ],
+                                            );
+                                          },
                                         );
                                       },
                                     ),
@@ -1407,7 +1879,6 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                       child: _loadingLyrics
                                           ? const Center(
                                               child: CircularProgressIndicator(
-                                                year2023: false,
                                                 color: Colors.white,
                                               ),
                                             )
@@ -1674,7 +2145,8 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                 children: [
                                                   SizedBox(
                                                     width: progressBarWidth,
-                                                    child: TweenAnimationBuilder<double>(
+                                                    child: ClipRect(
+                                                      child: TweenAnimationBuilder<double>(
                                                       duration: const Duration(
                                                         milliseconds: 400,
                                                       ),
@@ -1760,6 +2232,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                           squiggleSpeed: 0.05,
                                                         );
                                                       },
+                                                    ),
                                                     ),
                                                   ),
                                                   Padding(
@@ -2124,12 +2597,11 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                                     ? SizedBox(
                                                                         width:
                                                                             playIconSize -
-                                                                            5,
+                                                                            10,
                                                                         height:
                                                                             playIconSize -
-                                                                            5,
+                                                                            10,
                                                                         child: CircularProgressIndicator(
-                                                                          year2023: false,
                                                                           strokeWidth:
                                                                               5,
                                                                           strokeCap:
@@ -2476,17 +2948,28 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                               onTap: isLoading
                                                   ? () {}
                                                   : () async {
-                                                      if (!_showLyrics) {
-                                                        setState(() {
-                                                          _showLyrics = true;
-                                                        });
-                                                        await _loadLyrics(
-                                                          currentMediaItem,
-                                                        );
+                                                      // Check if lyrics on cover is enabled
+                                                      final prefs = await SharedPreferences.getInstance();
+                                                      final showLyricsOnCover = prefs.getBool('show_lyrics_on_cover') ?? false;
+                                                      
+                                                      if (showLyricsOnCover) {
+                                                        // Original behavior: toggle lyrics display on cover
+                                                        if (!_showLyrics) {
+                                                          setState(() {
+                                                            _showLyrics = true;
+                                                          });
+                                                          await _loadLyrics(
+                                                            currentMediaItem,
+                                                          );
+                                                        } else {
+                                                          setState(() {
+                                                            _showLyrics = false;
+                                                          });
+                                                        }
                                                       } else {
-                                                        setState(() {
-                                                          _showLyrics = false;
-                                                        });
+                                                        // New behavior: show lyrics in modal
+                                                        if (!context.mounted) return;
+                                                        _showLyricsModal(context, currentMediaItem);
                                                       }
                                                     },
                                               child: Container(
@@ -2641,6 +3124,708 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
           );
         },
       ),
+    );
+  }
+
+  // Cache para evitar cargar letras repetidamente
+  final Map<String, Future<LyricsResult>> _lyricsCache = {};
+
+  Future<LyricsResult> _loadLyricsWithDelay(MediaItem mediaItem) async {
+    final cacheKey = mediaItem.id;
+    
+    // Si ya está en cache, usar ese Future
+    if (_lyricsCache.containsKey(cacheKey)) {
+      return await _lyricsCache[cacheKey]!;
+    }
+    
+    // Crear nuevo Future y cachearlo
+    final future = _loadLyricsInternal(mediaItem);
+    _lyricsCache[cacheKey] = future;
+    
+    return await future;
+  }
+
+  Future<LyricsResult> _loadLyricsInternal(MediaItem mediaItem) async {
+    // Add a minimal delay to let the modal open completely
+    await Future.delayed(Duration(milliseconds: 100));
+    // Then load the lyrics
+    return await SyncedLyricsService.getSyncedLyricsWithResult(mediaItem);
+  }
+
+
+  Future<void> _showLyricsModal(BuildContext context, MediaItem mediaItem) async {
+    if (!context.mounted) return;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      useSafeArea: true,
+      builder: (BuildContext context) {
+        return ValueListenableBuilder<AppColorScheme>(
+          valueListenable: colorSchemeNotifier,
+          builder: (context, colorScheme, child) {
+            final isAmoled = colorScheme == AppColorScheme.amoled;
+            final isDark = Theme.of(context).brightness == Brightness.dark;
+            
+            return Container(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(context).size.height - MediaQuery.of(context).padding.top,
+              ),
+              child: StreamBuilder<MediaItem?>(
+                stream: audioHandler?.mediaItem.distinct((prev, next) => prev?.id == next?.id),
+                builder: (context, mediaSnapshot) {
+                  final currentMediaItem = mediaSnapshot.data ?? mediaItem;
+                  
+                  return Column(
+                    children: [
+                      // Handle bar
+                      Container(
+                        margin: EdgeInsets.symmetric(vertical: 8),
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                      // Song Info Header
+                      Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        child: Row(
+                          children: [
+                            // Album Artwork
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: SizedBox(
+                                width: 52,
+                                height: 52,
+                                child: _buildLyricsModalArtwork(currentMediaItem),
+                              ),
+                            ),
+                            SizedBox(width: 12),
+                            // Song Info
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  TitleMarquee(
+                                    text: currentMediaItem.title,
+                                    maxWidth: MediaQuery.of(context).size.width - 140, // Account for artwork, spacing, and play button
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                      color: Theme.of(context).colorScheme.onSurface,
+                                    ),
+                                  ),
+                                  Text(
+                                    currentMediaItem.artist ?? LocaleProvider.tr('unknown_artist'),
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
+                              ),
+                            ),
+                            // Buttons Row
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                // Lyrics Search Button
+                                IconButton(
+                                  onPressed: () async {
+                                    await Navigator.of(context).push(
+                                      PageRouteBuilder(
+                                        pageBuilder: (context, animation, secondaryAnimation) =>
+                                            LyricsSearchScreen(
+                                              currentSong: currentMediaItem,
+                                            ),
+                                        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                                          const begin = Offset(1.0, 0.0);
+                                          const end = Offset.zero;
+                                          const curve = Curves.ease;
+                                          final tween = Tween(
+                                            begin: begin,
+                                            end: end,
+                                          ).chain(CurveTween(curve: curve));
+                                          return SlideTransition(
+                                            position: animation.drive(tween),
+                                            child: child,
+                                          );
+                                        },
+                                      ),
+                                    );
+                                  },
+                                  icon: Icon(
+                                    Icons.lyrics_outlined,
+                                    size: 24,
+                                  ),
+                                  tooltip: LocaleProvider.tr('search_lyrics'),
+                                ),
+                                // Play/Pause Button
+                                StreamBuilder<PlaybackState>(
+                                  stream: audioHandler?.playbackState,
+                                  builder: (context, snapshot) {
+                                    final playbackState = snapshot.data;
+                                    final isPlaying = playbackState?.playing ?? false;
+                                    
+                                    return IconButton(
+                                      onPressed: () {
+                                        if (isPlaying) {
+                                          audioHandler?.pause();
+                                        } else {
+                                          audioHandler?.play();
+                                        }
+                                      },
+                                      icon: Icon(
+                                        isPlaying ? Symbols.pause_rounded : Symbols.play_arrow_rounded,
+                                        size: 34,
+                                        grade: 200,
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      // Content
+                      Expanded(
+                        child: ShaderMask(
+                          shaderCallback: (Rect bounds) {
+                            return LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [
+                                Colors.transparent,
+                                Colors.white,
+                                Colors.white,
+                                Colors.transparent,
+                              ],
+                              stops: const [0.0, 0.1, 0.9, 1.0],
+                            ).createShader(bounds);
+                          },
+                          blendMode: BlendMode.dstIn,
+                          child: StreamBuilder<MediaItem?>(
+                            stream: audioHandler?.mediaItem.distinct((prev, next) => prev?.id == next?.id),
+                            builder: (context, mediaStreamSnapshot) {
+                              final currentMediaItemForLyrics = mediaStreamSnapshot.data ?? currentMediaItem;
+                              
+                              return ValueListenableBuilder<String?>(
+                                valueListenable: lyricsUpdatedNotifier,
+                                builder: (context, updatedSongId, child) {
+                                  // Forzar reconstrucción si se actualizó esta canción específica
+                                  final shouldRebuild = updatedSongId == currentMediaItemForLyrics.id;
+                                  return FutureBuilder<LyricsResult>(
+                                    key: ValueKey('${currentMediaItemForLyrics.id}_${shouldRebuild ? DateTime.now().millisecondsSinceEpoch : _lyricsUpdateCounter}'), // Rebuild when song changes or lyrics are updated
+                                    future: _loadLyricsWithDelay(currentMediaItemForLyrics),
+                                    builder: (context, snapshot) {
+                          if (snapshot.connectionState == ConnectionState.waiting) {
+                            return Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  CircularProgressIndicator(
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                      Theme.of(context).colorScheme.primary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }
+                          
+                          if (snapshot.hasError) {
+                            return Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.error_outline,
+                                    size: 64,
+                                    color: Theme.of(context).colorScheme.error,
+                                  ),
+                                  SizedBox(height: 16),
+                                  Text(
+                                    LocaleProvider.tr('api_unavailable'),
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      color: Theme.of(context).colorScheme.onSurface,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }
+                          
+                          final result = snapshot.data!;
+                          
+                          if (result.type == LyricsResultType.apiUnavailable) {
+                            return Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.error_outline,
+                                    size: 64,
+                                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+                                  ),
+                                  SizedBox(height: 16),
+                                  Text(
+                                    LocaleProvider.tr('api_unavailable'),
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          } else if (result.type == LyricsResultType.noConnection) {
+                            return Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.wifi_off,
+                                    size: 64,
+                                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+                                  ),
+                                  SizedBox(height: 16),
+                                  Text(
+                                    LocaleProvider.tr('no_connection'),
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          } else if (result.type == LyricsResultType.found && result.data?.synced != null) {
+                            // Parse lyrics
+                            final synced = result.data!.synced!;
+                            final lines = synced.split('\n');
+                            final parsed = <LyricLine>[];
+                            final reg = RegExp(r'\[(\d{2}):(\d{2})(?:\.(\d{2,3}))?\](.*)');
+                            for (final line in lines) {
+                              final match = reg.firstMatch(line);
+                              if (match != null) {
+                                final min = int.parse(match.group(1)!);
+                                final sec = int.parse(match.group(2)!);
+                                final ms = match.group(3) != null
+                                    ? int.parse(match.group(3)!.padRight(3, '0'))
+                                    : 0;
+                                final text = match.group(4)!.trim();
+                                parsed.add(
+                                  LyricLine(
+                                    Duration(minutes: min, seconds: sec, milliseconds: ms),
+                                    text,
+                                  ),
+                                );
+                              }
+                            }
+                            
+                            if (parsed.isEmpty) {
+                              return Center(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.lyrics_outlined,
+                                      size: 64,
+                                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+                                    ),
+                                    SizedBox(height: 16),
+                                    Text(
+                                      LocaleProvider.tr('no_lyrics_found'),
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+                                      ),
+                                    ),
+                                    SizedBox(height: 24),
+                                    ElevatedButton.icon(
+                                      onPressed: () async {
+                                        Navigator.of(context).pop();
+                                        await Navigator.of(context).push(
+                                          PageRouteBuilder(
+                                            pageBuilder: (context, animation, secondaryAnimation) =>
+                                                LyricsSearchScreen(
+                                                  currentSong: currentMediaItemForLyrics,
+                                                ),
+                                            transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                                              const begin = Offset(1.0, 0.0);
+                                              const end = Offset.zero;
+                                              const curve = Curves.ease;
+                                              final tween = Tween(
+                                                begin: begin,
+                                                end: end,
+                                              ).chain(CurveTween(curve: curve));
+                                              return SlideTransition(
+                                                position: animation.drive(tween),
+                                                child: child,
+                                              );
+                                            },
+                                          ),
+                                        );
+                                      },
+                                      icon: Icon(Symbols.search_rounded),
+                                      label: Text(LocaleProvider.tr('search_lyrics')),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: Theme.of(context).colorScheme.primary,
+                                        foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                                        padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(12),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }
+                            
+                            return _LyricsModalListView(
+                              lyricLines: parsed,
+                              isAmoled: isAmoled,
+                              isDark: isDark,
+                            );
+                          } else {
+                            return Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.lyrics_outlined,
+                                    size: 64,
+                                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+                                  ),
+                                  SizedBox(height: 16),
+                                  Text(
+                                    LocaleProvider.tr('no_lyrics_found'),
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+                                    ),
+                                  ),
+                                  SizedBox(height: 24),
+                                  ElevatedButton.icon(
+                                    onPressed: () async {
+                                      Navigator.of(context).pop();
+                                      await Navigator.of(context).push(
+                                        PageRouteBuilder(
+                                          pageBuilder: (context, animation, secondaryAnimation) =>
+                                              LyricsSearchScreen(
+                                                currentSong: currentMediaItemForLyrics,
+                                              ),
+                                          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                                            const begin = Offset(1.0, 0.0);
+                                            const end = Offset.zero;
+                                            const curve = Curves.ease;
+                                            final tween = Tween(
+                                              begin: begin,
+                                              end: end,
+                                            ).chain(CurveTween(curve: curve));
+                                            return SlideTransition(
+                                              position: animation.drive(tween),
+                                              child: child,
+                                            );
+                                          },
+                                        ),
+                                      );
+                                    },
+                                    icon: Icon(Symbols.search_rounded),
+                                    label: Text(LocaleProvider.tr('search_lyrics')),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Theme.of(context).colorScheme.primary,
+                                      foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                                      padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }
+                                },
+                              );
+                                },
+                              );
+                            },
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildLyricsModalArtwork(MediaItem mediaItem) {
+    final artUri = mediaItem.artUri;
+    if (artUri != null) {
+      final scheme = artUri.scheme.toLowerCase();
+
+      // Si es un archivo local
+      if (scheme == 'file' || scheme == 'content') {
+        try {
+          return Image.file(
+            File(artUri.toFilePath()),
+            width: 50,
+            height: 50,
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) {
+              return _buildFallbackIcon();
+            },
+          );
+        } catch (e) {
+          return _buildFallbackIcon();
+        }
+      }
+      // Si es una URL remota
+      else if (scheme == 'http' || scheme == 'https') {
+        return Image.network(
+          artUri.toString(),
+          width: 50,
+          height: 50,
+          fit: BoxFit.cover,
+          cacheWidth: 200,
+          cacheHeight: 200,
+          errorBuilder: (context, error, stackTrace) {
+            return _buildFallbackIcon();
+          },
+        );
+      }
+    }
+
+    // Si no hay artUri o no se puede cargar, intentar cargar desde la base de datos local
+    final songId = mediaItem.extras?['songId'];
+    final songPath = mediaItem.extras?['data'];
+    
+    if (songId != null && songPath != null) {
+      return FutureBuilder<Uri?>(
+        future: getOrCacheArtwork(songId, songPath),
+        builder: (context, snapshot) {
+          if (snapshot.hasData && snapshot.data != null) {
+            return Image.file(
+              File(snapshot.data!.toFilePath()),
+              width: 50,
+              height: 50,
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) {
+                return _buildFallbackIcon();
+              },
+            );
+          }
+          return _buildFallbackIcon();
+        },
+      );
+    }
+
+    return _buildFallbackIcon();
+  }
+
+  Widget _buildFallbackIcon() {
+    return Container(
+      width: 50,
+      height: 50,
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainer,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Icon(
+        Icons.music_note,
+        size: 24,
+        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+      ),
+    );
+  }
+}
+
+class _LyricsModalListView extends StatefulWidget {
+  final List<LyricLine> lyricLines;
+  final bool isAmoled;
+  final bool isDark;
+
+  const _LyricsModalListView({
+    required this.lyricLines,
+    required this.isAmoled,
+    required this.isDark,
+  });
+
+  @override
+  State<_LyricsModalListView> createState() => _LyricsModalListViewState();
+}
+
+class _LyricsModalListViewState extends State<_LyricsModalListView> {
+  late final AutoScrollController _scrollController;
+  int _currentLyricIndex = 0;
+  int _lastCurrentIndex = -1;
+  Timer? _scrollTimer;
+  bool _isManualScrolling = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController = AutoScrollController();
+    
+    // Calculate initial current lyric index
+    _calculateCurrentLyricIndex();
+    
+    _startPositionListener();
+    // Scroll to current lyric when modal opens
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scrollToCurrentLyric();
+    });
+    
+    // Listen for manual scroll events
+    _scrollController.addListener(_onScroll);
+  }
+  
+  void _onScroll() {
+    // Detect if user is manually scrolling
+    if (_scrollController.hasClients && _scrollController.position.isScrollingNotifier.value) {
+      _isManualScrolling = true;
+      // Reset flag after scroll ends
+      Timer(Duration(milliseconds: 500), () {
+        if (mounted) {
+          _isManualScrolling = false;
+        }
+      });
+    }
+  }
+
+  void _calculateCurrentLyricIndex() {
+    final position = audioHandler?.playbackState.value.position ?? Duration.zero;
+    
+    // Find current lyric line
+    int currentIndex = 0;
+    for (int i = 0; i < widget.lyricLines.length; i++) {
+      if (position >= widget.lyricLines[i].time) {
+        currentIndex = i;
+      } else {
+        break;
+      }
+    }
+    
+    _currentLyricIndex = currentIndex;
+    _lastCurrentIndex = currentIndex;
+  }
+
+  @override
+  void dispose() {
+    _scrollTimer?.cancel();
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _startPositionListener() {
+    _scrollTimer = Timer.periodic(Duration(milliseconds: 500), (timer) {
+      if (!mounted) return;
+      
+      final position = audioHandler?.playbackState.value.position ?? Duration.zero;
+      
+      // Find current lyric line
+      int currentIndex = 0;
+      for (int i = 0; i < widget.lyricLines.length; i++) {
+        if (position >= widget.lyricLines[i].time) {
+          currentIndex = i;
+        } else {
+          break;
+        }
+      }
+      
+      if (currentIndex != _currentLyricIndex) {
+        setState(() {
+          _currentLyricIndex = currentIndex;
+        });
+        
+        // Only scroll if the index actually changed and user is not manually scrolling
+        if (_currentLyricIndex != _lastCurrentIndex && !_isManualScrolling) {
+          _lastCurrentIndex = _currentLyricIndex;
+          _scrollToCurrentLyric();
+        }
+      }
+    });
+  }
+
+  Future<void> _scrollToCurrentLyric() async {
+    if (_currentLyricIndex >= 0 && _currentLyricIndex < widget.lyricLines.length) {
+      await _scrollController.scrollToIndex(
+        _currentLyricIndex,
+        preferPosition: AutoScrollPosition.middle,
+        duration: Duration(milliseconds: 500),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView.builder(
+      controller: _scrollController,
+      padding: EdgeInsets.only(top: 60, bottom: 0),
+      itemCount: widget.lyricLines.length,
+      itemBuilder: (context, index) {
+        final isCurrent = index == _currentLyricIndex;
+        final textStyle = TextStyle(
+          color: isCurrent
+              ? (widget.isAmoled && widget.isDark
+                  ? Colors.white
+                  : Theme.of(context).colorScheme.primary)
+              : widget.isAmoled && widget.isDark
+                  ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5)
+                  : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+          fontWeight: FontWeight.bold,
+          fontSize: isCurrent ? 24 : 22,
+        );
+        
+        return AutoScrollTag(
+          key: ValueKey(index),
+          controller: _scrollController,
+          index: index,
+          child: GestureDetector(
+            onTap: () {
+              // Seek to the time of this lyric line
+              final targetTime = widget.lyricLines[index].time;
+              audioHandler?.seek(targetTime);
+              
+              // Set manual scrolling flag
+              _isManualScrolling = true;
+              
+              // Update current index immediately
+              setState(() {
+                _currentLyricIndex = index;
+                _lastCurrentIndex = index;
+              });
+              
+              // Reset manual scrolling flag after a delay
+              Timer(Duration(seconds: 3), () {
+                _isManualScrolling = false;
+              });
+            },
+            child: Container(
+              padding: EdgeInsets.symmetric(vertical: 8, horizontal: 32),
+              child: Text(
+                widget.lyricLines[index].text,
+                textAlign: TextAlign.left,
+                style: textStyle,
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -3203,7 +4388,7 @@ class _PlaylistListViewState extends State<_PlaylistListView> {
           controller: _scrollController,
           shrinkWrap: true,
           padding: EdgeInsets.only(
-            top: 100 + MediaQuery.of(context).padding.top, // Agregar padding para la barra de estado
+            top: 80 + MediaQuery.of(context).padding.top, // Reducir padding para evitar recorte de la primera canción
           ),
           itemCount: widget.queue.length,
           itemBuilder: (context, index) {
@@ -3219,8 +4404,8 @@ class _PlaylistListViewState extends State<_PlaylistListView> {
             
             return Padding(
               padding: EdgeInsets.only(
-                top: isFirstItem ? 8.0 : 0.0,
-                bottom: isFirstItem ? 4.0 : 0.0,
+                top: isFirstItem ? 42.0 : 0.0,
+                bottom: isFirstItem ? 8.0 : 0.0,
               ),
               child: ListTile(
                 leading: ArtworkListTile(

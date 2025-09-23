@@ -99,13 +99,16 @@ class SyncedLyricsService {
   static Future<LyricsResult> getSyncedLyricsWithResult(
     MediaItem song, {
     int? durInSec,
+    bool forceReload = false,
   }) async {
     final lyricsBox = await box;
 
-    // Buscar en la base local primero
-    final existingLyrics = lyricsBox.get(song.id);
-    if (existingLyrics != null) {
-      return LyricsResult(type: LyricsResultType.found, data: existingLyrics);
+    // Buscar en la base local primero (solo si no se fuerza la recarga)
+    if (!forceReload) {
+      final existingLyrics = lyricsBox.get(song.id);
+      if (existingLyrics != null) {
+        return LyricsResult(type: LyricsResultType.found, data: existingLyrics);
+      }
     }
 
     // Verificar conectividad antes de intentar cualquier operación de red

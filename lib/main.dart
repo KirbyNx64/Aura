@@ -12,7 +12,7 @@ import 'package:flutter/services.dart';
 import 'package:music/utils/yt_search/yt_screen.dart';
 import 'package:music/l10n/locale_provider.dart';
 import 'package:music/utils/notifiers.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:music/utils/notification_service.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:music/utils/db/playlist_model.dart';
 import 'package:music/utils/audio/synced_lyrics_service.dart';
@@ -155,34 +155,47 @@ class _MainNavRootState extends State<MainNavRoot> {
   final ValueNotifier<int> selectedTabIndex = ValueNotifier<int>(0);
   final GlobalKey ytScreenKey = GlobalKey();
   final GlobalKey foldersScreenKey = GlobalKey();
+  
 
-  Future<bool> onWillPop() async {
-    final tab = selectedTabIndex.value;
-    if (tab == 1) {
-      // YT
-      final state = ytScreenKey.currentState as dynamic;
-      if (state?.canPopInternally() == true) {
-        state.handleInternalPop();
-        return false;
-      }
-    } else if (tab == 3) {
-      // Folders
-      final state = foldersScreenKey.currentState as dynamic;
-      if (state?.canPopInternally() == true) {
-        state.handleInternalPop();
-        return false;
-      }
-    }
-    return true;
-  }
 
   @override
   Widget build(BuildContext context) {
-    return WillPopScope(
-      onWillPop: onWillPop,
+    return PopScope(
+      canPop: false, // Siempre bloquear pop inicialmente
+      onPopInvokedWithResult: (didPop, result) {
+        final tab = selectedTabIndex.value;
+        
+        // Verificar navegación interna primero
+        if (tab == 1) {
+          // YT
+          final state = ytScreenKey.currentState as dynamic;
+          if (state?.canPopInternally() == true) {
+            state.handleInternalPop();
+            return;
+          }
+        } else if (tab == 3) {
+          // Folders
+          final state = foldersScreenKey.currentState as dynamic;
+          if (state?.canPopInternally() == true) {
+            state.handleInternalPop();
+            return;
+          }
+        } else if (tab == 0) {
+          // Home screen - verificar si tiene navegación interna
+          final state = homeScreenKey.currentState as dynamic;
+          if (state?.canPopInternally() == true) {
+            state.handleInternalPop();
+            return;
+          }
+        }
+        
+        // Bloquear completamente el cierre de la aplicación
+        // Solo permitir navegación interna, nunca salir de la app
+      },
       child: Material3BottomNav(
         pageBuilders: [
           (context, onTabChange) => HomeScreen(
+            key: homeScreenKey,
             onTabChange: onTabChange,
             setThemeMode: widget.setThemeMode,
             setColorScheme: widget.setColorScheme,
@@ -198,31 +211,14 @@ class _MainNavRootState extends State<MainNavRoot> {
   }
 }
 
-final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
-    FlutterLocalNotificationsPlugin();
-
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Hive.initFlutter();
   Hive.registerAdapter(PlaylistModelAdapter());
   await SyncedLyricsService.initialize();
 
-  // Inicialización de notificaciones locales
-  const AndroidInitializationSettings initializationSettingsAndroid =
-      AndroidInitializationSettings('@mipmap/ic_stat_music_note');
-
-  final InitializationSettings initializationSettings = InitializationSettings(
-    android: initializationSettingsAndroid,
-  );
-
-  await flutterLocalNotificationsPlugin.initialize(initializationSettings);
-
-  // Solicitar permisos de notificación en Android 13+
-  await flutterLocalNotificationsPlugin
-      .resolvePlatformSpecificImplementation<
-        AndroidFlutterLocalNotificationsPlugin
-      >()
-      ?.requestNotificationsPermission();
+  // Inicialización del servicio de notificaciones
+  await NotificationService.initialize();
 
   await LocaleProvider.loadLocale();
   final permisosOk = await pedirPermisosMedia();

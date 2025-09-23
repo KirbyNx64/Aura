@@ -1,6 +1,7 @@
 import 'package:hive/hive.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 import 'playlist_model.dart' as hive_model;
+import 'songs_index_db.dart';
 
 class PlaylistsDB {
   static final PlaylistsDB _instance = PlaylistsDB._internal();
@@ -71,11 +72,14 @@ class PlaylistsDB {
     final b = await box;
     final playlist = b.get(playlistId);
     if (playlist == null) return [];
-    final OnAudioQuery query = OnAudioQuery();
-    final allSongs = await query.querySongs();
+    
+    // Usar SongsIndexDB para obtener solo canciones no ignoradas
+    final SongsIndexDB songsIndex = SongsIndexDB();
+    final indexedSongs = await songsIndex.getIndexedSongs();
+    
     List<SongModel> ordered = [];
     for (final path in playlist.songPaths) {
-      final match = allSongs.where((s) => s.data == path);
+      final match = indexedSongs.where((s) => s.data == path);
       if (match.isNotEmpty) {
         ordered.add(match.first);
       }

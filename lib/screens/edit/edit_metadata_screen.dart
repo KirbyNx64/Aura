@@ -9,6 +9,7 @@ import 'package:audio_service/audio_service.dart';
 import 'package:media_scanner/media_scanner.dart';
 import 'package:music/main.dart' show audioHandler;
 import 'package:music/utils/audio/background_audio_handler.dart';
+import 'package:music/utils/theme_preferences.dart';
 
 class EditMetadataScreen extends StatefulWidget {
   final MediaItem song;
@@ -310,9 +311,18 @@ class _EditMetadataScreenState extends State<EditMetadataScreen> {
   }
 
   void _showSuccessDialog() {
+    final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: isAmoled && isDark
+              ? const BorderSide(color: Colors.white, width: 1)
+              : BorderSide.none,
+        ),
         title: Text(LocaleProvider.tr('changes_saved')),
         content: Text(LocaleProvider.tr('changes_saved_desc')),
         actions: [
@@ -329,9 +339,18 @@ class _EditMetadataScreenState extends State<EditMetadataScreen> {
   }
 
   void _showErrorDialog(String title, String message) {
+    final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: isAmoled && isDark
+              ? const BorderSide(color: Colors.white, width: 1)
+              : BorderSide.none,
+        ),
         title: Text(title),
         content: Text(message),
         actions: [
@@ -346,6 +365,9 @@ class _EditMetadataScreenState extends State<EditMetadataScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
     return Scaffold(
       appBar: AppBar(
         title: TranslatedText('edit_song_info'),
@@ -358,6 +380,12 @@ class _EditMetadataScreenState extends State<EditMetadataScreen> {
             onPressed: () => showDialog(
               context: context,
               builder: (context) => AlertDialog(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  side: isAmoled && isDark
+                      ? const BorderSide(color: Colors.white, width: 1)
+                      : BorderSide.none,
+                ),
                 title: Text(LocaleProvider.tr('edit_song_info')),
                 content: Text(LocaleProvider.tr('edit_song_info_desc')),
               ),

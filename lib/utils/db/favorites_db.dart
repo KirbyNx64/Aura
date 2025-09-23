@@ -1,5 +1,6 @@
 import 'package:hive/hive.dart';
 import 'package:on_audio_query/on_audio_query.dart';
+import 'songs_index_db.dart';
 
 class FavoritesDB {
   static final FavoritesDB _instance = FavoritesDB._internal();
@@ -32,11 +33,14 @@ class FavoritesDB {
   Future<List<SongModel>> getFavorites() async {
     final b = await box;
     final List<String> paths = b.values.toList().reversed.toList();
-    final OnAudioQuery query = OnAudioQuery();
-    final allSongs = await query.querySongs();
+    
+    // Usar SongsIndexDB para obtener solo canciones no ignoradas
+    final SongsIndexDB songsIndex = SongsIndexDB();
+    final indexedSongs = await songsIndex.getIndexedSongs();
+    
     List<SongModel> ordered = [];
     for (final path in paths) {
-      final match = allSongs.where((s) => s.data == path);
+      final match = indexedSongs.where((s) => s.data == path);
       if (match.isNotEmpty) {
         ordered.add(match.first);
       }
@@ -47,5 +51,20 @@ class FavoritesDB {
   Future<bool> isFavorite(String path) async {
     final b = await box;
     return b.values.contains(path);
+  }
+
+  Future<void> removeFavoriteById(int songId) async {
+    final b = await box;
+    final OnAudioQuery query = OnAudioQuery();
+    final allSongs = await query.querySongs();
+    try {
+      final song = allSongs.firstWhere((s) => s.id == songId);
+      final key = b.keys.firstWhere((k) => b.get(k) == song.data, orElse: () => null);
+      if (key != null) {
+        await b.delete(key);
+      }
+    } catch (e) {
+      // La canción no existe
+    }
   }
 }

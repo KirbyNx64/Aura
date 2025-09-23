@@ -28,6 +28,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:music/utils/song_info_dialog.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import 'package:music/screens/artist/artist_screen.dart';
 import 'dart:async';
 
 enum OrdenCancionesPlaylist { normal, alfabetico, invertido, ultimoAgregado }
@@ -57,6 +58,9 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   String? _updateVersion;
   String? _updateApkUrl;
   bool _updateChecked = false;
+  
+  // Estado de carga
+  bool _isLoading = true;
 
   List<SongModel> _mostPlayed = [];
   final PageController _pageController = PageController(viewportFraction: 0.95);
@@ -242,17 +246,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _loadOrderFilter().then((_) async {
-      await _loadAllSongs();
-      await _loadMostPlayed();
-      await _loadShortcuts();
-      await _loadArtists();
-      await _loadRecentsData();
-      await _fillQuickPickWithRandomSongs();
-      _initQuickPickPages();
-      setState(() {});
-      _loadPlaylists();
-    });
+    _initializeData();
     playlistsShouldReload.addListener(_onPlaylistsShouldReload);
     shortcutsShouldReload.addListener(_onShortcutsShouldReload);
     mostPlayedShouldReload.addListener(_onMostPlayedShouldReload);
@@ -286,33 +280,73 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       });
     });
 
-    // Escuchar cambios en el MediaItem con debounce (para detección de canción actual)
-    audioHandler?.mediaItem.listen((mediaItem) {
-      _immediateMediaItemDebounce?.cancel();
-      _immediateMediaItemDebounce = Timer(
-        const Duration(milliseconds: 500),
-        () {
-          if (mounted) {
-            _immediateMediaItemNotifier.value = mediaItem;
-            // Actualizar también el path inmediatamente para compatibilidad
-            final path = mediaItem?.extras?['data'] as String?;
-            if (_currentSongPathNotifier.value != path) {
-              _currentSongPathNotifier.value = path;
-            }
-          }
-        },
-      );
-    });
-
-    // Escuchar cambios en el MediaItem con debounce (para espaciado y elementos no críticos)
-    audioHandler?.mediaItem.listen((mediaItem) {
+    // Escuchar cambios en el MediaItem con debounce
+    audioHandler?.mediaItem.listen((item) {
       _mediaItemDebounce?.cancel();
       _mediaItemDebounce = Timer(const Duration(milliseconds: 400), () {
         if (mounted) {
-          _currentMediaItemNotifier.value = mediaItem;
+          _currentMediaItemNotifier.value = item;
+          final path = item?.extras?['data'] as String?;
+          _currentSongPathNotifier.value = path;
         }
       });
     });
+
+    // Escuchar cambios inmediatos en el MediaItem (sin debounce)
+    audioHandler?.mediaItem.listen((item) {
+      _immediateMediaItemDebounce?.cancel();
+      _immediateMediaItemDebounce = Timer(const Duration(milliseconds: 50), () {
+        if (mounted) {
+          _immediateMediaItemNotifier.value = item;
+        }
+      });
+    });
+  }
+
+  /// Inicializa todos los datos necesarios para la pantalla de inicio
+  Future<void> _initializeData() async {
+    try {
+      // Cargar filtros de orden
+      await _loadOrderFilter();
+      
+      // Cargar todas las canciones
+      await _loadAllSongs();
+      
+      // Cargar canciones más reproducidas
+      await _loadMostPlayed();
+      
+      // Cargar accesos directos
+      await _loadShortcuts();
+      
+      // Cargar artistas
+      await _loadArtists();
+      
+      // Cargar canciones recientes
+      await _loadRecentsData();
+      
+      // Llenar selección rápida con canciones aleatorias
+      await _fillQuickPickWithRandomSongs();
+      
+      // Inicializar páginas de selección rápida
+      _initQuickPickPages();
+      
+      // Cargar playlists
+      await _loadPlaylists();
+      
+      // Finalizar carga
+      setState(() {
+        _isLoading = false;
+      });
+    } catch (e) {
+      // En caso de error, mostrar la pantalla de todas formas
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  void _onPlaylistsShouldReload() {
+    _loadPlaylists();
   }
 
   void _onShortcutsShouldReload() {
@@ -465,8 +499,8 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     List<SongModel> songsSource = allSongs;
     if (songsSource.isEmpty) {
       try {
-        final query = OnAudioQuery();
-        songsSource = await query.querySongs();
+        // Usar SongsIndexDB para obtener solo canciones no ignoradas
+        songsSource = await SongsIndexDB().getIndexedSongs();
         // Persistir también en el estado para futuras búsquedas
         if (mounted) {
           setState(() {
@@ -831,7 +865,23 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   const SizedBox(width: 8),
                   InkWell(
                     onTap: () {
-                      _showArtistSearchOptions(artistName);
+                      Navigator.of(context).pop(); // Cerrar el modal primero
+                      Navigator.of(context).push(
+                        PageRouteBuilder(
+                          pageBuilder: (context, animation, secondaryAnimation) =>
+                              ArtistScreen(artistName: artistName),
+                          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                            const begin = Offset(1.0, 0.0);
+                            const end = Offset.zero;
+                            const curve = Curves.ease;
+                            var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+                            return SlideTransition(
+                              position: animation.drive(tween),
+                              child: child,
+                            );
+                          },
+                        ),
+                      );
                     },
                     borderRadius: BorderRadius.circular(12),
                     child: Container(
@@ -849,7 +899,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(
-                            Icons.search,
+                            Icons.person_outline,
                             size: 20,
                             color: Theme.of(context).brightness == Brightness.dark
                               ? Theme.of(context).colorScheme.onPrimaryContainer
@@ -857,7 +907,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           ),
                           const SizedBox(width: 8),
                           Text(
-                            LocaleProvider.tr('search'),
+                            LocaleProvider.tr('go_to_artist'),
                             style: TextStyle(
                               fontWeight: FontWeight.w600,
                               fontSize: 14,
@@ -1499,6 +1549,36 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       await _handleAddToPlaylistSingle(context, song);
                     },
                   ),
+                  if ((song.artist ?? '').trim().isNotEmpty)
+                    ListTile(
+                      leading: const Icon(Icons.person_outline),
+                      title: const TranslatedText('go_to_artist'),
+                      onTap: () {
+                        if (!context.mounted) return;
+                        Navigator.of(context).pop();
+                        final name = (song.artist ?? '').trim();
+                        if (name.isEmpty) return;
+                        Navigator.of(context).push(
+                          PageRouteBuilder(
+                            pageBuilder: (context, animation, secondaryAnimation) =>
+                                ArtistScreen(artistName: name),
+                            transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                              const begin = Offset(1.0, 0.0);
+                              const end = Offset.zero;
+                              const curve = Curves.ease;
+                              final tween = Tween(
+                                begin: begin,
+                                end: end,
+                              ).chain(CurveTween(curve: curve));
+                              return SlideTransition(
+                                position: animation.drive(tween),
+                                child: child,
+                              );
+                            },
+                          ),
+                        );
+                      },
+                    ),
                   ListTile(
                     leading: const Icon(Icons.info_outline),
                     title: TranslatedText('song_info'),
@@ -1688,8 +1768,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _loadAllSongs() async {
-    final query = OnAudioQuery();
-    final songs = await query.querySongs();
+    final songs = await SongsIndexDB().getIndexedSongs();
     setState(() {
       allSongs = songs;
     });
@@ -1843,10 +1922,6 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     });
   }
 
-  void _onPlaylistsShouldReload() {
-    _loadPlaylists();
-  }
-
   String _quitarDiacriticos(String texto) {
     const conAcentos = 'áàäâãéèëêíìïîóòöôõúùüûÁÀÄÂÃÉÈËÊÍÌÏÎÓÒÖÔÕÚÙÜÛ';
     const sinAcentos = 'aaaaaeeeeiiiiooooouuuuaaaaaeeeeiiiiooooouuuu';
@@ -1859,19 +1934,14 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   // Agrega la key global arriba en HomeScreenState
   final GlobalKey ytScreenKey = GlobalKey();
 
-  // Agrega un ValueNotifier para el índice de tab si no existe
-  final ValueNotifier<int> _selectedTabIndex = ValueNotifier<int>(0);
 
-  Future<bool> onWillPop() async {
-    // print('WillPopScope: tab= [32m${_selectedTabIndex.value} [0m');
-    final state = ytScreenKey.currentState as dynamic;
-    // print('YT state: $state');
-    if (_selectedTabIndex.value == 1 && state?.canPopInternally() == true) {
-      // print('Delegando pop a YT');
-      state.handleInternalPop();
-      return false;
-    }
-    // print('Pop manejado por home');
+  bool canPopInternally() {
+    // Retorna true si hay navegación interna (recientes o playlist songs abiertos)
+    return _showingRecents || _showingPlaylistSongs;
+  }
+
+  void handleInternalPop() {
+    // Manejar navegación interna de home screen
     if (_showingRecents || _showingPlaylistSongs) {
       // Limpiar cache de artistas para forzar reconstrucción con contexto correcto
       _artistWidgetCache.clear();
@@ -1879,9 +1949,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         _showingRecents = false;
         _showingPlaylistSongs = false;
       });
-      return false;
     }
-    return true;
   }
 
   @override
@@ -2238,6 +2306,35 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   await _handleAddToPlaylistSingle(context, song);
                 },
               ),
+              if ((song.artist ?? '').trim().isNotEmpty)
+                ListTile(
+                  leading: const Icon(Icons.person_outline),
+                  title: const TranslatedText('go_to_artist'),
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    final name = (song.artist ?? '').trim();
+                    if (name.isEmpty) return;
+                    Navigator.of(context).push(
+                      PageRouteBuilder(
+                        pageBuilder: (context, animation, secondaryAnimation) =>
+                            ArtistScreen(artistName: name),
+                        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                          const begin = Offset(1.0, 0.0);
+                          const end = Offset.zero;
+                          const curve = Curves.ease;
+                          final tween = Tween(
+                            begin: begin,
+                            end: end,
+                          ).chain(CurveTween(curve: curve));
+                          return SlideTransition(
+                            position: animation.drive(tween),
+                            child: child,
+                          );
+                        },
+                      ),
+                    );
+                  },
+                ),
               ListTile(
                 leading: const Icon(Icons.info_outline),
                 title: TranslatedText('song_info'),
@@ -2254,6 +2351,9 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _removeFromPlaylistMassive() async {
+    final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
     final selectedSongs =
         (_searchPlaylistController.text.isNotEmpty
                 ? _filteredPlaylistSongs
@@ -2263,6 +2363,12 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: isAmoled && isDark
+              ? const BorderSide(color: Colors.white, width: 1)
+              : BorderSide.none,
+        ),
         title: TranslatedText('remove_from_playlist'),
         content: Text(
           count == 1
@@ -2329,6 +2435,9 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _showAddFromRecentsToCurrentPlaylistDialog() async {
+    final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
     final recents = await RecentsDB().getRecents();
     if (!mounted) return;
     final Set<int> selectedIds = {};
@@ -2338,6 +2447,12 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         return StatefulBuilder(
           builder: (context, setStateDialog) {
             return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: isAmoled && isDark
+                    ? const BorderSide(color: Colors.white, width: 1)
+                    : BorderSide.none,
+              ),
               title: TranslatedText('add_from_recents'),
               content: SizedBox(
                 width: double.maxFinite,
@@ -2520,10 +2635,9 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             randomSongsForPlayer.add(song);
             usedPaths.add(path);
           } catch (_) {
-            // Si no se encuentra en allSongs, intentar obtenerla de la base de datos
+            // Si no se encuentra en allSongs, intentar obtenerla de la base de datos indexada
             try {
-              final query = OnAudioQuery();
-              final songs = await query.querySongs();
+              final songs = await SongsIndexDB().getIndexedSongs();
               final foundSong = songs.firstWhere((s) => s.data == path);
               randomSongsForPlayer.add(foundSong);
               usedPaths.add(path);
@@ -2578,10 +2692,9 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             newRandomSongs.add(song);
             usedPaths.add(path);
           } catch (_) {
-            // Si no se encuentra en allSongs, intentar obtenerla de la base de datos
+            // Si no se encuentra en allSongs, intentar obtenerla de la base de datos indexada
             try {
-              final query = OnAudioQuery();
-              final songs = await query.querySongs();
+              final songs = await SongsIndexDB().getIndexedSongs();
               final foundSong = songs.firstWhere((s) => s.data == path);
               newRandomSongs.add(foundSong);
               usedPaths.add(path);
@@ -2663,6 +2776,61 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
+    final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
+    // Mostrar pantalla de carga mientras se cargan las bases de datos
+    if (_isLoading) {
+      return Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              // Icono de música con animación
+              TweenAnimationBuilder<double>(
+                duration: const Duration(seconds: 2),
+                tween: Tween(begin: 0.0, end: 1.0),
+                builder: (context, value, child) {
+                  return Transform.scale(
+                    scale: 0.8 + (0.2 * value),
+                    child: Opacity(
+                      opacity: value,
+                      child: Container(
+                        width: 120,
+                        height: 120,
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(60),
+                        ),
+                        child: Icon(
+                          Icons.music_note,
+                          size: 60,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+              
+              const SizedBox(height: 32),
+              
+              // Indicador de progreso
+              SizedBox(
+                width: 200,
+                child: LinearProgressIndicator(
+                  backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    Theme.of(context).colorScheme.primary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     final quickPickSongsPerPage = 4;
     final limitedQuickPick = _shuffledQuickPick.take(20).toList();
     // Lista extendida para reproducción (más de 20 canciones)
@@ -2671,9 +2839,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         ? 0
         : (limitedQuickPick.length / quickPickSongsPerPage).ceil();
 
-    return WillPopScope(
-      onWillPop: onWillPop,
-      child: Scaffold(
+    return Scaffold(
         appBar: AppBar(
           backgroundColor: Theme.of(context).scaffoldBackgroundColor,
           surfaceTintColor: Colors.transparent,
@@ -3357,6 +3523,35 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                             await _loadRecents();
                                                           },
                                                         ),
+                                                        if ((song.artist ?? '').trim().isNotEmpty)
+                                                          ListTile(
+                                                            leading: const Icon(Icons.person_outline),
+                                                            title: const TranslatedText('go_to_artist'),
+                                                            onTap: () {
+                                                              Navigator.of(context).pop();
+                                                              final name = (song.artist ?? '').trim();
+                                                              if (name.isEmpty) return;
+                                                              Navigator.of(context).push(
+                                                                PageRouteBuilder(
+                                                                  pageBuilder: (context, animation, secondaryAnimation) =>
+                                                                      ArtistScreen(artistName: name),
+                                                                  transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                                                                    const begin = Offset(1.0, 0.0);
+                                                                    const end = Offset.zero;
+                                                                    const curve = Curves.ease;
+                                                                    final tween = Tween(
+                                                                      begin: begin,
+                                                                      end: end,
+                                                                    ).chain(CurveTween(curve: curve));
+                                                                    return SlideTransition(
+                                                                      position: animation.drive(tween),
+                                                                      child: child,
+                                                                    );
+                                                                  },
+                                                                ),
+                                                              );
+                                                            },
+                                                          ),
                                                         ListTile(
                                                           leading: const Icon(Icons.info_outline),
                                                           title: TranslatedText('song_info'),
@@ -3687,6 +3882,35 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                         await _loadRecents();
                                                       },
                                                     ),
+                                                    if ((song.artist ?? '').trim().isNotEmpty)
+                                                      ListTile(
+                                                        leading: const Icon(Icons.person_outline),
+                                                        title: const TranslatedText('go_to_artist'),
+                                                        onTap: () {
+                                                          Navigator.of(context).pop();
+                                                          final name = (song.artist ?? '').trim();
+                                                          if (name.isEmpty) return;
+                                                          Navigator.of(context).push(
+                                                            PageRouteBuilder(
+                                                              pageBuilder: (context, animation, secondaryAnimation) =>
+                                                                  ArtistScreen(artistName: name),
+                                                              transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                                                                const begin = Offset(1.0, 0.0);
+                                                                const end = Offset.zero;
+                                                                const curve = Curves.ease;
+                                                                final tween = Tween(
+                                                                  begin: begin,
+                                                                  end: end,
+                                                                ).chain(CurveTween(curve: curve));
+                                                                return SlideTransition(
+                                                                  position: animation.drive(tween),
+                                                                  child: child,
+                                                                );
+                                                              },
+                                                            ),
+                                                          );
+                                                        },
+                                                      ),
                                                     ListTile(
                                                       leading: const Icon(Icons.info_outline),
                                                       title: TranslatedText('song_info'),
@@ -4028,6 +4252,35 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                           );
                                                         },
                                                       ),
+                                                      if ((song.artist ?? '').trim().isNotEmpty)
+                                                        ListTile(
+                                                          leading: const Icon(Icons.person_outline),
+                                                          title: const TranslatedText('go_to_artist'),
+                                                          onTap: () {
+                                                            Navigator.of(context).pop();
+                                                            final name = (song.artist ?? '').trim();
+                                                            if (name.isEmpty) return;
+                                                            Navigator.of(context).push(
+                                                              PageRouteBuilder(
+                                                                pageBuilder: (context, animation, secondaryAnimation) =>
+                                                                    ArtistScreen(artistName: name),
+                                                                transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                                                                  const begin = Offset(1.0, 0.0);
+                                                                  const end = Offset.zero;
+                                                                  const curve = Curves.ease;
+                                                                  final tween = Tween(
+                                                                    begin: begin,
+                                                                    end: end,
+                                                                  ).chain(CurveTween(curve: curve));
+                                                                  return SlideTransition(
+                                                                    position: animation.drive(tween),
+                                                                    child: child,
+                                                                  );
+                                                                },
+                                                              ),
+                                                            );
+                                                          },
+                                                        ),
                                                       ListTile(
                                                         leading: Icon(
                                                           isPinned
@@ -4541,6 +4794,35 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                               .value;
                                                     },
                                                   ),
+                                                  if ((song.artist ?? '').trim().isNotEmpty)
+                                                    ListTile(
+                                                      leading: const Icon(Icons.person_outline),
+                                                      title: const TranslatedText('go_to_artist'),
+                                                      onTap: () {
+                                                        Navigator.of(context).pop();
+                                                        final name = (song.artist ?? '').trim();
+                                                        if (name.isEmpty) return;
+                                                        Navigator.of(context).push(
+                                                          PageRouteBuilder(
+                                                            pageBuilder: (context, animation, secondaryAnimation) =>
+                                                                ArtistScreen(artistName: name),
+                                                            transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                                                              const begin = Offset(1.0, 0.0);
+                                                              const end = Offset.zero;
+                                                              const curve = Curves.ease;
+                                                              final tween = Tween(
+                                                                begin: begin,
+                                                                end: end,
+                                                              ).chain(CurveTween(curve: curve));
+                                                              return SlideTransition(
+                                                                position: animation.drive(tween),
+                                                                child: child,
+                                                              );
+                                                            },
+                                                          ),
+                                                        );
+                                                      },
+                                                    ),
                                                   ListTile(
                                                     leading: const Icon(
                                                       Icons.check_box_outlined,
@@ -5154,6 +5436,12 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                           final result = await showDialog<String>(
                                             context: context,
                                             builder: (context) => AlertDialog(
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius: BorderRadius.circular(16),
+                                                side: isAmoled && isDark
+                                                    ? const BorderSide(color: Colors.white, width: 1)
+                                                    : BorderSide.none,
+                                              ),
                                               title: TranslatedText(
                                                 'new_playlist',
                                               ),
@@ -5286,6 +5574,12 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                       final result = await showDialog<String>(
                                                         context: context,
                                                         builder: (context) => AlertDialog(
+                                                          shape: RoundedRectangleBorder(
+                                                            borderRadius: BorderRadius.circular(16),
+                                                            side: isAmoled && isDark
+                                                                ? const BorderSide(color: Colors.white, width: 1)
+                                                                : BorderSide.none,
+                                                          ),
                                                           title: TranslatedText(
                                                             'rename_playlist',
                                                           ),
@@ -5357,6 +5651,12 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                       final confirm = await showDialog<bool>(
                                                         context: context,
                                                         builder: (context) => AlertDialog(
+                                                          shape: RoundedRectangleBorder(
+                                                            borderRadius: BorderRadius.circular(16),
+                                                            side: isAmoled && isDark
+                                                                ? const BorderSide(color: Colors.white, width: 1)
+                                                                : BorderSide.none,
+                                                          ),
                                                           title: TranslatedText(
                                                             'delete_playlist',
                                                           ),
@@ -5415,8 +5715,8 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             );
           },
         ),
-      ),
-    );
+      );
+    
   }
 
   Widget _buildPlaylistArtworkGrid(Map<String, dynamic> playlist) {
@@ -5702,217 +6002,6 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
-  // Función para buscar el artista en YouTube
-  Future<void> _searchArtistOnYouTube(String artistName) async {
-    try {
-      // Codificar la consulta para la URL
-      final encodedQuery = Uri.encodeComponent(artistName);
-      final youtubeSearchUrl =
-          'https://www.youtube.com/results?search_query=$encodedQuery';
-
-      // Intentar abrir YouTube en el navegador o en la app
-      final url = Uri.parse(youtubeSearchUrl);
-
-      if (await canLaunchUrl(url)) {
-        await launchUrl(url, mode: LaunchMode.externalApplication);
-      } else {
-        // ignore: use_build_context_synchronously
-      }
-    } catch (e) {
-      // ignore: avoid_print
-    }
-  }
-
-  // Función para buscar el artista en YouTube Music
-  Future<void> _searchArtistOnYouTubeMusic(String artistName) async {
-    try {
-      // Codificar la consulta para la URL
-      final encodedQuery = Uri.encodeComponent(artistName);
-      
-      // URL correcta para búsqueda en YouTube Music
-      final ytMusicSearchUrl = 'https://music.youtube.com/search?q=$encodedQuery';
-
-      // Intentar abrir YouTube Music en el navegador o en la app
-      final url = Uri.parse(ytMusicSearchUrl);
-
-      if (await canLaunchUrl(url)) {
-        await launchUrl(url, mode: LaunchMode.externalApplication);
-      } else {
-        // ignore: use_build_context_synchronously
-      }
-    } catch (e) {
-      // ignore: avoid_print
-    }
-  }
-
-  // Función para mostrar opciones de búsqueda del artista
-  Future<void> _showArtistSearchOptions(String artistName) async {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return ValueListenableBuilder<AppColorScheme>(
-          valueListenable: colorSchemeNotifier,
-          builder: (context, colorScheme, child) {
-            final isAmoled = colorScheme == AppColorScheme.amoled;
-            final isDark = Theme.of(context).brightness == Brightness.dark;
-            
-            return AlertDialog(
-              title: Center(
-                child: TranslatedText(
-                  'search_artist',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              content: SizedBox(
-                width: double.maxFinite,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    SizedBox(height: 18),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Row(
-                        children: [
-                          SizedBox(width: 4),
-                          TranslatedText(
-                            'search_options',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Theme.of(context).colorScheme.onSurface,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    SizedBox(height: 20),
-                    // Tarjeta de YouTube
-                    InkWell(
-                      onTap: () {
-                        Navigator.of(context).pop();
-                        _searchArtistOnYouTube(artistName);
-                      },
-                      borderRadius: BorderRadius.circular(16),
-                      child: Container(
-                        width: double.infinity,
-                        padding: EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: isAmoled && isDark
-                              ? Colors.white.withValues(alpha: 0.1)
-                              : Theme.of(context).colorScheme.secondaryContainer,
-                          borderRadius: BorderRadius.only(
-                            topLeft: Radius.circular(16),
-                            topRight: Radius.circular(16),
-                            bottomLeft: Radius.circular(4),
-                            bottomRight: Radius.circular(4),
-                          ),
-                          border: Border.all(
-                            color: isAmoled && isDark
-                                ? Colors.white.withValues(alpha: 0.2)
-                                : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
-                            width: 1,
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Image.asset(
-                                'assets/icon/Youtube_logo.png',
-                                width: 30,
-                                height: 30,
-                              ),
-                            ),
-                            SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                'YouTube',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                  color: isAmoled && isDark
-                                      ? Colors.white
-                                      : Theme.of(context).colorScheme.onSurface,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    SizedBox(height: 4),
-                    // Tarjeta de YouTube Music
-                    InkWell(
-                      onTap: () {
-                        Navigator.of(context).pop();
-                        _searchArtistOnYouTubeMusic(artistName);
-                      },
-                      borderRadius: BorderRadius.circular(16),
-                      child: Container(
-                        width: double.infinity,
-                        padding: EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: isAmoled && isDark
-                              ? Colors.white.withValues(alpha: 0.1)
-                              : Theme.of(context).colorScheme.secondaryContainer,
-                          borderRadius: BorderRadius.only(
-                            topLeft: Radius.circular(4),
-                            topRight: Radius.circular(4),
-                            bottomLeft: Radius.circular(16),
-                            bottomRight: Radius.circular(16),
-                          ),
-                          border: Border.all(
-                            color: isAmoled && isDark
-                                ? Colors.white.withValues(alpha: 0.2)
-                                : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
-                            width: 1,
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Image.asset(
-                                'assets/icon/Youtube_Music_icon.png',
-                                width: 30,
-                                height: 30,
-                              ),
-                            ),
-                            SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                'YT Music',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                  color: isAmoled && isDark
-                                      ? Colors.white
-                                      : Theme.of(context).colorScheme.onSurface,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
   // Función para mostrar opciones de búsqueda
   Future<void> _showSearchOptions(SongModel song) async {
     showDialog(
@@ -5925,6 +6014,12 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             final isDark = Theme.of(context).brightness == Brightness.dark;
             
             return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: isAmoled && isDark
+                    ? const BorderSide(color: Colors.white, width: 1)
+                    : BorderSide.none,
+              ),
               title: Center(
                 child: TranslatedText(
                   'search_song',

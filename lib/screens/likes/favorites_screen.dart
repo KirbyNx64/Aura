@@ -18,6 +18,7 @@ import 'package:music/screens/play/player_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:music/widgets/song_info_dialog.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import 'package:music/screens/artist/artist_screen.dart';
 
 enum OrdenFavoritos { normal, alfabetico, invertido, ultimoAgregado }
 
@@ -601,6 +602,35 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                   shortcutsShouldReload.value = !shortcutsShouldReload.value;
                 },
               ),
+              if ((song.artist ?? '').trim().isNotEmpty)
+                ListTile(
+                  leading: const Icon(Icons.person_outline),
+                  title: const TranslatedText('go_to_artist'),
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    final name = (song.artist ?? '').trim();
+                    if (name.isEmpty) return;
+                    Navigator.of(context).push(
+                      PageRouteBuilder(
+                        pageBuilder: (context, animation, secondaryAnimation) =>
+                            ArtistScreen(artistName: name),
+                        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                          const begin = Offset(1.0, 0.0);
+                          const end = Offset.zero;
+                          const curve = Curves.ease;
+                          final tween = Tween(
+                            begin: begin,
+                            end: end,
+                          ).chain(CurveTween(curve: curve));
+                          return SlideTransition(
+                            position: animation.drive(tween),
+                            child: child,
+                          );
+                        },
+                      ),
+                    );
+                  },
+                ),
               ListTile(
                 leading: const Icon(Icons.check_box_outlined),
                 title: TranslatedText('select'),
@@ -789,6 +819,9 @@ class _FavoritesScreenState extends State<FavoritesScreen>
   }
 
   Future<void> _removeFromFavoritesMassive() async {
+    final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
     final selectedSongs =
         (_searchController.text.isNotEmpty ? _filteredFavorites : _favorites)
             .where((s) => _selectedSongIds.contains(s.id));
@@ -796,6 +829,12 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: isAmoled && isDark
+              ? const BorderSide(color: Colors.white, width: 1)
+              : BorderSide.none,
+        ),
         title: TranslatedText('remove_from_favorites'),
         content: Text(
           count == 1
@@ -828,6 +867,10 @@ class _FavoritesScreenState extends State<FavoritesScreen>
   Future<void> _showAddFromRecentsDialog() async {
     final recents = await RecentsDB().getRecents();
     if (!mounted) return;
+
+    final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     final Set<int> selectedIds = {};
     await showDialog(
       context: context,
@@ -835,6 +878,12 @@ class _FavoritesScreenState extends State<FavoritesScreen>
         return StatefulBuilder(
           builder: (context, setStateDialog) {
             return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: isAmoled && isDark
+                    ? const BorderSide(color: Colors.white, width: 1)
+                    : BorderSide.none,
+              ),
               title: TranslatedText('add_from_recents'),
               content: SizedBox(
                 width: double.maxFinite,
@@ -1422,6 +1471,12 @@ class _FavoritesScreenState extends State<FavoritesScreen>
             final isDark = Theme.of(context).brightness == Brightness.dark;
             
             return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: isAmoled && isDark
+                    ? const BorderSide(color: Colors.white, width: 1)
+                    : BorderSide.none,
+              ),
               title: Center(
                 child: TranslatedText(
                   'search_song',

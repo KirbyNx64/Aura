@@ -10,11 +10,11 @@ import 'package:flutter/material.dart';
 /// values of this curve are then being normalized onto the interval from 0 to
 /// 1, but the integration value can always be obtained using the [interval]
 /// property.
-class _IntegralCurve extends Curve {
+class IntegralCurve extends Curve {
   /// Delta for integrating.
   static double delta = 0.01;
 
-  const _IntegralCurve._(this.original, this.integral, this._values);
+  const IntegralCurve._(this.original, this.integral, this._values);
 
   /// The original curve that was integrated.
   final Curve original;
@@ -26,7 +26,7 @@ class _IntegralCurve extends Curve {
   final Map<double, double> _values;
 
   /// The constructor that takes the [original] curve.
-  factory _IntegralCurve(Curve original) {
+  factory IntegralCurve(Curve original) {
     double integral = 0.0;
     final Map<double, double> values = {};
 
@@ -42,7 +42,7 @@ class _IntegralCurve extends Curve {
       values[t] = values[t]! / integral;
     }
 
-    return _IntegralCurve._(original, integral, values);
+    return IntegralCurve._(original, integral, values);
   }
 
   /// Transforms a value to the normalized integrated value of the [original]
@@ -150,8 +150,8 @@ class Marquee extends StatefulWidget {
           "The decelerationDuration must be positive or zero as time travel "
           "isn't invented yet.",
         ),
-        accelerationCurve = _IntegralCurve(accelerationCurve),
-        decelerationCurve = _IntegralCurve(decelerationCurve);
+        accelerationCurve = IntegralCurve(accelerationCurve),
+        decelerationCurve = IntegralCurve(decelerationCurve);
 
   /// The text to be displayed.
   ///
@@ -456,7 +456,7 @@ class Marquee extends StatefulWidget {
   ///
   /// * [accelerationDuration] to change the duration of the acceleration.
   /// * [decelerationCurve], the equivalent for decelerating.
-  final _IntegralCurve accelerationCurve;
+  final IntegralCurve accelerationCurve;
 
   /// How long the deceleration takes.
   ///
@@ -506,7 +506,7 @@ class Marquee extends StatefulWidget {
   ///
   /// * [decelerationDuration] to change the duration of the acceleration.
   /// * [accelerationCurve], the equivalent for decelerating.
-  final _IntegralCurve decelerationCurve;
+  final IntegralCurve decelerationCurve;
 
   /// This function will be called if [numberOfRounds] is set and the [Marquee]
   /// finished scrolled the specified number of rounds.

@@ -1,5 +1,6 @@
 import 'package:hive/hive.dart';
 import 'package:on_audio_query/on_audio_query.dart';
+import 'songs_index_db.dart';
 
 class MostPlayedDB {
   static final MostPlayedDB _instance = MostPlayedDB._internal();
@@ -27,12 +28,13 @@ class MostPlayedDB {
     entries.sort((a, b) => (b.value['play_count'] as int).compareTo(a.value['play_count'] as int));
     final paths = entries.take(limit).map((e) => e.key as String).toList();
 
-    final OnAudioQuery query = OnAudioQuery();
-    final allSongs = await query.querySongs();
+    // Usar SongsIndexDB para obtener solo canciones no ignoradas
+    final SongsIndexDB songsIndex = SongsIndexDB();
+    final indexedSongs = await songsIndex.getIndexedSongs();
 
     List<SongModel> ordered = [];
     for (final path in paths) {
-      final match = allSongs.where((s) => s.data == path);
+      final match = indexedSongs.where((s) => s.data == path);
       if (match.isNotEmpty) {
         ordered.add(match.first);
       }
@@ -43,5 +45,10 @@ class MostPlayedDB {
   Future<int> getPlayCount(String path) async {
     final b = await box;
     return b.get(path)?['play_count'] ?? 0;
+  }
+
+  Future<void> removeMostPlayed(String path) async {
+    final b = await box;
+    await b.delete(path);
   }
 }

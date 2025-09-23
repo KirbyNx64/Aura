@@ -345,6 +345,9 @@ class _DownloadScreenState extends State<DownloadScreen>
 
   // Nuevo método para obtener información de playlist con continuaciones
   Future<void> _fetchPlaylistInfo(String url) async {
+    final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
     setState(() {
       _isDownloading = true;
       _isPlaylist = true;
@@ -415,6 +418,12 @@ class _DownloadScreenState extends State<DownloadScreen>
           showDialog(
             context: context,
             builder: (context) => AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: isAmoled && isDark
+                    ? const BorderSide(color: Colors.white, width: 1)
+                    : BorderSide.none,
+              ),
               title: Text(LocaleProvider.tr('playlist_partial_fetch')),
               content: Text(
                 '${LocaleProvider.tr('playlist_partial_fetch_desc')}\n\n'
@@ -435,6 +444,12 @@ class _DownloadScreenState extends State<DownloadScreen>
           showDialog(
             context: context,
             builder: (context) => AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: isAmoled && isDark
+                    ? const BorderSide(color: Colors.white, width: 1)
+                    : BorderSide.none,
+              ),
               title: Text(LocaleProvider.tr('large_playlist_confirmation')),
               content: Text(
                 '${LocaleProvider.tr('large_playlist_confirmation_desc')}\n\n'
@@ -827,6 +842,12 @@ class _DownloadScreenState extends State<DownloadScreen>
             final isDark = Theme.of(context).brightness == Brightness.dark;
             
             return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: isAmoled && isDark
+                    ? const BorderSide(color: Colors.white, width: 1)
+                    : BorderSide.none,
+              ),
               title: TranslatedText('select_common_folder'),
               content: SizedBox(
                 width: double.maxFinite,
@@ -937,6 +958,9 @@ class _DownloadScreenState extends State<DownloadScreen>
   Future<void> _pickNewFolder() async {
     final androidInfo = await DeviceInfoPlugin().androidInfo;
     final sdkInt = androidInfo.version.sdkInt;
+    final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
+    if (!mounted) return;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     // Si es Android 9 (API 28) o inferior, usar carpeta Música por defecto
     if (sdkInt <= 28) {
@@ -949,6 +973,12 @@ class _DownloadScreenState extends State<DownloadScreen>
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: isAmoled && isDark
+                ? const BorderSide(color: Colors.white, width: 1)
+                : BorderSide.none,
+          ),
           title: Text(LocaleProvider.tr('information')),
           content: Text(LocaleProvider.tr('android_9_or_lower')),
           actions: [
@@ -981,6 +1011,9 @@ class _DownloadScreenState extends State<DownloadScreen>
   Future<void> _pickDirectory() async {
     final androidInfo = await DeviceInfoPlugin().androidInfo;
     final sdkInt = androidInfo.version.sdkInt;
+    final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
+    if (!mounted) return;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     // Si es Android 9 (API 28) o inferior, usar carpeta Música por defecto
     if (sdkInt <= 28) {
@@ -991,6 +1024,12 @@ class _DownloadScreenState extends State<DownloadScreen>
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: isAmoled && isDark
+                ? const BorderSide(color: Colors.white, width: 1)
+                : BorderSide.none,
+          ),
           title: TranslatedText('info'),
           content: Text(LocaleProvider.tr('android_9_or_lower')),
           actions: [
@@ -1183,6 +1222,9 @@ class _DownloadScreenState extends State<DownloadScreen>
   // }
 
   Future<void> _downloadAudioOnlyExplode() async {
+    final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
     final url = _urlController.text.trim();
     if (url.isEmpty) return;
 
@@ -1192,6 +1234,12 @@ class _DownloadScreenState extends State<DownloadScreen>
         showDialog(
           context: context,
           builder: (context) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: isAmoled && isDark
+                  ? const BorderSide(color: Colors.white, width: 1)
+                  : BorderSide.none,
+            ),
             title: Text(LocaleProvider.tr('folder_not_selected')),
             content: Column(
               mainAxisSize: MainAxisSize.min,
@@ -1308,6 +1356,12 @@ class _DownloadScreenState extends State<DownloadScreen>
         showDialog(
           context: context,
           builder: (context) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: isAmoled && isDark
+                  ? const BorderSide(color: Colors.white, width: 1)
+                  : BorderSide.none,
+            ),
             title: Text(LocaleProvider.tr('video_unavailable')),
             content: Text(LocaleProvider.tr('video_unavailable_desc')),
             actions: [
@@ -1328,6 +1382,12 @@ class _DownloadScreenState extends State<DownloadScreen>
         showDialog(
           context: context,
           builder: (context) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: isAmoled && isDark
+                  ? const BorderSide(color: Colors.white, width: 1)
+                  : BorderSide.none,
+            ),
             title: Text(LocaleProvider.tr('download_failed_title')),
             content: Text(
               '${LocaleProvider.tr('download_failed_desc')}\n\n'
@@ -1609,9 +1669,18 @@ class _DownloadScreenState extends State<DownloadScreen>
 
   void _mostrarAlerta({required String titulo, required String mensaje, bool mostrarBotonCarpeta = false}) {
     if (!mounted) return;
+    final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: isAmoled && isDark
+              ? const BorderSide(color: Colors.white, width: 1)
+              : BorderSide.none,
+        ),
         title: Text(titulo),
         content: mostrarBotonCarpeta 
           ? Column(
@@ -1649,11 +1718,20 @@ class _DownloadScreenState extends State<DownloadScreen>
   /// Retorna true si se otorgaron los permisos, false si se canceló
   Future<bool> _mostrarDialogoPermisos(BuildContext context) async {
     bool permisoOtorgado = false;
+
+    final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     
     await showDialog(
       context: context,
       barrierDismissible: false, // No se puede cerrar tocando fuera
       builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: isAmoled && isDark
+              ? const BorderSide(color: Colors.white, width: 1)
+              : BorderSide.none,
+        ),
         title: Text(LocaleProvider.tr('grant_all_files_permission')),
         content: Text(
           '${LocaleProvider.tr('grant_all_files_permission_desc')}\n\n${LocaleProvider.tr('permission_required_for_download')}'
@@ -1893,7 +1971,9 @@ class _DownloadScreenState extends State<DownloadScreen>
     bool isPlaylistDownload = false,
   }) async {
     // Procesar audio sin cambiar estado de UI
-
+    final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
     final baseName = title.replaceAll(RegExp(r'[\\/:*?"<>|]'), '').trim();
     final m4aPath = inputPath;
 
@@ -1944,6 +2024,12 @@ class _DownloadScreenState extends State<DownloadScreen>
         showDialog(
           context: context,
           builder: (context) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: isAmoled && isDark
+                  ? const BorderSide(color: Colors.white, width: 1)
+                  : BorderSide.none,
+            ),
             title: Text(LocaleProvider.tr('audio_processing_error')),
             content: Text(e.toString()),
             actions: [
@@ -1991,6 +2077,8 @@ class _DownloadScreenState extends State<DownloadScreen>
     if (_focusNode.hasFocus && bottomInset == 0) {
       Future.microtask(() => _focusNode.unfocus());
     }
+    final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
       appBar: AppBar(
@@ -2014,6 +2102,12 @@ class _DownloadScreenState extends State<DownloadScreen>
               showDialog(
                 context: context,
                 builder: (context) => AlertDialog(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    side: isAmoled && isDark
+                        ? const BorderSide(color: Colors.white, width: 1)
+                        : BorderSide.none,
+                  ),
                   title: Text(LocaleProvider.tr('want_more_options')),
                   content: Text(LocaleProvider.tr('seal_recommendation')),
                   actions: [
@@ -2055,6 +2149,12 @@ class _DownloadScreenState extends State<DownloadScreen>
               showDialog(
                 context: context,
                 builder: (context) => AlertDialog(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    side: isAmoled && isDark
+                        ? const BorderSide(color: Colors.white, width: 1)
+                        : BorderSide.none,
+                  ),
                   title: Text(LocaleProvider.tr('what_means_each_option')),
                   content: SizedBox(
                     width: double.maxFinite,
@@ -2098,6 +2198,12 @@ class _DownloadScreenState extends State<DownloadScreen>
               showDialog(
                 context: context,
                 builder: (context) => AlertDialog(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    side: isAmoled && isDark
+                        ? const BorderSide(color: Colors.white, width: 1)
+                        : BorderSide.none,
+                  ),
                   title: Text(LocaleProvider.tr('download_info_title')),
                   content: Text(
                     '${LocaleProvider.tr('download_info_desc')}\n\n'
@@ -2207,6 +2313,12 @@ class _DownloadScreenState extends State<DownloadScreen>
                                     showDialog(
                                       context: context,
                                       builder: (context) => AlertDialog(
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(16),
+                                          side: isAmoled && isDark
+                                              ? const BorderSide(color: Colors.white, width: 1)
+                                              : BorderSide.none,
+                                        ),
                                         title: Text(LocaleProvider.tr('error')),
                                         content: Text(LocaleProvider.tr('no_internet_connection')),
                                         actions: [
@@ -2423,6 +2535,7 @@ class _DownloadScreenState extends State<DownloadScreen>
                     ),
                     const SizedBox(height: 8),
                     LinearProgressIndicator(
+                      // ignore: deprecated_member_use
                       year2023: false,
                       value: null, // Barra de progreso indeterminada
                       minHeight: 8,
@@ -2641,6 +2754,7 @@ class _DownloadScreenState extends State<DownloadScreen>
                       const SizedBox(height: 8),
                     ],
                     LinearProgressIndicator(
+                      // ignore: deprecated_member_use
                       year2023: false,
                       value: _progress,
                       minHeight: 8,

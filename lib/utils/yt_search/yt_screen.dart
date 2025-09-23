@@ -20,134 +20,11 @@ import 'package:flutter/foundation.dart';
 import 'package:music/utils/yt_search/stream_provider.dart';
 import 'dart:async';
 import 'package:dio/dio.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:music/utils/notification_service.dart';
+import 'package:music/widgets/image_viewer.dart';
+import 'package:music/screens/artist/artist_screen.dart';
 
-// Función para mostrar la notificación de progreso de descarga
-class DownloadNotificationThrottler {
-  double _lastProgress = 0;
-  DateTime _lastUpdate = DateTime.fromMillisecondsSinceEpoch(0);
-  String _currentTitle = 'Descargando...';
-  static final DownloadNotificationThrottler _instance =
-      DownloadNotificationThrottler._internal();
-  factory DownloadNotificationThrottler() => _instance;
-  DownloadNotificationThrottler._internal();
-
-  void setTitle(String title) {
-    _currentTitle = title;
-  }
-
-  void show(double progress, {int notificationId = 0}) {
-    final now = DateTime.now();
-    final percentDelta = (progress - _lastProgress).abs();
-    final timeDelta = now.difference(_lastUpdate).inMilliseconds;
-    if (percentDelta >= 3 || timeDelta >= 400) {
-      _lastProgress = progress;
-      _lastUpdate = now;
-      showDownloadProgressNotification(
-        progress,
-        _currentTitle,
-        notificationId: notificationId,
-      );
-    }
-  }
-}
-
-Future<void> showDownloadProgressNotification(
-  double progress,
-  String title, {
-  int notificationId = 0,
-}) async {
-  final AndroidNotificationDetails androidPlatformChannelSpecifics =
-      AndroidNotificationDetails(
-        'download_channel_no_vibration',
-        'Descargas',
-        channelDescription: 'Notificaciones de progreso de descarga',
-        importance: Importance.defaultImportance,
-        priority: Priority.defaultPriority,
-        showProgress: true,
-        maxProgress: 100,
-        progress: progress.toInt(),
-        indeterminate: false,
-        onlyAlertOnce: true,
-        enableVibration: false,
-        vibrationPattern: null,
-        ongoing: true,
-      );
-  final NotificationDetails platformChannelSpecifics = NotificationDetails(
-    android: androidPlatformChannelSpecifics,
-  );
-
-  await flutterLocalNotificationsPlugin.show(
-    notificationId,
-    title,
-    '${progress.toInt()}%',
-    platformChannelSpecifics,
-    payload: 'download',
-  );
-}
-
-Future<void> showDownloadCompletedNotification(
-  String title,
-  int notificationId,
-) async {
-  final AndroidNotificationDetails androidPlatformChannelSpecifics =
-      AndroidNotificationDetails(
-        'download_channel_no_vibration',
-        'Descargas',
-        channelDescription: 'Notificaciones de progreso de descarga',
-        importance: Importance.defaultImportance,
-        priority: Priority.defaultPriority,
-        showProgress: false,
-        enableVibration: false,
-        vibrationPattern: null,
-        ongoing: false, // No es persistente
-      );
-  final NotificationDetails platformChannelSpecifics = NotificationDetails(
-    android: androidPlatformChannelSpecifics,
-  );
-
-  await flutterLocalNotificationsPlugin.show(
-    notificationId,
-    title,
-    LocaleProvider.tr('download_complete'),
-    platformChannelSpecifics,
-    payload: 'download_completed',
-  );
-}
-
-Future<void> showDownloadFailedNotification(
-  String title,
-  int notificationId,
-) async {
-  final AndroidNotificationDetails androidPlatformChannelSpecifics =
-      AndroidNotificationDetails(
-        'download_channel_no_vibration',
-        'Descargas',
-        channelDescription: 'Notificaciones de progreso de descarga',
-        importance: Importance.defaultImportance,
-        priority: Priority.defaultPriority,
-        showProgress: false,
-        enableVibration: false,
-        ongoing: true,
-        autoCancel: false,
-      );
-  final NotificationDetails platformChannelSpecifics = NotificationDetails(
-    android: androidPlatformChannelSpecifics,
-  );
-
-  await flutterLocalNotificationsPlugin.show(
-    notificationId,
-    title,
-    LocaleProvider.tr('download_failed_title'),
-    platformChannelSpecifics,
-    payload: 'download_failed',
-  );
-}
-
-Future<void> cancelDownloadNotification({int notificationId = 0}) async {
-  await flutterLocalNotificationsPlugin.cancel(notificationId);
-}
 
 class YtSearchTestScreen extends StatefulWidget {
   final String? initialQuery;
@@ -165,6 +42,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
   List<YtMusicResult> _videoResults = [];
   List<dynamic> _albumResults = [];
   List<Map<String, String>> _playlistResults = [];
+  List<Map<String, dynamic>> _artistResults = [];
   String? _expandedCategory; // 'songs', 'videos', 'album', 'playlists', o null
   bool _loading = false;
   String? _error;
@@ -314,6 +192,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
       _videoResults = [];
       _albumResults = [];
       _playlistResults = [];
+      _artistResults = [];
       _albumSongs = [];
       _currentAlbum = null;
       _playlistSongs = [];
@@ -339,6 +218,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
           _videoResults = [];
           _albumResults = [];
           _playlistResults = [];
+          _artistResults = [];
           _albumSongs = [];
           _currentAlbum = null;
           _playlistSongs = [];
@@ -356,6 +236,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
       _videoResults = [];
       _albumResults = [];
       _playlistResults = [];
+      _artistResults = [];
       _albumSongs = [];
       _currentAlbum = null;
       _playlistSongs = [];
@@ -373,13 +254,15 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
       final videoFuture = _searchVideosOnly(_controller.text);
       final albumFuture = searchAlbumsOnly(_controller.text);
       final playlistFuture = searchPlaylistsOnly(_controller.text);
-      final results = await Future.wait([songFuture, videoFuture, albumFuture, playlistFuture]);
+      final artistFuture = searchArtists(_controller.text, limit: 10);
+      final results = await Future.wait([songFuture, videoFuture, albumFuture, playlistFuture, artistFuture]);
       if (!mounted) return;
       setState(() {
         _songResults = (results[0] as List).cast<YtMusicResult>();
         _videoResults = (results[1] as List).cast<YtMusicResult>();
         _albumResults = (results[2] as List); // No cast<YtMusicResult> aquí
         _playlistResults = (results[3] as List).cast<Map<String, String>>();
+        _artistResults = (results[4] as List).cast<Map<String, dynamic>>();
         // print('Álbumes encontrados:  [32m${_albumResults.length} [0m');
         _loading = false;
       });
@@ -436,6 +319,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
             _songResults = [];
             _videoResults = [];
             _albumResults = [];
+            _artistResults = [];
             _hasSearched = false;
             _error = null;
           });
@@ -513,6 +397,42 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
     super.dispose();
   }
 
+  // Función helper para manejar imágenes de red de forma segura
+  Widget _buildSafeNetworkImage(String? imageUrl, {double? width, double? height, BoxFit? fit, Widget? fallback}) {
+    if (imageUrl == null || imageUrl.isEmpty) {
+      return fallback ?? const Icon(Icons.music_note, size: 32);
+    }
+    
+    return Image.network(
+      imageUrl,
+      width: width,
+      height: height,
+      fit: fit ?? BoxFit.cover,
+      errorBuilder: (context, error, stackTrace) {
+        return fallback ?? const Icon(Icons.music_note, size: 32);
+      },
+      loadingBuilder: (context, child, loadingProgress) {
+        if (loadingProgress == null) return child;
+        return Container(
+          width: width,
+          height: height,
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surfaceContainer,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Center(
+            child: CircularProgressIndicator(
+              color: Colors.transparent,
+              value: loadingProgress.expectedTotalBytes != null
+                  ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                  : null,
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   @override
   void didChangeMetrics() {
     final viewInsets =
@@ -528,6 +448,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
     setState(() {
       _songResults = [];
       _videoResults = [];
+      _artistResults = [];
       _error = null;
       _hasSearched = false;
       _loading = false;
@@ -722,6 +643,9 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
   Future<void> _pickDirectory() async {
     final androidInfo = await DeviceInfoPlugin().androidInfo;
     final sdkInt = androidInfo.version.sdkInt;
+    final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
+    if (!mounted) return;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     // Android 9 or lower: use default Music folder
     if (sdkInt <= 28) {
@@ -733,6 +657,12 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: isAmoled && isDark
+                ? const BorderSide(color: Colors.white, width: 1)
+                : BorderSide.none,
+          ),
           title: TranslatedText('info'),
           content: Text(LocaleProvider.tr('android_9_or_lower')),
           actions: [
@@ -765,6 +695,12 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
             final isDark = Theme.of(context).brightness == Brightness.dark;
             
             return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: isAmoled && isDark
+                    ? const BorderSide(color: Colors.white, width: 1)
+                    : BorderSide.none,
+              ),
               title: TranslatedText('select_common_folder'),
               content: SizedBox(
                 width: double.maxFinite,
@@ -961,6 +897,9 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
       }
     }
     _clearSelection();
+    
+    // Mostrar mensaje de confirmación
+    _showMessage(LocaleProvider.tr('success'), LocaleProvider.tr('download_started_for_elements').replaceAll('@count', items.length.toString()));
   }
 
   Future<void> _loadMoreSongs() async {
@@ -1046,6 +985,9 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
 
   @override
   Widget build(BuildContext context) {
+    final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -1101,6 +1043,12 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                         showDialog(
                           context: context,
                           builder: (context) => AlertDialog(
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                              side: isAmoled && isDark
+                                  ? const BorderSide(color: Colors.white, width: 1)
+                                  : BorderSide.none,
+                            ),
                             title: TranslatedText('info'),
                             content: TranslatedText('search_music_in_ytm'),
                             actions: [
@@ -1195,6 +1143,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                         _songResults = [];
                                         _videoResults = [];
                                         _albumResults = [];
+                                        _artistResults = [];
                                       }
                                     });
                                     if (value.isEmpty) {
@@ -1262,9 +1211,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                         Text(_error!, style: const TextStyle(color: Colors.red))
                       else if (_loading)
                         const Expanded(
-                          child: Center(child: CircularProgressIndicator(
-                            year2023: false,
-                          )),
+                          child: Center(child: CircularProgressIndicator()),
                         )
                       else if (_noInternet)
                         Expanded(
@@ -1408,7 +1355,6 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                       child:
                                                           CircularProgressIndicator(
                                                             strokeWidth: 2,
-                                                            year2023: false,
                                                           ),
                                                     ),
                                                     const SizedBox(width: 12),
@@ -1463,7 +1409,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                                 24,
                                                               ),
                                                           child:
-                                                              _YtPreviewPlayer(
+                                                              YtPreviewPlayer(
                                                                 results:
                                                                     _songResults,
                                                                 currentIndex:
@@ -1526,12 +1472,21 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                         child:
                                                             item.thumbUrl !=
                                                                 null
-                                                            ? Image.network(
+                                                            ? _buildSafeNetworkImage(
                                                                 item.thumbUrl!,
                                                                 width: 56,
                                                                 height: 56,
                                                                 fit: BoxFit
                                                                     .cover,
+                                                                fallback: Container(
+                                                                  width: 56,
+                                                                  height: 56,
+                                                                  decoration: BoxDecoration(
+                                                                    color: Theme.of(context).colorScheme.surfaceContainer,
+                                                                    borderRadius: BorderRadius.circular(8),
+                                                                  ),
+                                                                  child: const Icon(Icons.music_note, size: 24, color: Colors.grey),
+                                                                ),
                                                               )
                                                             : Container(
                                                                 width: 56,
@@ -1548,8 +1503,6 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                                   Icons
                                                                       .music_note,
                                                                   size: 32,
-                                                                  color: Colors
-                                                                      .grey,
                                                                 ),
                                                               ),
                                                       ),
@@ -1645,7 +1598,6 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                       child:
                                                           CircularProgressIndicator(
                                                             strokeWidth: 2,
-                                                            year2023: false,
                                                           ),
                                                     ),
                                                     const SizedBox(width: 12),
@@ -1699,7 +1651,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                               const EdgeInsets.all(
                                                                 24,
                                                               ),
-                                                          child: _YtPreviewPlayer(
+                                                          child: YtPreviewPlayer(
                                                             results:
                                                                 _videoResults,
                                                             currentIndex: idx,
@@ -1761,12 +1713,21 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                         child:
                                                             item.thumbUrl !=
                                                                 null
-                                                            ? Image.network(
+                                                            ? _buildSafeNetworkImage(
                                                                 item.thumbUrl!,
                                                                 width: 56,
                                                                 height: 56,
                                                                 fit: BoxFit
                                                                     .cover,
+                                                                fallback: Container(
+                                                                  width: 56,
+                                                                  height: 56,
+                                                                  decoration: BoxDecoration(
+                                                                    color: Theme.of(context).colorScheme.surfaceContainer,
+                                                                    borderRadius: BorderRadius.circular(8),
+                                                                  ),
+                                                                  child: const Icon(Icons.music_note, size: 24),
+                                                                ),
                                                               )
                                                             : Container(
                                                                 width: 56,
@@ -1862,11 +1823,20 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                 child: ClipRRect(
                                                   borderRadius:
                                                       BorderRadius.circular(8),
-                                                  child: Image.network(
+                                                  child: _buildSafeNetworkImage(
                                                     _currentAlbum!['thumbUrl'],
                                                     width: 40,
                                                     height: 40,
                                                     fit: BoxFit.cover,
+                                                    fallback: Container(
+                                                      width: 40,
+                                                      height: 40,
+                                                      decoration: BoxDecoration(
+                                                        color: Theme.of(context).colorScheme.surfaceContainer,
+                                                        borderRadius: BorderRadius.circular(8),
+                                                      ),
+                                                      child: const Icon(Icons.music_note, size: 20),
+                                                    ),
                                                   ),
                                                 ),
                                               ),
@@ -1909,7 +1879,6 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                         const Expanded(
                                           child: Center(
                                             child: CircularProgressIndicator(
-                                              year2023: false,
                                             ),
                                           ),
                                         )
@@ -1999,7 +1968,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                                 const EdgeInsets.all(
                                                                   24,
                                                                 ),
-                                                            child: _YtPreviewPlayer(
+                                                            child: YtPreviewPlayer(
                                                               results:
                                                                   _albumSongs,
                                                               currentIndex: idx,
@@ -2064,12 +2033,21 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                                 item
                                                                     .thumbUrl!
                                                                     .isNotEmpty)
-                                                            ? Image.network(
+                                                            ? _buildSafeNetworkImage(
                                                                 item.thumbUrl!,
                                                                 width: 56,
                                                                 height: 56,
                                                                 fit: BoxFit
                                                                     .cover,
+                                                                fallback: Container(
+                                                                  width: 56,
+                                                                  height: 56,
+                                                                  decoration: BoxDecoration(
+                                                                    color: Theme.of(context).colorScheme.surfaceContainer,
+                                                                    borderRadius: BorderRadius.circular(8),
+                                                                  ),
+                                                                  child: const Icon(Icons.music_note, size: 24),
+                                                                ),
                                                               )
                                                             : (_currentAlbum !=
                                                                       null &&
@@ -2078,12 +2056,21 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                                   (_currentAlbum!['thumbUrl']
                                                                           as String)
                                                                       .isNotEmpty)
-                                                            ? Image.network(
+                                                            ? _buildSafeNetworkImage(
                                                                 _currentAlbum!['thumbUrl'],
                                                                 width: 56,
                                                                 height: 56,
                                                                 fit: BoxFit
                                                                     .cover,
+                                                                fallback: Container(
+                                                                  width: 56,
+                                                                  height: 56,
+                                                                  decoration: BoxDecoration(
+                                                                    color: Theme.of(context).colorScheme.surfaceContainer,
+                                                                    borderRadius: BorderRadius.circular(8),
+                                                                  ),
+                                                                  child: const Icon(Icons.music_note, size: 24),
+                                                                ),
                                                               )
                                                             : Container(
                                                                 width: 56,
@@ -2100,8 +2087,6 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                                   Icons
                                                                       .music_note,
                                                                   size: 32,
-                                                                  color: Colors
-                                                                      .grey,
                                                                 ),
                                                               ),
                                                       ),
@@ -2184,11 +2169,20 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                 child: ClipRRect(
                                                   borderRadius:
                                                       BorderRadius.circular(8),
-                                                  child: Image.network(
+                                                  child: _buildSafeNetworkImage(
                                                     _currentPlaylist!['thumbUrl'],
                                                     width: 40,
                                                     height: 40,
                                                     fit: BoxFit.cover,
+                                                    fallback: Container(
+                                                      width: 40,
+                                                      height: 40,
+                                                      decoration: BoxDecoration(
+                                                        color: Theme.of(context).colorScheme.surfaceContainer,
+                                                        borderRadius: BorderRadius.circular(8),
+                                                      ),
+                                                      child: const Icon(Icons.music_note, size: 20),
+                                                    ),
                                                   ),
                                                 ),
                                               ),
@@ -2222,9 +2216,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                       if (_loadingPlaylistSongs)
                                         const Expanded(
                                           child: Center(
-                                            child: CircularProgressIndicator(
-                                              year2023: false,
-                                            ),
+                                            child: CircularProgressIndicator(),
                                           ),
                                         )
                                       else if (_playlistSongs.isEmpty)
@@ -2311,7 +2303,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                                 const EdgeInsets.all(
                                                               24,
                                                             ),
-                                                            child: _YtPreviewPlayer(
+                                                            child: YtPreviewPlayer(
                                                               results:
                                                                   _playlistSongs,
                                                               currentIndex: idx,
@@ -2376,7 +2368,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                           ),
                                                           child: item.thumbUrl !=
                                                                   null
-                                                              ? Image.network(
+                                                              ? _buildSafeNetworkImage(
                                                                   item.thumbUrl!,
                                                                   width: 56,
                                                                   height: 56,
@@ -2390,12 +2382,21 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                                   (_currentPlaylist!['thumbUrl']
                                                                           as String)
                                                                       .isNotEmpty)
-                                                            ? Image.network(
+                                                            ? _buildSafeNetworkImage(
                                                                 _currentPlaylist!['thumbUrl'],
                                                                 width: 56,
                                                                 height: 56,
                                                                 fit: BoxFit
                                                                     .cover,
+                                                                fallback: Container(
+                                                                  width: 56,
+                                                                  height: 56,
+                                                                  decoration: BoxDecoration(
+                                                                    color: Theme.of(context).colorScheme.surfaceContainer,
+                                                                    borderRadius: BorderRadius.circular(8),
+                                                                  ),
+                                                                  child: const Icon(Icons.music_note, size: 24),
+                                                                ),
                                                               )
                                                             : Container(
                                                                 width: 56,
@@ -2412,8 +2413,6 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                                   Icons
                                                                       .music_note,
                                                                   size: 32,
-                                                                  color: Colors
-                                                                      .grey,
                                                                 ),
                                                               ),
                                                         ),
@@ -2513,7 +2512,6 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                       child:
                                                           CircularProgressIndicator(
                                                             strokeWidth: 2,
-                                                            year2023: false,
                                                           ),
                                                     ),
                                                     const SizedBox(width: 12),
@@ -2540,7 +2538,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                   8,
                                                 ),
                                                 child: playlist['thumbUrl'] != null
-                                                    ? Image.network(
+                                                    ? _buildSafeNetworkImage(
                                                         playlist['thumbUrl']!,
                                                         width: 56,
                                                         height: 56,
@@ -2617,6 +2615,131 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                   // Vista normal: resumen de ambas categorías
                                   return ListView(
                                     children: [
+                                      // Sección Artistas
+                                      if (_artistResults.isNotEmpty)
+                                        Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Padding(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                vertical: 4,
+                                              ),
+                                              child: Text(
+                                                LocaleProvider.tr('artists'),
+                                                style: Theme.of(context)
+                                                    .textTheme
+                                                    .titleMedium
+                                                    ?.copyWith(
+                                                      fontSize: 20,
+                                                    ),
+                                              ),
+                                            ),
+                                            const SizedBox(height: 8),
+                                            Column(
+                                              children: _artistResults.take(3).map((artist) {
+                                                final artistName = artist['name'] ?? 'Artista desconocido';
+                                                final thumbUrl = artist['thumbUrl'];
+                                                final browseId = artist['browseId'];
+                                                return GestureDetector(
+                                                  onTap: () {
+                                                    // print('🚀 Navegando a artista: $artistName con browseId: $browseId');
+                                                    Navigator.of(context).push(
+                                                      PageRouteBuilder(
+                                                        pageBuilder: (context, animation, secondaryAnimation) =>
+                                                            ArtistScreen(artistName: artistName, browseId: browseId),
+                                                        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                                                          const begin = Offset(1.0, 0.0);
+                                                          const end = Offset.zero;
+                                                          const curve = Curves.easeInOutCubic;
+                                                          var tween = Tween(begin: begin, end: end).chain(
+                                                            CurveTween(curve: curve),
+                                                          );
+                                                          return SlideTransition(
+                                                            position: animation.drive(tween),
+                                                            child: child,
+                                                          );
+                                                        },
+                                                        transitionDuration: const Duration(milliseconds: 300),
+                                                      ),
+                                                    );
+                                                  },
+                                                  child: Container(
+                                                    width: double.infinity,
+                                                    margin: const EdgeInsets.symmetric(),
+                                                    child: ListTile(
+                                                      contentPadding: const EdgeInsets.symmetric(
+                                                        horizontal: 0,
+                                                        vertical: 8,
+                                                      ),
+                                                      leading: ClipRRect(
+                                                        borderRadius: BorderRadius.circular(28),
+                                                        child: thumbUrl != null && thumbUrl.isNotEmpty
+                                                            ? _buildSafeNetworkImage(
+                                                                thumbUrl,
+                                                                width: 56,
+                                                                height: 56,
+                                                                fit: BoxFit.cover,
+                                                                fallback: Container(
+                                                                  width: 56,
+                                                                  height: 56,
+                                                                  decoration: BoxDecoration(
+                                                                    color: Theme.of(context).colorScheme.surfaceContainer,
+                                                                    shape: BoxShape.circle,
+                                                                  ),
+                                                                  child: const Icon(Icons.person, size: 28),
+                                                                ),
+                                                              )
+                                                            : Container(
+                                                                width: 56,
+                                                                height: 56,
+                                                                decoration: BoxDecoration(
+                                                                  color: Theme.of(context).colorScheme.surfaceContainer,
+                                                                  shape: BoxShape.circle,
+                                                                ),
+                                                                child: const Icon(Icons.person, size: 28),
+                                                              ),
+                                                      ),
+                                                      title: Text(
+                                                        artistName,
+                                                        maxLines: 1,
+                                                        overflow: TextOverflow.ellipsis,
+                                                      ),
+                                                      trailing: IconButton(
+                                                        icon: const Icon(Icons.chevron_right),
+                                                        tooltip: LocaleProvider.tr('view_artist'),
+                                                        onPressed: () {
+                                                          // print('🚀 Navegando a artista (botón): $artistName con browseId: $browseId');
+                                                          Navigator.of(context).push(
+                                                            PageRouteBuilder(
+                                                              pageBuilder: (context, animation, secondaryAnimation) =>
+                                                                  ArtistScreen(artistName: artistName, browseId: browseId),
+                                                              transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                                                                const begin = Offset(1.0, 0.0);
+                                                                const end = Offset.zero;
+                                                                const curve = Curves.easeInOutCubic;
+                                                                var tween = Tween(begin: begin, end: end).chain(
+                                                                  CurveTween(curve: curve),
+                                                                );
+                                                                return SlideTransition(
+                                                                  position: animation.drive(tween),
+                                                                  child: child,
+                                                                );
+                                                              },
+                                                              transitionDuration: const Duration(milliseconds: 300),
+                                                            ),
+                                                          );
+                                                        },
+                                                      ),
+                                                    ),
+                                                  ),
+                                                );
+                                              }).toList(),
+                                            ),
+                                            const SizedBox(height: 16),
+                                          ],
+                                        ),
                                       // Sección Canciones
                                       if (_songResults.isNotEmpty)
                                         Column(
@@ -2707,7 +2830,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                                     const EdgeInsets.all(
                                                                       24,
                                                                     ),
-                                                                child: _YtPreviewPlayer(
+                                                                child: YtPreviewPlayer(
                                                                   results:
                                                                       _songResults,
                                                                   currentIndex:
@@ -2773,7 +2896,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                               child:
                                                                   item.thumbUrl !=
                                                                       null
-                                                                  ? Image.network(
+                                                                  ? _buildSafeNetworkImage(
                                                                       item.thumbUrl!,
                                                                       width: 56,
                                                                       height:
@@ -2798,8 +2921,6 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                                             .music_note,
                                                                         size:
                                                                             32,
-                                                                        color: Colors
-                                                                            .grey,
                                                                       ),
                                                                     ),
                                                             ),
@@ -2938,7 +3059,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                                   const EdgeInsets.all(
                                                                     24,
                                                                   ),
-                                                              child: _YtPreviewPlayer(
+                                                              child: YtPreviewPlayer(
                                                                 results:
                                                                     _videoResults,
                                                                 currentIndex:
@@ -3003,7 +3124,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                             child:
                                                                 item.thumbUrl !=
                                                                     null
-                                                                ? Image.network(
+                                                                ? _buildSafeNetworkImage(
                                                                     item.thumbUrl!,
                                                                     width: 56,
                                                                     height: 56,
@@ -3136,7 +3257,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                       8,
                                                     ),
                                                     child: playlist['thumbUrl'] != null
-                                                        ? Image.network(
+                                                        ? _buildSafeNetworkImage(
                                                             playlist['thumbUrl']!,
                                                             width: 56,
                                                             height: 56,
@@ -3259,7 +3380,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                           BorderRadius.circular(
                                                             8,
                                                           ),
-                                                      child: Image.network(
+                                                      child: _buildSafeNetworkImage(
                                                         album.thumbUrl!,
                                                         width: 56,
                                                         height: 56,
@@ -3355,16 +3476,134 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
         ],
       ),
       floatingActionButton: null,
+      );
+  }
+
+  // Función para mostrar mensajes con diseño elegante
+  void _showMessage(String title, String message) {
+    showDialog(
+      context: context,
+      builder: (context) => ValueListenableBuilder<AppColorScheme>(
+        valueListenable: colorSchemeNotifier,
+        builder: (context, colorScheme, child) {
+          final isAmoled = colorScheme == AppColorScheme.amoled;
+          final isDark = Theme.of(context).brightness == Brightness.dark;
+          
+          return AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: isAmoled && isDark
+                  ? const BorderSide(color: Colors.white, width: 1)
+                  : BorderSide.none,
+            ),
+            title: Center(
+              child: Text(
+                title,
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            content: SizedBox(
+              width: 400,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(height: 18),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 4),
+                      child: Text(
+                        message,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Theme.of(context).colorScheme.onSurface,
+                        ),
+                        textAlign: TextAlign.left,
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ),
+                  SizedBox(height: 20),
+                  // Tarjeta de aceptar
+                  InkWell(
+                    onTap: () => Navigator.of(context).pop(),
+                    borderRadius: BorderRadius.circular(16),
+                    child: Container(
+                      width: double.infinity,
+                      padding: EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: isAmoled && isDark
+                            ? Colors.white.withValues(alpha: 0.2) // Color personalizado para amoled
+                            : Theme.of(context).colorScheme.primaryContainer,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: isAmoled && isDark
+                              ? Colors.white.withValues(alpha: 0.4) // Borde personalizado para amoled
+                              : Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
+                          width: 2,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(12),
+                              color: isAmoled && isDark
+                                  ? Colors.white.withValues(alpha: 0.2) // Fondo del ícono para amoled
+                                  : Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                            ),
+                            child: Icon(
+                              Icons.check_circle,
+                              size: 30,
+                              color: isAmoled && isDark
+                                  ? Colors.white // Ícono blanco para amoled
+                                  : Theme.of(context).colorScheme.primary,
+                            ),
+                          ),
+                          SizedBox(width: 8),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  LocaleProvider.tr('ok'),
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                    color: isAmoled && isDark
+                                        ? Colors.white // Texto blanco para amoled
+                                        : Theme.of(context).colorScheme.primary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
     );
   }
 }
 
-class _YtPreviewPlayer extends StatefulWidget {
+class YtPreviewPlayer extends StatefulWidget {
   final List<YtMusicResult> results;
   final int currentIndex;
   final String? fallbackThumbUrl;
   final String? fallbackArtist;
-  const _YtPreviewPlayer({
+  const YtPreviewPlayer({
+    super.key,
     required this.results,
     required this.currentIndex,
     this.fallbackThumbUrl,
@@ -3372,10 +3611,10 @@ class _YtPreviewPlayer extends StatefulWidget {
   });
 
   @override
-  State<_YtPreviewPlayer> createState() => _YtPreviewPlayerState();
+  State<YtPreviewPlayer> createState() => YtPreviewPlayerState();
 }
 
-class _YtPreviewPlayerState extends State<_YtPreviewPlayer>
+class YtPreviewPlayerState extends State<YtPreviewPlayer>
     with TickerProviderStateMixin {
   final AudioPlayer _player = AudioPlayer();
   bool _loading = false;
@@ -3412,6 +3651,42 @@ class _YtPreviewPlayerState extends State<_YtPreviewPlayer>
     _playerStateSubscription?.cancel();
     _player.dispose();
     super.dispose();
+  }
+
+  // Función helper para manejar imágenes de red de forma segura
+  Widget _buildSafeNetworkImage(String? imageUrl, {double? width, double? height, BoxFit? fit, Widget? fallback}) {
+    if (imageUrl == null || imageUrl.isEmpty) {
+      return fallback ?? const Icon(Icons.music_note, size: 32);
+    }
+    
+    return Image.network(
+      imageUrl,
+      width: width,
+      height: height,
+      fit: fit ?? BoxFit.cover,
+      errorBuilder: (context, error, stackTrace) {
+        return fallback ?? const Icon(Icons.music_note, size: 32);
+      },
+      loadingBuilder: (context, child, loadingProgress) {
+        if (loadingProgress == null) return child;
+        return Container(
+          width: width,
+          height: height,
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surfaceContainer,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Center(
+            child: CircularProgressIndicator(
+              color: Colors.transparent,
+              value: loadingProgress.expectedTotalBytes != null
+                  ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                  : null,
+            ),
+          ),
+        );
+      },
+    );
   }
 
   void _playPrevious() {
@@ -3471,19 +3746,7 @@ class _YtPreviewPlayerState extends State<_YtPreviewPlayer>
         .checkConnectivity();
     if (connectivityResult.contains(ConnectivityResult.none)) {
       if (!mounted) return;
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: Text('Error'),
-          content: Text(LocaleProvider.tr('no_internet_retry')),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('OK'),
-            ),
-          ],
-        ),
-      );
+      _showMessage('Error', LocaleProvider.tr('no_internet_retry'));
       setState(() {
         _loading = false;
       });
@@ -3558,19 +3821,7 @@ class _YtPreviewPlayerState extends State<_YtPreviewPlayer>
         _loading = false;
       });
       if (!mounted) return;
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: Text('Error'),
-          content: Text('Error al reproducir el preview de la canción'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('OK'),
-            ),
-          ],
-        ),
-      );
+      _showMessage('Error', 'Error al reproducir el preview de la canción');
     }
   }
 
@@ -3584,8 +3835,16 @@ class _YtPreviewPlayerState extends State<_YtPreviewPlayer>
 
   @override
   Widget build(BuildContext context) {
+    final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Card(
       color: Theme.of(context).colorScheme.surfaceContainer,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: isAmoled && isDark
+            ? const BorderSide(color: Colors.white, width: 1)
+            : BorderSide.none,
+      ),
       margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 0),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
@@ -3600,35 +3859,70 @@ class _YtPreviewPlayerState extends State<_YtPreviewPlayer>
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child:
-                          (_currentItem.thumbUrl != null &&
-                              _currentItem.thumbUrl!.isNotEmpty)
-                          ? Image.network(
-                              _currentItem.thumbUrl!,
-                              width: 64,
-                              height: 64,
-                              fit: BoxFit.cover,
-                            )
-                          : (widget.fallbackThumbUrl != null &&
-                                widget.fallbackThumbUrl!.isNotEmpty)
-                          ? Image.network(
-                              widget.fallbackThumbUrl!,
-                              width: 64,
-                              height: 64,
-                              fit: BoxFit.cover,
-                            )
-                          : Container(
-                              width: 64,
-                              height: 64,
-                              color: Colors.grey[300],
-                              child: const Icon(
-                                Icons.music_note,
-                                size: 32,
-                                color: Colors.grey,
+
+                    GestureDetector(
+                      onTap: () {
+                        final imageUrl = _currentItem.thumbUrl ?? widget.fallbackThumbUrl;
+                        if (imageUrl != null && imageUrl.isNotEmpty) {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => ImageViewer(
+                                imageUrl: imageUrl,
+                                title: _currentItem.title,
+                                subtitle: _currentItem.artist ?? widget.fallbackArtist,
+                                videoId: _currentItem.videoId,
                               ),
                             ),
+                          );
+                        }
+                      },
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child:
+                            (_currentItem.thumbUrl != null &&
+                                _currentItem.thumbUrl!.isNotEmpty)
+                            ? _buildSafeNetworkImage(
+                                _currentItem.thumbUrl!,
+                                width: 64,
+                                height: 64,
+                                fit: BoxFit.cover,
+                                fallback: Container(
+                                  width: 64,
+                                  height: 64,
+                                  decoration: BoxDecoration(
+                                    color: Theme.of(context).colorScheme.surfaceContainer,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: const Icon(Icons.music_note, size: 32),
+                                ),
+                              )
+                            : (widget.fallbackThumbUrl != null &&
+                                  widget.fallbackThumbUrl!.isNotEmpty)
+                            ? _buildSafeNetworkImage(
+                                widget.fallbackThumbUrl!,
+                                width: 64,
+                                height: 64,
+                                fit: BoxFit.cover,
+                                fallback: Container(
+                                  width: 64,
+                                  height: 64,
+                                  decoration: BoxDecoration(
+                                    color: Theme.of(context).colorScheme.surfaceContainer,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: const Icon(Icons.music_note, size: 32),
+                                ),
+                              )
+                            : Container(
+                                width: 64,
+                                height: 64,
+                                color: Colors.grey[300],
+                                child: const Icon(
+                                  Icons.music_note,
+                                  size: 32,
+                                ),
+                              ),
+                      ),
                     ),
                     const SizedBox(width: 16),
                     Expanded(
@@ -3767,10 +4061,9 @@ class _YtPreviewPlayerState extends State<_YtPreviewPlayer>
                       child: Center(
                         child: _loading
                             ? SizedBox(
-                                width: 30,
-                                height: 30,
+                                width: 20,
+                                height: 20,
                                 child: CircularProgressIndicator(
-                                  year2023: false,
                                   strokeWidth: 2,
                                   strokeCap: StrokeCap.round,
                                   color: colorSchemeNotifier.value == AppColorScheme.amoled
@@ -3935,6 +4228,123 @@ class _YtPreviewPlayerState extends State<_YtPreviewPlayer>
       final seconds = d.inSeconds.remainder(60).toString().padLeft(2, '0');
       return '$minutes:$seconds';
     }
+  }
+
+  // Función para mostrar mensajes con diseño elegante
+  void _showMessage(String title, String message) {
+    showDialog(
+      context: context,
+      builder: (context) => ValueListenableBuilder<AppColorScheme>(
+        valueListenable: colorSchemeNotifier,
+        builder: (context, colorScheme, child) {
+          final isAmoled = colorScheme == AppColorScheme.amoled;
+          final isDark = Theme.of(context).brightness == Brightness.dark;
+          
+          return AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: isAmoled && isDark
+                  ? const BorderSide(color: Colors.white, width: 1)
+                  : BorderSide.none,
+            ),
+            title: Center(
+              child: Text(
+                title,
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            content: SizedBox(
+              width: 400,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(height: 18),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 4),
+                      child: Text(
+                        message,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Theme.of(context).colorScheme.onSurface,
+                        ),
+                        textAlign: TextAlign.left,
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ),
+                  SizedBox(height: 20),
+                  // Tarjeta de aceptar
+                  InkWell(
+                    onTap: () => Navigator.of(context).pop(),
+                    borderRadius: BorderRadius.circular(16),
+                    child: Container(
+                      width: double.infinity,
+                      padding: EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: isAmoled && isDark
+                            ? Colors.white.withValues(alpha: 0.2) // Color personalizado para amoled
+                            : Theme.of(context).colorScheme.primaryContainer,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: isAmoled && isDark
+                              ? Colors.white.withValues(alpha: 0.4) // Borde personalizado para amoled
+                              : Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
+                          width: 2,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(12),
+                              color: isAmoled && isDark
+                                  ? Colors.white.withValues(alpha: 0.2) // Fondo del ícono para amoled
+                                  : Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                            ),
+                            child: Icon(
+                              Icons.check_circle,
+                              size: 30,
+                              color: isAmoled && isDark
+                                  ? Colors.white // Ícono blanco para amoled
+                                  : Theme.of(context).colorScheme.primary,
+                            ),
+                          ),
+                          SizedBox(width: 8),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  LocaleProvider.tr('ok'),
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                    color: isAmoled && isDark
+                                        ? Colors.white // Texto blanco para amoled
+                                        : Theme.of(context).colorScheme.primary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
   }
 }
 

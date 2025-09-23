@@ -1,5 +1,6 @@
 import 'package:hive/hive.dart';
 import 'package:on_audio_query/on_audio_query.dart';
+import 'songs_index_db.dart';
 
 class RecentsDB {
   static final RecentsDB _instance = RecentsDB._internal();
@@ -39,12 +40,13 @@ class RecentsDB {
     entries.sort((a, b) => b.value.compareTo(a.value)); // Más recientes primero
     final paths = entries.take(maxRecents).map((e) => e.key as String).toList();
 
-    final OnAudioQuery query = OnAudioQuery();
-    final allSongs = await query.querySongs();
+    // Usar SongsIndexDB para obtener solo canciones no ignoradas
+    final SongsIndexDB songsIndex = SongsIndexDB();
+    final indexedSongs = await songsIndex.getIndexedSongs();
 
     List<SongModel> ordered = [];
     for (final path in paths) {
-      final match = allSongs.where((s) => s.data == path);
+      final match = indexedSongs.where((s) => s.data == path);
       if (match.isNotEmpty) {
         ordered.add(match.first);
       }

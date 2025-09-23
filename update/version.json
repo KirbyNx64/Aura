@@ -1,9 +1,9 @@
 {
-  "version": "1.5.1",
+  "version": "1.5.2",
   "apk_urls": {
-    "arm64-v8a": "https://github.com/KirbyNx64/Aura/releases/download/v1.5.1/AuraMusic-v1.5.1-arm64-v8a.apk",
-    "armeabi-v7a": "https://github.com/KirbyNx64/Aura/releases/download/v1.5.1/AuraMusic-v1.5.1-armeabi-v7a.apk",
-    "x86_64": "https://github.com/KirbyNx64/Aura/releases/download/v1.5.1/AuraMusic-v1.5.1-x86_64.apk"
+    "arm64-v8a": "https://github.com/KirbyNx64/Aura/releases/download/v1.5.2/AuraMusic-v1.5.2-arm64-v8a.apk",
+    "armeabi-v7a": "https://github.com/KirbyNx64/Aura/releases/download/v1.5.2/AuraMusic-v1.5.2-armeabi-v7a.apk",
+    "x86_64": "https://github.com/KirbyNx64/Aura/releases/download/v1.5.2/AuraMusic-v1.5.2-x86_64.apk"
   },
-  "changelog": "• Es posible que no se actualice correctamente vía OTA. Descarga manual desde: https://github.com/KirbyNx64/Aura/releases/tag/v1.5.1\n\n• Ajustes visuales en la interfaz.\n\n• Ahora puedes activar o desactivar los gestos del reproductor.\n\n• Nueva sección de Artistas en la pantalla de inicio.\n\n• Al seleccionar la carpeta de guardado se mostrarán primero las carpetas más utilizadas.\n\n• En la barra de reproducción de la preview de canciones en YouTube Search ahora se muestra el progreso de carga de la canción.\n\n• Los streams de audio ahora se guardan en una base de datos y solo se reutilizan cuando están disponibles.\n\n• Se actualizaron dependencias de la app para mayor estabilidad y compatibilidad.\n\n• Otros cambios menores y correcciones internas."
+  "changelog": "• Es posible que no se actualice correctamente vía OTA. Descarga manual desde: https://github.com/KirbyNx64/Aura/releases/tag/v1.5.2\n\n• Artistas en YouTube Search: Ahora los artistas aparecen en las búsquedas de YouTube Music.\n\n• Nueva pantalla de Artistas: Consulta información de artistas y encuentra fácilmente sus canciones.\n\n• Descargar carátula desde la preview de YT Music: Toca la carátula en el reproductor de la preview para descargarla.\n\n• Doble toque para adelantar/retroceder: Haz doble toque en la carátula del reproductor para adelantar o retroceder 10 segundos.\n\n• Visualización de letras mejorada: Las letras de las canciones ahora se muestran de forma más clara y ordenada.\n\n• Asignar letras manualmente: Si no se encuentra la letra o si la letra automática no es la correcta, ahora puedes explorar más opciones de letras y asignar la más adecuada.\n\n• Volumen Boost: Sube el volumen por encima del nivel normal para un sonido más potente.\n\n• Ignorar carpetas: Puedes ignorar carpetas para que no se indexen sus canciones.\n\n• Mejoras visuales generales: Cambios en la interfaz para una experiencia más pulida.\n\n• Corrección de errores: Diversas soluciones de errores y optimizaciones internas."
 }

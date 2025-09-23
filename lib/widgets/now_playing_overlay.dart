@@ -388,6 +388,7 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> {
                                         child: ClipRRect(
                                           borderRadius: BorderRadius.circular(8),
                                           child: LinearProgressIndicator(
+                                            // ignore: deprecated_member_use
                                             year2023: false,
                                             key: ValueKey(total),
                                             value: total > 0

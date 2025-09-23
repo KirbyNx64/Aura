@@ -6,6 +6,7 @@ import 'package:music/l10n/locale_provider.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:music/utils/permission/permission_handler.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:music/utils/notification_service.dart';
 import 'dart:async';
 
 // Clase para manejar la cola de descargas
@@ -64,6 +65,8 @@ class DownloadQueue {
     // Si no hay ninguna descarga en proceso, mostrar el título inmediatamente e iniciar el procesamiento
     if (!_isProcessing) {
       _onDownloadStartCallback?.call(task.title, task.artist, task.notificationId);
+      // Usar el servicio global de notificaciones
+      DownloadNotificationThrottler().setTitle(task.title);
       _processQueue();
     } else {
       // Si ya hay una descarga en proceso, notificar que se agregó a la cola
@@ -86,6 +89,8 @@ class DownloadQueue {
         // Para descargas adicionales (no la primera), notificar el inicio
         if (!_isFirstDownload) {
           _onDownloadStartCallback?.call(task.title, task.artist, task.notificationId);
+          // Usar el servicio global de notificaciones
+          DownloadNotificationThrottler().setTitle(task.title);
         }
         
         // Iniciar la descarga
@@ -130,6 +135,8 @@ class DownloadQueue {
       onProgressUpdate: (progress) {
         // print('Progreso: ${(progress * 100).toStringAsFixed(1)}%');
         _onProgressCallback?.call(progress, task.notificationId);
+        // Usar el servicio global de notificaciones
+        DownloadNotificationThrottler().show(progress * 100, notificationId: task.notificationId);
       },
       onStateUpdate: (isDownloading, isProcessing) {
         // print('Estado: Descargando=$isDownloading, Procesando=$isProcessing');
@@ -138,10 +145,14 @@ class DownloadQueue {
       onError: (title, message) {
         _showDialogSafely(task.context, title, message);
         _onErrorCallback?.call(title, message);
+        // Usar el servicio global de notificaciones
+        showDownloadFailedNotification(title, task.notificationId);
       },
       onSuccess: (title, message) {
         _showDialogSafely(task.context, title, message);
         _onSuccessCallback?.call(title, message, task.notificationId);
+        // Usar el servicio global de notificaciones
+        showDownloadCompletedNotification(title, task.notificationId);
       },
     );
     
