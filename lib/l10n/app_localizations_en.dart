@@ -138,6 +138,8 @@ const Map<String, String> appLocalizationsEn = {
       'Select the quality of artwork when playing music',
   'hero_animation': 'Hero animation',
   'hero_animation_desc': 'Enable Hero animation between overlay and player.',
+  'overlay_next_button': 'Next button in overlay',
+  'overlay_next_button_desc': 'Shows the next song button in the playback overlay.',
   '100_percent_maximum': '100% (Maximum)',
   '80_percent_recommended': '80% (Recommended)',
   '60_percent_performance': '60% (Performance)',

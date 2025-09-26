@@ -182,6 +182,15 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
                 indicatorColor: isAmoled && isDark 
                     ? Colors.white// Color más sutil para amoled
                     : null, // Usar el color por defecto para otros temas
+                labelTextStyle: WidgetStateProperty.resolveWith<TextStyle?>(
+                  (Set<WidgetState> states) {
+                    final isSelected = states.contains(WidgetState.selected);
+                    return Theme.of(context).textTheme.labelSmall?.copyWith(
+                      overflow: TextOverflow.ellipsis,
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                    );
+                  },
+                ),
               );
             },
           );

@@ -63,12 +63,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _loadColorScheme();
     _loadArtworkQuality();
     _initHeroAnimationSetting();
+    _loadOverlayNextButtonSetting();
   }
 
   Future<void> _initHeroAnimationSetting() async {
     final prefs = await SharedPreferences.getInstance();
     final useHero = prefs.getBool('use_hero_animation') ?? true;
     heroAnimationNotifier.value = useHero;
+  }
+
+  Future<void> _loadOverlayNextButtonSetting() async {
+    final prefs = await SharedPreferences.getInstance();
+    final nextButtonEnabled = prefs.getBool('overlay_next_button_enabled') ?? false;
+    overlayNextButtonEnabled.value = nextButtonEnabled;
   }
 
   Future<void> _loadArtworkQuality() async {
@@ -3575,6 +3582,50 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             child: Column(
               children: [
+                ValueListenableBuilder<bool>(
+                  valueListenable: overlayNextButtonEnabled,
+                  builder: (context, value, child) {
+                    return SwitchListTile(
+                      value: value,
+                      onChanged: (v) async {
+                        final prefs = await SharedPreferences.getInstance();
+                        await prefs.setBool('overlay_next_button_enabled', v);
+                        overlayNextButtonEnabled.value = v;
+                        setState(() {});
+                      },
+                      title: Text(LocaleProvider.tr('overlay_next_button')),
+                      subtitle: Text(
+                        LocaleProvider.tr('overlay_next_button_desc'),
+                        style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7)),
+                      ),
+                      secondary: const Icon(Symbols.skip_next_rounded, grade: 200),
+                      thumbIcon: WidgetStateProperty.resolveWith<Icon?>((Set<WidgetState> states) {
+                        if (states.contains(WidgetState.selected)) {
+                          return const Icon(Icons.check, size: 20);
+                        } else {
+                          return const Icon(Icons.close, size: 20);
+                        }
+                      }),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 4),
+          Card(
+            color: cardColor,
+            margin: EdgeInsets.zero,
+            shape: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(4),
+                topRight: Radius.circular(4),
+                bottomLeft: Radius.circular(4),
+                bottomRight: Radius.circular(4),
+              ),
+            ),
+            child: Column(
+              children: [
                 ListTile(
                   leading: const Icon(Icons.lyrics_outlined),
                   title: Text(LocaleProvider.tr('delete_lyrics')),
@@ -3741,9 +3792,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7)),
                   ),
                   onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const UpdateScreen()),
+                    Navigator.of(context).push(
+                      PageRouteBuilder(
+                        pageBuilder:
+                            (context, animation, secondaryAnimation) =>
+                                const UpdateScreen(),
+                        transitionsBuilder:
+                            (context, animation, secondaryAnimation, child) {
+                          const begin = Offset(1.0, 0.0);
+                          const end = Offset.zero;
+                          const curve = Curves.ease;
+                          final tween = Tween(
+                            begin: begin,
+                            end: end,
+                          ).chain(CurveTween(curve: curve));
+                          return SlideTransition(
+                            position: animation.drive(tween),
+                            child: child,
+                          );
+                        },
+                      ),
                     );
                   },
                 ),

@@ -1115,13 +1115,14 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         errorBuilder: (context, error, stackTrace) {
                           return Container(
                             decoration: BoxDecoration(
-                              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                              color: colorSchemeNotifier.value == AppColorScheme.amoled
+                                  ? Colors.white.withValues(alpha: 0.1)
+                                  : Theme.of(context).colorScheme.secondaryContainer.withValues(alpha: 0.8),
                             ),
                             child: Center(
                               child: Icon(
                                 Icons.person,
                                 size: 40,
-                                color: Theme.of(context).colorScheme.primary,
                               ),
                             ),
                           );
@@ -1130,7 +1131,9 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           if (loadingProgress == null) return child;
                           return Container(
                             decoration: BoxDecoration(
-                              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                              color: colorSchemeNotifier.value == AppColorScheme.amoled
+                                  ? Colors.white.withValues(alpha: 0.1)
+                                  : Theme.of(context).colorScheme.secondaryContainer.withValues(alpha: 0.8),
                             ),
                             child: Center(
                               child: CircularProgressIndicator(
@@ -1146,13 +1149,14 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       )
                     : Container(
                         decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                          color: colorSchemeNotifier.value == AppColorScheme.amoled
+                              ? Colors.white.withValues(alpha: 0.1)
+                              : Theme.of(context).colorScheme.secondaryContainer.withValues(alpha: 0.8),
                         ),
                         child: Center(
                           child: Icon(
                             Icons.person,
                             size: 40,
-                            color: Theme.of(context).colorScheme.primary,
                           ),
                         ),
                       ),
@@ -2824,7 +2828,9 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               SizedBox(
                 width: 200,
                 child: LinearProgressIndicator(
-                  backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
+                  minHeight: 6,
+                  borderRadius: BorderRadius.circular(8),
+                  backgroundColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
                   valueColor: AlwaysStoppedAnimation<Color>(
                     Theme.of(context).colorScheme.primary,
                   ),
@@ -5047,9 +5053,9 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                   vertical: 4,
                                 ),
                                 child: Material(
-                                  color: Theme.of(
-                                    context,
-                                  ).colorScheme.surfaceContainer,
+                                  color: colorSchemeNotifier.value == AppColorScheme.amoled
+                                      ? Colors.white.withValues(alpha: 0.1)
+                                      : Theme.of(context).colorScheme.secondaryContainer.withValues(alpha: 0.4),
                                   borderRadius: BorderRadius.circular(12),
                                   child: ListTile(
                                     leading: Icon(
@@ -5101,11 +5107,25 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                         ),
                                       ),
                                       onPressed: () {
-                                        Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                            builder: (_) =>
-                                                const UpdateScreen(),
+                                        Navigator.of(context).push(
+                                          PageRouteBuilder(
+                                            pageBuilder:
+                                                (context, animation, secondaryAnimation) =>
+                                                    const UpdateScreen(),
+                                            transitionsBuilder:
+                                                (context, animation, secondaryAnimation, child) {
+                                              const begin = Offset(1.0, 0.0);
+                                              const end = Offset.zero;
+                                              const curve = Curves.ease;
+                                              final tween = Tween(
+                                                begin: begin,
+                                                end: end,
+                                              ).chain(CurveTween(curve: curve));
+                                              return SlideTransition(
+                                                position: animation.drive(tween),
+                                                child: child,
+                                              );
+                                            },
                                           ),
                                         );
                                       },

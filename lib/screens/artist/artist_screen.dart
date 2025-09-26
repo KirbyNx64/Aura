@@ -903,26 +903,31 @@ class _ArtistScreenState extends State<ArtistScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      if (_artist!['thumbUrl'] != null)
-                        Center(
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(100),
-                            child: _buildSafeNetworkImage(
-                              _artist!['thumbUrl'],
+                      Center(
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(100),
+                          child: _buildSafeNetworkImage(
+                            _artist!['thumbUrl'],
+                            width: 160,
+                            height: 160,
+                            fit: BoxFit.cover,
+                            fallback: Container(
                               width: 160,
                               height: 160,
-                              fit: BoxFit.cover,
-                              fallback: const Icon(
+                              decoration: BoxDecoration(
+                                color: colorSchemeNotifier.value == AppColorScheme.amoled
+                                    ? Colors.white.withValues(alpha: 0.1)
+                                    : Theme.of(context).colorScheme.secondaryContainer.withValues(alpha: 0.8),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
                                 Icons.person,
                                 size: 120,
                               ),
                             ),
                           ),
-                        )
-                      else
-                        const Center(
-                          child: Icon(Icons.person, size: 120),
                         ),
+                      ),
                       const SizedBox(height: 24),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,

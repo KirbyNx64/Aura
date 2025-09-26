@@ -1027,14 +1027,15 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     showModalBottomSheet(
       context: safeContext,
       isScrollControlled: true,
-      builder: (context) => Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom,
-          left: 16,
-          right: 16,
-          top: 24,
-        ),
-        child: Column(
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom,
+            left: 16,
+            right: 16,
+            top: 24,
+          ),
+          child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
@@ -1123,6 +1124,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
             ),
             const SizedBox(height: 12),
           ],
+        ),
         ),
       ),
     );

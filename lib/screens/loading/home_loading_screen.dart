@@ -55,7 +55,9 @@ class HomeLoadingScreen extends StatelessWidget {
             SizedBox(
               width: 200,
               child: LinearProgressIndicator(
-                backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
+                minHeight: 6,
+                borderRadius: BorderRadius.circular(8),
+                backgroundColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
                 valueColor: AlwaysStoppedAnimation<Color>(
                   Theme.of(context).colorScheme.primary,
                 ),

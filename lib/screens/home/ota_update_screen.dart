@@ -27,11 +27,14 @@ class _UpdateScreenState extends State<UpdateScreen> {
 
   // Estado para saber si ya buscó actualización
   bool _hasChecked = false;
+  // Estado para saber si está buscando actualizaciones
+  bool _isChecking = false;
 
   Future<void> _checkUpdate() async {
     setState(() {
       _status = LocaleProvider.tr('checking_update');
       _hasChecked = true;
+      _isChecking = true;
       _version = '';
       _changelog = '';
       _apkUrl = null;
@@ -43,6 +46,7 @@ class _UpdateScreenState extends State<UpdateScreen> {
       if (mounted) {
         setState(() {
           _status = LocaleProvider.tr('no_updates_available');
+          _isChecking = false;
         });
       }
     } else {
@@ -52,6 +56,7 @@ class _UpdateScreenState extends State<UpdateScreen> {
           _changelog = updateInfo.changelog;
           _apkUrl = updateInfo.apkUrl;
           _status = LocaleProvider.tr('ready_to_download');
+          _isChecking = false;
         });
       }
     }
@@ -503,7 +508,40 @@ class _UpdateScreenState extends State<UpdateScreen> {
                   ),
                 ],
               )
-            : _version.isEmpty && _hasChecked
+            : _version.isEmpty && _hasChecked && _isChecking
+            ? Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 120,
+                      height: 120,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
+                      ),
+                      child: CircularProgressIndicator(
+                        strokeWidth: 4,
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          Theme.of(context).colorScheme.primary,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    Text(
+                      _status,
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w500,
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              )
+            : _version.isEmpty && _hasChecked && !_isChecking
             ? Center(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,

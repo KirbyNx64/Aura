@@ -268,98 +268,185 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  TitleMarquee(
-                                    text: currentSong.title,
-                                    maxWidth:
-                                        MediaQuery.of(context).size.width -
-                                        162, // Ajusta según tu layout
-                                    style: Theme.of(
-                                      context,
-                                    ).textTheme.titleMedium,
+                                  ValueListenableBuilder<bool>(
+                                    valueListenable: overlayNextButtonEnabled,
+                                    builder: (context, nextButtonEnabled, child) {
+                                      // Ajustar el ancho máximo según si el botón next está habilitado
+                                      final maxWidth = nextButtonEnabled 
+                                          ? MediaQuery.of(context).size.width - 210 // Más espacio cuando hay botón next
+                                          : MediaQuery.of(context).size.width - 162; // Espacio normal
+                                      
+                                      return TitleMarquee(
+                                        text: currentSong.title,
+                                        maxWidth: maxWidth,
+                                        style: Theme.of(
+                                          context,
+                                        ).textTheme.titleMedium,
+                                      );
+                                    },
                                   ),
-                                  Text(
-                                    (currentSong.artist == null ||
-                                            currentSong.artist!.trim().isEmpty)
-                                        ? 'Desconocido'
-                                        : currentSong.artist!,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: Theme.of(
-                                      context,
-                                    ).textTheme.bodyMedium,
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          (currentSong.artist == null ||
+                                                  currentSong.artist!.trim().isEmpty)
+                                              ? 'Desconocido'
+                                              : currentSong.artist!,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: Theme.of(
+                                            context,
+                                          ).textTheme.bodyMedium,
+                                        ),
+                                      ),
+                                      Icon(
+                                        Symbols.person_rounded,
+                                        size: 14,
+                                        color: Colors.transparent,
+                                      ),
+                                    ],
                                   ),
                                 ],
                               ),
                             ),
 
-                            RepaintBoundary(
-                              child: ValueListenableBuilder<bool>(
-                                valueListenable: _isPlayingNotifier,
-                                builder: (context, isPlaying, child) {
-                                  return ValueListenableBuilder<AppColorScheme>(
-                                    valueListenable: colorSchemeNotifier,
-                                    builder: (context, colorScheme, child) {
-                                      return Material(
-                                        color: Colors.transparent,
-                                        child: InkWell(
-                                          customBorder: RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(
-                                              isPlaying ? (40 / 3) : (40 / 2),
-                                            ),
-                                          ),
-                                          splashColor: Colors.transparent,
-                                          highlightColor: Colors.transparent,
-                                          onTap: () {
-                                            // Actualizar el estado inmediatamente para mejor UX
-                                            _isPlayingNotifier.value = !isPlaying;
-                                            
-                                            // Ejecutar la acción de audio de forma asíncrona para no bloquear la UI
-                                            Future.microtask(() {
-                                              if (isPlaying) {
-                                                audioHandler?.pause();
-                                              } else {
-                                                audioHandler?.play();
-                                              }
-                                            });
-                                          },
-                                          child: AnimatedContainer(
-                                            duration: const Duration(milliseconds: 250),
-                                            curve: Curves.easeInOut,
-                                            width: 40,
-                                            height: 40,
-                                            decoration: BoxDecoration(
-                                              color: colorScheme == AppColorScheme.amoled
-                                                  ? Colors.white
-                                                  : Theme.of(context).brightness == Brightness.light
-                                                      ? Theme.of(context).colorScheme.onPrimaryContainer.withValues(alpha: 0.7)
-                                                      : colorScheme == AppColorScheme.system
-                                                        ? Theme.of(context).colorScheme.primary
-                                                        : Theme.of(context).colorScheme.primaryContainer,
-                                              borderRadius: BorderRadius.circular(
-                                                isPlaying ? (40 / 3) : (40 / 2),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                RepaintBoundary(
+                                  child: ValueListenableBuilder<bool>(
+                                    valueListenable: _isPlayingNotifier,
+                                    builder: (context, isPlaying, child) {
+                                      return ValueListenableBuilder<AppColorScheme>(
+                                        valueListenable: colorSchemeNotifier,
+                                        builder: (context, colorScheme, child) {
+                                          return Material(
+                                            color: Colors.transparent,
+                                            child: InkWell(
+                                              customBorder: RoundedRectangleBorder(
+                                                borderRadius: BorderRadius.circular(
+                                                  isPlaying ? (40 / 3) : (40 / 2),
+                                                ),
+                                              ),
+                                              splashColor: Colors.transparent,
+                                              highlightColor: Colors.transparent,
+                                              onTap: () {
+                                                // Actualizar el estado inmediatamente para mejor UX
+                                                _isPlayingNotifier.value = !isPlaying;
+                                                
+                                                // Ejecutar la acción de audio de forma asíncrona para no bloquear la UI
+                                                Future.microtask(() {
+                                                  if (isPlaying) {
+                                                    audioHandler?.pause();
+                                                  } else {
+                                                    audioHandler?.play();
+                                                  }
+                                                });
+                                              },
+                                              child: AnimatedContainer(
+                                                duration: const Duration(milliseconds: 250),
+                                                curve: Curves.easeInOut,
+                                                width: 40,
+                                                height: 40,
+                                                decoration: BoxDecoration(
+                                                  color: colorScheme == AppColorScheme.amoled
+                                                      ? Colors.white
+                                                      : Theme.of(context).brightness == Brightness.light
+                                                          ? Theme.of(context).colorScheme.onPrimaryContainer.withValues(alpha: 0.7)
+                                                          : colorScheme == AppColorScheme.system
+                                                            ? Theme.of(context).colorScheme.primary
+                                                            : Theme.of(context).colorScheme.primaryContainer,
+                                                  borderRadius: BorderRadius.circular(
+                                                    isPlaying ? (40 / 3) : (40 / 2),
+                                                  ),
+                                                ),
+                                                child: Center(
+                                                  child: Icon(
+                                                    isPlaying ? Symbols.pause_rounded : Symbols.play_arrow_rounded,
+                                                    grade: 200,
+                                                    size: 28,
+                                                    color: colorScheme == AppColorScheme.amoled
+                                                        ? Colors.black
+                                                        : Theme.of(context).brightness == Brightness.light
+                                                          ? Theme.of(context).colorScheme.secondaryContainer
+                                                          : colorScheme == AppColorScheme.system
+                                                            ? Theme.of(context).colorScheme.onPrimary
+                                                            : Theme.of(context).colorScheme.onPrimaryContainer,
+                                                  ),
+                                                ),
                                               ),
                                             ),
-                                            child: Center(
-                                              child: Icon(
-                                                isPlaying ? Symbols.pause_rounded : Symbols.play_arrow_rounded,
-                                                grade: 200,
-                                                size: 28,
-                                                color: colorScheme == AppColorScheme.amoled
-                                                    ? Colors.black
-                                                    : Theme.of(context).brightness == Brightness.light
-                                                      ? Theme.of(context).colorScheme.surfaceContainer
-                                                      : colorScheme == AppColorScheme.system
-                                                        ? Theme.of(context).colorScheme.onPrimary
-                                                        : Theme.of(context).colorScheme.onPrimaryContainer,
-                                              ),
-                                            ),
-                                          ),
-                                        ),
+                                          );
+                                        },
                                       );
                                     },
-                                  );
-                                },
-                              ),
+                                  ),
+                                ),
+                                
+                                // Botón de siguiente (solo si está habilitado)
+                                ValueListenableBuilder<bool>(
+                                  valueListenable: overlayNextButtonEnabled,
+                                  builder: (context, nextButtonEnabled, child) {
+                                    if (!nextButtonEnabled) return const SizedBox.shrink();
+                                    
+                                    return Padding(
+                                      padding: const EdgeInsets.only(left: 8.0),
+                                      child: RepaintBoundary(
+                                        child: ValueListenableBuilder<AppColorScheme>(
+                                          valueListenable: colorSchemeNotifier,
+                                          builder: (context, colorScheme, child) {
+                                            return Material(
+                                              color: Colors.transparent,
+                                              child: InkWell(
+                                                customBorder: RoundedRectangleBorder(
+                                                  borderRadius: BorderRadius.circular(20),
+                                                ),
+                                                splashColor: Colors.transparent,
+                                                highlightColor: Colors.transparent,
+                                                onTap: () {
+                                                  if (isLoading || !navigationEnabled) return;
+                                                  audioHandler?.skipToNext();
+                                                },
+                                                child: AnimatedContainer(
+                                                  duration: const Duration(milliseconds: 250),
+                                                  curve: Curves.easeInOut,
+                                                  width: 40,
+                                                  height: 40,
+                                                  decoration: BoxDecoration(
+                                                    color: colorScheme == AppColorScheme.amoled
+                                                        ? Colors.white
+                                                        : Theme.of(context).brightness == Brightness.light
+                                                            ? Theme.of(context).colorScheme.onPrimaryContainer.withValues(alpha: 0.7)
+                                                            : colorScheme == AppColorScheme.system
+                                                              ? Theme.of(context).colorScheme.primary
+                                                              : Theme.of(context).colorScheme.primaryContainer,
+                                                    borderRadius: BorderRadius.circular(20),
+                                                  ),
+                                                  child: Center(
+                                                    child: Icon(
+                                                      Symbols.skip_next_rounded,
+                                                      grade: 200,
+                                                      size: 24,
+                                                      color: colorScheme == AppColorScheme.amoled
+                                                          ? Colors.black
+                                                          : Theme.of(context).brightness == Brightness.light
+                                                            ? Theme.of(context).colorScheme.secondaryContainer
+                                                            : colorScheme == AppColorScheme.system
+                                                              ? Theme.of(context).colorScheme.onPrimary
+                                                              : Theme.of(context).colorScheme.onPrimaryContainer,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ],
                             ),
                           ],
                         ),

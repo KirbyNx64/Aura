@@ -677,7 +677,11 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
         const SizedBox(height: 8),
         Expanded(
           child: ListView.builder(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            padding: EdgeInsets.only(
+              left: 16.0,
+              right: 16.0,
+              bottom: MediaQuery.of(context).padding.bottom + 16.0,
+            ),
             itemCount: _searchResults.length,
             itemBuilder: (context, index) {
               final result = _searchResults[index];
@@ -756,6 +760,7 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
                           ? Colors.black
                           : Theme.of(context).colorScheme.onPrimary,
                       padding: const EdgeInsets.all(16),
+                      elevation: 0,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(16),
                       ),

@@ -2792,7 +2792,9 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                                   width: 56,
                                                                   height: 56,
                                                                   decoration: BoxDecoration(
-                                                                    color: isSystem ? Theme.of(context).colorScheme.secondaryContainer : Theme.of(context).colorScheme.surfaceContainer,
+                                                                    color: colorSchemeNotifier.value == AppColorScheme.amoled
+                                                                        ? Colors.white.withValues(alpha: 0.1)
+                                                                        : (isSystem ? Theme.of(context).colorScheme.secondaryContainer : Theme.of(context).colorScheme.surfaceContainer),
                                                                     shape: BoxShape.circle,
                                                                   ),
                                                                   child: const Icon(Icons.person, size: 28),
@@ -2802,7 +2804,9 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                                 width: 56,
                                                                 height: 56,
                                                                 decoration: BoxDecoration(
-                                                                  color: Theme.of(context).colorScheme.surfaceContainer,
+                                                                  color: colorSchemeNotifier.value == AppColorScheme.amoled
+                                                                      ? Colors.white.withValues(alpha: 0.1)
+                                                                      : Theme.of(context).colorScheme.surfaceContainer,
                                                                   shape: BoxShape.circle,
                                                                 ),
                                                                 child: const Icon(Icons.person, size: 28),

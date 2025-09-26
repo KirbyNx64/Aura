@@ -37,6 +37,8 @@ final ValueNotifier<bool> heroAnimationNotifier = ValueNotifier(true);
 
 final ValueNotifier<bool> playLoadingNotifier = ValueNotifier(false);
 
+final ValueNotifier<bool> overlayNextButtonEnabled = ValueNotifier(false);
+
 // Notifier para controlar si el overlay puede abrir la pantalla del reproductor
 final ValueNotifier<bool> overlayPlayerNavigationEnabled = ValueNotifier(true);
 
