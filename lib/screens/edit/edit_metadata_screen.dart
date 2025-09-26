@@ -370,6 +370,28 @@ class _EditMetadataScreenState extends State<EditMetadataScreen> {
     
     return Scaffold(
       appBar: AppBar(
+        leading: IconButton(
+          constraints: const BoxConstraints(
+            minWidth: 40,
+            minHeight: 40,
+            maxWidth: 40,
+            maxHeight: 40,
+          ),
+          padding: EdgeInsets.zero,
+          icon: Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
+            ),
+            child: const Icon(
+              Icons.arrow_back,
+              size: 24,
+            ),
+          ),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
         title: TranslatedText('edit_song_info'),
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         surfaceTintColor: Colors.transparent,
@@ -395,7 +417,8 @@ class _EditMetadataScreenState extends State<EditMetadataScreen> {
           ),
         ],
       ),
-      body: SingleChildScrollView(
+      body: SafeArea(
+        child: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -565,6 +588,7 @@ class _EditMetadataScreenState extends State<EditMetadataScreen> {
             ),
           ],
         ),
+      ),
       ),
     );
   }

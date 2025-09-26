@@ -2,6 +2,7 @@ import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
 import 'package:music/utils/permission/permission_handler.dart';
 import 'package:music/utils/theme_preferences.dart';
+import 'package:dynamic_color/dynamic_color.dart';
 import 'package:music/widgets/bottom_nav.dart';
 import 'package:music/screens/home/home_screen.dart';
 import 'package:music/screens/likes/favorites_screen.dart';
@@ -20,6 +21,10 @@ import 'package:music/utils/audio/background_audio_handler.dart';
 import 'package:music/utils/db/songs_index_db.dart';
 import 'package:music/utils/db/artists_db.dart';
 import 'package:on_audio_query/on_audio_query.dart';
+import 'package:flutter_sharing_intent/model/sharing_file.dart';
+import 'package:music/utils/sharing_handler.dart';
+import 'package:music/utils/yt_preview_modal.dart';
+import 'dart:async';
 
 // Cambiar de late final a nullable para mejor manejo de errores
 AudioHandler? audioHandler;
@@ -156,7 +161,136 @@ class _MainNavRootState extends State<MainNavRoot> {
   final GlobalKey ytScreenKey = GlobalKey();
   final GlobalKey foldersScreenKey = GlobalKey();
   
+  StreamSubscription? _sharingSubscription;
 
+  @override
+  void initState() {
+    super.initState();
+    _initializeSharingHandler();
+  }
+
+  @override
+  void dispose() {
+    _sharingSubscription?.cancel();
+    super.dispose();
+  }
+
+  /// Inicializa el manejador de enlaces compartidos
+  void _initializeSharingHandler() {
+    // Escuchar enlaces compartidos entrantes
+    _sharingSubscription = SharingHandler.sharingIntentStream.listen(
+      (List<SharedFile> sharedFiles) async {
+        await _handleSharedLinks(sharedFiles);
+      },
+      onError: (error) {
+        // print('Error en sharing intent: $error');
+      },
+    );
+
+    // Procesar enlaces compartidos iniciales (cuando la app se abre desde un enlace)
+    SharingHandler.getInitialSharingMedia().then((List<SharedFile> sharedFiles) {
+      if (sharedFiles.isNotEmpty) {
+        _handleSharedLinks(sharedFiles);
+      }
+    });
+  }
+
+  /// Maneja los enlaces compartidos de YouTube
+  Future<void> _handleSharedLinks(List<SharedFile> sharedFiles) async {
+    try {
+      final youtubeResults = await SharingHandler.processSharedLinks(sharedFiles);
+      
+      if (youtubeResults.isNotEmpty) {
+        // Cambiar a la pestaña de YouTube (índice 1)
+        selectedTabIndex.value = 1;
+        
+        // Abrir el YtPreviewPlayer con los resultados
+        if (mounted) {
+          _openYtPreviewPlayer(youtubeResults);
+        }
+      } else {
+        // No se encontraron resultados válidos
+        if (mounted) {
+          _showErrorDialog(
+            LocaleProvider.tr('error'),
+            LocaleProvider.tr('youtube_link_invalid'),
+          );
+        }
+      }
+    } catch (e) {
+      // Mostrar diálogo de error si algo falla
+      if (mounted) {
+        _showErrorDialog(
+          LocaleProvider.tr('error'),
+          LocaleProvider.tr('youtube_processing_error').replaceAll('@error', e.toString()),
+        );
+      }
+    }
+  }
+
+  /// Abre el YtPreviewPlayer con los resultados de YouTube
+  void _openYtPreviewPlayer(List<dynamic> results) {
+    // Abrir el modal directamente desde aquí
+    _showYtPreviewPlayerModal(results);
+  }
+
+  /// Muestra el modal del YtPreviewPlayer
+  void _showYtPreviewPlayerModal(List<dynamic> results) {
+    if (results.isEmpty) {
+      _showErrorDialog(
+        LocaleProvider.tr('error'),
+        LocaleProvider.tr('youtube_no_results'),
+      );
+      return;
+    }
+    
+    // Navegar a la pestaña de YouTube primero
+    selectedTabIndex.value = 1;
+    
+    // Obtener el contexto de la aplicación
+    final context = homeScreenKey.currentContext ?? ytScreenKey.currentContext;
+    if (context != null) {
+      // Esperar un momento y luego abrir el modal
+      Future.delayed(const Duration(milliseconds: 300), () {
+        if (mounted) {
+          if (!context.mounted) return;
+          try {
+            YtPreviewModal.show(context, results);
+          } catch (e) {
+            _showErrorDialog(
+              LocaleProvider.tr('error'),
+              LocaleProvider.tr('youtube_modal_error').replaceAll('@error', e.toString()),
+            );
+          }
+        }
+      });
+    } else {
+      _showErrorDialog(
+        LocaleProvider.tr('error'),
+        LocaleProvider.tr('youtube_context_error'),
+      );
+    }
+  }
+
+  /// Muestra un diálogo de error
+  void _showErrorDialog(String title, String message) {
+    final context = homeScreenKey.currentContext ?? ytScreenKey.currentContext;
+    if (context != null && context.mounted) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text(title),
+          content: Text(message),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text(LocaleProvider.tr('ok')),
+            ),
+          ],
+        ),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -236,6 +370,13 @@ void main() async {
       statusBarIconBrightness: Brightness.light,
       systemNavigationBarDividerColor: Colors.transparent,
     ),
+  );
+  
+  // Para Android 15+, asegurar que el contenido no se superponga con la barra de navegación
+  // sin cambiar los colores
+  SystemChrome.setEnabledSystemUIMode(
+    SystemUiMode.manual,
+    overlays: [SystemUiOverlay.top, SystemUiOverlay.bottom],
   );
 
   if (!permisosOk) {
@@ -407,6 +548,10 @@ class MainApp extends StatefulWidget {
 class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
   AppThemeMode _themeMode = AppThemeMode.system;
   bool _isLoading = true;
+  
+  // Variables para mantener los colores dinámicos actuales
+  ColorScheme? _currentLightDynamic;
+  ColorScheme? _currentDarkDynamic;
 
   @override
   void initState() {
@@ -428,13 +573,14 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
     // Reconfigurar la barra de navegación cuando la app regrese
     if (state == AppLifecycleState.resumed) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        _updateSystemNavigationBar();
+        // Usar los colores dinámicos guardados
+        _updateSystemNavigationBar(_currentLightDynamic, _currentDarkDynamic);
       });
     }
   }
 
   // Método para actualizar la barra de navegación del sistema
-  void _updateSystemNavigationBar() {
+  void _updateSystemNavigationBar([ColorScheme? lightDynamic, ColorScheme? darkDynamic]) {
     if (!mounted) return;
 
     try {
@@ -443,15 +589,34 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
           (_themeMode == AppThemeMode.system &&
               MediaQuery.of(context).platformBrightness == Brightness.dark);
 
-      // Crear un tema temporal para obtener los colores del sistema
-      final tempTheme = _buildTheme(
-        isDark ? Brightness.dark : Brightness.light,
-      );
+      // Obtener el color correcto basado en el esquema de color actual
+      Color surfaceColor;
+      
+      if (colorSchemeNotifier.value == AppColorScheme.amoled && isDark) {
+        // Para tema AMOLED, usar negro
+        surfaceColor = Colors.black;
+      } else if (colorSchemeNotifier.value == AppColorScheme.system) {
+        // Para tema sistema, usar los colores dinámicos si están disponibles
+        if (isDark && darkDynamic != null) {
+          surfaceColor = darkDynamic.surface;
+        } else if (!isDark && lightDynamic != null) {
+          surfaceColor = lightDynamic.surface;
+        } else {
+          // Fallback si no hay colores dinámicos
+          surfaceColor = isDark ? const Color(0xFF121212) : const Color(0xFFF5F5F5);
+        }
+      } else {
+        // Para otros temas, crear un tema temporal con el esquema correcto
+        final tempTheme = _buildTheme(
+          isDark ? Brightness.dark : Brightness.light,
+        );
+        surfaceColor = tempTheme.colorScheme.surface;
+      }
 
       // Configurar la barra de navegación del sistema
       SystemChrome.setSystemUIOverlayStyle(
         SystemUiOverlayStyle(
-          systemNavigationBarColor: tempTheme.colorScheme.surface,
+          systemNavigationBarColor: surfaceColor,
           systemNavigationBarIconBrightness: isDark
               ? Brightness.light
               : Brightness.dark,
@@ -467,7 +632,7 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
           if (mounted) {
             SystemChrome.setSystemUIOverlayStyle(
               SystemUiOverlayStyle(
-                systemNavigationBarColor: tempTheme.colorScheme.surface,
+                systemNavigationBarColor: surfaceColor,
                 systemNavigationBarIconBrightness: isDark
                     ? Brightness.light
                     : Brightness.dark,
@@ -517,9 +682,9 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
     });
     // Guardar la preferencia
     await ThemePreferences.setThemeMode(themeMode);
-    // Actualizar la barra de navegación del sistema
+    // Actualizar la barra de navegación del sistema con los colores dinámicos actuales
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _updateSystemNavigationBar();
+      _updateSystemNavigationBar(_currentLightDynamic, _currentDarkDynamic);
     });
   }
 
@@ -528,13 +693,13 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
     colorSchemeNotifier.value = colorScheme;
     // Guardar la preferencia
     await ThemePreferences.setColorScheme(colorScheme);
-    // Actualizar la barra de navegación del sistema
+    // Actualizar la barra de navegación del sistema con los colores dinámicos actuales
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _updateSystemNavigationBar();
+      _updateSystemNavigationBar(_currentLightDynamic, _currentDarkDynamic);
     });
   }
 
-  ThemeData _buildTheme(Brightness brightness) {
+  ThemeData _buildTheme(Brightness brightness, [ColorScheme? dynamicColorScheme]) {
     final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
     if (isAmoled && brightness == Brightness.dark) {
       return ThemeData(
@@ -570,6 +735,17 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
         ),
       );
     }
+    
+    // Si se seleccionó "Sistema" y hay colores dinámicos disponibles, usarlos
+    if (colorSchemeNotifier.value == AppColorScheme.system && dynamicColorScheme != null) {
+      return ThemeData(
+        useMaterial3: true,
+        colorScheme: dynamicColorScheme,
+        brightness: brightness,
+      );
+    }
+    
+    // Usar color personalizado
     return ThemeData(
       useMaterial3: true,
       colorSchemeSeed: ThemePreferences.getColorFromScheme(
@@ -590,28 +766,36 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
       );
     }
 
-    return ValueListenableBuilder<AppColorScheme>(
-      valueListenable: colorSchemeNotifier,
-      builder: (context, colorScheme, child) {
-        // Actualizar la barra de navegación cuando cambie el color
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          _updateSystemNavigationBar();
-        });
+    return DynamicColorBuilder(
+      builder: (ColorScheme? lightDynamic, ColorScheme? darkDynamic) {
+        // Guardar los colores dinámicos actuales
+        _currentLightDynamic = lightDynamic;
+        _currentDarkDynamic = darkDynamic;
+        
+        return ValueListenableBuilder<AppColorScheme>(
+          valueListenable: colorSchemeNotifier,
+          builder: (context, colorScheme, child) {
+            // Actualizar la barra de navegación cuando cambie el color
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              _updateSystemNavigationBar(lightDynamic, darkDynamic);
+            });
 
-        return MaterialApp(
-          title: 'Mi App de Música',
-          debugShowCheckedModeBanner: false,
-          themeMode: _themeMode == AppThemeMode.system
-              ? ThemeMode.system
-              : _themeMode == AppThemeMode.dark
-              ? ThemeMode.dark
-              : ThemeMode.light,
-          theme: _buildTheme(Brightness.light),
-          darkTheme: _buildTheme(Brightness.dark),
-          home: MainNavRoot(
-            setThemeMode: _setThemeMode,
-            setColorScheme: _setColorScheme,
-          ),
+            return MaterialApp(
+              title: 'Mi App de Música',
+              debugShowCheckedModeBanner: false,
+              themeMode: _themeMode == AppThemeMode.system
+                  ? ThemeMode.system
+                  : _themeMode == AppThemeMode.dark
+                  ? ThemeMode.dark
+                  : ThemeMode.light,
+              theme: _buildTheme(Brightness.light, lightDynamic),
+              darkTheme: _buildTheme(Brightness.dark, darkDynamic),
+              home: MainNavRoot(
+                setThemeMode: _setThemeMode,
+                setColorScheme: _setColorScheme,
+              ),
+            );
+          },
         );
       },
     );

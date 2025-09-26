@@ -2079,6 +2079,7 @@ class _DownloadScreenState extends State<DownloadScreen>
     }
     final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isSystem = colorSchemeNotifier.value == AppColorScheme.system;
 
     return Scaffold(
       appBar: AppBar(
@@ -2418,7 +2419,7 @@ class _DownloadScreenState extends State<DownloadScreen>
                 margin: const EdgeInsets.symmetric(vertical: 8),
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surfaceContainer,
+                  color: isSystem ? Theme.of(context).colorScheme.secondaryContainer.withValues(alpha: 0.5) : Theme.of(context).colorScheme.surfaceContainer,
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
@@ -2496,7 +2497,7 @@ class _DownloadScreenState extends State<DownloadScreen>
                 margin: const EdgeInsets.symmetric(vertical: 8),
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surfaceContainer,
+                  color: isSystem ? Theme.of(context).colorScheme.secondaryContainer.withValues(alpha: 0.5) : Theme.of(context).colorScheme.surfaceContainer,
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
@@ -2551,7 +2552,7 @@ class _DownloadScreenState extends State<DownloadScreen>
                 margin: const EdgeInsets.symmetric(vertical: 8),
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primaryContainer.withAlpha(25),
+                  color: isSystem ? Theme.of(context).colorScheme.secondaryContainer.withValues(alpha: 0.5) : Theme.of(context).colorScheme.primaryContainer.withAlpha(25),
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(
                     color: Theme.of(context).colorScheme.primary.withAlpha(76),
@@ -2658,7 +2659,7 @@ class _DownloadScreenState extends State<DownloadScreen>
                 margin: const EdgeInsets.symmetric(vertical: 8),
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surfaceContainer,
+                  color: isSystem ? Theme.of(context).colorScheme.secondaryContainer.withValues(alpha: 0.5) : Theme.of(context).colorScheme.surfaceContainer,
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(

@@ -46,7 +46,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _downloadTypeExplode = false; // true: Explode, false: Directo
   bool _coverQualityHigh = true; // true: Alto, false: Bajo
   String _audioQuality = 'high'; // 'high', 'medium', 'low'
-  AppColorScheme _currentColorScheme = AppColorScheme.deepPurple;
+  AppColorScheme _currentColorScheme = AppColorScheme.system;
   int _artworkQuality = 410; // 80% por defecto
   int? _availableBytesAtDownloadDir;
   int? _totalBytesAtDownloadDir;
@@ -67,7 +67,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _initHeroAnimationSetting() async {
     final prefs = await SharedPreferences.getInstance();
-    final useHero = prefs.getBool('use_hero_animation') ?? false;
+    final useHero = prefs.getBool('use_hero_animation') ?? true;
     heroAnimationNotifier.value = useHero;
   }
 
@@ -2917,28 +2917,50 @@ class _SettingsScreenState extends State<SettingsScreen> {
               mainAxisSpacing: 8,
               childAspectRatio: 1,
             ),
-            itemCount: AppColorScheme.values
-                .where((e) => e.toString() != 'AppColorScheme.grey')
-                .length,
+            itemCount: AppColorScheme.values.length,
             itemBuilder: (context, index) {
-              final filteredSchemes = AppColorScheme.values
-                  .where((e) => e.toString() != 'AppColorScheme.grey')
-                  .toList();
-              final colorScheme = filteredSchemes[index];
-              final color = ThemePreferences.getColorFromScheme(colorScheme);
+              final colorScheme = AppColorScheme.values[index];
               final isSelected = colorScheme == _currentColorScheme;
-
-              return GestureDetector(
-                onTap: () {
-                  setState(() {
-                    _currentColorScheme = colorScheme;
-                  });
-                  widget.setColorScheme?.call(colorScheme);
-                  Navigator.of(context).pop();
-                },
-                child: Container(
+              
+              // Para el color del sistema, mostrar un gradiente multicolor
+              Widget circleWidget;
+              
+              if (colorScheme == AppColorScheme.system) {
+                circleWidget = Container(
                   decoration: BoxDecoration(
-                    color: color,
+                    shape: BoxShape.circle,
+                    gradient: const LinearGradient(
+                      colors: [
+                        Colors.red,
+                        Colors.orange,
+                        Colors.yellow,
+                        Colors.green,
+                        Colors.blue,
+                        Colors.indigo,
+                        Colors.purple,
+                      ],
+                      stops: [0.0, 0.16, 0.33, 0.5, 0.66, 0.83, 1.0],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    border: Border.all(
+                      color: isSelected ? Colors.white : Colors.transparent,
+                      width: 3,
+                    ),
+                  ),
+                  child: isSelected
+                      ? const Icon(Icons.check, color: Colors.white, size: 24)
+                      : const Icon(
+                          Icons.auto_awesome,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                );
+              } else {
+                final displayColor = ThemePreferences.getColorFromScheme(colorScheme);
+                circleWidget = Container(
+                  decoration: BoxDecoration(
+                    color: displayColor,
                     shape: BoxShape.circle,
                     border: Border.all(
                       color: isSelected ? Colors.white : Colors.transparent,
@@ -2948,17 +2970,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   child: isSelected
                       ? const Icon(Icons.check, color: Colors.white, size: 24)
                       : null,
-                ),
+                );
+              }
+
+              return GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _currentColorScheme = colorScheme;
+                  });
+                  widget.setColorScheme?.call(colorScheme);
+                  Navigator.of(context).pop();
+                },
+                child: circleWidget,
               );
             },
           ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: Text(LocaleProvider.tr('cancel')),
-          ),
-        ],
       ),
     );
   }
@@ -2967,6 +2994,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget build(BuildContext context) {
     final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isSystem = colorSchemeNotifier.value == AppColorScheme.system;
+    final cardColor = isSystem && isDark ? Theme.of(context).colorScheme.onSecondary.withValues(alpha: 0.5) : null; 
     
     return Scaffold(
       appBar: AppBar(
@@ -2976,7 +3005,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
         scrolledUnderElevation: 0,
         title: TranslatedText('settings'),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
+          icon: Container(
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
+            ),
+            padding: const EdgeInsets.all(8),
+            child: const Icon(Icons.arrow_back),
+          ),
           onPressed: () => Navigator.of(context).pop(),
         ),
         // Icono de información
@@ -2989,7 +3025,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ],
       ),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + MediaQuery.of(context).padding.bottom),
         children: [
           // Preferencias
           TranslatedText(
@@ -2998,6 +3034,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const SizedBox(height: 8),
           Card(
+            color: cardColor,
             margin: EdgeInsets.zero,
             shape: const RoundedRectangleBorder(
               borderRadius: BorderRadius.only(
@@ -3027,6 +3064,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const SizedBox(height: 4),
           Card(
+            color: cardColor,
             margin: EdgeInsets.zero,
             shape: const RoundedRectangleBorder(
               borderRadius: BorderRadius.only(
@@ -3052,6 +3090,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const SizedBox(height: 4),
           Card(
+            color: cardColor,
             margin: EdgeInsets.zero,
             shape: const RoundedRectangleBorder(
               borderRadius: BorderRadius.only(
@@ -3077,6 +3116,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const SizedBox(height: 4),
           Card(
+            color: cardColor,
             margin: EdgeInsets.zero,
             shape: const RoundedRectangleBorder(
               borderRadius: BorderRadius.only(
@@ -3106,6 +3146,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const SizedBox(height: 8),
           Card(
+            color: cardColor,
             margin: EdgeInsets.zero,
             shape: const RoundedRectangleBorder(
               borderRadius: BorderRadius.only(
@@ -3152,6 +3193,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const SizedBox(height: 4),
           Card(
+            color: cardColor,
             margin: EdgeInsets.zero,
             shape: const RoundedRectangleBorder(
               borderRadius: BorderRadius.only(
@@ -3191,6 +3233,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const SizedBox(height: 4),
           Card(
+            color: cardColor,
             margin: EdgeInsets.zero,
             shape: const RoundedRectangleBorder(
               borderRadius: BorderRadius.only(
@@ -3220,6 +3263,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const SizedBox(height: 4),
           Card(
+            color: cardColor,
             margin: EdgeInsets.zero,
             shape: const RoundedRectangleBorder(  
               borderRadius: BorderRadius.only(
@@ -3249,6 +3293,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const SizedBox(height: 4),
           Card(
+            color: cardColor,
             margin: EdgeInsets.zero,
             shape: const RoundedRectangleBorder(  
               borderRadius: BorderRadius.only(
@@ -3278,6 +3323,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const SizedBox(height: 4),
           Card(
+            color: cardColor,
             margin: EdgeInsets.zero,
             shape: const RoundedRectangleBorder(  
               borderRadius: BorderRadius.only(
@@ -3336,6 +3382,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const SizedBox(height: 8),
           Card(
+            color: cardColor,
             margin: EdgeInsets.zero,
             shape: const RoundedRectangleBorder(
               borderRadius: BorderRadius.only(
@@ -3381,6 +3428,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const SizedBox(height: 4),
           Card(
+            color: cardColor,
             margin: EdgeInsets.zero,
             shape: const RoundedRectangleBorder(
               borderRadius: BorderRadius.only(
@@ -3426,6 +3474,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const SizedBox(height: 4),
           Card(
+            color: cardColor,
             margin: EdgeInsets.zero,
             shape: const RoundedRectangleBorder(
               borderRadius: BorderRadius.only(
@@ -3470,6 +3519,51 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const SizedBox(height: 4),
           Card(
+            color: cardColor,
+            margin: EdgeInsets.zero,
+            shape: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(4),
+                topRight: Radius.circular(4),
+                bottomLeft: Radius.circular(4),
+                bottomRight: Radius.circular(4),
+              ),
+            ),
+            child: Column(
+              children: [
+                ValueListenableBuilder<bool>(
+                  valueListenable: heroAnimationNotifier,
+                  builder: (context, value, child) {
+                    return SwitchListTile(
+                      value: value,
+                      onChanged: (v) async {
+                        final prefs = await SharedPreferences.getInstance();
+                        await prefs.setBool('use_hero_animation', v);
+                        heroAnimationNotifier.value = v;
+                        setState(() {});
+                      },
+                      title: Text(LocaleProvider.tr('hero_animation')),
+                      subtitle: Text(
+                        LocaleProvider.tr('hero_animation_desc'),
+                        style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7)),
+                      ),
+                      secondary: const Icon(Icons.animation),
+                      thumbIcon: WidgetStateProperty.resolveWith<Icon?>((Set<WidgetState> states) {
+                        if (states.contains(WidgetState.selected)) {
+                          return const Icon(Icons.check, size: 20);
+                        } else {
+                          return const Icon(Icons.close, size: 20);
+                        }
+                      }),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 4),
+          Card(
+            color: cardColor,
             margin: EdgeInsets.zero,
             shape: const RoundedRectangleBorder(
               borderRadius: BorderRadius.only(
@@ -3495,6 +3589,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const SizedBox(height: 4),
           Card(
+            color: cardColor,
             margin: EdgeInsets.zero,
             shape: const RoundedRectangleBorder(
               borderRadius: BorderRadius.only(
@@ -3541,6 +3636,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const SizedBox(height: 8),
           Card(
+            color: cardColor,
             margin: EdgeInsets.zero,
             shape: const RoundedRectangleBorder(
               borderRadius: BorderRadius.only(
@@ -3566,6 +3662,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const SizedBox(height: 4),
           Card(
+            color: cardColor,
             margin: EdgeInsets.zero,
             shape: const RoundedRectangleBorder(
               borderRadius: BorderRadius.only(
@@ -3598,6 +3695,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const SizedBox(height: 8),
           Card(
+            color: cardColor,
             margin: EdgeInsets.zero,
             shape: const RoundedRectangleBorder(
               borderRadius: BorderRadius.only(
@@ -3623,6 +3721,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const SizedBox(height: 4),
           Card(
+            color: cardColor,
             margin: EdgeInsets.zero,
             shape: const RoundedRectangleBorder(
               borderRadius: BorderRadius.only(
@@ -3653,6 +3752,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const SizedBox(height: 4),
           Card(
+            color: cardColor,
             margin: EdgeInsets.zero,
             shape: const RoundedRectangleBorder(
               borderRadius: BorderRadius.only(
@@ -3711,7 +3811,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              '${LocaleProvider.tr('version')}: v1.5.2',
+                              '${LocaleProvider.tr('version')}: v1.5.3',
                               style: const TextStyle(fontSize: 15),
                               textAlign: TextAlign.center,
                             ),

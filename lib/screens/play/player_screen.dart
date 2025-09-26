@@ -28,6 +28,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:music/utils/gesture_preferences.dart';
 import 'package:music/screens/artist/artist_screen.dart';
 import 'package:music/screens/play/lyrics_search_screen.dart';
+import 'package:like_button/like_button.dart';
 
 final OnAudioQuery _audioQuery = OnAudioQuery();
 
@@ -113,6 +114,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
       ValueNotifier<double?>(null);
   String? _currentSongDataPath;
   bool _isCurrentFavorite = false;
+  bool _shouldAnimateLikeButton = false;
   final int _lyricsUpdateCounter = 0;
   final ValueNotifier<int> _lyricsUpdateNotifier = ValueNotifier<int>(0);
 
@@ -174,11 +176,12 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
   }
 
   Widget _defaultArtwork(double size) {
+    final isSystem = colorSchemeNotifier.value == AppColorScheme.system;
     return Container(
       width: size,
       height: size,
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainer,
+        color: isSystem ? Theme.of(context).colorScheme.secondaryContainer.withValues(alpha: 0.5) : Theme.of(context).colorScheme.surfaceContainer,
         borderRadius: BorderRadius.circular(16),
       ),
       child: Icon(
@@ -236,11 +239,12 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
   }
 
   Widget _buildModalPlaceholder() {
+    final isSystem = colorSchemeNotifier.value == AppColorScheme.system;
     return Container(
       width: 60,
       height: 60,
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainer,
+        color: isSystem ? Theme.of(context).colorScheme.secondaryContainer.withValues(alpha: 0.5) : Theme.of(context).colorScheme.surfaceContainer,
         borderRadius: BorderRadius.circular(8),
       ),
       child: Icon(Icons.music_note, size: 30),
@@ -1523,6 +1527,8 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                 setState(() {
                   _currentSongDataPath = path;
                   _isCurrentFavorite = fav;
+                  // No animar cuando es cambio de canción, solo cuando es acción del usuario
+                  _shouldAnimateLikeButton = false;
                 });
               }
             }());
@@ -2010,65 +2016,104 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                   return ValueListenableBuilder<bool>(
                                     valueListenable: playLoadingNotifier,
                                     builder: (context, isLoading, _) {
-                                      return AnimatedTapButton(
-                                        onTap: () {
-                                          if (isLoading) return;
-                                          unawaited(() async {
-                                            final path =
-                                                currentMediaItem
-                                                    .extras?['data'] ??
-                                                '';
-                                            if (path.isEmpty) return;
-                                            if (isFav) {
-                                              await FavoritesDB()
-                                                  .removeFavorite(path);
-                                              favoritesShouldReload.value =
-                                                  !favoritesShouldReload.value;
-                                              if (!context.mounted) return;
+                                      return LikeButton(
+                                        isLiked: isFav,
+                                        size: 32,
+                                        animationDuration: _shouldAnimateLikeButton 
+                                            ? const Duration(milliseconds: 800)
+                                            : Duration.zero,
+                                        circleColor: CircleColor(
+                                          start: Theme.of(context).brightness == Brightness.dark 
+                                              ? Colors.white 
+                                              : Colors.black,
+                                          end: Theme.of(context).brightness == Brightness.dark 
+                                              ? Colors.white 
+                                              : Colors.black,
+                                        ),
+                                        bubblesColor: BubblesColor(
+                                          dotPrimaryColor: Theme.of(context).brightness == Brightness.dark 
+                                              ? Colors.white 
+                                              : Colors.black,
+                                          dotSecondaryColor: Theme.of(context).brightness == Brightness.dark 
+                                              ? Colors.white 
+                                              : Colors.black,
+                                        ),
+                                        likeBuilder: (bool isLiked) {
+                                          return Icon(
+                                            isLiked
+                                                ? Symbols.favorite_rounded
+                                                : Symbols.favorite_border_rounded,
+                                            grade: 200,
+                                            fill: isLiked ? 1 : 0,
+                                            size: 32,
+                                            color: Theme.of(
+                                              context,
+                                            ).colorScheme.onSurface,
+                                          );
+                                        },
+                                        onTap: (isLiked) async {
+                                          if (isLoading) return false;
+                                          
+                                          // Activar animación para esta acción
+                                          setState(() {
+                                            _shouldAnimateLikeButton = true;
+                                          });
+                                          
+                                          // Resetear la bandera después de la animación (tiempo generoso)
+                                          Future.delayed(const Duration(milliseconds: 1000), () {
+                                            if (mounted) {
                                               setState(() {
-                                                _isCurrentFavorite = false;
-                                              });
-                                            } else {
-                                              final allSongs = await _audioQuery
-                                                  .querySongs();
-                                              final songList = allSongs
-                                                  .where((s) => s.data == path)
-                                                  .toList();
-                                              if (songList.isEmpty) {
-                                                if (!context.mounted) return;
-                                                ScaffoldMessenger.of(
-                                                  context,
-                                                ).showSnackBar(
-                                                  SnackBar(
-                                                    content: Text(
-                                                      LocaleProvider.tr(
-                                                        'song_not_found',
-                                                      ),
-                                                    ),
-                                                  ),
-                                                );
-                                                return;
-                                              }
-                                              final song = songList.first;
-                                              await _addToFavorites(song);
-                                              if (!context.mounted) return;
-                                              setState(() {
-                                                _isCurrentFavorite = true;
+                                                _shouldAnimateLikeButton = false;
                                               });
                                             }
-                                          }());
+                                          });
+                                          
+                                          final path =
+                                              currentMediaItem
+                                                  .extras?['data'] ??
+                                              '';
+                                          if (path.isEmpty) return false;
+                                          
+                                          if (isLiked) {
+                                            await FavoritesDB()
+                                                .removeFavorite(path);
+                                            favoritesShouldReload.value =
+                                                !favoritesShouldReload.value;
+                                            if (!context.mounted) return false;
+                                            setState(() {
+                                              _isCurrentFavorite = false;
+                                            });
+                                            return false; // Cambiar a no favorito
+                                          } else {
+                                            final allSongs = await _audioQuery
+                                                .querySongs();
+                                            final songList = allSongs
+                                                .where((s) => s.data == path)
+                                                .toList();
+                                            if (songList.isEmpty) {
+                                              if (!context.mounted) return false;
+                                              ScaffoldMessenger.of(
+                                                context,
+                                              ).showSnackBar(
+                                                SnackBar(
+                                                  content: Text(
+                                                    LocaleProvider.tr(
+                                                      'song_not_found',
+                                                    ),
+                                                  ),
+                                                ),
+                                              );
+                                              return false; // Mantener estado actual
+                                            }
+                                            final song = songList.first;
+                                            await _addToFavorites(song);
+                                            if (!context.mounted) return false;
+                                            setState(() {
+                                              _isCurrentFavorite = true;
+                                            });
+                                            return true; // Cambiar a favorito
+                                          }
                                         },
-                                        child: Icon(
-                                          isFav
-                                              ? Symbols.favorite_rounded
-                                              : Symbols.favorite_border_rounded,
-                                          grade: 200,
-                                          fill: isFav ? 1 : 0,
-                                          size: 32,
-                                          color: Theme.of(
-                                            context,
-                                          ).colorScheme.onSurface,
-                                        ),
                                       );
                                     },
                                   );
@@ -3637,11 +3682,12 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
   }
 
   Widget _buildFallbackIcon() {
+    final isSystem = colorSchemeNotifier.value == AppColorScheme.system;
     return Container(
       width: 50,
       height: 50,
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainer,
+        color: isSystem ? Theme.of(context).colorScheme.secondaryContainer.withValues(alpha: 0.5) : Theme.of(context).colorScheme.surfaceContainer,
         borderRadius: BorderRadius.circular(8),
       ),
       child: Icon(
@@ -3775,7 +3821,7 @@ class _LyricsModalListViewState extends State<_LyricsModalListView> {
   Widget build(BuildContext context) {
     return ListView.builder(
       controller: _scrollController,
-      padding: EdgeInsets.only(top: 60, bottom: 0),
+      padding: EdgeInsets.only(top: 60, bottom: MediaQuery.of(context).padding.bottom),
       itemCount: widget.lyricLines.length,
       itemBuilder: (context, index) {
         final isCurrent = index == _currentLyricIndex;
@@ -4364,11 +4410,12 @@ class _PlaylistListViewState extends State<_PlaylistListView> {
   }
 
   Widget _buildFallbackIcon() {
+    final isSystem = colorSchemeNotifier.value == AppColorScheme.system;
     return Container(
       width: 50,
       height: 50,
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainer,
+        color: isSystem ? Theme.of(context).colorScheme.secondaryContainer.withValues(alpha: 0.5) : Theme.of(context).colorScheme.surfaceContainer,
         borderRadius: BorderRadius.circular(8),
       ),
       child: Icon(
@@ -4389,6 +4436,7 @@ class _PlaylistListViewState extends State<_PlaylistListView> {
           shrinkWrap: true,
           padding: EdgeInsets.only(
             top: 80 + MediaQuery.of(context).padding.top, // Reducir padding para evitar recorte de la primera canción
+            bottom: MediaQuery.of(context).padding.bottom, // Padding inferior para evitar que se oculte detrás de la barra de navegación
           ),
           itemCount: widget.queue.length,
           itemBuilder: (context, index) {
@@ -4399,13 +4447,14 @@ class _PlaylistListViewState extends State<_PlaylistListView> {
             final songId = item.extras?['songId'] ?? 0;
             final songPath = item.extras?['data'] ?? '';
             
-            // Agregar padding adicional al primer elemento para evitar recorte
+            // Agregar padding adicional al primer y último elemento para evitar recorte
             final isFirstItem = index == 0;
+            final isLastItem = index == widget.queue.length - 1;
             
             return Padding(
               padding: EdgeInsets.only(
                 top: isFirstItem ? 42.0 : 0.0,
-                bottom: isFirstItem ? 8.0 : 0.0,
+                bottom: isFirstItem ? 8.0 : (isLastItem ? 20.0 : 0.0),
               ),
               child: ListTile(
                 leading: ArtworkListTile(
@@ -4651,11 +4700,12 @@ class _ArtworkListTileState extends State<ArtworkListTile> {
   }
 
   Widget _buildFallbackIcon() {
+    final isSystem = colorSchemeNotifier.value == AppColorScheme.system;
     return Container(
       width: widget.size,
       height: widget.size,
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainer,
+        color: isSystem ? Theme.of(context).colorScheme.secondaryContainer.withValues(alpha: 0.5) : Theme.of(context).colorScheme.surfaceContainer,
         borderRadius: widget.borderRadius,
       ),
       child: Icon(

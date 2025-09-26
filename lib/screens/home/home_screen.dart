@@ -933,7 +933,11 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   final currentMediaItem = snapshot.data;
                   
                   return ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 0),
+                    padding: EdgeInsets.only(
+                      left: 0,
+                      right: 0,
+                      bottom: MediaQuery.of(context).padding.bottom,
+                    ),
                     itemCount: songs.length,
                     itemBuilder: (context, index) {
                       final song = songs[index];
@@ -1193,6 +1197,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   // Método optimizado para construir widgets de accesos directos: cachea solo la parte visual, handlers frescos
   Widget _buildShortcutWidget(SongModel song, BuildContext context) {
     final String shortcutKey = 'shortcut_${song.id}_${song.data}';
+    final isSystem = colorSchemeNotifier.value == AppColorScheme.system;
 
     // Cachear solo el contenido visual pesado (carátula base, pin, título)
     Widget cachedVisual;
@@ -1219,7 +1224,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   nullArtworkWidget: Container(
                     width: 400,
                     height: 400,
-                    color: Theme.of(context).colorScheme.surfaceContainer,
+                    color: isSystem ? Theme.of(context).colorScheme.secondaryContainer.withValues(alpha: 0.5) : Theme.of(context).colorScheme.surfaceContainer,
                     child: Center(
                       child: Icon(
                         Icons.music_note,
@@ -1606,6 +1611,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     List<SongModel> pageSongs,
   ) {
     final String quickPickKey = 'quickpick_leading_${song.id}_${song.data}';
+    final isSystem = colorSchemeNotifier.value == AppColorScheme.system;
     Widget leading;
     if (_quickPickWidgetCache.containsKey(quickPickKey)) {
       leading = _quickPickWidgetCache[quickPickKey]!;
@@ -1621,7 +1627,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           artworkFit: BoxFit.cover,
           keepOldArtwork: true,
           nullArtworkWidget: Container(
-            color: Theme.of(context).colorScheme.surfaceContainer,
+            color: isSystem ? Theme.of(context).colorScheme.secondaryContainer.withValues(alpha: 0.5) : Theme.of(context).colorScheme.surfaceContainer,
             width: 60,
             height: 67,
             child: Icon(
@@ -2437,6 +2443,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Future<void> _showAddFromRecentsToCurrentPlaylistDialog() async {
     final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isSystem = colorSchemeNotifier.value == AppColorScheme.system;
     
     final recents = await RecentsDB().getRecents();
     if (!mounted) return;
@@ -2499,9 +2506,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                     artworkWidth: 40,
                                     keepOldArtwork: true,
                                     nullArtworkWidget: Container(
-                                      color: Theme.of(
-                                        context,
-                                      ).colorScheme.surfaceContainer,
+                                      color: isSystem ? Theme.of(context).colorScheme.secondaryContainer.withValues(alpha: 0.5) : Theme.of(context).colorScheme.surfaceContainer,
                                       width: 40,
                                       height: 40,
                                       child: Icon(
@@ -2849,7 +2854,18 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               ? (_isSelectingPlaylistSongs
                     ? null
                     : IconButton(
-                        icon: const Icon(Icons.arrow_back),
+                        icon: Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
+                          ),
+                          child: const Icon(
+                            Icons.arrow_back,
+                            size: 24,
+                          ),
+                        ),
                         onPressed: () {
                           // Limpiar cache de artistas para forzar reconstrucción con contexto correcto
                           _artistWidgetCache.clear();
@@ -3177,6 +3193,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                 final isAmoledTheme =
                                     colorSchemeNotifier.value ==
                                     AppColorScheme.amoled;
+                                final isSystem = colorSchemeNotifier.value == AppColorScheme.system;
 
                                 // Solo usar ValueListenableBuilder para la canción actual
                                 if (isCurrent) {
@@ -3197,9 +3214,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                             artworkWidth: 50,
                                             keepOldArtwork: true,
                                             nullArtworkWidget: Container(
-                                              color: Theme.of(
-                                                context,
-                                              ).colorScheme.surfaceContainer,
+                                              color: isSystem ? Theme.of(context).colorScheme.secondaryContainer.withValues(alpha: 0.5) : Theme.of(context).colorScheme.surfaceContainer,
                                               width: 50,
                                               height: 50,
                                               child: Icon(
@@ -3584,9 +3599,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                         artworkWidth: 50,
                                         keepOldArtwork: true,
                                         nullArtworkWidget: Container(
-                                          color: Theme.of(
-                                            context,
-                                          ).colorScheme.surfaceContainer,
+                                          color: isSystem ? Theme.of(context).colorScheme.secondaryContainer.withValues(alpha: 0.5) : Theme.of(context).colorScheme.surfaceContainer,
                                           width: 50,
                                           height: 50,
                                           child: Icon(
@@ -3988,7 +4001,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                 final isAmoledTheme =
                                     colorSchemeNotifier.value ==
                                     AppColorScheme.amoled;
-
+                                final isSystem = colorSchemeNotifier.value == AppColorScheme.system;
                                 // Solo usar ValueListenableBuilder para la canción actual
                                 if (isCurrent) {
                                   return ValueListenableBuilder<bool>(
@@ -4389,9 +4402,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                 artworkWidth: 50,
                                                 keepOldArtwork: true,
                                                 nullArtworkWidget: Container(
-                                                  color: Theme.of(context)
-                                                      .colorScheme
-                                                      .surfaceContainer,
+                                                  color: isSystem ? Theme.of(context).colorScheme.secondaryContainer.withValues(alpha: 0.5) : Theme.of(context).colorScheme.surfaceContainer,
                                                   width: 50,
                                                   height: 50,
                                                   child: Icon(
@@ -4895,9 +4906,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                             artworkWidth: 50,
                                             keepOldArtwork: true,
                                             nullArtworkWidget: Container(
-                                              color: Theme.of(
-                                                context,
-                                              ).colorScheme.surfaceContainer,
+                                              color: isSystem ? Theme.of(context).colorScheme.secondaryContainer.withValues(alpha: 0.5) : Theme.of(context).colorScheme.surfaceContainer,
                                               width: 50,
                                               height: 50,
                                               child: Icon(
@@ -5922,6 +5931,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   // Función para construir la carátula del modal
   Widget _buildModalArtwork(SongModel song) {
+    final isSystem = colorSchemeNotifier.value == AppColorScheme.system;
     return QueryArtworkWidget(
       id: song.id,
       type: ArtworkType.AUDIO,
@@ -5933,7 +5943,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         width: 60,
         height: 60,
         decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surfaceContainer,
+          color: isSystem ? Theme.of(context).colorScheme.secondaryContainer.withValues(alpha: 0.5) : Theme.of(context).colorScheme.surfaceContainer,
           borderRadius: BorderRadius.circular(8),
         ),
         child: Icon(Icons.music_note, size: 30),

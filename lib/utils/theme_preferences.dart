@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 enum AppThemeMode { system, light, dark }
 
 enum AppColorScheme {
+  system, // Nuevo: usar colores dinámicos del sistema
   deepPurple,
   purple,
   deepPurpleAccent,
@@ -80,8 +81,8 @@ class ThemePreferences {
     if (index != null && index >= 0 && index < AppColorScheme.values.length) {
       return AppColorScheme.values[index];
     }
-    // Default to deepPurple
-    return AppColorScheme.deepPurple;
+    // Default to system (dynamic colors)
+    return AppColorScheme.system;
   }
 
   // Limpiar la preferencia del tema (resetear a valores por defecto)
@@ -99,6 +100,8 @@ class ThemePreferences {
   // Obtener el Color correspondiente al esquema de color
   static Color getColorFromScheme(AppColorScheme scheme) {
     switch (scheme) {
+      case AppColorScheme.system:
+        return Colors.deepPurple; // Color por defecto cuando no hay colores dinámicos disponibles
       case AppColorScheme.deepPurple:
         return Colors.deepPurple;
       case AppColorScheme.purple:
@@ -139,6 +142,8 @@ class ThemePreferences {
   // Obtener el nombre del color para mostrar en la UI
   static String getColorName(AppColorScheme scheme) {
     switch (scheme) {
+      case AppColorScheme.system:
+        return 'Sistema';
       case AppColorScheme.deepPurple:
         return 'Deep Purple';
       case AppColorScheme.purple:

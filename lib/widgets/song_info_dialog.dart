@@ -143,6 +143,7 @@ class SongInfoDialog {
     bool isDark,
   ) {
     return Card(
+      shadowColor: Colors.transparent,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -433,6 +434,7 @@ class SongInfoDialog {
     bool isDark,
   ) {
     return Card(
+      shadowColor: Colors.transparent,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(

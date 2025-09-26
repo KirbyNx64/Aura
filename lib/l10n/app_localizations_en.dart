@@ -10,6 +10,8 @@ const Map<String, String> appLocalizationsEn = {
   'information': 'Information',
   'yes': 'Yes',
   'no': 'No',
+  'error': 'Error',
+  'success': 'Success',
 
   // Preferences
   'preferences': 'Preferences',
@@ -160,12 +162,10 @@ const Map<String, String> appLocalizationsEn = {
   'search_options': 'Search options',
   'search_song': 'Search song',
   'confirm': 'Confirm',
-  'success': 'Success',
   'download_completed': 'Download completed',
   'download_completed_desc': 'The download has finished successfully.',
   'image_saved': 'Image saved',
   'image_saved_desc': 'The image has been saved in gallery successfully.',
-  'error': 'Error',
   'are_you_sure': 'Are you sure?',
   // Backup
   'backup': 'Backup',
@@ -484,6 +484,7 @@ const Map<String, String> appLocalizationsEn = {
 
   // OTA Update screen
   'checking_update': 'Checking for updates...',
+  'check_again': 'Check again',
   'no_updates_available': 'No updates available.',
   'ready_to_download': 'Ready to download',
   'downloading_update': 'Downloading update...',
@@ -618,4 +619,23 @@ const Map<String, String> appLocalizationsEn = {
   // Loading messages
   'loading_music_library': 'Loading music library',
   'loading_music_library_description': 'We are preparing your music. This may take a few moments...',
+  
+  // YouTube sharing errors
+  'youtube_link_invalid': 'Could not process YouTube link. Please verify it is a valid link.',
+  'youtube_no_results': 'No results to show.',
+  'youtube_no_valid_videos': 'No valid videos found to play.',
+  'youtube_processing_error': 'Error processing shared link: @error',
+  'youtube_modal_error': 'Error opening player: @error',
+  'youtube_context_error': 'Could not get application context.',
+  'youtube_unknown_video': 'Unknown video',
+  'youtube_unknown_artist': 'Unknown artist',
+  'youtube_conversion_error': 'Error converting result: @error',
+  'youtube_modal_show_error': 'Error showing player: @error',
+  'download_in_app': 'Download in app',
+  'download_in_app_desc': 'Automatic download and direct installation',
+  'download_in_browser': 'Download in browser',
+  'download_in_browser_desc': 'Open link in web browser',
+  'opening_in_browser': 'Opening in browser',
+  'could_not_open': 'Could not open',
+  'select_download_method': 'Select how you want to download the update',
 };

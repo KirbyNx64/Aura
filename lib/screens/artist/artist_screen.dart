@@ -790,6 +790,8 @@ class _ArtistScreenState extends State<ArtistScreen> {
   Widget build(BuildContext context) {
     final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isSystem = colorSchemeNotifier.value == AppColorScheme.system;
+    final isLight = Theme.of(context).brightness == Brightness.light;
     
     return PopScope(
       canPop: !canPopInternally(),
@@ -804,6 +806,28 @@ class _ArtistScreenState extends State<ArtistScreen> {
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         scrolledUnderElevation: 0,
+        leading: IconButton(
+          constraints: const BoxConstraints(
+            minWidth: 40,
+            minHeight: 40,
+            maxWidth: 40,
+            maxHeight: 40,
+          ),
+          padding: EdgeInsets.zero,
+          icon: Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
+            ),
+            child: const Icon(
+              Icons.arrow_back,
+              size: 24,
+            ),
+          ),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
         title: const TranslatedText('artist'),
         actions: [
           if (_isSelectionMode && _selectedIndexes.isNotEmpty)
@@ -875,7 +899,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
                 )
               : SingleChildScrollView(
                   controller: _scrollController,
-                  padding: const EdgeInsets.all(16),
+                  padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + MediaQuery.of(context).padding.bottom),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -929,7 +953,9 @@ class _ArtistScreenState extends State<ArtistScreen> {
                         child: Container(
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: Theme.of(context).colorScheme.surfaceContainer,
+                            color: isSystem && isLight ? Theme.of(context).colorScheme.secondaryContainer
+                                  : isSystem && isDark ? Theme.of(context).colorScheme.onSecondaryFixed 
+                                    : Theme.of(context).colorScheme.surfaceContainer,
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Row(
@@ -955,7 +981,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                   height: 32,
                                   decoration: BoxDecoration(
                                     shape: BoxShape.circle,
-                                    color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                                    color: isSystem ? Theme.of(context).colorScheme.surfaceContainer : Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
                                   ),
                                   child: Icon(
                                     _descExpanded
@@ -980,7 +1006,18 @@ class _ArtistScreenState extends State<ArtistScreen> {
                             Row(
                               children: [
                                 IconButton(
-                                  icon: const Icon(Icons.arrow_back),
+                                  icon: Container(
+                                    width: 40,
+                                    height: 40,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
+                                    ),
+                                    child: const Icon(
+                                      Icons.arrow_back,
+                                      size: 24,
+                                    ),
+                                  ),
                                   tooltip: 'Volver',
                                   onPressed: () {
                                     setState(() {
@@ -988,6 +1025,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                     });
                                   },
                                 ),
+                                const SizedBox(width: 8),
                                 Text(
                                   LocaleProvider.tr('songs_search'),
                                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
@@ -1073,7 +1111,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                                 width: 56,
                                                 height: 56,
                                                 decoration: BoxDecoration(
-                                                  color: Theme.of(context).colorScheme.surfaceContainer,
+                                                  color: isSystem ? Theme.of(context).colorScheme.secondaryContainer : Theme.of(context).colorScheme.surfaceContainer,
                                                   borderRadius: BorderRadius.circular(12),
                                                 ),
                                                 child: Icon(
@@ -1155,7 +1193,18 @@ class _ArtistScreenState extends State<ArtistScreen> {
                             Row(
                               children: [
                                 IconButton(
-                                  icon: const Icon(Icons.arrow_back),
+                                  icon: Container(
+                                    width: 40,
+                                    height: 40,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
+                                    ),
+                                    child: const Icon(
+                                      Icons.arrow_back,
+                                      size: 24,
+                                    ),
+                                  ),
                                   tooltip: 'Volver',
                                   onPressed: () {
                                   setState(() {
@@ -1165,6 +1214,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                   });
                                 },
                                 ),
+                                const SizedBox(width: 8),
                                 if (_currentAlbum != null) ...[
                                   if (_currentAlbum!['thumbUrl'] != null)
                                     Padding(
@@ -1358,7 +1408,18 @@ class _ArtistScreenState extends State<ArtistScreen> {
                             Row(
                               children: [
                                 IconButton(
-                                  icon: const Icon(Icons.arrow_back),
+                                  icon: Container(
+                                    width: 40,
+                                    height: 40,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
+                                    ),
+                                    child: const Icon(
+                                      Icons.arrow_back,
+                                      size: 24,
+                                    ),
+                                  ),
                                   tooltip: 'Volver',
                                   onPressed: () {
                                     setState(() {
@@ -1366,6 +1427,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                     });
                                   },
                                 ),
+                                const SizedBox(width: 8),
                                 Text(
                                   LocaleProvider.tr('videos'),
                                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
@@ -1451,7 +1513,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                                 width: 56,
                                                 height: 56,
                                                 decoration: BoxDecoration(
-                                                  color: Theme.of(context).colorScheme.surfaceContainer,
+                                                  color: isSystem ? Theme.of(context).colorScheme.secondaryContainer : Theme.of(context).colorScheme.surfaceContainer,
                                                   borderRadius: BorderRadius.circular(12),
                                                 ),
                                                 child: Icon(
@@ -1533,7 +1595,18 @@ class _ArtistScreenState extends State<ArtistScreen> {
                             Row(
                               children: [
                                 IconButton(
-                                  icon: const Icon(Icons.arrow_back),
+                                  icon: Container(
+                                    width: 40,
+                                    height: 40,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
+                                    ),
+                                    child: const Icon(
+                                      Icons.arrow_back,
+                                      size: 24,
+                                    ),
+                                  ),
                                   tooltip: 'Volver',
                                   onPressed: () {
                                     setState(() {
@@ -1541,6 +1614,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                     });
                                   },
                                 ),
+                                const SizedBox(width: 8),
                                 Text(
                                   LocaleProvider.tr('albums'),
                                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
@@ -1778,7 +1852,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                                     width: 56,
                                                     height: 56,
                                                     decoration: BoxDecoration(
-                                                      color: Theme.of(context).colorScheme.surfaceContainer,
+                                                      color: isSystem ? Theme.of(context).colorScheme.secondaryContainer : Theme.of(context).colorScheme.surfaceContainer,
                                                       borderRadius: BorderRadius.circular(12),
                                                     ),
                                                     child: Icon(
@@ -1930,7 +2004,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                                         fit: BoxFit.cover,
                                                       )
                                                     : Container(
-                                                        color: Theme.of(context).colorScheme.surfaceContainer,
+                                                        color: isSystem ? Theme.of(context).colorScheme.secondaryContainer : Theme.of(context).colorScheme.surfaceContainer,
                                                         child: const Icon(Icons.album, size: 40),
                                                       ),
                                               ),
@@ -2061,7 +2135,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                                     width: 56,
                                                     height: 56,
                                                     decoration: BoxDecoration(
-                                                      color: Theme.of(context,).colorScheme.surfaceContainer,
+                                                      color: isSystem ? Theme.of(context).colorScheme.secondaryContainer : Theme.of(context).colorScheme.surfaceContainer,
                                                       borderRadius: BorderRadius.circular(12),
                                                     ),
                                                     child: Icon(

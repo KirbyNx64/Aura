@@ -199,12 +199,20 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> {
                       );
                     }
                   },
-                  child: Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 12),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.surfaceContainer,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
+                  child: ValueListenableBuilder<AppColorScheme>(
+                    valueListenable: colorSchemeNotifier,
+                    builder: (context, colorScheme, child) {
+                      final isSystem = colorScheme == AppColorScheme.system;
+                      final isLight = Theme.of(context).brightness == Brightness.light;
+                      final isDark = Theme.of(context).brightness == Brightness.dark;
+                      return Container(
+                        margin: const EdgeInsets.symmetric(horizontal: 12),
+                        decoration: BoxDecoration(
+                          color: isSystem && isLight ? Theme.of(context).colorScheme.secondaryContainer 
+                                  : isSystem && isDark ? Theme.of(context).colorScheme.onSecondaryFixed 
+                                    : Theme.of(context).colorScheme.surfaceContainer,
+                          borderRadius: BorderRadius.circular(16),
+                        ),
                     padding: const EdgeInsets.symmetric(
                       horizontal: 16,
                       vertical: 10,
@@ -288,58 +296,67 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> {
                               child: ValueListenableBuilder<bool>(
                                 valueListenable: _isPlayingNotifier,
                                 builder: (context, isPlaying, child) {
-                                  return Material(
-                                    color: Colors.transparent,
-                                    child: InkWell(
-                                      customBorder: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(
-                                          isPlaying ? (40 / 3) : (40 / 2),
-                                        ),
-                                      ),
-                                      splashColor: Colors.transparent,
-                                      highlightColor: Colors.transparent,
-                                      onTap: () {
-                                        // Actualizar el estado inmediatamente para mejor UX
-                                        _isPlayingNotifier.value = !isPlaying;
-                                        
-                                        // Ejecutar la acción de audio de forma asíncrona para no bloquear la UI
-                                        Future.microtask(() {
-                                          if (isPlaying) {
-                                            audioHandler?.pause();
-                                          } else {
-                                            audioHandler?.play();
-                                          }
-                                        });
-                                      },
-                                      child: AnimatedContainer(
-                                        duration: const Duration(milliseconds: 250),
-                                        curve: Curves.easeInOut,
-                                        width: 40,
-                                        height: 40,
-                                        decoration: BoxDecoration(
-                                          color: colorSchemeNotifier.value == AppColorScheme.amoled
-                                              ? Colors.white
-                                              : Theme.of(context).brightness == Brightness.dark
-                                                  ? Theme.of(context).colorScheme.primaryContainer
-                                                  : Theme.of(context).colorScheme.onPrimaryContainer.withValues(alpha: 0.7),
-                                          borderRadius: BorderRadius.circular(
-                                            isPlaying ? (40 / 3) : (40 / 2),
+                                  return ValueListenableBuilder<AppColorScheme>(
+                                    valueListenable: colorSchemeNotifier,
+                                    builder: (context, colorScheme, child) {
+                                      return Material(
+                                        color: Colors.transparent,
+                                        child: InkWell(
+                                          customBorder: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(
+                                              isPlaying ? (40 / 3) : (40 / 2),
+                                            ),
+                                          ),
+                                          splashColor: Colors.transparent,
+                                          highlightColor: Colors.transparent,
+                                          onTap: () {
+                                            // Actualizar el estado inmediatamente para mejor UX
+                                            _isPlayingNotifier.value = !isPlaying;
+                                            
+                                            // Ejecutar la acción de audio de forma asíncrona para no bloquear la UI
+                                            Future.microtask(() {
+                                              if (isPlaying) {
+                                                audioHandler?.pause();
+                                              } else {
+                                                audioHandler?.play();
+                                              }
+                                            });
+                                          },
+                                          child: AnimatedContainer(
+                                            duration: const Duration(milliseconds: 250),
+                                            curve: Curves.easeInOut,
+                                            width: 40,
+                                            height: 40,
+                                            decoration: BoxDecoration(
+                                              color: colorScheme == AppColorScheme.amoled
+                                                  ? Colors.white
+                                                  : Theme.of(context).brightness == Brightness.light
+                                                      ? Theme.of(context).colorScheme.onPrimaryContainer.withValues(alpha: 0.7)
+                                                      : colorScheme == AppColorScheme.system
+                                                        ? Theme.of(context).colorScheme.primary
+                                                        : Theme.of(context).colorScheme.primaryContainer,
+                                              borderRadius: BorderRadius.circular(
+                                                isPlaying ? (40 / 3) : (40 / 2),
+                                              ),
+                                            ),
+                                            child: Center(
+                                              child: Icon(
+                                                isPlaying ? Symbols.pause_rounded : Symbols.play_arrow_rounded,
+                                                grade: 200,
+                                                size: 28,
+                                                color: colorScheme == AppColorScheme.amoled
+                                                    ? Colors.black
+                                                    : Theme.of(context).brightness == Brightness.light
+                                                      ? Theme.of(context).colorScheme.surfaceContainer
+                                                      : colorScheme == AppColorScheme.system
+                                                        ? Theme.of(context).colorScheme.onPrimary
+                                                        : Theme.of(context).colorScheme.onPrimaryContainer,
+                                              ),
+                                            ),
                                           ),
                                         ),
-                                        child: Center(
-                                          child: Icon(
-                                            isPlaying ? Symbols.pause_rounded : Symbols.play_arrow_rounded,
-                                            grade: 200,
-                                            size: 28,
-                                            color: colorSchemeNotifier.value == AppColorScheme.amoled
-                                                ? Colors.black
-                                                : Theme.of(context).brightness == Brightness.dark
-                                                  ? Theme.of(context).colorScheme.onPrimaryContainer
-                                                  : Theme.of(context).colorScheme.surfaceContainer,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
+                                      );
+                                    },
                                   );
                                 },
                               ),
@@ -349,65 +366,70 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> {
                         const SizedBox(height: 6),
 
                         RepaintBoundary(
-                          child: StreamBuilder<Duration>(
-                            stream:
-                                (audioHandler as MyAudioHandler).positionStream,
-                            initialData: Duration.zero,
-                            builder: (context, posSnapshot) {
-                              final position =
-                                  posSnapshot.data ?? Duration.zero;
-                              final hasDuration =
-                                  duration != null &&
-                                  duration.inMilliseconds > 0;
+                          child: ValueListenableBuilder<AppColorScheme>(
+                            valueListenable: colorSchemeNotifier,
+                            builder: (context, colorScheme, child) {
+                              return StreamBuilder<Duration>(
+                                stream:
+                                    (audioHandler as MyAudioHandler).positionStream,
+                                initialData: Duration.zero,
+                                builder: (context, posSnapshot) {
+                                  final position =
+                                      posSnapshot.data ?? Duration.zero;
+                                  final hasDuration =
+                                      duration != null &&
+                                      duration.inMilliseconds > 0;
 
-                              return StreamBuilder<Duration?>(
-                                stream: (audioHandler as MyAudioHandler)
-                                    .player
-                                    .durationStream,
-                                builder: (context, durationSnapshot) {
-                                  final fallbackDuration =
-                                      durationSnapshot.data;
-                                  final total = hasDuration
-                                      ? duration.inMilliseconds
-                                      : (fallbackDuration?.inMilliseconds ?? 1);
-                                  final current = position.inMilliseconds.clamp(
-                                    0,
-                                    total,
-                                  );
+                                  return StreamBuilder<Duration?>(
+                                    stream: (audioHandler as MyAudioHandler)
+                                        .player
+                                        .durationStream,
+                                    builder: (context, durationSnapshot) {
+                                      final fallbackDuration =
+                                          durationSnapshot.data;
+                                      final total = hasDuration
+                                          ? duration.inMilliseconds
+                                          : (fallbackDuration?.inMilliseconds ?? 1);
+                                      final current = position.inMilliseconds.clamp(
+                                        0,
+                                        total,
+                                      );
 
-                                  return Column(
-                                    children: [
-                                      Container(
-                                        decoration: BoxDecoration(
-                                          borderRadius: BorderRadius.circular(8),
-                                          border: Border.all(
-                                            color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
-                                            width: 0.5,
-                                          ),
-                                        ),
-                                        child: ClipRRect(
-                                          borderRadius: BorderRadius.circular(8),
-                                          child: LinearProgressIndicator(
-                                            // ignore: deprecated_member_use
-                                            year2023: false,
-                                            key: ValueKey(total),
-                                            value: total > 0
-                                                ? current / total
-                                                : 0,
-                                            minHeight: 4,
-                                            borderRadius: BorderRadius.circular(
-                                              8,
+                                      return Column(
+                                        children: [
+                                          Container(
+                                            decoration: BoxDecoration(
+                                              borderRadius: BorderRadius.circular(8),
+                                              border: Border.all(
+                                                color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
+                                                width: 0.5,
+                                              ),
                                             ),
-                                            backgroundColor: Theme.of(
-                                              context,
-                                            ).colorScheme.primary.withValues(alpha: 0.3),
-                                            color: Theme.of(
-                                              context,
-                                            ).colorScheme.primary,
+                                            child: ClipRRect(
+                                              borderRadius: BorderRadius.circular(8),
+                                              child: LinearProgressIndicator(
+                                                // ignore: deprecated_member_use
+                                                year2023: false,
+                                                key: ValueKey(total),
+                                                value: total > 0
+                                                    ? current / total
+                                                    : 0,
+                                                minHeight: 4,
+                                                borderRadius: BorderRadius.circular(
+                                                  8,
+                                                ),
+                                                backgroundColor: Theme.of(
+                                                  context,
+                                                ).colorScheme.primary.withValues(alpha: 0.3),
+                                                color: Theme.of(
+                                                  context,
+                                                ).colorScheme.primary,
+                                              ),
+                                            ),
                                           ),
-                                        ),
-                                      ),
-                                    ],
+                                        ],
+                                      );
+                                    },
                                   );
                                 },
                               );
@@ -416,6 +438,8 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> {
                         ),
                       ],
                     ),
+                  );
+                    },
                   ),
                 );
               },

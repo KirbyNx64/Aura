@@ -1306,6 +1306,7 @@ class _FoldersScreenState extends State<FoldersScreen>
 
   // Función para construir la carátula del modal
   Widget _buildModalArtwork(SongModel song) {
+    final isSystem = colorSchemeNotifier.value == AppColorScheme.system;
     return QueryArtworkWidget(
       id: song.id,
       type: ArtworkType.AUDIO,
@@ -1317,7 +1318,7 @@ class _FoldersScreenState extends State<FoldersScreen>
         width: 60,
         height: 60,
         decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surfaceContainer,
+          color: isSystem ? Theme.of(context).colorScheme.secondaryContainer.withValues(alpha: 0.5) : Theme.of(context).colorScheme.surfaceContainer,
           borderRadius: BorderRadius.circular(8),
         ),
         child: Icon(Icons.music_note, size: 30),
@@ -2714,7 +2715,25 @@ class _FoldersScreenState extends State<FoldersScreen>
                     },
                   )
                 : IconButton(
-                    icon: const Icon(Icons.arrow_back),
+                    constraints: const BoxConstraints(
+                      minWidth: 40,
+                      minHeight: 40,
+                      maxWidth: 40,
+                      maxHeight: 40,
+                    ),
+                    padding: EdgeInsets.zero,
+                    icon: Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
+                      ),
+                      child: const Icon(
+                        Icons.arrow_back,
+                        size: 24,
+                      ),
+                    ),
                     onPressed: () async {
                       setState(() {
                         carpetaSeleccionada = null;
@@ -3085,6 +3104,7 @@ class _FoldersScreenState extends State<FoldersScreen>
   ) {
     final path = song.data;
     final opacity = isIgnored ? 0.4 : 1.0;
+    final isSystem = colorSchemeNotifier.value == AppColorScheme.system;
 
     return Opacity(
       opacity: opacity,
@@ -3137,7 +3157,7 @@ class _FoldersScreenState extends State<FoldersScreen>
                   artworkWidth: 50,
                   keepOldArtwork: true,
                   nullArtworkWidget: Container(
-                    color: Theme.of(context).colorScheme.surfaceContainer,
+                    color: isSystem ? Theme.of(context).colorScheme.secondaryContainer.withValues(alpha: 0.5) : Theme.of(context).colorScheme.surfaceContainer,
                     width: 50,
                     height: 50,
                     child: Icon(

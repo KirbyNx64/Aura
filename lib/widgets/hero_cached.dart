@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'dart:io';
 import 'dart:async';
+import 'package:music/utils/notifiers.dart';
+import 'package:music/utils/theme_preferences.dart';
 
 class ArtworkHeroCached extends StatefulWidget {
   final Uri? artUri;
@@ -89,13 +91,26 @@ class _ArtworkHeroCachedState extends State<ArtworkHeroCached> {
 
   @override
   Widget build(BuildContext context) {
-    return Hero(
-      key: Key(widget.heroTag),
-      tag: widget.heroTag,
-      child: ClipRRect(
-        borderRadius: widget.borderRadius,
-        child: _buildContent(context),
-      ),
+    return ValueListenableBuilder<bool>(
+      valueListenable: heroAnimationNotifier,
+      builder: (context, useHeroAnimation, child) {
+        final content = ClipRRect(
+          borderRadius: widget.borderRadius,
+          child: _buildContent(context),
+        );
+
+        // Si las animaciones hero están deshabilitadas, devolver solo el contenido
+        if (!useHeroAnimation) {
+          return content;
+        }
+
+        // Si están habilitadas, usar Hero
+        return Hero(
+          key: Key(widget.heroTag),
+          tag: widget.heroTag,
+          child: content,
+        );
+      },
     );
   }
 
@@ -140,10 +155,11 @@ class _ArtworkHeroCachedState extends State<ArtworkHeroCached> {
   }
 
   Widget _buildPlaceholder(BuildContext context) {
+    final isSystem = colorSchemeNotifier.value == AppColorScheme.system;
     return Container(
       width: widget.size,
       height: widget.size,
-      color: Theme.of(context).colorScheme.surfaceContainer,
+      color: isSystem ? Theme.of(context).colorScheme.secondaryContainer.withValues(alpha: 0.5) : Theme.of(context).colorScheme.surfaceContainer,
       child: widget.showPlaceholderIcon
           ? Icon(Icons.music_note, size: widget.size * 0.6)
           : null,

@@ -692,11 +692,17 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
   Widget _buildResultCard(LyricsSearchResult result, int index) {
     final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isSystem = colorSchemeNotifier.value == AppColorScheme.system;
+    final isLight = Theme.of(context).brightness == Brightness.light;
     final isExpanded = _expandedCards.contains(index);
     final fullLyrics = _getFullLyrics(result.syncedLyrics);
     final previewLyrics = _getLyricsPreview(result.syncedLyrics);
     
     return Card(
+      shadowColor: Colors.transparent,
+      color: isSystem && isDark ? Theme.of(context).colorScheme.secondaryContainer.withValues(alpha: 0.3) 
+              : isSystem && isLight ? Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.3)
+                : null,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
         side: isAmoled && isDark
@@ -779,7 +785,7 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
                   child: Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.surfaceContainer,
+                      color: isSystem ? Theme.of(context).colorScheme.secondaryContainer.withValues(alpha: 0.5) : Theme.of(context).colorScheme.surfaceContainer,
                       borderRadius: BorderRadius.circular(8),
                       border: isAmoled && isDark
                           ? Border.all(color: Colors.white, width: 1)

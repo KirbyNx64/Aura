@@ -870,6 +870,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
 
     final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isSystem = colorSchemeNotifier.value == AppColorScheme.system;
 
     final Set<int> selectedIds = {};
     await showDialog(
@@ -930,9 +931,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                                     artworkWidth: 40,
                                     keepOldArtwork: true,
                                     nullArtworkWidget: Container(
-                                      color: Theme.of(
-                                        context,
-                                      ).colorScheme.surfaceContainer,
+                                        color: isSystem ? Theme.of(context).colorScheme.secondaryContainer.withValues(alpha: 0.5) : Theme.of(context).colorScheme.surfaceContainer,
                                       width: 40,
                                       height: 40,
                                       child: Icon(
@@ -998,6 +997,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     bool playing,
     bool isAmoledTheme,
   ) {
+    final isSystem = colorSchemeNotifier.value == AppColorScheme.system;
     return ListTile(
       onLongPress: () {
         if (_isSelecting) {
@@ -1044,7 +1044,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
               artworkWidth: 50,
               keepOldArtwork: true,
               nullArtworkWidget: Container(
-                color: Theme.of(context).colorScheme.surfaceContainer,
+                color: isSystem ? Theme.of(context).colorScheme.secondaryContainer.withValues(alpha: 0.5) : Theme.of(context).colorScheme.surfaceContainer,
                 width: 50,
                 height: 50,
                 child: Icon(
@@ -1379,6 +1379,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
 
   // Función para construir la carátula del modal
   Widget _buildModalArtwork(SongModel song) {
+    final isSystem = colorSchemeNotifier.value == AppColorScheme.system;
     return QueryArtworkWidget(
       id: song.id,
       type: ArtworkType.AUDIO,
@@ -1390,7 +1391,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
         width: 60,
         height: 60,
         decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surfaceContainer,
+          color: isSystem ? Theme.of(context).colorScheme.secondaryContainer.withValues(alpha: 0.5) : Theme.of(context).colorScheme.surfaceContainer,
           borderRadius: BorderRadius.circular(8),
         ),
         child: Icon(Icons.music_note, size: 30),

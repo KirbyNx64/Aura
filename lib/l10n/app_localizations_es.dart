@@ -10,6 +10,8 @@ const Map<String, String> appLocalizationsEs = {
   'information': 'Información',
   'yes': 'Sí',
   'no': 'No',
+  'error': 'Error',
+  'success': 'Éxito',
 
   // Preferences
   'preferences': 'Preferencias',
@@ -165,8 +167,6 @@ const Map<String, String> appLocalizationsEs = {
   'confirm': 'Confirmar',
   'search_options': 'Opciones de búsqueda',
   'search_song': 'Buscar canción',
-  'success': 'Éxito',
-  'error': 'Error',
   'download_completed': 'Descarga completada',
   'download_completed_desc': 'La descarga ha finalizado correctamente.',
   'image_saved': 'Imagen guardada',
@@ -495,6 +495,7 @@ const Map<String, String> appLocalizationsEs = {
 
   // OTA Update screen
   'checking_update': 'Buscando actualización...',
+  'check_again': 'Buscar de nuevo',
   'no_updates_available': 'No hay actualizaciones disponibles.',
   'ready_to_download': 'Lista para descargar',
   'downloading_update': 'Descargando actualización...',
@@ -632,4 +633,23 @@ const Map<String, String> appLocalizationsEs = {
   
   // Exit confirmation
   'press_again_to_exit': 'Presiona de nuevo para salir',
+  
+  // YouTube sharing errors
+  'youtube_link_invalid': 'No se pudo procesar el enlace de YouTube. Verifica que sea un enlace válido.',
+  'youtube_no_results': 'No hay resultados para mostrar.',
+  'youtube_no_valid_videos': 'No se encontraron videos válidos para reproducir.',
+  'youtube_processing_error': 'Error al procesar el enlace compartido: @error',
+  'youtube_modal_error': 'Error al abrir el reproductor: @error',
+  'youtube_context_error': 'No se pudo obtener el contexto de la aplicación.',
+  'youtube_unknown_video': 'Video desconocido',
+  'youtube_unknown_artist': 'Artista desconocido',
+  'youtube_conversion_error': 'Error convirtiendo resultado: @error',
+  'youtube_modal_show_error': 'Error al mostrar el reproductor: @error',
+  'download_in_app': 'Descargar en la app',
+  'download_in_app_desc': 'Descarga automática e instalación directa',
+  'download_in_browser': 'Descargar en navegador',
+  'download_in_browser_desc': 'Abrir enlace en navegador web',
+  'opening_in_browser': 'Abriendo en navegador',
+  'could_not_open': 'No se pudo abrir',
+  'select_download_method': 'Selecciona cómo quieres descargar la actualización',
 };
