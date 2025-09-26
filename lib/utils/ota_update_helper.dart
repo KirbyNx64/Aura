@@ -36,9 +36,16 @@ class OtaUpdateHelper {
       if (!_isNewVersion(localVersion, remoteVersion)) return null;
 
       final String? arch = await _getArch();
-      if (arch == null || !apkUrls.containsKey(arch)) return null;
+      // ('Arquitectura detectada: $arch');
+      // print('URLs disponibles: $apkUrls');
+      
+      if (arch == null || !apkUrls.containsKey(arch)) {
+        // print('Error: Arquitectura no soportada o no encontrada en las URLs');
+        return null;
+      }
 
       final String apkUrl = apkUrls[arch];
+      // print('URL seleccionada para $arch: $apkUrl');
 
       return UpdateInfo(
         version: remoteVersion,
@@ -55,11 +62,34 @@ class OtaUpdateHelper {
     if (Platform.isAndroid) {
       final androidInfo = await deviceInfo.androidInfo;
       final List<String> abis = androidInfo.supportedAbis;
-      if (abis.isEmpty) return 'unknown'; {
-        if (abis.contains('arm64-v8a')) return 'arm64-v8a';
-        if (abis.contains('armeabi-v7a')) return 'armeabi-v7a';
-        if (abis.contains('x86_64')) return 'x86_64';
+      
+      // print('ABIs soportadas por el dispositivo: $abis');
+      
+      if (abis.isEmpty) {
+        // print('No se encontraron ABIs soportadas');
+        return 'unknown';
       }
+      
+      // Priorizar la primera ABI (la nativa del dispositivo/emulador)
+      final String primaryAbi = abis.first;
+      // print('ABI principal (primera en la lista): $primaryAbi');
+      
+      // Mapear la ABI principal a nuestro formato
+      if (primaryAbi == 'arm64-v8a') {
+        // print('Seleccionada arquitectura: arm64-v8a');
+        return 'arm64-v8a';
+      } else if (primaryAbi == 'armeabi-v7a') {
+        // print('Seleccionada arquitectura: armeabi-v7a');
+        return 'armeabi-v7a';
+      } else if (primaryAbi == 'x86_64') {
+        // print('Seleccionada arquitectura: x86_64');
+        return 'x86_64';
+      } else if (primaryAbi == 'x86') {
+        // print('Seleccionada arquitectura: x86 (fallback a x86_64)');
+        return 'x86_64'; // Fallback para x86
+      }
+      
+      // print('ABI no reconocida: $primaryAbi');
     }
     return null; // No compatible ABI detectada
   }
