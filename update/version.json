@@ -1,9 +1,9 @@
 {
-  "version": "1.5.4",
+  "version": "1.5.5",
   "apk_urls": {
-    "arm64-v8a": "https://github.com/KirbyNx64/Aura/releases/download/v1.5.4/AuraMusic-v1.5.4-arm64-v8a.apk",
-    "armeabi-v7a": "https://github.com/KirbyNx64/Aura/releases/download/v1.5.4/AuraMusic-v1.5.4-armeabi-v7a.apk",
-    "x86_64": "https://github.com/KirbyNx64/Aura/releases/download/v1.5.4/AuraMusic-v1.5.4-x86_64.apk"
+    "arm64-v8a": "https://github.com/KirbyNx64/Aura/releases/download/v1.5.5/AuraMusic-v1.5.5-arm64-v8a.apk",
+    "armeabi-v7a": "https://github.com/KirbyNx64/Aura/releases/download/v1.5.5/AuraMusic-v1.5.5-armeabi-v7a.apk",
+    "x86_64": "https://github.com/KirbyNx64/Aura/releases/download/v1.5.5/AuraMusic-v1.5.5-x86_64.apk"
   },
   "changelog": "• Corrección de errores: Solución de fallos menores y optimizaciones internas."
 }

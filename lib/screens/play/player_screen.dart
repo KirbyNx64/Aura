@@ -143,36 +143,78 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
   }
 
   Widget buildArtwork(MediaItem mediaItem, double size) {
-    final artworkUrl = mediaItem.artUri?.toString();
-    if (artworkUrl != null && artworkUrl.isNotEmpty) {
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: Image.network(
-          artworkUrl,
-          width: size,
-          height: size,
-          fit: BoxFit.cover,
-          errorBuilder: (context, error, stackTrace) => _defaultArtwork(size),
-          loadingBuilder: (context, child, loadingProgress) =>
-              loadingProgress == null
-              ? child
-              : Container(
-                  width: size,
-                  height: size,
-                  alignment: Alignment.center,
-                  child: const CircularProgressIndicator(
-                    // ignore: deprecated_member_use
-                    year2023: false,
+    final artUri = mediaItem.artUri;
+    
+    // Prioridad 1: Si hay artUri, usarlo directamente
+    if (artUri != null) {
+      final scheme = artUri.scheme.toLowerCase();
+      
+      // Si es un archivo local, usar Image.file (más rápido)
+      if (scheme == 'file' || scheme == 'content') {
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: Image.file(
+            File(artUri.toFilePath()),
+            width: size,
+            height: size,
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) => _defaultArtwork(size),
+          ),
+        );
+      }
+      
+      // Si es una URL de red, usar Image.network con optimizaciones
+      if (scheme == 'http' || scheme == 'https') {
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: Image.network(
+            artUri.toString(),
+            width: size,
+            height: size,
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) => _defaultArtwork(size),
+            loadingBuilder: (context, child, loadingProgress) =>
+                loadingProgress == null
+                ? child
+                : Container(
+                    width: size,
+                    height: size,
+                    alignment: Alignment.center,
+                    child: const CircularProgressIndicator(
+                      // ignore: deprecated_member_use
+                      year2023: false,
+                    ),
                   ),
-                ),
-          // Optimización: Cache de imagen
-          cacheWidth: (size * MediaQuery.of(context).devicePixelRatio).round(),
-          cacheHeight: (size * MediaQuery.of(context).devicePixelRatio).round(),
-        ),
-      );
-    } else {
-      return _defaultArtwork(size);
+            // Optimización: Cache de imagen
+            cacheWidth: (size * MediaQuery.of(context).devicePixelRatio).round(),
+            cacheHeight: (size * MediaQuery.of(context).devicePixelRatio).round(),
+          ),
+        );
+      }
     }
+    
+    // Prioridad 2: Verificar caché si no hay artUri
+    final songId = mediaItem.extras?['songId'];
+    final songPath = mediaItem.extras?['data'];
+    
+    if (songId != null && songPath != null) {
+      final cachedArtwork = _getCachedArtwork(songPath);
+      if (cachedArtwork != null) {
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: Image.file(
+            File(cachedArtwork.toFilePath()),
+            width: size,
+            height: size,
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) => _defaultArtwork(size),
+          ),
+        );
+      }
+    }
+    
+    // Si no hay carátula disponible, mostrar placeholder
+    return _defaultArtwork(size);
   }
 
   Widget _defaultArtwork(double size) {
@@ -633,53 +675,46 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     final newSongId =
         newMediaItem?.extras?['songId']?.toString() ?? newMediaItem?.id;
 
-    // ('🔄 PLAYER SCREEN: _handleArtworkChange llamado - Nueva canción: ${newMediaItem?.title} (ID: $newSongId)');
-
     if (_lastArtworkSongId != newSongId) {
-      final previousSongId = _lastArtworkSongId;
       _lastArtworkSongId = newSongId;
       
-      // print('🎵 PLAYER SCREEN: Cambio de canción detectado - Anterior: $previousSongId, Nueva: $newSongId');
-
-      // Si es una nueva canción (no el primer load)
-      if (previousSongId != null && newMediaItem != null) {
-        // Verificar si la carátula está en caché antes de mostrar loading
+      // Verificar si la carátula está disponible inmediatamente
+      if (newMediaItem != null) {
+        final songId = newMediaItem.extras?['songId'] as int?;
         final songPath = newMediaItem.extras?['data'] as String?;
-        final cachedArtwork = songPath != null ? _getCachedArtwork(songPath) : null;
+        final hasArtUri = newMediaItem.artUri != null;
+        final hasCachedArtwork = songPath != null ? _getCachedArtwork(songPath) != null : false;
         
-        if (newMediaItem.artUri == null && cachedArtwork == null) {
-          // No hay carátula en MediaItem ni en caché - mostrar loading brevemente
-          // print('⏳ PLAYER SCREEN: Mostrando loading - carátula no está en caché para: ${newMediaItem.title}');
-          _artworkLoadingNotifier.value = true;
-
-          // Dar tiempo breve para que el audio handler cargue la carátula
-          Timer(const Duration(milliseconds: 200), () {
-            if (mounted && _lastArtworkSongId == newSongId) {
-              // Verificar si ya se cargó la carátula
-              final currentMediaItem = audioHandler?.mediaItem.valueOrNull;
-              if (currentMediaItem?.id == newSongId &&
-                  currentMediaItem?.artUri != null) {
-                // La carátula ya se cargó
-                _artworkLoadingNotifier.value = false;
-              } else {
-                // No hay carátula para esta canción - no mostrar loading
-                _artworkLoadingNotifier.value = false;
-              }
-            }
-          });
-        } else {
-          // Ya hay carátula en MediaItem o en caché - no mostrar loading
-          // print('✅ PLAYER SCREEN: No mostrar loading - carátula disponible para: ${newMediaItem.title}');
-          _artworkLoadingNotifier.value = false;
+        // Solo mostrar loading si no hay carátula disponible en ningún lugar
+        _artworkLoadingNotifier.value = !hasArtUri && !hasCachedArtwork;
+        
+        // Precargar carátula en background si no está disponible
+        if (!hasArtUri && !hasCachedArtwork && songId != null && songPath != null) {
+          _preloadArtworkInBackground(songId, songPath);
         }
       } else {
-        // Primer load o no hay nueva canción - no mostrar loading
         _artworkLoadingNotifier.value = false;
       }
     } else if (newMediaItem?.artUri != null && _artworkLoadingNotifier.value) {
       // La carátula acaba de llegar para la canción actual
       _artworkLoadingNotifier.value = false;
     }
+  }
+
+  /// Precarga la carátula en background para mejorar la experiencia
+  void _preloadArtworkInBackground(int songId, String songPath) {
+    // Usar el sistema optimizado de carga de carátulas
+    Future.microtask(() async {
+      try {
+        await getOrCacheArtwork(songId, songPath);
+        // Actualizar el estado si la carátula se cargó exitosamente
+        if (mounted && _lastArtworkSongId == songId.toString()) {
+          _artworkLoadingNotifier.value = false;
+        }
+      } catch (e) {
+        // Error silencioso - no afectar la UI
+      }
+    });
   }
 
   @override

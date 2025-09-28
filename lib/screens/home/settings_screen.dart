@@ -3882,7 +3882,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              '${LocaleProvider.tr('version')}: v1.5.4',
+                              '${LocaleProvider.tr('version')}: 1.5.5',
                               style: const TextStyle(fontSize: 15),
                               textAlign: TextAlign.center,
                             ),

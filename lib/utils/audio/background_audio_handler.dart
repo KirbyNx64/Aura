@@ -350,6 +350,11 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   bool _hasBeenTracked = false;
   Duration _elapsedTrackingTime = Duration.zero;
 
+  // Control de pausa automática durante cambios de canción
+  Timer? _songChangeResumeTimer;
+  bool _wasPlayingBeforeChange = false;
+  static const Duration _songChangeDelay = Duration(milliseconds: 800);
+
   // Claves de SharedPreferences
   static const String _kPrefQueuePaths = 'playback_queue_paths';
   static const String _kPrefQueueIndex = 'playback_queue_index';
@@ -565,6 +570,10 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
     // Cancelar timer de notificaciones
     _notificationUpdateTimer?.cancel();
+    
+    // Cancelar timer de cambio de canción
+    _songChangeResumeTimer?.cancel();
+    _songChangeResumeTimer = null;
 
     _currentIndexSubscription = null;
     _playbackEventSubscription = null;
@@ -1438,6 +1447,31 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     _updateSleepTimer();
   }
 
+  /// Controla la pausa automática durante cambios de canción
+  void _handleSongChangePause() {
+    // Solo establecer el estado original en el primer cambio
+    if (_songChangeResumeTimer == null) {
+      _wasPlayingBeforeChange = _player.playing;
+    }
+    
+    // Cancelar timer anterior si existe
+    _songChangeResumeTimer?.cancel();
+    
+    // Si estaba reproduciéndose originalmente y no está pausado, pausar
+    if (_wasPlayingBeforeChange && _player.playing) {
+      _player.pause();
+    }
+    
+    // Configurar timer para reanudar después del delay
+    _songChangeResumeTimer = Timer(_songChangeDelay, () {
+      if (_wasPlayingBeforeChange && !_player.playing) {
+        _player.play();
+      }
+      _wasPlayingBeforeChange = false;
+      _songChangeResumeTimer = null; // Limpiar referencia al timer
+    });
+  }
+
   @override
   Future<void> skipToNext() async {
     if (_initializing || _isSkipping) return;
@@ -1445,6 +1479,9 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     _isSkipping = true;
 
     try {
+      // Pausar automáticamente durante el cambio de canción
+      _handleSongChangePause();
+      
       // Cancelar operaciones pendientes antes de cambiar
       _pendingArtworkOperations.clear();
       cancelAllArtworkLoads();
@@ -1466,6 +1503,9 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
     _isSkipping = true;
     try {
+      // Pausar automáticamente durante el cambio de canción
+      _handleSongChangePause();
+      
       // Cancelar operaciones pendientes antes de cambiar
       _pendingArtworkOperations.clear();
       cancelAllArtworkLoads();

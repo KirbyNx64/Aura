@@ -121,7 +121,6 @@ class _ArtworkHeroCachedState extends State<ArtworkHeroCached> {
   Widget _buildContent(BuildContext context) {
     // Si está cargando, mostrar contenedor transparente
     if (widget.isLoading) {
-      // print('🖼️ HERO CACHED: Mostrando contenedor transparente (cargando)');
       return Container(
         width: widget.size,
         height: widget.size,
@@ -129,24 +128,21 @@ class _ArtworkHeroCachedState extends State<ArtworkHeroCached> {
       );
     }
 
-    // Si hay carátula actual, mostrarla
+    // Prioridad 1: Si hay carátula actual en artUri, mostrarla inmediatamente
     if (widget.artUri != null) {
-      // print('🖼️ HERO CACHED: Mostrando carátula desde URI: ${widget.artUri!.path}');
       return Image.file(
         File(widget.artUri!.toFilePath()),
         width: widget.size,
         height: widget.size,
         fit: BoxFit.cover,
         errorBuilder: (context, error, stackTrace) {
-          // print('❌ HERO CACHED: Error cargando imagen: $error');
           return _buildPlaceholder(context);
         },
       );
     }
 
-    // Si estamos esperando una nueva carátula y tenemos fallback, mostrar la anterior
+    // Prioridad 2: Si estamos esperando una nueva carátula y tenemos fallback, mostrar la anterior
     if (_hasTemporaryFallback && _previousArtUri != null) {
-      // print('🖼️ HERO CACHED: Mostrando carátula temporal: ${_previousArtUri!.path}');
       return Image.file(
         File(_previousArtUri!.toFilePath()),
         width: widget.size,
@@ -158,27 +154,24 @@ class _ArtworkHeroCachedState extends State<ArtworkHeroCached> {
       );
     }
 
-    // Si no hay carátula en artUri, verificar caché
+    // Prioridad 3: Verificar caché inmediatamente (más rápido que esperar)
     if (widget.songPath != null) {
       final cache = artworkCache;
       final cachedArtwork = cache[widget.songPath!];
       if (cachedArtwork != null) {
-        // print('🖼️ HERO CACHED: Mostrando carátula desde caché: ${cachedArtwork.path}');
         return Image.file(
           File(cachedArtwork.toFilePath()),
           width: widget.size,
           height: widget.size,
           fit: BoxFit.cover,
           errorBuilder: (context, error, stackTrace) {
-            // print('❌ HERO CACHED: Error cargando imagen desde caché: $error');
             return _buildPlaceholder(context);
           },
         );
       }
     }
 
-    // Si no hay carátula, mostrar placeholder
-    // print('🖼️ HERO CACHED: Mostrando placeholder (sin carátula)');
+    // Si no hay carátula disponible, mostrar placeholder
     return _buildPlaceholder(context);
   }
 
