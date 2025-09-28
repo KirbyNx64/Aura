@@ -14,6 +14,7 @@ import 'package:music/utils/yt_search/yt_screen.dart';
 import 'package:music/l10n/locale_provider.dart';
 import 'package:music/utils/notifiers.dart';
 import 'package:music/utils/notification_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:music/utils/db/playlist_model.dart';
 import 'package:music/utils/audio/synced_lyrics_service.dart';
@@ -669,6 +670,15 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
       });
       // Inicializar el notifier con el color guardado
       colorSchemeNotifier.value = savedColorScheme;
+      
+      // Inicializar la configuración de animación hero
+      final prefs = await SharedPreferences.getInstance();
+      final useHero = prefs.getBool('use_hero_animation') ?? true;
+      heroAnimationNotifier.value = useHero;
+      
+      // Inicializar la configuración del botón next en overlay
+      final nextButtonEnabled = prefs.getBool('overlay_next_button_enabled') ?? false;
+      overlayNextButtonEnabled.value = nextButtonEnabled;
       // Configurar la barra de navegación del sistema después de cargar las preferencias
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _updateSystemNavigationBar();

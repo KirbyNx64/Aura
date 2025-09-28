@@ -1,9 +1,9 @@
 {
-  "version": "1.5.3",
+  "version": "1.5.4",
   "apk_urls": {
-    "arm64-v8a": "https://github.com/KirbyNx64/Aura/releases/download/v1.5.3/AuraMusic-v1.5.3-arm64-v8a.apk",
-    "armeabi-v7a": "https://github.com/KirbyNx64/Aura/releases/download/v1.5.3/AuraMusic-v1.5.3-armeabi-v7a.apk",
-    "x86_64": "https://github.com/KirbyNx64/Aura/releases/download/v1.5.3/AuraMusic-v1.5.3-x86_64.apk"
+    "arm64-v8a": "https://github.com/KirbyNx64/Aura/releases/download/v1.5.4/AuraMusic-v1.5.4-arm64-v8a.apk",
+    "armeabi-v7a": "https://github.com/KirbyNx64/Aura/releases/download/v1.5.4/AuraMusic-v1.5.4-armeabi-v7a.apk",
+    "x86_64": "https://github.com/KirbyNx64/Aura/releases/download/v1.5.4/AuraMusic-v1.5.4-x86_64.apk"
   },
-  "changelog": "• Nuevo tema dinámico: Usa automáticamente la paleta de colores de tu dispositivo, manteniendo todos los temas anteriores.\n\n• Compartir enlaces de YouTube: Ahora puedes compartir enlaces de videos o canciones de YouTube directamente a la app para descargar el audio.\n\n• Desactivar animación Hero: Opción para desactivar la animación de apertura/cierre del reproductor.\n\n• Botón para siguiente canción en el mini reproductor: Añadido un nuevo botón para saltar a la siguiente canción desde el mini reproductor.\n\n• Mejor compatibilidad con Android 15+: Se corrigieron errores de navegación y se mejoró la compatibilidad con estas versiones de Android.\n\n• Mejoras visuales y de diseño: Pequeños ajustes en la interfaz para una experiencia más pulida.\n\n• Corrección de errores: Solución de fallos menores y optimizaciones internas."
+  "changelog": "• Corrección de errores: Solución de fallos menores y optimizaciones internas."
 }

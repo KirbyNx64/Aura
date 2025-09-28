@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:async';
 import 'package:music/utils/notifiers.dart';
 import 'package:music/utils/theme_preferences.dart';
+import 'package:music/utils/audio/background_audio_handler.dart';
 
 class ArtworkHeroCached extends StatefulWidget {
   final Uri? artUri;
@@ -11,6 +12,7 @@ class ArtworkHeroCached extends StatefulWidget {
   final String heroTag;
   final bool showPlaceholderIcon;
   final bool isLoading;
+  final String? songPath; // Para verificar caché cuando artUri es null
 
   const ArtworkHeroCached({
     super.key,
@@ -20,6 +22,7 @@ class ArtworkHeroCached extends StatefulWidget {
     required this.heroTag,
     this.showPlaceholderIcon = true,
     this.isLoading = false,
+    this.songPath,
   });
 
   @override
@@ -38,6 +41,7 @@ class _ArtworkHeroCachedState extends State<ArtworkHeroCached> {
 
     // Si la carátula cambió
     if (widget.artUri != oldWidget.artUri) {
+      // print('🖼️ HERO CACHED: Carátula actualizada - Anterior: ${oldWidget.artUri?.path}, Nueva: ${widget.artUri?.path}');
       _transitionTimer?.cancel();
 
       // Si tenemos carátula actual y la nueva es null
@@ -117,6 +121,7 @@ class _ArtworkHeroCachedState extends State<ArtworkHeroCached> {
   Widget _buildContent(BuildContext context) {
     // Si está cargando, mostrar contenedor transparente
     if (widget.isLoading) {
+      // print('🖼️ HERO CACHED: Mostrando contenedor transparente (cargando)');
       return Container(
         width: widget.size,
         height: widget.size,
@@ -126,12 +131,14 @@ class _ArtworkHeroCachedState extends State<ArtworkHeroCached> {
 
     // Si hay carátula actual, mostrarla
     if (widget.artUri != null) {
+      // print('🖼️ HERO CACHED: Mostrando carátula desde URI: ${widget.artUri!.path}');
       return Image.file(
         File(widget.artUri!.toFilePath()),
         width: widget.size,
         height: widget.size,
         fit: BoxFit.cover,
         errorBuilder: (context, error, stackTrace) {
+          // print('❌ HERO CACHED: Error cargando imagen: $error');
           return _buildPlaceholder(context);
         },
       );
@@ -139,6 +146,7 @@ class _ArtworkHeroCachedState extends State<ArtworkHeroCached> {
 
     // Si estamos esperando una nueva carátula y tenemos fallback, mostrar la anterior
     if (_hasTemporaryFallback && _previousArtUri != null) {
+      // print('🖼️ HERO CACHED: Mostrando carátula temporal: ${_previousArtUri!.path}');
       return Image.file(
         File(_previousArtUri!.toFilePath()),
         width: widget.size,
@@ -150,7 +158,27 @@ class _ArtworkHeroCachedState extends State<ArtworkHeroCached> {
       );
     }
 
+    // Si no hay carátula en artUri, verificar caché
+    if (widget.songPath != null) {
+      final cache = artworkCache;
+      final cachedArtwork = cache[widget.songPath!];
+      if (cachedArtwork != null) {
+        // print('🖼️ HERO CACHED: Mostrando carátula desde caché: ${cachedArtwork.path}');
+        return Image.file(
+          File(cachedArtwork.toFilePath()),
+          width: widget.size,
+          height: widget.size,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) {
+            // print('❌ HERO CACHED: Error cargando imagen desde caché: $error');
+            return _buildPlaceholder(context);
+          },
+        );
+      }
+    }
+
     // Si no hay carátula, mostrar placeholder
+    // print('🖼️ HERO CACHED: Mostrando placeholder (sin carátula)');
     return _buildPlaceholder(context);
   }
 

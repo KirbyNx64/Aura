@@ -234,6 +234,28 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
       }
     }
 
+    // Si no hay artUri, verificar caché primero
+    final songId = mediaItem.extras?['songId'];
+    final songPath = mediaItem.extras?['data'];
+    
+    if (songId != null && songPath != null) {
+      // Verificar si está en caché primero
+      final cachedArtwork = _getCachedArtwork(songPath);
+      if (cachedArtwork != null) {
+        // print('✅ MODAL: Usando carátula desde caché para: ${songPath.split('/').last}');
+        return Image.file(
+          File(cachedArtwork.toFilePath()),
+          width: 60,
+          height: 60,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) =>
+              _buildModalPlaceholder(),
+        );
+      } else {
+        // print('⚠️ MODAL: Carátula no en caché, usando placeholder para: ${songPath.split('/').last}');
+      }
+    }
+
     // Fallback si no hay carátula o no se puede cargar
     return _buildModalPlaceholder();
   }
@@ -594,19 +616,40 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     }
   }
 
+  /// Verifica si la carátula está en el caché del audio handler
+  Uri? _getCachedArtwork(String songPath) {
+    final cache = artworkCache;
+    final cached = cache[songPath];
+    if (cached != null) {
+      // print('⚡ CACHÉ HIT: Carátula encontrada en caché para: ${songPath.split('/').last}');
+    } else {
+      // print('❌ CACHÉ MISS: Carátula NO encontrada en caché para: ${songPath.split('/').last}');
+    }
+    return cached;
+  }
+
   /// Maneja el cambio de carátula cuando cambia la canción
   void _handleArtworkChange(MediaItem? newMediaItem) {
     final newSongId =
         newMediaItem?.extras?['songId']?.toString() ?? newMediaItem?.id;
 
+    // ('🔄 PLAYER SCREEN: _handleArtworkChange llamado - Nueva canción: ${newMediaItem?.title} (ID: $newSongId)');
+
     if (_lastArtworkSongId != newSongId) {
       final previousSongId = _lastArtworkSongId;
       _lastArtworkSongId = newSongId;
+      
+      // print('🎵 PLAYER SCREEN: Cambio de canción detectado - Anterior: $previousSongId, Nueva: $newSongId');
 
       // Si es una nueva canción (no el primer load)
       if (previousSongId != null && newMediaItem != null) {
-        // Si no hay carátula en caché, marcar como loading brevemente
-        if (newMediaItem.artUri == null) {
+        // Verificar si la carátula está en caché antes de mostrar loading
+        final songPath = newMediaItem.extras?['data'] as String?;
+        final cachedArtwork = songPath != null ? _getCachedArtwork(songPath) : null;
+        
+        if (newMediaItem.artUri == null && cachedArtwork == null) {
+          // No hay carátula en MediaItem ni en caché - mostrar loading brevemente
+          // print('⏳ PLAYER SCREEN: Mostrando loading - carátula no está en caché para: ${newMediaItem.title}');
           _artworkLoadingNotifier.value = true;
 
           // Dar tiempo breve para que el audio handler cargue la carátula
@@ -625,7 +668,8 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
             }
           });
         } else {
-          // Ya hay carátula - no está loading
+          // Ya hay carátula en MediaItem o en caché - no mostrar loading
+          // print('✅ PLAYER SCREEN: No mostrar loading - carátula disponible para: ${newMediaItem.title}');
           _artworkLoadingNotifier.value = false;
         }
       } else {
@@ -1768,6 +1812,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                       'now_playing_artwork_${(currentMediaItem.extras?['songId'] ?? currentMediaItem.id).toString()}',
                                                   showPlaceholderIcon: !_showLyrics,
                                                   isLoading: isArtworkLoading,
+                                                  songPath: currentMediaItem.extras?['data'] as String?,
                                                 ),
                                                 // Indicadores de doble toque solo cuando las letras se muestran en modal y se ha hecho doble toque
                                                 if (!showLyricsOnCover && _showDoubleTapIndicators)
@@ -3283,6 +3328,8 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                 // Lyrics Search Button
                                 IconButton(
                                   onPressed: () async {
+                                    // Cerrar el modal de letras antes de abrir la pantalla de búsqueda
+                                    Navigator.of(context).pop();
                                     await Navigator.of(context).push(
                                       PageRouteBuilder(
                                         pageBuilder: (context, animation, secondaryAnimation) =>
@@ -3562,6 +3609,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                   SizedBox(height: 24),
                                   ElevatedButton.icon(
                                     onPressed: () async {
+                                      // Cerrar el modal de letras antes de abrir la pantalla de búsqueda
                                       Navigator.of(context).pop();
                                       await Navigator.of(context).push(
                                         PageRouteBuilder(
@@ -3656,15 +3704,33 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
       }
     }
 
-    // Si no hay artUri o no se puede cargar, intentar cargar desde la base de datos local
+    // Si no hay artUri o no se puede cargar, verificar caché primero
     final songId = mediaItem.extras?['songId'];
     final songPath = mediaItem.extras?['data'];
     
     if (songId != null && songPath != null) {
+      // Verificar si está en caché primero
+      final cachedArtwork = _getCachedArtwork(songPath);
+      if (cachedArtwork != null) {
+        // print('✅ LYRICS MODAL: Usando carátula desde caché para: ${songPath.split('/').last}');
+        return Image.file(
+          File(cachedArtwork.toFilePath()),
+          width: 50,
+          height: 50,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) {
+            return _buildFallbackIcon();
+          },
+        );
+      }
+      
+      // Si no está en caché, cargar desde la base de datos
+      // print('🔄 LYRICS MODAL: Cargando carátula desde BD para: ${songPath.split('/').last}');
       return FutureBuilder<Uri?>(
         future: getOrCacheArtwork(songId, songPath),
         builder: (context, snapshot) {
           if (snapshot.hasData && snapshot.data != null) {
+            // print('✅ LYRICS MODAL: Carátula cargada desde BD para: ${songPath.split('/').last}');
             return Image.file(
               File(snapshot.data!.toFilePath()),
               width: 50,
@@ -3675,6 +3741,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
               },
             );
           }
+          // print('❌ LYRICS MODAL: No se pudo cargar carátula para: ${songPath.split('/').last}');
           return _buildFallbackIcon();
         },
       );
@@ -3896,13 +3963,18 @@ class TitleMarquee extends StatefulWidget {
 
 class _TitleMarqueeState extends State<TitleMarquee> {
   bool _showMarquee = false;
+  Timer? _marqueeTimer;
 
   @override
   void didUpdateWidget(covariant TitleMarquee oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.text != widget.text) {
+      // Cancelar timer anterior si existe
+      _marqueeTimer?.cancel();
       setState(() => _showMarquee = false);
-      Future.delayed(const Duration(milliseconds: 3000), () {
+      
+      // Crear nuevo timer para la nueva canción
+      _marqueeTimer = Timer(const Duration(milliseconds: 3000), () {
         if (mounted) setState(() => _showMarquee = true);
       });
     }
@@ -3911,9 +3983,15 @@ class _TitleMarqueeState extends State<TitleMarquee> {
   @override
   void initState() {
     super.initState();
-    Future.delayed(const Duration(milliseconds: 3000), () {
+    _marqueeTimer = Timer(const Duration(milliseconds: 3000), () {
       if (mounted) setState(() => _showMarquee = true);
     });
+  }
+
+  @override
+  void dispose() {
+    _marqueeTimer?.cancel();
+    super.dispose();
   }
 
   @override
@@ -4325,6 +4403,18 @@ class _PlaylistListViewState extends State<_PlaylistListView> {
   late final ScrollController _scrollController;
   bool _isShuffling = false;
 
+  /// Verifica si la carátula está en el caché del audio handler
+  Uri? _getCachedArtwork(String songPath) {
+    final cache = artworkCache;
+    final cached = cache[songPath];
+    if (cached != null) {
+      // print('⚡ PLAYLIST CACHÉ HIT: Carátula encontrada en caché para: ${songPath.split('/').last}');
+    } else {
+      // print('❌ PLAYLIST CACHÉ MISS: Carátula NO encontrada en caché para: ${songPath.split('/').last}');
+    }
+    return cached;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -4384,15 +4474,33 @@ class _PlaylistListViewState extends State<_PlaylistListView> {
       }
     }
 
-    // Si no hay artUri o no se puede cargar, intentar cargar desde la base de datos local
+    // Si no hay artUri o no se puede cargar, verificar caché primero
     final songId = mediaItem.extras?['songId'];
     final songPath = mediaItem.extras?['data'];
     
     if (songId != null && songPath != null) {
+      // Verificar si está en caché primero
+      final cachedArtwork = _getCachedArtwork(songPath);
+      if (cachedArtwork != null) {
+        // print('✅ PLAYLIST: Usando carátula desde caché para: ${songPath.split('/').last}');
+        return Image.file(
+          File(cachedArtwork.toFilePath()),
+          width: 50,
+          height: 50,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) {
+            return _buildFallbackIcon();
+          },
+        );
+      }
+      
+      // Si no está en caché, cargar desde la base de datos
+      // print('🔄 PLAYLIST: Cargando carátula desde BD para: ${songPath.split('/').last}');
       return FutureBuilder<Uri?>(
         future: getOrCacheArtwork(songId, songPath),
         builder: (context, snapshot) {
           if (snapshot.hasData && snapshot.data != null) {
+            // print('✅ PLAYLIST: Carátula cargada desde BD para: ${songPath.split('/').last}');
             return Image.file(
               File(snapshot.data!.toFilePath()),
               width: 50,
@@ -4403,6 +4511,7 @@ class _PlaylistListViewState extends State<_PlaylistListView> {
               },
             );
           }
+          // print('❌ PLAYLIST: No se pudo cargar carátula para: ${songPath.split('/').last}');
           return _buildFallbackIcon();
         },
       );
@@ -4652,8 +4761,27 @@ class _ArtworkListTileState extends State<ArtworkListTile> {
       setState(() => _artUri = widget.artUri);
       return;
     }
+    
+    // Verificar si está en caché primero
+    final cache = artworkCache;
+    final cachedArtwork = cache[widget.songPath];
+    if (cachedArtwork != null) {
+      // print('✅ ARTWORK LIST TILE: Usando carátula desde caché para: ${widget.songPath.split('/').last}');
+      if (mounted) setState(() => _artUri = cachedArtwork);
+      return;
+    }
+    
+    // Si no está en caché, cargar desde la base de datos
+    // print('🔄 ARTWORK LIST TILE: Cargando carátula desde BD para: ${widget.songPath.split('/').last}');
     final uri = await getOrCacheArtwork(widget.songId, widget.songPath);
-    if (mounted) setState(() => _artUri = uri);
+    if (mounted) {
+      if (uri != null) {
+        // print('✅ ARTWORK LIST TILE: Carátula cargada desde BD para: ${widget.songPath.split('/').last}');
+      } else {
+        // print('❌ ARTWORK LIST TILE: No se pudo cargar carátula para: ${widget.songPath.split('/').last}');
+      }
+      setState(() => _artUri = uri);
+    }
   }
 
   @override

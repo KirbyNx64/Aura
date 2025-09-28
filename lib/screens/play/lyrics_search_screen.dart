@@ -84,10 +84,12 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
     // Quitar el foco del TextField
     _searchFocusNode.unfocus();
 
-    setState(() {
-      _isSearching = true;
-      _hasSearched = true;
-    });
+    if (mounted) {
+      setState(() {
+        _isSearching = true;
+        _hasSearched = true;
+      });
+    }
 
     try {
       final dio = Dio();
@@ -126,22 +128,30 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
           }
         }
 
-        setState(() {
-          _searchResults = results;
-        });
+        if (mounted) {
+          setState(() {
+            _searchResults = results;
+          });
+        }
       } else {
+        if (mounted) {
+          setState(() {
+            _searchResults = [];
+          });
+        }
+      }
+    } catch (e) {
+      if (mounted) {
         setState(() {
           _searchResults = [];
         });
       }
-    } catch (e) {
-      setState(() {
-        _searchResults = [];
-      });
     } finally {
-      setState(() {
-        _isSearching = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isSearching = false;
+        });
+      }
     }
   }
 
@@ -533,10 +543,12 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
                                     icon: const Icon(Symbols.clear_rounded),
                                     onPressed: () {
                                       _searchController.clear();
-                                      setState(() {
-                                        _searchResults = [];
-                                        _hasSearched = false;
-                                      });
+                                      if (mounted) {
+                                        setState(() {
+                                          _searchResults = [];
+                                          _hasSearched = false;
+                                        });
+                                      }
                                     },
                                   )
                                 : null,
@@ -546,7 +558,9 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
                           ),
                           onSubmitted: (_) => _performSearch(),
                           onChanged: (value) {
-                            setState(() {});
+                            if (mounted) {
+                              setState(() {});
+                            }
                           },
                         ),
                       ),
@@ -778,13 +792,15 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
               if (fullLyrics.length > previewLyrics.length)
                 InkWell(
                   onTap: () {
-                    setState(() {
-                      if (isExpanded) {
-                        _expandedCards.remove(index);
-                      } else {
-                        _expandedCards.add(index);
-                      }
-                    });
+                    if (mounted) {
+                      setState(() {
+                        if (isExpanded) {
+                          _expandedCards.remove(index);
+                        } else {
+                          _expandedCards.add(index);
+                        }
+                      });
+                    }
                   },
                   borderRadius: BorderRadius.circular(8),
                   child: Container(

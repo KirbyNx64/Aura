@@ -2627,9 +2627,11 @@ class _FoldersScreenState extends State<FoldersScreen>
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),
-                        subtitle: Text(
-                          '${canciones.length} ${LocaleProvider.tr('songs')}',
-                        ),
+                        subtitle: ignored && canciones.isEmpty 
+                            ? null 
+                            : Text(
+                                '${canciones.length} ${LocaleProvider.tr('songs')}',
+                              ),
                         onTap: ignored ? null : () async {
                           await _loadSongsForFolder(entry);
                         },

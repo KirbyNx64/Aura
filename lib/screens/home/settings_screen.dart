@@ -3031,9 +3031,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ],
       ),
-      body: ListView(
+      body: SingleChildScrollView(
+        physics: const ClampingScrollPhysics(),
         padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + MediaQuery.of(context).padding.bottom),
-        children: [
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
           // Preferencias
           TranslatedText(
             'preferences',
@@ -3879,7 +3882,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              '${LocaleProvider.tr('version')}: v1.5.3',
+                              '${LocaleProvider.tr('version')}: v1.5.4',
                               style: const TextStyle(fontSize: 15),
                               textAlign: TextAlign.center,
                             ),
@@ -3996,6 +3999,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ),
         ],
+      ),
       ),
     );
   }
