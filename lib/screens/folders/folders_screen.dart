@@ -21,6 +21,7 @@ import 'package:music/utils/db/mostplayer_db.dart';
 import 'package:music/screens/artist/artist_screen.dart';
 import 'package:mini_music_visualizer/mini_music_visualizer.dart';
 import 'package:music/screens/play/player_screen.dart';
+import 'package:music/widgets/hero_cached.dart';
 import 'package:music/utils/db/playlist_model.dart' as hive_model;
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -612,6 +613,7 @@ class _FoldersScreenState extends State<FoldersScreen>
                     leading: Icon(
                       isFavorite ? Icons.delete_outline : Symbols.favorite_rounded,
                       weight: isFavorite ? null : 600,
+                      fill: 1,
                     ),
                     title: TranslatedText(
                       isFavorite ? 'remove_from_favorites' : 'add_to_favorites',
@@ -973,6 +975,9 @@ class _FoldersScreenState extends State<FoldersScreen>
       // Limpiar la cola y el MediaItem antes de mostrar la nueva canción
       handler.queue.add([]);
       handler.mediaItem.add(null);
+      
+      // Limpiar el fallback de las carátulas para evitar parpadeo
+      ArtworkHeroCached.clearFallback();
 
       // Crear MediaItem temporal para mostrar el overlay inmediatamente
       final song = filtered[index];
@@ -2893,7 +2898,7 @@ class _FoldersScreenState extends State<FoldersScreen>
                 ),
               ] else ...[
                 IconButton(
-                  icon: const Icon(Symbols.shuffle, size: 28, weight: 600),
+                  icon: const Icon(Symbols.shuffle_rounded, size: 28, weight: 600),
                   tooltip: LocaleProvider.tr('shuffle'),
                   onPressed: () {
                     if (_displaySongs.isNotEmpty) {
@@ -3220,6 +3225,7 @@ class _FoldersScreenState extends State<FoldersScreen>
                   isCurrent
                       ? (playing ? Symbols.pause_rounded : Symbols.play_arrow_rounded)
                       : Symbols.play_arrow_rounded,
+                  fill: 1,
                   grade: 200,
                   color: isCurrent
                       ? Theme.of(context).colorScheme.primary

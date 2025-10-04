@@ -27,69 +27,73 @@ class ArtworkHeroCached extends StatefulWidget {
 
   @override
   State<ArtworkHeroCached> createState() => _ArtworkHeroCachedState();
+
+  // Método estático para limpiar el fallback desde otras pantallas
+  static void clearFallback() {
+    _ArtworkHeroCachedState._clearAllFallbacks();
+  }
 }
 
 class _ArtworkHeroCachedState extends State<ArtworkHeroCached> {
-  Uri? _currentArtUri;
   Uri? _previousArtUri;
-  Timer? _transitionTimer;
-  bool _hasTemporaryFallback = false;
+  Timer? _fallbackTimer;
+  bool _hasFallback = false;
+  
+  // Lista estática para rastrear todas las instancias activas
+  static final Set<_ArtworkHeroCachedState> _activeInstances = <_ArtworkHeroCachedState>{};
+  
+  // Método estático para limpiar todos los fallbacks
+  static void _clearAllFallbacks() {
+    for (final instance in _activeInstances) {
+      instance._clearFallback();
+    }
+  }
+  
+  // Método para limpiar el fallback de esta instancia específica
+  void _clearFallback() {
+    _fallbackTimer?.cancel();
+    if (mounted) {
+      setState(() {
+        _hasFallback = false;
+        _previousArtUri = null;
+      });
+    }
+  }
 
   @override
   void didUpdateWidget(ArtworkHeroCached oldWidget) {
     super.didUpdateWidget(oldWidget);
-
-    // Si la carátula cambió
+    
+    // Si cambió la carátula
     if (widget.artUri != oldWidget.artUri) {
-      // print('🖼️ HERO CACHED: Carátula actualizada - Anterior: ${oldWidget.artUri?.path}, Nueva: ${widget.artUri?.path}');
-      _transitionTimer?.cancel();
-
-      // Si tenemos carátula actual y la nueva es null
-      if (_currentArtUri != null && widget.artUri == null) {
-        // Verificar si deberíamos mantener la anterior temporalmente
-        // (cuando estamos cargando o en un cambio rápido de canciones)
-        final shouldKeepFallback =
-            widget.isLoading ||
-            (oldWidget.artUri != null && widget.artUri == null);
-
-        if (shouldKeepFallback) {
-          // Mantener la anterior temporalmente
-          _previousArtUri = _currentArtUri;
-          _hasTemporaryFallback = true;
-
-          // Limpiar después de un tiempo corto pero razonable
-          _transitionTimer = Timer(const Duration(milliseconds: 200), () {
-            if (mounted) {
-              setState(() {
-                _hasTemporaryFallback = false;
-                _previousArtUri = null;
-              });
-            }
-          });
-        } else {
-          // Cambio inmediato a placeholder
-          _hasTemporaryFallback = false;
-          _previousArtUri = null;
-        }
+      _fallbackTimer?.cancel();
+      
+      // Si teníamos carátula y ahora es null, mantener la anterior temporalmente
+      if (oldWidget.artUri != null && widget.artUri == null) {
+        _previousArtUri = oldWidget.artUri;
+        _hasFallback = true;
+        
+        // Limpiar fallback después de un tiempo corto
+        _fallbackTimer = Timer(const Duration(milliseconds: 300), () {
+          _clearFallback();
+        });
       } else {
-        // Cambio normal o nueva carátula disponible
-        _hasTemporaryFallback = false;
-        _previousArtUri = null;
+        // Cambio normal, limpiar fallback
+        _clearFallback();
       }
-
-      _currentArtUri = widget.artUri;
     }
   }
 
   @override
   void initState() {
     super.initState();
-    _currentArtUri = widget.artUri;
+    _activeInstances.add(this);
   }
 
   @override
   void dispose() {
-    _transitionTimer?.cancel();
+    _activeInstances.remove(this);
+    _fallbackTimer?.cancel();
     super.dispose();
   }
 
@@ -141,8 +145,8 @@ class _ArtworkHeroCachedState extends State<ArtworkHeroCached> {
       );
     }
 
-    // Prioridad 2: Si estamos esperando una nueva carátula y tenemos fallback, mostrar la anterior
-    if (_hasTemporaryFallback && _previousArtUri != null) {
+    // Prioridad 2: Si tenemos fallback temporal, mostrarlo
+    if (_hasFallback && _previousArtUri != null) {
       return Image.file(
         File(_previousArtUri!.toFilePath()),
         width: widget.size,

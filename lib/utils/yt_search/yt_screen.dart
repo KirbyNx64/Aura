@@ -26,6 +26,8 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:music/utils/notification_service.dart';
 import 'package:music/widgets/image_viewer.dart';
 import 'package:music/screens/artist/artist_screen.dart';
+import 'package:music/screens/download/download_history_screen.dart';
+import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 
 // Top-level function para usar con compute
 Uint8List? decodeAndCropImage(Uint8List bytes) {
@@ -105,6 +107,19 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
   List<YtMusicResult> _playlistSongs = [];
   Map<String, dynamic>? _currentPlaylist;
   bool _loadingPlaylistSongs = false;
+  
+  // Variables para manejar enlaces de YouTube
+  bool _isUrlSearch = false;
+  Video? _urlVideoResult;
+  bool _loadingUrlVideo = false;
+  String? _urlVideoError;
+  
+  // Variables para manejar playlists de YouTube
+  bool _isUrlPlaylistSearch = false;
+  List<YtMusicResult> _urlPlaylistVideos = [];
+  String? _urlPlaylistTitle;
+  bool _loadingUrlPlaylist = false;
+  String? _urlPlaylistError;
 
   // ValueNotifiers para el progreso de descarga
   final ValueNotifier<double> downloadProgressNotifier = ValueNotifier(0.0);
@@ -224,6 +239,19 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
     if (_controller.text.trim().isEmpty) {
       return;
     }
+    
+    // Verificar si es un enlace de playlist de YouTube
+    if (_isYouTubePlaylistUrl(_controller.text)) {
+      await _processUrlPlaylist(_controller.text);
+      return;
+    }
+    
+    // Verificar si es un enlace de video de YouTube
+    if (_isYouTubeUrl(_controller.text)) {
+      await _processUrlVideo(_controller.text);
+      return;
+    }
+    
     // Salir de la vista expandida al hacer una nueva búsqueda
     if (_expandedCategory != null) {
       setState(() {
@@ -501,9 +529,452 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
       _loadingMoreSongs = false;
       _loadingMoreVideos = false;
       _showSuggestions = true;
+      _isUrlSearch = false;
+      _urlVideoResult = null;
+      _loadingUrlVideo = false;
+      _urlVideoError = null;
+      _isUrlPlaylistSearch = false;
+      _urlPlaylistVideos = [];
+      _urlPlaylistTitle = null;
+      _loadingUrlPlaylist = false;
+      _urlPlaylistError = null;
       _selectedIndexes.clear();
       _isSelectionMode = false;
+      // Limpiar también los resultados de URL
+      _isUrlSearch = false;
+      _urlVideoResult = null;
+      _loadingUrlVideo = false;
+      _urlVideoError = null;
     });
+  }
+
+  // Función para detectar si el texto es un enlace de YouTube
+  bool _isYouTubeUrl(String text) {
+    final trimmedText = text.trim();
+    return trimmedText.contains('youtube.com/watch') ||
+           trimmedText.contains('youtu.be/') ||
+           trimmedText.contains('youtube.com/embed/') ||
+           trimmedText.contains('youtube.com/v/') ||
+           trimmedText.contains('m.youtube.com/watch');
+  }
+
+  // Función para detectar si el texto es un enlace de playlist de YouTube Music
+  bool _isYouTubePlaylistUrl(String text) {
+    final trimmedText = text.trim();
+    return trimmedText.contains('music.youtube.com/playlist') ||
+           trimmedText.contains('youtube.com/playlist') ||
+           trimmedText.contains('playlist?list=') ||
+           (trimmedText.contains('youtube.com/watch') && trimmedText.contains('list='));
+  }
+
+  // Función para extraer el ID de playlist de la URL
+  String? _extractPlaylistId(String url) {
+    try {
+      final uri = Uri.parse(url);
+      
+      // Caso 1: URL directa de playlist
+      if (uri.pathSegments.isNotEmpty && 
+          uri.pathSegments[0] == "playlist" &&
+          uri.queryParameters.containsKey("list")) {
+        return uri.queryParameters['list'];
+      }
+      
+      // Caso 2: URL de video con parámetro list (playlist)
+      if (uri.queryParameters.containsKey("list")) {
+        return uri.queryParameters['list'];
+      }
+      
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // Función para validar y normalizar el ID de playlist
+  String _validatePlaylistId(String playlistId) {
+    // Remover prefijo VL si está presente
+    if (playlistId.startsWith('VL')) {
+      return playlistId.substring(2);
+    }
+    return playlistId;
+  }
+
+  // Función para extraer información del video desde el enlace
+  Future<void> _processUrlVideo(String url) async {
+    setState(() {
+      _loadingUrlVideo = true;
+      _urlVideoError = null;
+      _isUrlSearch = true;
+    });
+
+    try {
+      final yt = YoutubeExplode();
+      final video = await yt.videos.get(url);
+      yt.close();
+      
+      setState(() {
+        _urlVideoResult = video;
+        _loadingUrlVideo = false;
+      });
+    } catch (e) {
+      setState(() {
+        _urlVideoError = 'Error al procesar el enlace: ${e.toString()}';
+        _loadingUrlVideo = false;
+      });
+    }
+  }
+
+  // Función para extraer información de la playlist desde el enlace usando el servicio existente
+  Future<void> _processUrlPlaylist(String url) async {
+    setState(() {
+      _loadingUrlPlaylist = true;
+      _urlPlaylistError = null;
+      _isUrlPlaylistSearch = true;
+    });
+
+    try {
+      // Extraer ID de playlist de la URL
+      final playlistId = _extractPlaylistId(url);
+      if (playlistId == null) {
+        throw Exception('No se pudo extraer el ID de la playlist de la URL');
+      }
+
+      // Validar y normalizar el ID
+      final validatedId = _validatePlaylistId(playlistId);
+      
+      // Obtener información de la playlist
+      final playlistInfo = await getPlaylistInfo(validatedId);
+      if (playlistInfo == null) {
+        throw Exception('No se pudo obtener información de la playlist');
+      }
+      
+      // Obtener todas las canciones de la playlist usando el servicio existente (sin límite)
+      final allSongs = await getPlaylistSongs(validatedId); // Sin límite para obtener todas
+      
+      setState(() {
+        _urlPlaylistTitle = playlistInfo['title'];
+        _urlPlaylistVideos = allSongs;
+        _loadingUrlPlaylist = false;
+      });
+      
+    } catch (e) {
+      setState(() {
+        _urlPlaylistError = 'Error al procesar la playlist: ${e.toString()}';
+        _loadingUrlPlaylist = false;
+      });
+    }
+  }
+
+  // Función para construir la UI del resultado del video
+  Widget _buildUrlVideoResult() {
+    final isSystem = colorSchemeNotifier.value == AppColorScheme.system;
+    
+    if (_urlVideoResult == null) return const SizedBox.shrink();
+    
+    return SingleChildScrollView(
+      child: Column(
+        children: [
+          // Resultado del video
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: isSystem ? Theme.of(context).colorScheme.secondaryContainer.withValues(alpha: 0.5) : Theme.of(context).colorScheme.surfaceContainer,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withAlpha((0.05 * 255).toInt()),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Thumbnail y información básica
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Thumbnail
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.network(
+                        'https://img.youtube.com/vi/${_urlVideoResult!.id}/maxresdefault.jpg',
+                        width: 120,
+                        height: 120,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Container(
+                            width: 120,
+                            height: 120,
+                            decoration: BoxDecoration(
+                              color: Colors.grey[300],
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Icon(Icons.music_video, size: 40),
+                          );
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    
+                    // Información del video
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _urlVideoResult!.title,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            _urlVideoResult!.author.replaceFirst(RegExp(r' - Topic$'), ''),
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                              fontSize: 14,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                
+                const SizedBox(height: 16),
+                
+                // Botón de acción
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: () async {
+                      if (_urlVideoResult != null) {
+                        // Agregar a la cola de descargas
+                        final downloadQueue = DownloadQueue();
+                        await downloadQueue.addToQueue(
+                          context: context,
+                          videoId: _urlVideoResult!.id.toString(),
+                          title: _urlVideoResult!.title,
+                          artist: _urlVideoResult!.author.replaceFirst(RegExp(r' - Topic$'), ''),
+                        );
+                        
+                        // Mostrar mensaje de confirmación
+                        _showMessage(
+                          LocaleProvider.tr('success'),
+                          LocaleProvider.tr('download_started'),
+                        );
+                      }
+                    },
+                    icon: const Icon(Icons.download),
+                    label: Text(LocaleProvider.tr('download')),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Theme.of(context).colorScheme.primary,
+                      foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Función para construir la UI del resultado de la playlist
+  Widget _buildUrlPlaylistResult() {
+    final isSystem = colorSchemeNotifier.value == AppColorScheme.system;
+    
+    if (_urlPlaylistVideos.isEmpty) return const SizedBox.shrink();
+    
+    return StreamBuilder<MediaItem?>(
+      stream: audioHandler?.mediaItem,
+      builder: (context, snapshot) {
+        final mediaItem = snapshot.data;
+        // Calcular espacio inferior considerando overlay de reproducción
+        double bottomSpace = mediaItem != null ? 100.0 : 0.0;
+        
+        return Padding(
+          padding: EdgeInsets.only(bottom: bottomSpace),
+          child: SingleChildScrollView(
+            child: Column(
+        children: [
+          // Resultado de la playlist
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: isSystem ? Theme.of(context).colorScheme.secondaryContainer.withValues(alpha: 0.5) : Theme.of(context).colorScheme.surfaceContainer,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withAlpha((0.05 * 255).toInt()),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Título de la playlist
+                Row(
+                  children: [
+                    Icon(
+                      Icons.playlist_play,
+                      size: 24,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _urlPlaylistTitle ?? 'Playlist',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 18,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    IconButton(
+                      onPressed: () async {
+                        final downloadQueue = DownloadQueue();
+                        for (final song in _urlPlaylistVideos) {
+                          await downloadQueue.addToQueue(
+                            context: context,
+                            videoId: song.videoId ?? '',
+                            title: song.title ?? 'Sin título',
+                            artist: song.artist?.replaceFirst(RegExp(r' - Topic$'), '') ?? 'Artista desconocido',
+                          );
+                        }
+                        _showMessage(
+                          LocaleProvider.tr('success'),
+                          '${_urlPlaylistVideos.length} canciones agregadas a la cola de descarga',
+                        );
+                      },
+                      icon: const Icon(Icons.download),
+                      style: IconButton.styleFrom(
+                        backgroundColor: Theme.of(context).colorScheme.primary,
+                        foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Text(
+                      '${_urlPlaylistVideos.length} canciones',
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        fontSize: 14,
+                      ),
+                    ),
+                    if (_loadingUrlPlaylist) ...[
+                      const SizedBox(width: 8),
+                      SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            Theme.of(context).colorScheme.primary,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Cargando...',
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.primary,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 16),
+                
+                // Lista de canciones
+                ListView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: _urlPlaylistVideos.length,
+                  itemBuilder: (context, index) {
+                    final song = _urlPlaylistVideos[index];
+                    return ListTile(
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 0, vertical: 2),
+                      dense: true,
+                      leading: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.network(
+                          song.thumbUrl ?? 'https://img.youtube.com/vi/${song.videoId}/maxresdefault.jpg',
+                          width: 48,
+                          height: 48,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return Container(
+                              width: 48,
+                              height: 48,
+                              decoration: BoxDecoration(
+                                color: Colors.grey[300],
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Icon(Icons.music_video, size: 20),
+                            );
+                          },
+                        ),
+                      ),
+                      title: Text(
+                        song.title ?? 'Sin título',
+                        style: const TextStyle(fontSize: 14),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      subtitle: Text(
+                        song.artist?.replaceFirst(RegExp(r' - Topic$'), '') ?? 'Artista desconocido',
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          fontSize: 12,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      trailing: IconButton(
+                        icon: const Icon(Icons.download),
+                        onPressed: () async {
+                          // Agregar a la cola de descargas
+                          final downloadQueue = DownloadQueue();
+                          await downloadQueue.addToQueue(
+                            context: context,
+                            videoId: song.videoId ?? '',
+                            title: song.title ?? 'Sin título',
+                            artist: song.artist?.replaceFirst(RegExp(r' - Topic$'), '') ?? 'Artista desconocido',
+                          );
+                        },
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+        ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   // Métodos para manejar el progreso de descarga
@@ -1068,6 +1539,31 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                   ),
               ]
             : [
+                IconButton(
+                  icon: const Icon(Icons.history, size: 28),
+                  tooltip: LocaleProvider.tr('download_history'),
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      PageRouteBuilder(
+                        pageBuilder: (context, animation, secondaryAnimation) =>
+                            const DownloadHistoryScreen(),
+                        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                          const begin = Offset(1.0, 0.0);
+                          const end = Offset.zero;
+                          const curve = Curves.ease;
+                          final tween = Tween(
+                            begin: begin,
+                            end: end,
+                          ).chain(CurveTween(curve: curve));
+                          return SlideTransition(
+                            position: animation.drive(tween),
+                            child: child,
+                          );
+                        },
+                      ),
+                    );
+                  },
+                ),
                 ValueListenableBuilder<String?>(
                   valueListenable: downloadDirectoryNotifier,
                   builder: (context, dir, child) {
@@ -1256,6 +1752,70 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                       // SOLO UNO de estos bloques se muestra a la vez
                       if (_error != null)
                         Text(_error!, style: const TextStyle(color: Colors.red))
+                      else if (_isUrlSearch && _loadingUrlVideo)
+                        const Expanded(
+                          child: Center(child: CircularProgressIndicator()),
+                        )
+                      else if (_isUrlSearch && _urlVideoError != null)
+                        Expanded(
+                          child: Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.error_outline,
+                                  size: 48,
+                                  color: Theme.of(context).colorScheme.error,
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  _urlVideoError!,
+                                  style: TextStyle(
+                                    color: Theme.of(context).colorScheme.error,
+                                    fontSize: 14,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ],
+                            ),
+                          ),
+                        )
+                      else if (_isUrlSearch && _urlVideoResult != null)
+                        Expanded(
+                          child: _buildUrlVideoResult(),
+                        )
+                      else if (_isUrlPlaylistSearch && _loadingUrlPlaylist)
+                        const Expanded(
+                          child: Center(child: CircularProgressIndicator()),
+                        )
+                      else if (_isUrlPlaylistSearch && _urlPlaylistError != null)
+                        Expanded(
+                          child: Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.error_outline,
+                                  size: 48,
+                                  color: Theme.of(context).colorScheme.error,
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  _urlPlaylistError!,
+                                  style: TextStyle(
+                                    color: Theme.of(context).colorScheme.error,
+                                    fontSize: 14,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ],
+                            ),
+                          ),
+                        )
+                      else if (_isUrlPlaylistSearch && _urlPlaylistVideos.isNotEmpty)
+                        Expanded(
+                          child: _buildUrlPlaylistResult(),
+                        )
                       else if (_loading)
                         const Expanded(
                           child: Center(child: CircularProgressIndicator()),
@@ -4298,6 +4858,7 @@ class YtPreviewPlayerState extends State<YtPreviewPlayer>
                                 _playing ? Symbols.pause_rounded : Symbols.play_arrow_rounded,
                                 grade: 200,
                                 size: 24,
+                                fill: 1,
                                 color: colorSchemeNotifier.value == AppColorScheme.amoled
                                         ? Colors.black
                                         : Theme.of(context).brightness == Brightness.dark
@@ -4325,14 +4886,14 @@ class YtPreviewPlayerState extends State<YtPreviewPlayer>
                 ),
                 // Botón anterior
                 IconButton(
-                  icon: const Icon(Symbols.skip_previous_rounded, grade: 200),
+                  icon: const Icon(Symbols.skip_previous_rounded, grade: 200, fill: 1),
                   onPressed: (!_loading && _currentIndex > 0)
                       ? _playPrevious
                       : null,
                 ),
                 // Botón siguiente
                 IconButton(
-                  icon: const Icon(Symbols.skip_next_rounded, grade: 200),
+                  icon: const Icon(Symbols.skip_next_rounded, grade: 200, fill: 1),
                   onPressed:
                       (!_loading && _currentIndex < widget.results.length - 1)
                       ? _playNext

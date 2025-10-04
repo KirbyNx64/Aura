@@ -210,6 +210,9 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
             errorBuilder: (context, error, stackTrace) => _defaultArtwork(size),
           ),
         );
+      } else {
+        // Si no está en cache, cargar de forma asíncrona
+        _loadArtworkAsync(songId, songPath);
       }
     }
     
@@ -294,6 +297,8 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
               _buildModalPlaceholder(),
         );
       } else {
+        // Si no está en cache, cargar de forma asíncrona
+        _loadArtworkAsync(songId, songPath);
         // print('⚠️ MODAL: Carátula no en caché, usando placeholder para: ${songPath.split('/').last}');
       }
     }
@@ -668,6 +673,24 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
       // print('❌ CACHÉ MISS: Carátula NO encontrada en caché para: ${songPath.split('/').last}');
     }
     return cached;
+  }
+
+  /// Carga carátula de forma asíncrona si no está en cache
+  void _loadArtworkAsync(int songId, String songPath) {
+    // Verificar si ya se está cargando para evitar duplicados
+    if (_lastArtworkSongId == songId.toString()) return;
+    
+    _lastArtworkSongId = songId.toString();
+    
+    // Cargar de forma asíncrona usando el sistema unificado
+    getOrCacheArtwork(songId, songPath).then((artUri) {
+      if (artUri != null && mounted) {
+        // Forzar rebuild para mostrar la carátula cargada
+        setState(() {});
+      }
+    }).catchError((error) {
+      // print('❌ Error cargando carátula en player screen: $error');
+    });
   }
 
   /// Maneja el cambio de carátula cuando cambia la canción
@@ -1846,7 +1869,6 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                   heroTag:
                                                       'now_playing_artwork_${(currentMediaItem.extras?['songId'] ?? currentMediaItem.id).toString()}',
                                                   showPlaceholderIcon: !_showLyrics,
-                                                  isLoading: isArtworkLoading,
                                                   songPath: currentMediaItem.extras?['data'] as String?,
                                                 ),
                                                 // Indicadores de doble toque solo cuando las letras se muestran en modal y se ha hecho doble toque
@@ -2445,19 +2467,19 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                             Color repeatColor;
                             switch (repeatMode) {
                               case AudioServiceRepeatMode.one:
-                                repeatIcon = Symbols.repeat_one;
+                                repeatIcon = Symbols.repeat_one_rounded;
                                 repeatColor = Theme.of(
                                   context,
                                 ).colorScheme.primary;
                                 break;
                               case AudioServiceRepeatMode.all:
-                                repeatIcon = Symbols.repeat;
+                                repeatIcon = Symbols.repeat_rounded;
                                 repeatColor = Theme.of(
                                   context,
                                 ).colorScheme.primary;
                                 break;
                               default:
-                                repeatIcon = Symbols.repeat;
+                                repeatIcon = Symbols.repeat_rounded;
                                 repeatColor =
                                     Theme.of(context).brightness ==
                                         Brightness.light
@@ -2542,7 +2564,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                               ),
                                                               child: IconButton(
                                                                 icon: const Icon(
-                                                                  Symbols.shuffle,
+                                                                  Symbols.shuffle_rounded,
                                                                   weight: 600,
                                                                 ),
                                                                 color: Colors
@@ -2567,7 +2589,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                             )
                                                           : IconButton(
                                                               icon: const Icon(
-                                                                Symbols.shuffle,
+                                                                Symbols.shuffle_rounded,
                                                                 grade: 200,
                                                               ),
                                                               color: isShuffle
@@ -2626,6 +2648,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                         icon: const Icon(
                                                           Symbols.skip_previous_rounded,
                                                           grade: 200,
+                                                          fill: 1,
                                                         ),
                                                         color:
                                                             Theme.of(
@@ -2753,6 +2776,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                                         size:
                                                                             playIconSize,
                                                                         grade: 200,
+                                                                        fill: 1,
                                                                         color:
                                                                             Theme.of(
                                                                                   context,
@@ -2776,6 +2800,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                         icon: const Icon(
                                                           Symbols.skip_next_rounded,
                                                           grade: 200,
+                                                          fill: 1,
                                                         ),
                                                         color:
                                                             Theme.of(
@@ -3412,6 +3437,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                         isPlaying ? Symbols.pause_rounded : Symbols.play_arrow_rounded,
                                         size: 34,
                                         grade: 200,
+                                        fill: 1,
                                       ),
                                     );
                                   },
@@ -3757,6 +3783,9 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
             return _buildFallbackIcon();
           },
         );
+      } else {
+        // Si no está en cache, cargar de forma asíncrona
+        _loadArtworkAsync(songId, songPath);
       }
       
       // Si no está en caché, cargar desde la base de datos
@@ -4450,6 +4479,19 @@ class _PlaylistListViewState extends State<_PlaylistListView> {
     return cached;
   }
 
+  /// Carga carátula de forma asíncrona si no está en cache (para playlist)
+  void _loadArtworkAsync(int songId, String songPath) {
+    // Cargar de forma asíncrona usando el sistema unificado
+    getOrCacheArtwork(songId, songPath).then((artUri) {
+      if (artUri != null && mounted) {
+        // Forzar rebuild para mostrar la carátula cargada
+        setState(() {});
+      }
+    }).catchError((error) {
+      // print('❌ Error cargando carátula en playlist: $error');
+    });
+  }
+
   @override
   void initState() {
     super.initState();
@@ -4527,6 +4569,9 @@ class _PlaylistListViewState extends State<_PlaylistListView> {
             return _buildFallbackIcon();
           },
         );
+      } else {
+        // Si no está en cache, cargar de forma asíncrona
+        _loadArtworkAsync(songId, songPath);
       }
       
       // Si no está en caché, cargar desde la base de datos
@@ -4741,7 +4786,7 @@ class _PlaylistListViewState extends State<_PlaylistListView> {
                         child: Container(
                           padding: const EdgeInsets.all(8),
                           child: Icon(
-                            Symbols.shuffle,
+                            Symbols.shuffle_rounded,
                             size: 32,
                             color: Theme.of(context).colorScheme.onSurface,
                             weight: 600,

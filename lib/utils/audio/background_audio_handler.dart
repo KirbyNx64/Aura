@@ -8,7 +8,6 @@ import 'dart:collection';
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter/foundation.dart';
 import 'album_art_cache_manager.dart';
-import 'optimized_album_art_loader.dart';
 import 'package:music/utils/db/songs_index_db.dart';
 import 'package:music/utils/db/mostplayer_db.dart';
 import 'package:music/utils/db/recent_db.dart';
@@ -16,54 +15,114 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 AudioHandler? _audioHandler;
 
+/// Verifica si el AudioService está funcionando correctamente
+Future<bool> isAudioServiceHealthy() async {
+  try {
+    if (_audioHandler == null) return false;
+    
+    // Verificar que el handler responda a una operación básica
+    _audioHandler!.playbackState.value;
+    return true; // Si llegamos aquí sin excepción, está saludable
+  } catch (e) {
+    return false;
+  }
+}
+
+/// Obtiene el AudioHandler de forma segura, reinicializando si es necesario
+Future<AudioHandler> getAudioHandlerSafely() async {
+  // Verificar si la instancia actual está saludable
+  if (_audioHandler != null && await isAudioServiceHealthy()) {
+    return _audioHandler!;
+  }
+  
+  // Si no está saludable o no existe, reinicializar
+  if (_audioHandler != null) {
+    await reinitializeAudioHandler();
+  }
+  
+  // Si aún no hay instancia, crear una nueva
+  if (_audioHandler == null) {
+    return await initAudioService();
+  }
+  
+  return _audioHandler!;
+}
+
 Future<AudioHandler> initAudioService() async {
   if (_audioHandler != null) {
     return _audioHandler!;
   }
 
-  try {
-    _audioHandler = await AudioService.init(
-      builder: () => MyAudioHandler(),
-      config: AudioServiceConfig(
-        androidNotificationIcon: 'mipmap/ic_stat_music_note',
-        androidNotificationChannelId: 'com.aura.music.channel',
-        androidNotificationChannelName: 'Aura Music',
-        androidNotificationChannelDescription: 'Controles de reproducción de música',
-        androidNotificationOngoing: true,
-        androidNotificationClickStartsActivity: true,
-        androidStopForegroundOnPause: false,
-        androidResumeOnClick: true,
-        preloadArtwork: true,
-      ),
-    );
+  // Intentar inicializar con reintentos
+  for (int attempt = 1; attempt <= 3; attempt++) {
+    try {
+      _audioHandler = await AudioService.init(
+        builder: () => MyAudioHandler(),
+        config: AudioServiceConfig(
+          androidNotificationIcon: 'mipmap/ic_stat_music_note',
+          androidNotificationChannelId: 'com.aura.music.channel',
+          androidNotificationChannelName: 'Aura Music',
+          androidNotificationChannelDescription: 'Controles de reproducción de música',
+          androidNotificationOngoing: true,
+          androidNotificationClickStartsActivity: true,
+          androidStopForegroundOnPause: false,
+          androidResumeOnClick: true,
+          preloadArtwork: true,
+        ),
+      );
 
-    return _audioHandler!;
-  } catch (e) {
-    _audioHandler = null;
-    throw Exception('Error al inicializar AudioService: $e');
+      return _audioHandler!;
+    } catch (e) {
+      _audioHandler = null;
+      
+      if (attempt == 3) {
+        // En el último intento, lanzar la excepción
+        throw Exception('Error al inicializar AudioService después de 3 intentos: $e');
+      }
+      
+      // Esperar antes del siguiente intento (backoff exponencial)
+      final delayMs = 500 * (1 << (attempt - 1));
+      await Future.delayed(Duration(milliseconds: delayMs));
+    }
   }
+  
+  // Este punto nunca debería alcanzarse, pero por seguridad
+  throw Exception('Error inesperado al inicializar AudioService');
 }
 
 /// Función para reinicializar completamente el AudioHandler
 Future<void> reinitializeAudioHandler() async {
   try {
+    // Si hay una instancia activa, intentar detenerla primero
+    if (_audioHandler != null) {
+      try {
+        await _audioHandler!.stop();
+        await Future.delayed(const Duration(milliseconds: 500));
+      } catch (e) {
+        // Error al detener, continuar con la limpieza
+      }
+    }
+    
     // Limpiar la instancia global
     _audioHandler = null;
+
+    // Pequeña pausa para asegurar limpieza completa
+    await Future.delayed(const Duration(milliseconds: 200));
 
     // Reinicializar
     await initAudioService();
   } catch (e) {
-    // Error silencioso
+    // Error silencioso - el servicio puede seguir funcionando con la instancia anterior
   }
 }
 
 // Cache Manager optimizado para carátulas
 final AlbumArtCacheManager _albumArtCacheManager = AlbumArtCacheManager();
 
-// Cargador optimizado con cancelación
-final OptimizedAlbumArtLoader _optimizedLoader = OptimizedAlbumArtLoader();
+// OptimizedAlbumArtLoader obsoleto - ahora se usa AlbumArtCacheManager directamente
 
-// Cache global para URIs de carátulas (compatibilidad)
+// Cache global para URIs de carátulas (compatibilidad) - DEPRECATED
+// Se mantiene solo para compatibilidad, usar AlbumArtCacheManager
 const int _artworkCacheMaxEntries = 300;
 final LinkedHashMap<String, Uri?> _artworkCache = LinkedHashMap();
 final Map<String, Future<Uri?>> _preloadCache = {};
@@ -73,19 +132,16 @@ Map<String, Uri?> get artworkCache => _artworkCache;
 
 Future<Uri?> getOrCacheArtwork(int songId, String songPath) async {
   try {
-    // print('🔍 Buscando carátula para: $songId - $songPath');
-    
-    // 1. Verificar caché en memoria primero (más rápido)
+    // 1. Verificar cache en memoria primero (más rápido)
     if (_artworkCache.containsKey(songPath)) {
       final cached = _artworkCache[songPath];
       if (cached != null) {
         // Verificar que el archivo aún existe
         final file = File(cached.toFilePath());
-        if (await file.exists()) {
-          // print('⚡ Carátula encontrada en caché de memoria: ${cached.path}');
+        if (await file.exists() && await file.length() > 0) {
           return cached;
         } else {
-          // print('❌ Archivo de carátula eliminado, removiendo del caché');
+          // Archivo eliminado o corrupto, remover del caché
           _artworkCache.remove(songPath);
         }
       }
@@ -93,32 +149,15 @@ Future<Uri?> getOrCacheArtwork(int songId, String songPath) async {
 
     // 2. Verificar si ya se está cargando
     if (_preloadCache.containsKey(songPath)) {
-      // print('⏳ Carátula ya se está cargando, esperando...');
       return await _preloadCache[songPath]!;
     }
 
     // 3. Crear Future y almacenarlo para evitar duplicados
-    // print('🔄 Iniciando carga de carátula desde base de datos');
-    final future = _loadArtworkAsyncOptimized(songId, songPath);
+    final future = _loadArtworkWithCache(songId, songPath);
     _preloadCache[songPath] = future;
 
     try {
       final result = await future;
-      
-      // Solo agregar al caché si el resultado es válido
-      if (result != null) {
-        // print('✅ Carátula cargada exitosamente: ${result.path}');
-        _artworkCache[songPath] = result;
-        
-        // Limitar tamaño del caché (LRU)
-        if (_artworkCache.length > _artworkCacheMaxEntries) {
-          final firstKey = _artworkCache.keys.first;
-          _artworkCache.remove(firstKey);
-        }
-      } else {
-        // print('⚠️ No se pudo cargar carátula para: $songId');
-      }
-      
       return result;
     } finally {
       _preloadCache.remove(songPath);
@@ -129,73 +168,52 @@ Future<Uri?> getOrCacheArtwork(int songId, String songPath) async {
   }
 }
 
-/// Función optimizada siguiendo el patrón de Namida
-Future<Uri?> _loadArtworkAsyncOptimized(int songId, String songPath) async {
-  try {
-    // print('🔧 _loadArtworkAsyncOptimized iniciado para: $songId');
-    
-    // 1. Verificar caché temporal primero
-    _tempDirPath ??= (await getTemporaryDirectory()).path;
-    final cachedFile = File('$_tempDirPath/artwork_$songId.jpg');
-    
-    if (await cachedFile.exists()) {
-      // print('📁 Archivo de carátula encontrado en caché temporal: ${cachedFile.path}');
-      // Verificar que el archivo no esté corrupto
-      final fileSize = await cachedFile.length();
-      if (fileSize > 0) {
-        // print('✅ Archivo de carátula válido (${fileSize} bytes)');
-        return Uri.file(cachedFile.path);
-      } else {
-        // print('❌ Archivo de carátula corrupto (0 bytes), eliminando');
-        await cachedFile.delete();
-      }
-    } else {
-      // print('📁 No se encontró archivo en caché temporal');
-    }
-    
-    // 2. Cargar desde base de datos
-    // print('🔄 Cargando carátula desde base de datos...');
-    final bytes = await _optimizedLoader.loadAlbumArt(songId, songPath);
-    
-    if (bytes != null && bytes.isNotEmpty) {
-      // print('✅ Carátula cargada desde base de datos (${bytes.length} bytes)');
-      // 3. Guardar en caché temporal
-      await cachedFile.writeAsBytes(bytes);
-      // print('💾 Carátula guardada en caché temporal: ${cachedFile.path}');
-      return Uri.file(cachedFile.path);
-    } else {
-      // print('⚠️ No se encontraron bytes de carátula en la base de datos');
-    }
-  } catch (e) {
-    // print('❌ Error en _loadArtworkAsyncOptimized para $songId: $e');
+Future<Uri?> _loadArtworkWithCache(int songId, String songPath) async {
+  // Usar AlbumArtCacheManager para obtener bytes de carátula
+  final artworkBytes = await _albumArtCacheManager.getAlbumArt(songId, songPath);
+  
+  if (artworkBytes == null) {
+    return null;
   }
-  return null;
+  
+  // Convertir bytes a archivo temporal y retornar URI
+  final tempDir = await getTemporaryDirectory();
+  final artworkFile = File('${tempDir.path}/artwork_$songId.jpg');
+  
+  // Solo escribir si el archivo no existe o está corrupto
+  if (!await artworkFile.exists() || await artworkFile.length() == 0) {
+    await artworkFile.writeAsBytes(artworkBytes);
+  }
+  
+  final uri = Uri.file(artworkFile.path);
+  
+  // Mantener compatibilidad con el cache anterior
+  _artworkCache[songPath] = uri;
+  
+  // Limitar tamaño del caché (LRU)
+  if (_artworkCache.length > _artworkCacheMaxEntries) {
+    final firstKey = _artworkCache.keys.first;
+    _artworkCache.remove(firstKey);
+  }
+  
+  return uri;
 }
+
+// Función obsoleta eliminada - ahora se usa AlbumArtCacheManager directamente
 
 /// Precarga carátulas para una lista de canciones de forma asíncrona
 Future<void> preloadArtworks(
   List<SongModel> songs, {
   int maxConcurrent = 3,
 }) async {
-  // Usar el cargador optimizado para precarga
-  final songsToLoad = songs
-      .where(
-        (song) =>
-            !_artworkCache.containsKey(song.data) &&
-            !_preloadCache.containsKey(song.data),
-      )
-      .take(10)
-      .toList(); // Limitar a 10 canciones para no sobrecargar
-
-  if (songsToLoad.isEmpty) return;
-
-  // Convertir SongModel a formato requerido por el cargador optimizado
-  final songsData = songsToLoad
+  // Usar AlbumArtCacheManager para precarga optimizada
+  final songsData = songs
+      .take(20) // Limitar a 20 canciones para no sobrecargar
       .map((song) => {'id': song.id, 'data': song.data})
       .toList();
 
-  // Usar el cargador optimizado con cancelación
-  await _optimizedLoader.loadMultipleAlbumArts(songsData);
+  // Usar el sistema de precarga del AlbumArtCacheManager
+  await _albumArtCacheManager.preloadAlbumArts(songsData, maxConcurrent: maxConcurrent);
 }
 
 // TESTING
@@ -233,7 +251,7 @@ Future<void> preloadAllArtworksToCache(List<SongModel> songs) async {
         }
 
         // Cargar la carátula
-        final bytes = await _optimizedLoader.loadAlbumArt(song.id, song.data);
+        final bytes = await _albumArtCacheManager.getAlbumArt(song.id, song.data);
         
         if (bytes != null) {
           // Guardar en caché temporal
@@ -290,17 +308,19 @@ Map<String, dynamic> getOptimizedCacheStats() {
 
 /// Cancela todas las cargas de carátulas activas
 void cancelAllArtworkLoads() {
-  _optimizedLoader.cancelAllLoads();
+  // El AlbumArtCacheManager maneja la cancelación automáticamente
+  // No necesita cancelación manual
 }
 
 /// Cancela carga específica de carátula
 void cancelArtworkLoad(int songId) {
-  _optimizedLoader.cancelLoad(songId);
+  // El AlbumArtCacheManager maneja la cancelación automáticamente
+  // No necesita cancelación manual
 }
 
 /// Obtiene estadísticas del cargador optimizado
 Map<String, dynamic> getOptimizedLoaderStats() {
-  return _optimizedLoader.getLoaderStats();
+  return _albumArtCacheManager.getCacheStats();
 }
 
 class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
@@ -858,6 +878,35 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         }
       }
     }
+    
+    // Verificar también en caché temporal (archivos) antes de cargar en background
+    if (songPath != null && songId != null && !_artworkCache.containsKey(songPath)) {
+      unawaited(() async {
+        try {
+          _tempDirPath ??= (await getTemporaryDirectory()).path;
+          final cachedFile = File('$_tempDirPath/artwork_$songId.jpg');
+          
+          if (await cachedFile.exists()) {
+            final fileSize = await cachedFile.length();
+            if (fileSize > 0) {
+              // Archivo válido encontrado, agregar al caché de memoria
+              final validUri = Uri.file(cachedFile.path);
+              _artworkCache[songPath] = validUri;
+              
+              // Actualizar MediaItem inmediatamente
+              final finalMediaItem = currentMediaItem.copyWith(artUri: validUri);
+              _mediaQueue[index] = finalMediaItem;
+              mediaItem.add(finalMediaItem);
+              
+              // print('⚡ Carátula encontrada en caché temporal para: ${currentMediaItem.title}');
+              return;
+            }
+          }
+        } catch (e) {
+          // Error silencioso
+        }
+      }());
+    }
 
     // Si no hay carátula inmediata, enviar sin carátula y cargar en background
     // print('📱 Enviando MediaItem sin carátula - se cargará en background');
@@ -926,7 +975,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   int _loadVersion = 0;
 
   /// Función mejorada para crear MediaItems iniciales siguiendo las mejores prácticas de audio_service
-  Future<List<MediaItem>> _createMediaItemsWithArtwork(List<SongModel> songs) async {
+  Future<List<MediaItem>> _createMediaItemsWithArtwork(List<SongModel> songs, {int? priorityIndex}) async {
     final mediaItems = <MediaItem>[];
     
     // print('🎵 Creando ${songs.length} MediaItems con carátulas');
@@ -938,6 +987,12 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
           ? Duration(milliseconds: song.duration!)
           : null;
 
+      // Verificar si ya tenemos la carátula en caché antes de crear el MediaItem
+      Uri? cachedArtUri;
+      if (_artworkCache.containsKey(song.data)) {
+        cachedArtUri = _artworkCache[song.data];
+      }
+
       mediaItems.add(
         MediaItem(
           id: song.data,
@@ -945,7 +1000,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
           title: song.title,
           artist: song.artist ?? '',
           duration: dur,
-          artUri: null, // Inicialmente sin carátula para mantener orden
+          artUri: cachedArtUri, // Usar carátula del caché si está disponible
           extras: {
             'songId': song.id,
             'albumId': song.albumId,
@@ -956,14 +1011,27 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       );
     }
     
-    // Cargar carátulas para las primeras 3 canciones de forma síncrona para notificaciones inmediatas
-    if (songs.length >= 3) {
-      // print('🔄 Cargando carátulas para las primeras 3 canciones');
+    // Determinar qué canciones cargar primero
+    final Set<int> indicesToLoad = {};
+    
+    // Si hay un índice prioritario (canción actual), cargarlo primero
+    if (priorityIndex != null && priorityIndex >= 0 && priorityIndex < songs.length) {
+      indicesToLoad.add(priorityIndex);
+    }
+    
+    // Agregar las primeras 3 canciones si no están ya incluidas
+    for (int i = 0; i < 3 && i < songs.length; i++) {
+      indicesToLoad.add(i);
+    }
+    
+    // Cargar carátulas para las canciones prioritarias de forma síncrona
+    if (indicesToLoad.isNotEmpty) {
+      // print('🔄 Cargando carátulas para canciones prioritarias: ${indicesToLoad.toList()}');
       
-      for (int i = 0; i < 3; i++) {
+      for (final i in indicesToLoad) {
         final song = songs[i];
         try {
-          // print('🖼️ Cargando carátula para: ${song.title}');
+          // print('🖼️ Cargando carátula para: ${song.title} (índice: $i)');
           final artUri = await getOrCacheArtwork(song.id, song.data)
               .timeout(const Duration(milliseconds: 800));
           
@@ -1082,7 +1150,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
     // 1. Crear MediaItems con carátulas para las primeras canciones
     _mediaQueue.clear();
-    final mediaItems = await _createMediaItemsWithArtwork(validSongs);
+    final mediaItems = await _createMediaItemsWithArtwork(validSongs, priorityIndex: initialIndex);
     _mediaQueue.addAll(mediaItems);
     queue.add(List<MediaItem>.from(_mediaQueue));
     // Persistir cola inmediatamente (lista de rutas)
@@ -2032,6 +2100,38 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       if (shuffleEnabled) {
         unawaited(toggleShuffle(true));
       }
+      
+      // Asegurar que la carátula de la canción actual se cargue inmediatamente
+      if (savedIndex >= 0 && savedIndex < _mediaQueue.length) {
+        final currentMediaItem = _mediaQueue[savedIndex];
+        final songPath = currentMediaItem.extras?['data'] as String?;
+        final songId = currentMediaItem.extras?['songId'] as int?;
+        
+        if (songPath != null && songId != null) {
+          // Verificar si ya está en caché
+          if (!_artworkCache.containsKey(songPath)) {
+            // Cargar inmediatamente en background
+            unawaited(() async {
+              try {
+                final artUri = await getOrCacheArtwork(songId, songPath)
+                    .timeout(const Duration(milliseconds: 1500));
+                
+                if (artUri != null && mounted) {
+                  final validUri = Uri.file(artUri.toFilePath());
+                  final updatedMediaItem = currentMediaItem.copyWith(artUri: validUri);
+                  _mediaQueue[savedIndex] = updatedMediaItem;
+                  
+                  // Actualizar la notificación con la carátula
+                  mediaItem.add(updatedMediaItem);
+                }
+              } catch (e) {
+                // Error silencioso
+              }
+            }());
+          }
+        }
+      }
+      
       _preloadNextArtworks(savedIndex);
     } catch (_) {
       // Ignorar errores de restauración
@@ -2205,7 +2305,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         }
         
         // Si no existe, cargar y guardar
-        final bytes = await _optimizedLoader.loadAlbumArt(songId, songPath);
+        final bytes = await _albumArtCacheManager.getAlbumArt(songId, songPath);
         if (bytes != null && bytes.isNotEmpty) {
           await cachedFile.writeAsBytes(bytes);
           final uri = Uri.file(cachedFile.path);

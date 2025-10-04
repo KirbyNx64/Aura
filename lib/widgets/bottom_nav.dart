@@ -86,11 +86,6 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
         selectedIcon: Icon(Icons.folder, color: iconColor),
         label: LocaleProvider.tr('folders'),
       ),
-      NavigationDestination(
-        icon: Icon(Icons.download_outlined),
-        selectedIcon: Icon(Icons.download, color: iconColor),
-        label: LocaleProvider.tr('nav_downloads'),
-      ),
     ];
   }
 

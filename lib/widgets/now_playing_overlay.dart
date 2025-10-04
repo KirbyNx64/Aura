@@ -366,6 +366,7 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> {
                                                     isPlaying ? Symbols.pause_rounded : Symbols.play_arrow_rounded,
                                                     grade: 200,
                                                     size: 28,
+                                                    fill: 1,
                                                     color: colorScheme == AppColorScheme.amoled
                                                         ? Colors.black
                                                         : Theme.of(context).brightness == Brightness.light
@@ -428,6 +429,7 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> {
                                                       Symbols.skip_next_rounded,
                                                       grade: 200,
                                                       size: 24,
+                                                      fill: 1,
                                                       color: colorScheme == AppColorScheme.amoled
                                                           ? Colors.black
                                                           : Theme.of(context).brightness == Brightness.light

@@ -22,6 +22,7 @@ import 'package:music/utils/db/songs_index_db.dart';
 import 'package:music/utils/db/artists_db.dart';
 import 'package:music/utils/db/artist_images_cache_db.dart';
 import 'package:music/utils/yt_search/service.dart';
+import 'package:music/widgets/hero_cached.dart';
 import 'package:mini_music_visualizer/mini_music_visualizer.dart';
 import 'package:music/screens/play/player_screen.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -2122,6 +2123,9 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       // Limpiar la cola y el MediaItem antes de mostrar la nueva canción
       handler.queue.add([]);
       handler.mediaItem.add(null);
+      
+      // Limpiar el fallback de las carátulas para evitar parpadeo
+      ArtworkHeroCached.clearFallback();
 
       // Crear MediaItem temporal para mostrar el overlay inmediatamente
       Uri? cachedArtUri;
@@ -3037,7 +3041,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     ),
                   ] else ...[
                     IconButton(
-                      icon: const Icon(Symbols.shuffle, size: 28, weight: 600),
+                      icon: const Icon(Symbols.shuffle_rounded, size: 28, weight: 600),
                       tooltip: LocaleProvider.tr('shuffle'),
                       onPressed: () {
                         final List<SongModel> songsToShow =
@@ -3290,6 +3294,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                 ? Symbols.pause_rounded
                                                 : Symbols.play_arrow_rounded,
                                           grade: 200,
+                                          fill: 1,
                                           ),
                                           onPressed: () {
                                             if (isCurrent) {
@@ -3666,7 +3671,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                       overflow: TextOverflow.ellipsis,
                                     ),
                                     trailing: IconButton(
-                                      icon: const Icon(Symbols.play_arrow_rounded, grade: 200),
+                                      icon: const Icon(Symbols.play_arrow_rounded, grade: 200, fill: 1),
                                       onPressed: () {
                                         // Precargar la carátula antes de reproducir
                                         unawaited(_preloadArtworkForSong(song));
@@ -4480,6 +4485,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                 ? Symbols.pause_rounded
                                                 : Symbols.play_arrow_rounded,
                                           grade: 200,
+                                          fill: 1,
                                           ),
                                           onPressed: () {
                                             if (isCurrent) {
@@ -4980,6 +4986,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                             ? Symbols.pause_rounded
                                             : Symbols.play_arrow_rounded,
                                           grade: 200,
+                                          fill: 1,
                                       ),
                                       onPressed: () {
                                         if (isCurrent) {

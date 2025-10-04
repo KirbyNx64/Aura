@@ -7,7 +7,6 @@ import 'package:music/widgets/bottom_nav.dart';
 import 'package:music/screens/home/home_screen.dart';
 import 'package:music/screens/likes/favorites_screen.dart';
 import 'package:music/screens/folders/folders_screen.dart';
-import 'package:music/screens/download/download_screen.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter/services.dart';
 import 'package:music/utils/yt_search/yt_screen.dart';
@@ -25,6 +24,7 @@ import 'package:on_audio_query/on_audio_query.dart';
 import 'package:flutter_sharing_intent/model/sharing_file.dart';
 import 'package:music/utils/sharing_handler.dart';
 import 'package:music/utils/yt_preview_modal.dart';
+import 'package:music/services/download_history_service.dart';
 import 'dart:async';
 
 // Cambiar de late final a nullable para mejor manejo de errores
@@ -113,7 +113,8 @@ Future<AudioHandler?> initializeAudioServiceSafely() async {
   try {
     _audioHandlerInitializing = true;
 
-    audioHandler = await initAudioService();
+    // Usar la nueva función segura que maneja mejor los conflictos
+    audioHandler = await getAudioHandlerSafely();
 
     _audioHandlerInitialized = true;
     audioServiceReady.value = true; // Notificar que está listo
@@ -122,6 +123,18 @@ Future<AudioHandler?> initializeAudioServiceSafely() async {
     _audioHandlerInitialized = false;
     audioHandler = null;
     audioServiceReady.value = false; // Resetear el estado
+    
+    // Intentar reinicializar como último recurso
+    try {
+      await reinitializeAudioHandler();
+      audioHandler = await getAudioHandlerSafely();
+      _audioHandlerInitialized = true;
+      audioServiceReady.value = true;
+      return audioHandler;
+    } catch (e2) {
+      // Error silencioso - la app puede funcionar sin audio service
+    }
+    
     return null;
   } finally {
     _audioHandlerInitializing = false;
@@ -338,7 +351,6 @@ class _MainNavRootState extends State<MainNavRoot> {
           (context, onTabChange) => YtSearchTestScreen(key: ytScreenKey),
           (context, onTabChange) => FavoritesScreen(),
           (context, onTabChange) => FoldersScreen(key: foldersScreenKey),
-          (context, onTabChange) => DownloadScreen(),
         ],
         selectedTabIndex: selectedTabIndex,
       ),
@@ -412,6 +424,15 @@ void main() async {
   } catch (e) {
     // Si falla la precarga, continuar de todas formas
   }
+
+  // Pre-inicializar base de datos de historial de descargas en segundo plano
+  Future.microtask(() async {
+    try {
+      await DownloadHistoryService().preInitialize();
+    } catch (e) {
+      // Error silencioso - se inicializará cuando se necesite
+    }
+  });
 
   // Ir directo a MainApp y dejar la inicialización en segundo plano como respaldo
   runApp(MyRootApp());

@@ -17,6 +17,7 @@ import 'package:music/utils/db/playlist_model.dart' as hive_model;
 import 'package:music/screens/play/player_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:music/widgets/song_info_dialog.dart';
+import 'package:music/widgets/hero_cached.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:music/screens/artist/artist_screen.dart';
 
@@ -229,6 +230,9 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     // Limpiar la cola y el MediaItem antes de mostrar la nueva canción
     (audioHandler as MyAudioHandler).queue.add([]);
     (audioHandler as MyAudioHandler).mediaItem.add(null);
+    
+    // Limpiar el fallback de las carátulas para evitar parpadeo
+    ArtworkHeroCached.clearFallback();
 
     // Precargar la carátula antes de crear el MediaItem temporal
     Uri? cachedArtUri;
@@ -1093,7 +1097,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
         overflow: TextOverflow.ellipsis,
       ),
       trailing: IconButton(
-        icon: Icon(isCurrent && playing ? Symbols.pause_rounded : Symbols.play_arrow_rounded, grade: 200),
+        icon: Icon(isCurrent && playing ? Symbols.pause_rounded : Symbols.play_arrow_rounded, grade: 200, fill: 1),
         onPressed: () {
           if (isCurrent) {
             playing
@@ -1190,7 +1194,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
               ]
             : [
                 IconButton(
-                  icon: const Icon(Symbols.shuffle, size: 28, weight: 600),
+                  icon: const Icon(Symbols.shuffle_rounded, size: 28, weight: 600),
                   tooltip: 'Aleatorio',
                   onPressed: () {
                     final List<SongModel> songsToShow =

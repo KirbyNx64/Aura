@@ -34,9 +34,13 @@ const Map<String, String> appLocalizationsEn = {
   'gesture_settings_title': 'Player gestures',
   'gesture_settings_desc_dialog': 'Enable or disable player gestures',
 
-  // Downloads
-  'downloads': 'Downloads',
-  'available_storage': 'Available storage',
+      // Downloads
+      'downloads': 'Downloads',
+      'download_history': 'Download History',
+      'no_downloads': 'No recent downloads',
+      'delete_download': 'Delete download',
+      'delete_download_confirm': 'Are you sure you want to delete',
+      'available_storage': 'Available storage',
   'used_storage': 'Used storage',
   'total_storage': 'Total storage',
   'free_of': 'free of',
@@ -299,7 +303,7 @@ const Map<String, String> appLocalizationsEn = {
   'songs': 'songs',
 
   // Download screen
-  'download': 'Downloads',
+  'download': 'Download',
   'youtube_link': 'YouTube Link',
   'paste_link': 'Paste link',
   'large_playlist_detected': 'Large playlist detected',

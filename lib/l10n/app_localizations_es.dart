@@ -34,9 +34,13 @@ const Map<String, String> appLocalizationsEs = {
   'gesture_settings_title': 'Gestos en el reproductor',
   'gesture_settings_desc_dialog': 'Activa o desactiva los gestos del reproductor',
 
-  // Downloads
-  'downloads': 'Descargas',
-  'available_storage': 'Almacenamiento disponible',
+      // Downloads
+      'downloads': 'Descargas',
+      'download_history': 'Historial de descargas',
+      'no_downloads': 'No hay descargas recientes',
+      'delete_download': 'Eliminar descarga',
+      'delete_download_confirm': '¿Estás seguro de que quieres eliminar',
+      'available_storage': 'Almacenamiento disponible',
   'used_storage': 'Almacenamiento en uso',
   'total_storage': 'Almacenamiento total',
   'free_of': 'libres de',
@@ -296,9 +300,12 @@ const Map<String, String> appLocalizationsEs = {
   'songs': 'canciones',
 
   // Download screen
-  'download': 'Descargas',
+  'download': 'Descargar',
   'youtube_link': 'Enlace de YouTube',
   'paste_link': 'Pegar enlace',
+  'back_to_search': 'Volver a búsqueda',
+  'play': 'Reproducir',
+  'download_started': 'Descarga iniciada',
   'large_playlist_detected': 'Lista de reproducción muy grande detectada',
   'fetching_playlist_info':
       'Obteniendo información de la lista de reproducción... (Sin descargar aún)',

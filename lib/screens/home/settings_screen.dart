@@ -3601,7 +3601,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         LocaleProvider.tr('overlay_next_button_desc'),
                         style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7)),
                       ),
-                      secondary: const Icon(Symbols.skip_next_rounded, grade: 200),
+                      secondary: const Icon(Symbols.skip_next_rounded, grade: 200, fill: 1, size: 28),
                       thumbIcon: WidgetStateProperty.resolveWith<Icon?>((Set<WidgetState> states) {
                         if (states.contains(WidgetState.selected)) {
                           return const Icon(Icons.check, size: 20);
@@ -3882,7 +3882,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              '${LocaleProvider.tr('version')}: 1.5.5',
+                              '${LocaleProvider.tr('version')}: 1.5.6',
                               style: const TextStyle(fontSize: 15),
                               textAlign: TextAlign.center,
                             ),

@@ -16,6 +16,9 @@ import 'package:music/l10n/locale_provider.dart';
 import 'package:music/utils/notifiers.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:music/services/download_history_service.dart';
+import 'package:music/models/download_record.dart';
+import 'package:path/path.dart' as path;
 
 // Top-level function para usar con compute
 Uint8List? decodeAndCropImage(Uint8List bytes) {
@@ -80,6 +83,10 @@ class DownloadManager {
   // Estado
   bool _isDownloading = false;
   bool _isProcessing = false;
+  
+  // Control de throttling para actualizaciones de progreso
+  DateTime? _lastProgressUpdate;
+  static const _progressUpdateInterval = Duration(milliseconds: 100); // Actualizar máximo cada 100ms
 
   // Contexto opcional para mostrar diálogos directamente desde el manager
   BuildContext? _dialogContext;
@@ -141,7 +148,7 @@ class DownloadManager {
     }
 
     _updateState(true, false);
-    onProgressUpdate?.call(0.0);
+    _updateProgress(0.0);
 
     try {
       if (explode) {
@@ -212,7 +219,7 @@ class DownloadManager {
       await for (final chunk in stream) {
         received += chunk.length;
         sink.add(chunk);
-        onProgressUpdate?.call(received / totalBytes * 0.6);
+        _updateProgress(received / totalBytes * 0.6);
       }
 
       await sink.flush();
@@ -241,6 +248,7 @@ class DownloadManager {
           video.thumbnails.highResUrl,
           coverBytes ?? Uint8List(0),
           songTitle,
+          url,
         );
       }
 
@@ -343,7 +351,7 @@ class DownloadManager {
       filePath: filePath,
       totalSize: audio.size,
       onProgress: (progress) {
-        onProgressUpdate?.call(progress * 0.6);
+        _updateProgress(progress * 0.6);
       },
     );
 
@@ -370,6 +378,7 @@ class DownloadManager {
         video.thumbnails.highResUrl,
         coverBytes ?? Uint8List(0),
         songTitle,
+        url,
       );
     }
   }
@@ -518,6 +527,7 @@ class DownloadManager {
     String thumbnailUrl,
     Uint8List bytes,
     String? songTitle,
+    String downloadUrl,
   ) async {
     _updateState(true, true);
 
@@ -526,7 +536,7 @@ class DownloadManager {
 
     try {
       // Escribir metadatos con audiotags
-      onProgressUpdate?.call(0.75);
+      _updateProgress(0.75);
 
       final cleanedAuthor = _limpiarMetadato(
         author.replaceFirst(RegExp(r' - Topic$', caseSensitive: false), ''),
@@ -554,7 +564,32 @@ class DownloadManager {
       // Indexar en Android
       MediaScanner.loadMedia(path: m4aPath);
 
-      onProgressUpdate?.call(1.0);
+      _updateProgress(1.0);
+      
+      // Guardar en la base de datos de historial en segundo plano
+      // usando Future.microtask para no bloquear la UI
+      Future.microtask(() async {
+        try {
+          final file = File(m4aPath);
+          final fileSize = await file.length();
+          final downloadRecord = DownloadRecord(
+            title: safeTitle,
+            artist: cleanedAuthor,
+            filePath: m4aPath,
+            fileName: path.basename(m4aPath),
+            fileSize: fileSize,
+            downloadUrl: downloadUrl, // URL original de YouTube
+            thumbnailUrl: thumbnailUrl,
+            downloadDate: DateTime.now(),
+            status: 'completed',
+          );
+          await DownloadHistoryService().insertDownload(downloadRecord);
+        } catch (e) {
+          // No fallar la descarga si hay error al guardar en DB
+          // print('Error al guardar en historial: $e');
+        }
+      });
+      
       await Future.delayed(const Duration(seconds: 1));
       
       foldersShouldReload.value = !foldersShouldReload.value;
@@ -775,6 +810,17 @@ class DownloadManager {
     _isDownloading = isDownloading;
     _isProcessing = isProcessing;
     onStateUpdate?.call(isDownloading, isProcessing);
+  }
+  
+  // Actualizar progreso con throttling para no saturar la UI
+  void _updateProgress(double progress) {
+    final now = DateTime.now();
+    if (_lastProgressUpdate == null || 
+        now.difference(_lastProgressUpdate!) >= _progressUpdateInterval ||
+        progress >= 1.0) {
+      _lastProgressUpdate = now;
+      onProgressUpdate?.call(progress);
+    }
   }
 
   void _showErrorDialog(String title, String message) async {

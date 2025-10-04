@@ -1397,8 +1397,8 @@ Map<String, String>? _parsePlaylistItem(Map<String, dynamic> renderer) {
   };
 }
 
-// Función principal para obtener canciones de una lista de reproducción
-Future<List<YtMusicResult>> getPlaylistSongs(String playlistId, {int limit = 100}) async {
+// Función principal mejorada para obtener canciones de una lista de reproducción
+Future<List<YtMusicResult>> getPlaylistSongs(String playlistId, {int? limit}) async {
   // Convertir el ID de playlist al formato correcto
   String browseId = playlistId.startsWith("VL") ? playlistId : "VL$playlistId";
   
@@ -1408,36 +1408,43 @@ Future<List<YtMusicResult>> getPlaylistSongs(String playlistId, {int limit = 100
   };
 
   try {
+    // print('🎵 Iniciando obtención de canciones para playlist: $playlistId');
     final response = (await sendRequest("browse", data)).data;
     final results = <YtMusicResult>[];
 
     // Buscar las canciones en diferentes ubicaciones posibles
     var contents = _findPlaylistContents(response);
+    // print('🎵 Contenido inicial encontrado: ${contents?.length ?? 0} items');
     
     if (contents is List) {
       // Parsear las canciones iniciales
       final initialSongs = _parsePlaylistItems(contents);
       results.addAll(initialSongs);
+      // print('🎵 Canciones iniciales parseadas: ${initialSongs.length}');
 
-      // Si necesitamos más canciones y hay continuaciones, obtenerlas
-      if (results.length < limit) {
-        final continuationSongs = await _getPlaylistContinuations(
+      // Si no hay límite o necesitamos más canciones, obtener continuaciones
+      if (limit == null || results.length < limit) {
+        // print('🎵 Iniciando continuaciones...');
+        final continuationSongs = await _getPlaylistContinuationsImproved(
           response, 
           data, 
-          limit - results.length
+          limit ?? 999999 // Límite muy alto si no se especifica
         );
+        // print('🎵 Canciones de continuaciones obtenidas: ${continuationSongs.length}');
         results.addAll(continuationSongs);
       }
     }
 
-    return results.take(limit).toList();
+    // print('🎵 Total de canciones obtenidas: ${results.length}');
+    // Aplicar límite solo si se especifica
+    return limit != null ? results.take(limit).toList() : results;
   } catch (e) {
-    // print('Error obteniendo canciones de playlist: $e');
+    // print('❌ Error obteniendo canciones de playlist: $e');
     return [];
   }
 }
 
-// Función auxiliar para encontrar el contenido de la playlist
+// Función mejorada para encontrar el contenido de la playlist (inspirada en Harmony)
 List<dynamic>? _findPlaylistContents(Map<String, dynamic> response) {
   // Intentar múltiples rutas para encontrar las canciones
   var contents = nav(response, [
@@ -1465,6 +1472,7 @@ List<dynamic>? _findPlaylistContents(Map<String, dynamic> response) {
     'contents'
   ]);
 
+  // Agregar más rutas de búsqueda
   contents ??= nav(response, [
     'contents',
     'twoColumnBrowseResultsRenderer',
@@ -1479,6 +1487,51 @@ List<dynamic>? _findPlaylistContents(Map<String, dynamic> response) {
   contents ??= nav(response, [
     'contents',
     'singleColumnBrowseResultsRenderer',
+    'tabs',
+    0,
+    'tabRenderer',
+    'content',
+    'sectionListRenderer',
+    'contents',
+    0,
+    'musicShelfRenderer',
+    'contents'
+  ]);
+
+  // Buscar en la estructura de playlist específica
+  contents ??= nav(response, [
+    'contents',
+    'twoColumnBrowseResultsRenderer',
+    'tabs',
+    0,
+    'tabRenderer',
+    'content',
+    'sectionListRenderer',
+    'contents',
+    0,
+    'musicPlaylistShelfRenderer',
+    'contents'
+  ]);
+
+  // Buscar en estructura de single column con tabs
+  contents ??= nav(response, [
+    'contents',
+    'singleColumnBrowseResultsRenderer',
+    'tabs',
+    0,
+    'tabRenderer',
+    'content',
+    'sectionListRenderer',
+    'contents',
+    0,
+    'musicShelfRenderer',
+    'contents'
+  ]);
+
+  // Buscar en estructura de two column con tabs
+  contents ??= nav(response, [
+    'contents',
+    'twoColumnBrowseResultsRenderer',
     'tabs',
     0,
     'tabRenderer',
@@ -1622,19 +1675,24 @@ YtMusicResult? _parsePlaylistSong(Map<String, dynamic> renderer) {
   );
 }
 
-// Función para obtener continuaciones de la playlist
-Future<List<YtMusicResult>> _getPlaylistContinuations(
+// Función mejorada para obtener continuaciones (inspirada en Harmony Music)
+Future<List<YtMusicResult>> _getPlaylistContinuationsImproved(
   Map<String, dynamic> response, 
   Map<String, dynamic> data, 
   int limit
 ) async {
   final results = <YtMusicResult>[];
   
-  // Buscar token de continuación
-  String? continuationToken = _getPlaylistContinuationToken(response);
+  // Buscar token de continuación en múltiples ubicaciones
+  String? continuationToken = _getPlaylistContinuationTokenImproved(response);
+  // print('🔄 Token de continuación inicial: ${continuationToken != null ? "Encontrado" : "No encontrado"}');
   
-  while (continuationToken != null && results.length < limit) {
+  int maxAttempts = 50; // Límite de intentos para obtener todas las canciones
+  int attempts = 0;
+  
+  while (continuationToken != null && results.length < limit && attempts < maxAttempts) {
     try {
+      // print('🔄 Intento ${attempts + 1}: Obteniendo continuaciones...');
       final continuationData = {
         ...data,
         'continuation': continuationToken,
@@ -1642,7 +1700,7 @@ Future<List<YtMusicResult>> _getPlaylistContinuations(
       
       final continuationResponse = (await sendRequest("browse", continuationData)).data;
       
-      // Buscar items de continuación
+      // Buscar items de continuación en múltiples ubicaciones
       var continuationItems = nav(continuationResponse, [
         'continuationContents',
         'musicPlaylistShelfContinuation',
@@ -1656,27 +1714,111 @@ Future<List<YtMusicResult>> _getPlaylistContinuations(
         'continuationItems'
       ]);
 
+      continuationItems ??= nav(continuationResponse, [
+        'continuationContents',
+        'musicShelfContinuation',
+        'contents'
+      ]);
+
+      // Buscar en estructura de tabs
+      continuationItems ??= nav(continuationResponse, [
+        'contents',
+        'twoColumnBrowseResultsRenderer',
+        'tabs',
+        0,
+        'tabRenderer',
+        'content',
+        'sectionListRenderer',
+        'contents',
+        0,
+        'musicPlaylistShelfRenderer',
+        'contents'
+      ]);
+
+      continuationItems ??= nav(continuationResponse, [
+        'contents',
+        'singleColumnBrowseResultsRenderer',
+        'tabs',
+        0,
+        'tabRenderer',
+        'content',
+        'sectionListRenderer',
+        'contents',
+        0,
+        'musicPlaylistShelfRenderer',
+        'contents'
+      ]);
+
       if (continuationItems != null && continuationItems is List) {
         final songs = _parsePlaylistItems(continuationItems);
         results.addAll(songs);
+        // print('🔄 Canciones obtenidas en intento ${attempts + 1}: ${songs.length} (Total: ${results.length})');
         
         // Obtener siguiente token
-        continuationToken = _getPlaylistContinuationToken(continuationResponse);
+        continuationToken = _getPlaylistContinuationTokenImproved(continuationResponse);
+        // print('🔄 Siguiente token: ${continuationToken != null ? "Encontrado" : "No encontrado"}');
+        
+        // Si no hay más token, verificar si hay más contenido
+        if (continuationToken == null) {
+          // print('🔄 No hay más token, verificando si hay más contenido...');
+          // Verificar si hay más items en la respuesta actual
+          var moreItems = nav(continuationResponse, [
+            'contents',
+            'twoColumnBrowseResultsRenderer',
+            'secondaryContents',
+            'sectionListRenderer',
+            'contents',
+            0,
+            'musicPlaylistShelfRenderer',
+            'contents'
+          ]);
+          if (moreItems is List && moreItems.isNotEmpty) {
+            // print('🔄 Encontrados ${moreItems.length} items adicionales en la respuesta actual');
+            final additionalSongs = _parsePlaylistItems(moreItems);
+            results.addAll(additionalSongs);
+            // print('🔄 Canciones adicionales agregadas: ${additionalSongs.length} (Total: ${results.length})');
+          }
+        }
       } else {
+        // print('🔄 No se encontraron items de continuación en intento ${attempts + 1}');
         break;
       }
+      
+      attempts++;
     } catch (e) {
-      // print('Error en continuación de playlist: $e');
+      // print('Error en continuación de playlist (intento $attempts): $e');
       break;
     }
   }
   
+  // print('🔄 Total de continuaciones completadas: $attempts intentos, ${results.length} canciones obtenidas');
   return results;
 }
 
-// Función para obtener el token de continuación de playlist
-String? _getPlaylistContinuationToken(Map<String, dynamic> response) {
-  // Buscar en diferentes ubicaciones
+// Función corregida para obtener el token de continuación
+String? _getPlaylistContinuationTokenImproved(Map<String, dynamic> response) {
+  // print('🔍 Buscando token de continuación...');
+  
+  // PRIMERO: Buscar en el último elemento de contents (como hace Harmony)
+  var contents = _findPlaylistContents(response);
+  if (contents is List && contents.isNotEmpty) {
+    final lastItem = contents.last;
+    if (lastItem is Map && lastItem.containsKey('continuationItemRenderer')) {
+      final token = nav(lastItem, [
+        'continuationItemRenderer',
+        'continuationEndpoint',
+        'continuationCommand',
+        'token'
+      ]);
+      if (token != null) {
+        // print('🔍 Token encontrado en último elemento de contents: Encontrado');
+        return token;
+      }
+    }
+  }
+  // print('🔍 Token en último elemento de contents: No encontrado');
+
+  // SEGUNDO: Buscar en las ubicaciones tradicionales (como respaldo)
   var token = nav(response, [
     'contents',
     'twoColumnBrowseResultsRenderer',
@@ -1690,6 +1832,7 @@ String? _getPlaylistContinuationToken(Map<String, dynamic> response) {
     'nextContinuationData',
     'continuation'
   ]);
+  // print('🔍 Token en twoColumnBrowseResultsRenderer->secondaryContents: ${token != null ? "Encontrado" : "No encontrado"}');
 
   token ??= nav(response, [
     'contents',
@@ -1707,6 +1850,7 @@ String? _getPlaylistContinuationToken(Map<String, dynamic> response) {
     'nextContinuationData',
     'continuation'
   ]);
+  // print('🔍 Token en singleColumnBrowseResultsRenderer->tabs: ${token != null ? "Encontrado" : "No encontrado"}');
 
   token ??= nav(response, [
     'continuationContents',
@@ -1716,7 +1860,106 @@ String? _getPlaylistContinuationToken(Map<String, dynamic> response) {
     'nextContinuationData',
     'continuation'
   ]);
+  // print('🔍 Token en continuationContents->musicPlaylistShelfContinuation: ${token != null ? "Encontrado" : "No encontrado"}');
 
+  // Buscar en estructura de tabs
+  token ??= nav(response, [
+    'contents',
+    'twoColumnBrowseResultsRenderer',
+    'tabs',
+    0,
+    'tabRenderer',
+    'content',
+    'sectionListRenderer',
+    'contents',
+    0,
+    'musicPlaylistShelfRenderer',
+    'continuations',
+    0,
+    'nextContinuationData',
+    'continuation'
+  ]);
+  // print('🔍 Token en twoColumnBrowseResultsRenderer->tabs: ${token != null ? "Encontrado" : "No encontrado"}');
+
+  token ??= nav(response, [
+    'contents',
+    'singleColumnBrowseResultsRenderer',
+    'tabs',
+    0,
+    'tabRenderer',
+    'content',
+    'sectionListRenderer',
+    'contents',
+    0,
+    'musicShelfRenderer',
+    'continuations',
+    0,
+    'nextContinuationData',
+    'continuation'
+  ]);
+  // print('🔍 Token en singleColumnBrowseResultsRenderer->tabs->musicShelfRenderer: ${token != null ? "Encontrado" : "No encontrado"}');
+
+  // Buscar en onResponseReceivedActions
+  token ??= nav(response, [
+    'onResponseReceivedActions',
+    0,
+    'appendContinuationItemsAction',
+    'continuationItems',
+    0,
+    'continuationItemRenderer',
+    'continuationEndpoint',
+    'continuationCommand',
+    'token'
+  ]);
+  // print('🔍 Token en onResponseReceivedActions: ${token != null ? "Encontrado" : "No encontrado"}');
+
+  // Buscar en continuationContents
+  token ??= nav(response, [
+    'continuationContents',
+    'musicShelfContinuation',
+    'continuations',
+    0,
+    'nextContinuationData',
+    'continuation'
+  ]);
+  // print('🔍 Token en continuationContents->musicShelfContinuation: ${token != null ? "Encontrado" : "No encontrado"}');
+
+  // Buscar en continuationContents->musicPlaylistShelfContinuation
+  token ??= nav(response, [
+    'continuationContents',
+    'musicPlaylistShelfContinuation',
+    'continuations',
+    0,
+    'nextContinuationData',
+    'continuation'
+  ]);
+  // print('🔍 Token en continuationContents->musicPlaylistShelfContinuation: ${token != null ? "Encontrado" : "No encontrado"}');
+
+  // Buscar en el último elemento de continuationItems (para respuestas de continuación)
+  var continuationItems = nav(response, [
+    'onResponseReceivedActions',
+    0,
+    'appendContinuationItemsAction',
+    'continuationItems'
+  ]);
+  if (continuationItems is List && continuationItems.isNotEmpty) {
+    final lastItem = continuationItems.last;
+    if (lastItem is Map && lastItem.containsKey('continuationItemRenderer')) {
+      final continuationToken = nav(lastItem, [
+        'continuationItemRenderer',
+        'continuationEndpoint',
+        'continuationCommand',
+        'token'
+      ]);
+      if (continuationToken != null) {
+        token = continuationToken;
+        // print('🔍 Token encontrado en último elemento de continuationItems: Encontrado');
+      }
+    }
+  }
+  // print('🔍 Token en último elemento de continuationItems: ${token != null ? "Encontrado" : "No encontrado"}');
+
+  // print('🔍 Token final: ${token != null ? "Encontrado" : "No encontrado"}');
   return token;
 }
 
