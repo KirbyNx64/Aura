@@ -1,9 +1,9 @@
 {
-  "version": "1.5.6",
+  "version": "1.5.7",
   "apk_urls": {
-    "arm64-v8a": "https://github.com/KirbyNx64/Aura/releases/download/v1.5.6/AuraMusic-v1.5.6-arm64-v8a.apk",
-    "armeabi-v7a": "https://github.com/KirbyNx64/Aura/releases/download/v1.5.6/AuraMusic-v1.5.6-armeabi-v7a.apk",
-    "x86_64": "https://github.com/KirbyNx64/Aura/releases/download/v1.5.6/AuraMusic-v1.5.6-x86_64.apk"
+    "arm64-v8a": "https://github.com/KirbyNx64/Aura/releases/download/v1.5.7/AuraMusic-v1.5.7-arm64-v8a.apk",
+    "armeabi-v7a": "https://github.com/KirbyNx64/Aura/releases/download/v1.5.7/AuraMusic-v1.5.7-armeabi-v7a.apk",
+    "x86_64": "https://github.com/KirbyNx64/Aura/releases/download/v1.5.7/AuraMusic-v1.5.7-x86_64.apk"
   },
-  "changelog": "• Pantalla unificada de descargas y búsqueda: Ahora puedes usar enlaces de canciones y playlists directamente en el buscador. Esto hace más rápido encontrar canciones dentro de playlists y te permite elegir cuáles descargar.\n\n• Historial de descargas: Se guarda un pequeño registro de las canciones descargadas.\n\n• Mejoras visuales: Pequeños ajustes en la interfaz para una experiencia más pulida.\n\n• Corrección de errores: Solución de fallos menores y optimizaciones internas."
+  "changelog": "• Mejoras visuales: Pequeños ajustes en la interfaz para una experiencia más pulida.\n\n• Corrección de errores: Solución de fallos menores y optimizaciones internas."
 }
