@@ -114,7 +114,6 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
       ValueNotifier<double?>(null);
   String? _currentSongDataPath;
   bool _isCurrentFavorite = false;
-  bool _shouldAnimateLikeButton = false;
   final int _lyricsUpdateCounter = 0;
   final ValueNotifier<int> _lyricsUpdateNotifier = ValueNotifier<int>(0);
 
@@ -1631,8 +1630,6 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                 setState(() {
                   _currentSongDataPath = path;
                   _isCurrentFavorite = fav;
-                  // No animar cuando es cambio de canción, solo cuando es acción del usuario
-                  _shouldAnimateLikeButton = false;
                 });
               }
             }());
@@ -2121,11 +2118,10 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                     valueListenable: playLoadingNotifier,
                                     builder: (context, isLoading, _) {
                                       return LikeButton(
+                                        key: ValueKey('like_button_$_currentSongDataPath'),
                                         isLiked: isFav,
                                         size: 32,
-                                        animationDuration: _shouldAnimateLikeButton 
-                                            ? const Duration(milliseconds: 800)
-                                            : Duration.zero,
+                                        animationDuration: const Duration(milliseconds: 800),
                                         circleColor: CircleColor(
                                           start: Theme.of(context).brightness == Brightness.dark 
                                               ? Colors.white 
@@ -2157,20 +2153,6 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                         },
                                         onTap: (isLiked) async {
                                           if (isLoading) return false;
-                                          
-                                          // Activar animación para esta acción
-                                          setState(() {
-                                            _shouldAnimateLikeButton = true;
-                                          });
-                                          
-                                          // Resetear la bandera después de la animación (tiempo generoso)
-                                          Future.delayed(const Duration(milliseconds: 1000), () {
-                                            if (mounted) {
-                                              setState(() {
-                                                _shouldAnimateLikeButton = false;
-                                              });
-                                            }
-                                          });
                                           
                                           final path =
                                               currentMediaItem

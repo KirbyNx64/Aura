@@ -3,7 +3,7 @@ flutter_launcher_icons:
   ios: false
 
   # Ícono para Android (foreground, sin fondo)
-  image_path: "assets/icon/icon.png" 
+  image_path: "assets/icon.png" 
   adaptive_icon_foreground: "assets/icon/icon_foreground.png"
   adaptive_icon_monochrome: "assets/icon/icon_foreground.png"
 

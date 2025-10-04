@@ -94,10 +94,15 @@ class DownloadManager {
   // Inicializar configuración
   Future<void> initialize() async {
     final prefs = await SharedPreferences.getInstance();
-    _directoryPath = prefs.getString('download_directory');
+    _directoryPath = prefs.getString('download_directory') ?? '/storage/emulated/0/Music';
     _usarExplode = prefs.getBool('download_type_explode') ?? true;
     _usarFFmpeg = prefs.getBool('audio_processor_ffmpeg') ?? false;
     _audioQuality = prefs.getString('audio_quality') ?? 'high';
+    
+    // Guardar el directorio por defecto si no existe
+    if (!prefs.containsKey('download_directory')) {
+      await prefs.setString('download_directory', '/storage/emulated/0/Music');
+    }
   }
 
   // Configurar callbacks

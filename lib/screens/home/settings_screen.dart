@@ -1067,10 +1067,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _loadDownloadDirectory() async {
     final prefs = await SharedPreferences.getInstance();
+    final savedPath = prefs.getString('download_directory') ?? '/storage/emulated/0/Music';
+    
+    // Guardar el directorio por defecto si no existe
+    if (!prefs.containsKey('download_directory')) {
+      await prefs.setString('download_directory', '/storage/emulated/0/Music');
+    }
+    
     setState(() {
-      _downloadDirectory = prefs.getString('download_directory');
+      _downloadDirectory = savedPath;
     });
-    downloadDirectoryNotifier.value = _downloadDirectory;
+    downloadDirectoryNotifier.value = savedPath;
     _refreshAvailableSpace();
   }
 
@@ -3882,7 +3889,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              '${LocaleProvider.tr('version')}: 1.5.6',
+                              '${LocaleProvider.tr('version')}: 1.5.7',
                               style: const TextStyle(fontSize: 15),
                               textAlign: TextAlign.center,
                             ),

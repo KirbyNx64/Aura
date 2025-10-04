@@ -2402,9 +2402,14 @@ class _ArtistScreenState extends State<ArtistScreen> {
 
     // Obtener la carpeta de descarga
     final prefs = await SharedPreferences.getInstance();
-    final downloadPath = prefs.getString('download_directory');
+    final downloadPath = prefs.getString('download_directory') ?? '/storage/emulated/0/Music';
     
-    if (downloadPath == null || downloadPath.isEmpty) {
+    // Guardar el directorio por defecto si no existe
+    if (!prefs.containsKey('download_directory')) {
+      await prefs.setString('download_directory', '/storage/emulated/0/Music');
+    }
+    
+    if (downloadPath.isEmpty) {
       _showMessage('Error', 'No se ha seleccionado una carpeta de descarga');
       return;
     }

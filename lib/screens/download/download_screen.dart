@@ -151,13 +151,17 @@ class _DownloadScreenState extends State<DownloadScreen>
 
   Future<void> _loadSavedDirectory() async {
     final prefs = await SharedPreferences.getInstance();
-    final savedPath = prefs.getString('download_directory');
-    if (savedPath != null && savedPath.isNotEmpty) {
-      setState(() {
-        _directoryPath = savedPath;
-      });
-      downloadDirectoryNotifier.value = savedPath;
+    final savedPath = prefs.getString('download_directory') ?? '/storage/emulated/0/Music';
+    
+    // Guardar el directorio por defecto si no existe
+    if (!prefs.containsKey('download_directory')) {
+      await prefs.setString('download_directory', '/storage/emulated/0/Music');
     }
+    
+    setState(() {
+      _directoryPath = savedPath;
+    });
+    downloadDirectoryNotifier.value = savedPath;
   }
 
   Future<void> _loadDownloadPrefs() async {

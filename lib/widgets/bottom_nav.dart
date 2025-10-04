@@ -183,6 +183,7 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
                     return Theme.of(context).textTheme.labelSmall?.copyWith(
                       overflow: TextOverflow.ellipsis,
                       fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                      fontSize: 12,
                     );
                   },
                 ),

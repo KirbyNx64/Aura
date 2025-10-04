@@ -613,7 +613,6 @@ class _FoldersScreenState extends State<FoldersScreen>
                     leading: Icon(
                       isFavorite ? Icons.delete_outline : Symbols.favorite_rounded,
                       weight: isFavorite ? null : 600,
-                      fill: 1,
                     ),
                     title: TranslatedText(
                       isFavorite ? 'remove_from_favorites' : 'add_to_favorites',
