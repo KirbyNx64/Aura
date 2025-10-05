@@ -242,12 +242,14 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
     
     // Verificar si es un enlace de playlist de YouTube
     if (_isYouTubePlaylistUrl(_controller.text)) {
+      _focusNode.unfocus();
       await _processUrlPlaylist(_controller.text);
       return;
     }
     
     // Verificar si es un enlace de video de YouTube
     if (_isYouTubeUrl(_controller.text)) {
+      _focusNode.unfocus();
       await _processUrlVideo(_controller.text);
       return;
     }

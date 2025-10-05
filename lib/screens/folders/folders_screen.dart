@@ -28,6 +28,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:media_scanner/media_scanner.dart';
 import 'package:music/widgets/song_info_dialog.dart';
+import 'package:device_info_plus/device_info_plus.dart';
 
 enum OrdenCarpetas {
   normal,
@@ -89,6 +90,9 @@ class _FoldersScreenState extends State<FoldersScreen>
   double _lastBottomInset = 0.0;
 
   bool _isLoading = true;
+  
+  // Variable para verificar si estamos en Android 10+
+  bool _isAndroid10OrHigher = false;
 
   static const String _orderPrefsKey = 'folders_screen_order_filter';
   static const String _pinnedSongsKey = 'pinned_songs';
@@ -327,6 +331,7 @@ class _FoldersScreenState extends State<FoldersScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _checkAndroidVersion();
     _loadOrderFilter().then((_) => cargarCanciones());
     foldersShouldReload.addListener(_onFoldersShouldReload);
 
@@ -377,6 +382,29 @@ class _FoldersScreenState extends State<FoldersScreen>
         }
       });
     });
+  }
+
+  // Verificar versión de Android
+  Future<void> _checkAndroidVersion() async {
+    if (Platform.isAndroid) {
+      try {
+        final deviceInfo = DeviceInfoPlugin();
+        final androidInfo = await deviceInfo.androidInfo;
+        // Android 10 = API level 29
+        if (mounted) {
+          setState(() {
+            _isAndroid10OrHigher = (androidInfo.version.sdkInt >= 29);
+          });
+        }
+      } catch (e) {
+        // En caso de error, asumir que no es Android 10+
+        if (mounted) {
+          setState(() {
+            _isAndroid10OrHigher = false;
+          });
+        }
+      }
+    }
   }
 
   Future<void> _loadOrderFilter() async {
@@ -800,22 +828,24 @@ class _FoldersScreenState extends State<FoldersScreen>
                       await _navigateToEditScreen(songToMediaItem(song));
                     },
                   ),
-                  ListTile(
-                    leading: const Icon(Icons.drive_file_move),
-                    title: TranslatedText('move_to_folder'),
-                    onTap: () async {
-                      Navigator.of(context).pop();
-                      await _showFolderSelector(song, isMove: true);
-                    },
-                  ),
-                  ListTile(
-                    leading: const Icon(Icons.copy),
-                    title: TranslatedText('copy_to_folder'),
-                    onTap: () async {
-                      Navigator.of(context).pop();
-                      await _showFolderSelector(song, isMove: false);
-                    },
-                  ),
+                  if (_isAndroid10OrHigher)
+                    ListTile(
+                      leading: const Icon(Icons.drive_file_move),
+                      title: TranslatedText('move_to_folder'),
+                      onTap: () async {
+                        Navigator.of(context).pop();
+                        await _showFolderSelector(song, isMove: true);
+                      },
+                    ),
+                  if (_isAndroid10OrHigher)
+                    ListTile(
+                      leading: const Icon(Icons.copy),
+                      title: TranslatedText('copy_to_folder'),
+                      onTap: () async {
+                        Navigator.of(context).pop();
+                        await _showFolderSelector(song, isMove: false);
+                      },
+                    ),
                   ListTile(
                     leading: Icon(
                       isIgnored ? Icons.visibility : Icons.visibility_off,
@@ -1032,6 +1062,11 @@ class _FoldersScreenState extends State<FoldersScreen>
         } catch (_) {}
 
         await file.delete();
+
+        // Notificar al MediaStore de Android que el archivo fue eliminado
+        try {
+          await MediaScanner.loadMedia(path: song.data);
+        } catch (_) {}
 
         // Limpiar caches relacionadas con la canción borrada
         try {
@@ -2854,32 +2889,34 @@ class _FoldersScreenState extends State<FoldersScreen>
                         ],
                       ),
                     ),
-                    PopupMenuItem<String>(
-                      value: 'copy_to_folder',
-                      enabled: _selectedSongPaths.isNotEmpty,
-                      child: Row(
-                        children: [
-                          const Icon(Icons.copy),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(LocaleProvider.tr('copy_to_folder')),
-                          ),
-                        ],
+                    if (_isAndroid10OrHigher)
+                      PopupMenuItem<String>(
+                        value: 'copy_to_folder',
+                        enabled: _selectedSongPaths.isNotEmpty,
+                        child: Row(
+                          children: [
+                            const Icon(Icons.copy),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(LocaleProvider.tr('copy_to_folder')),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                    PopupMenuItem<String>(
-                      value: 'move_to_folder',
-                      enabled: _selectedSongPaths.isNotEmpty,
-                      child: Row(
-                        children: [
-                          const Icon(Icons.drive_file_move),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(LocaleProvider.tr('move_to_folder')),
-                          ),
-                        ],
+                    if (_isAndroid10OrHigher)
+                      PopupMenuItem<String>(
+                        value: 'move_to_folder',
+                        enabled: _selectedSongPaths.isNotEmpty,
+                        child: Row(
+                          children: [
+                            const Icon(Icons.drive_file_move),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(LocaleProvider.tr('move_to_folder')),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
                     PopupMenuItem<String>(
                       value: 'delete_songs',
                       enabled: _selectedSongPaths.isNotEmpty,
@@ -3575,6 +3612,12 @@ class _FoldersScreenState extends State<FoldersScreen>
           final file = File(song.data);
           if (await file.exists()) {
             await file.delete();
+            
+            // Notificar al MediaStore de Android que el archivo fue eliminado
+            try {
+              await MediaScanner.loadMedia(path: song.data);
+            } catch (_) {}
+            
             successCount++;
             
             // Limpiar caché de artwork
@@ -3802,6 +3845,51 @@ class _FoldersScreenState extends State<FoldersScreen>
     int successCount = 0;
     int errorCount = 0;
     
+    // ValueNotifier para actualizar el progreso en tiempo real
+    final progressNotifier = ValueNotifier<String>('0 / ${songs.length}');
+    
+    // Mostrar diálogo de progreso
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return PopScope(
+          canPop: false,
+          child: ValueListenableBuilder<String>(
+            valueListenable: progressNotifier,
+            builder: (context, progress, child) {
+              return AlertDialog(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const CircularProgressIndicator(),
+                    const SizedBox(height: 24),
+                    Text(
+                      isMove 
+                        ? LocaleProvider.tr('moving_songs')
+                        : LocaleProvider.tr('copying_songs'),
+                      style: const TextStyle(fontSize: 16),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      progress,
+                      style: const TextStyle(fontSize: 14),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        );
+      },
+    );
+    
     for (final song in songs) {
       try {
         if (isMove) {
@@ -3813,7 +3901,16 @@ class _FoldersScreenState extends State<FoldersScreen>
       } catch (e) {
         errorCount++;
       }
+      
+      // Actualizar el progreso
+      progressNotifier.value = '${successCount + errorCount} / ${songs.length}';
     }
+    
+    // Limpiar el notifier
+    progressNotifier.dispose();
+    
+    // Cerrar diálogo de progreso
+    if (mounted) Navigator.of(context).pop();
     
     if (mounted) {
       _showMessage(
@@ -3871,10 +3968,10 @@ class _FoldersScreenState extends State<FoldersScreen>
         await sourceFile.copy(destinationPath);
       }
 
-      // Actualizar el archivo en el sistema de medios de Android
+      // Actualizar el archivo nuevo en el sistema de medios de Android
       await MediaScanner.loadMedia(path: destinationPath);
       
-      // Actualizar la base de datos solo para este archivo
+      // Actualizar la base de datos para indexar los cambios
       await SongsIndexDB().forceReindex();
 
       // Actualizar el estado local sin recargar toda la pantalla
@@ -3932,10 +4029,15 @@ class _FoldersScreenState extends State<FoldersScreen>
         await sourceFile.rename(destinationPath);
       }
 
-      // Actualizar el archivo en el sistema de medios de Android
+      // Notificar al MediaStore sobre el archivo original eliminado
+      try {
+        await MediaScanner.loadMedia(path: song.data);
+      } catch (_) {}
+      
+      // Actualizar el archivo nuevo en el sistema de medios de Android
       await MediaScanner.loadMedia(path: destinationPath);
       
-      // Actualizar la base de datos solo para este archivo
+      // Actualizar la base de datos para indexar los cambios
       await SongsIndexDB().forceReindex();
 
       // Actualizar el estado local sin recargar toda la pantalla
@@ -4310,9 +4412,39 @@ class _FoldersScreenState extends State<FoldersScreen>
 
   // Función para mover una canción a otra carpeta
   Future<void> _moveSongToFolder(SongModel song, String destinationFolder) async {
+    // Mostrar diálogo de carga
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return PopScope(
+          canPop: false,
+          child: AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const CircularProgressIndicator(),
+                const SizedBox(height: 24),
+                Text(
+                  LocaleProvider.tr('moving_song'),
+                  style: const TextStyle(fontSize: 16),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
     try {
       final sourceFile = File(song.data);
       if (!await sourceFile.exists()) {
+        if (mounted) Navigator.of(context).pop(); // Cerrar diálogo
         _showMessage('El archivo no existe.', isError: true);
         return;
       }
@@ -4323,6 +4455,7 @@ class _FoldersScreenState extends State<FoldersScreen>
 
       // Verificar si ya existe un archivo con el mismo nombre
       if (await destinationFile.exists()) {
+        if (mounted) Navigator.of(context).pop(); // Cerrar diálogo
         _showMessage(LocaleProvider.tr('error_moving_song'), description: LocaleProvider.tr('file_already_exists'), isError: true);
         return;
       }
@@ -4331,6 +4464,7 @@ class _FoldersScreenState extends State<FoldersScreen>
       final destinationDir = Directory(destinationFolder);
       
       if (!await destinationDir.exists()) {
+        if (mounted) Navigator.of(context).pop(); // Cerrar diálogo
         _showMessage('La carpeta de destino no existe o no es accesible.\n\nRuta: $destinationFolder', isError: true);
         return;
       }
@@ -4365,10 +4499,15 @@ class _FoldersScreenState extends State<FoldersScreen>
         throw Exception('No se pudo mover el archivo');
       }
 
-      // Actualizar el archivo en el sistema de medios de Android
+      // Notificar al MediaStore sobre el archivo original eliminado
+      try {
+        await MediaScanner.loadMedia(path: song.data);
+      } catch (_) {}
+      
+      // Actualizar el archivo nuevo en el sistema de medios de Android
       await MediaScanner.loadMedia(path: destinationPath);
       
-      // Actualizar la base de datos solo para este archivo
+      // Actualizar la base de datos para indexar los cambios
       await SongsIndexDB().forceReindex();
       
       // Actualizar el estado local sin recargar toda la pantalla
@@ -4391,12 +4530,18 @@ class _FoldersScreenState extends State<FoldersScreen>
         shortcutsShouldReload.value = !shortcutsShouldReload.value;
       } catch (_) {}
 
+      // Cerrar diálogo de carga
+      if (mounted) Navigator.of(context).pop();
+
       _showMessage(
         LocaleProvider.tr('song_moved'),
         description: LocaleProvider.tr('song_moved_desc'),
       );
 
     } catch (e) {
+      // Cerrar diálogo de carga en caso de error
+      if (mounted) Navigator.of(context).pop();
+      
       _showMessage(
         LocaleProvider.tr('error_moving_song'),
         description: '${LocaleProvider.tr('error_moving_song_desc')}\n\nError: ${e.toString()}',
@@ -4407,9 +4552,39 @@ class _FoldersScreenState extends State<FoldersScreen>
 
   // Función para copiar una canción a otra carpeta
   Future<void> _copySongToFolder(SongModel song, String destinationFolder) async {
+    // Mostrar diálogo de carga
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return PopScope(
+          canPop: false,
+          child: AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const CircularProgressIndicator(),
+                const SizedBox(height: 24),
+                Text(
+                  LocaleProvider.tr('copying_song'),
+                  style: const TextStyle(fontSize: 16),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
     try {
       final sourceFile = File(song.data);
       if (!await sourceFile.exists()) {
+        if (mounted) Navigator.of(context).pop(); // Cerrar diálogo
         _showMessage('El archivo no existe.', isError: true);
         return;
       }
@@ -4420,6 +4595,7 @@ class _FoldersScreenState extends State<FoldersScreen>
 
       // Verificar si ya existe un archivo con el mismo nombre
       if (await destinationFile.exists()) {
+        if (mounted) Navigator.of(context).pop(); // Cerrar diálogo
         _showMessage(LocaleProvider.tr('error_copying_song'), description: LocaleProvider.tr('file_already_exists'), isError: true);
         return;
       }
@@ -4428,6 +4604,7 @@ class _FoldersScreenState extends State<FoldersScreen>
       final destinationDir = Directory(destinationFolder);
       
       if (!await destinationDir.exists()) {
+        if (mounted) Navigator.of(context).pop(); // Cerrar diálogo
         _showMessage('La carpeta de destino no existe o no es accesible.\n\nRuta: $destinationFolder', isError: true);
         return;
       }
@@ -4440,10 +4617,10 @@ class _FoldersScreenState extends State<FoldersScreen>
         throw Exception('La copia no se completó correctamente');
       }
 
-      // Actualizar el archivo en el sistema de medios de Android
+      // Actualizar el archivo nuevo en el sistema de medios de Android
       await MediaScanner.loadMedia(path: destinationPath);
       
-      // Actualizar la base de datos solo para este archivo
+      // Actualizar la base de datos para indexar los cambios
       await SongsIndexDB().forceReindex();
       
       // Notificar a otras pantallas que deben refrescar
@@ -4452,12 +4629,18 @@ class _FoldersScreenState extends State<FoldersScreen>
         shortcutsShouldReload.value = !shortcutsShouldReload.value;
       } catch (_) {}
 
+      // Cerrar diálogo de carga
+      if (mounted) Navigator.of(context).pop();
+
       _showMessage(
         LocaleProvider.tr('song_copied'),
         description: LocaleProvider.tr('song_copied_desc'),
       );
 
     } catch (e) {
+      // Cerrar diálogo de carga en caso de error
+      if (mounted) Navigator.of(context).pop();
+      
       _showMessage(
         LocaleProvider.tr('error_copying_song'),
         description: '${LocaleProvider.tr('error_copying_song_desc')}\n\nError: ${e.toString()}',

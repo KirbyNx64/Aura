@@ -766,6 +766,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       builder: (context) => SafeArea(
         child: SingleChildScrollView(
           child: Column(

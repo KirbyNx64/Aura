@@ -8,6 +8,7 @@ import '../../utils/theme_preferences.dart';
 import '../../utils/notifiers.dart';
 import '../../widgets/song_info_dialog.dart';
 import 'package:audio_service/audio_service.dart';
+import 'package:media_scanner/media_scanner.dart';
 
 class DownloadHistoryScreen extends StatefulWidget {
   const DownloadHistoryScreen({super.key});
@@ -111,6 +112,11 @@ class _DownloadHistoryScreenState extends State<DownloadHistoryScreen> {
       final file = File(record.filePath);
       if (await file.exists()) {
         await file.delete();
+        
+        // Notificar al MediaStore de Android que el archivo fue eliminado
+        try {
+          await MediaScanner.loadMedia(path: record.filePath);
+        } catch (_) {}
       }
       
       // Eliminar de la base de datos

@@ -5,5 +5,5 @@
     "armeabi-v7a": "https://github.com/KirbyNx64/Aura/releases/download/v1.5.7/AuraMusic-v1.5.7-armeabi-v7a.apk",
     "x86_64": "https://github.com/KirbyNx64/Aura/releases/download/v1.5.7/AuraMusic-v1.5.7-x86_64.apk"
   },
-  "changelog": "• Mejoras visuales: Pequeños ajustes en la interfaz para una experiencia más pulida.\n\n• Corrección de errores: Solución de fallos menores y optimizaciones internas."
+  "changelog": "• Corrección de errores: Solución de fallos menores y optimizaciones internas."
 }
