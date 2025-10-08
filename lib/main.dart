@@ -1,5 +1,6 @@
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:music/utils/permission/permission_handler.dart';
 import 'package:music/utils/theme_preferences.dart';
 import 'package:dynamic_color/dynamic_color.dart';
@@ -397,6 +398,16 @@ void main() async {
       MaterialApp(
         home: PermisosScreen(),
         debugShowCheckedModeBanner: false,
+        localizationsDelegates: const [
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        supportedLocales: const [
+          Locale('es', ''),
+          Locale('en', ''),
+        ],
+        locale: Locale(languageNotifier.value, ''),
         theme: ThemeData(
           useMaterial3: true,
           colorSchemeSeed: Colors.deepPurple,
@@ -429,6 +440,8 @@ void main() async {
   Future.microtask(() async {
     try {
       await DownloadHistoryService().preInitialize();
+      // Verificar si hay descargas no vistas
+      hasNewDownloadsNotifier.value = await DownloadHistoryService().hasUnviewedDownloads();
     } catch (e) {
       // Error silencioso - se inicializará cuando se necesite
     }
@@ -492,11 +505,10 @@ class _PermisosScreenState extends State<PermisosScreen>
         
         // Ir directo a la app
         if (!mounted) return;
-        Navigator.of(context).pushAndRemoveUntil(
+        Navigator.of(context).pushReplacement(
           MaterialPageRoute(
-            builder: (_) => MainApp(currentLanguage: languageNotifier.value),
+            builder: (_) => MyRootApp(),
           ),
-          (route) => false,
         );
       }
     }
@@ -792,6 +804,16 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
     if (_isLoading) {
       return MaterialApp(
         debugShowCheckedModeBanner: false,
+        localizationsDelegates: const [
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        supportedLocales: const [
+          Locale('es', ''),
+          Locale('en', ''),
+        ],
+        locale: Locale(languageNotifier.value, ''),
         theme: _buildTheme(Brightness.dark),
         home: const Scaffold(body: Center(child: CircularProgressIndicator())),
       );
@@ -814,6 +836,16 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
             return MaterialApp(
               title: 'Mi App de Música',
               debugShowCheckedModeBanner: false,
+              localizationsDelegates: const [
+                GlobalMaterialLocalizations.delegate,
+                GlobalWidgetsLocalizations.delegate,
+                GlobalCupertinoLocalizations.delegate,
+              ],
+              supportedLocales: const [
+                Locale('es', ''),
+                Locale('en', ''),
+              ],
+              locale: Locale(languageNotifier.value, ''),
               themeMode: _themeMode == AppThemeMode.system
                   ? ThemeMode.system
                   : _themeMode == AppThemeMode.dark

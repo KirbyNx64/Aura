@@ -1,13 +1,15 @@
 name: music
 description: "A new Flutter project."
 publish_to: 'none'
-version: 1.5.8+1
+version: 1.6.0+1
 
 environment:
   sdk: ^3.8.1
 
 dependencies:
   flutter:
+    sdk: flutter
+  flutter_localizations:
     sdk: flutter
   hive: ^2.2.3
   hive_flutter: ^1.1.0
@@ -54,6 +56,7 @@ dependencies:
   dynamic_color: ^1.8.1
   flutter_sharing_intent: ^1.1.1
   like_button: ^2.1.0
+  translator: ^1.0.4+1
 
 dev_dependencies:
   flutter_test:

@@ -22,6 +22,13 @@ class FavoritesDB {
     }
   }
 
+  Future<void> addFavoritePath(String path) async {
+    final b = await box;
+    if (!b.values.contains(path)) {
+      await b.add(path);
+    }
+  }
+
   Future<void> removeFavorite(String path) async {
     final b = await box;
     final key = b.keys.firstWhere((k) => b.get(k) == path, orElse: () => null);

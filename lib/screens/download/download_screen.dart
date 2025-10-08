@@ -733,7 +733,7 @@ class _DownloadScreenState extends State<DownloadScreen>
         filePath: filePath,
         totalSize: audio.size,
         onProgress: (progress) {
-          setState(() => _progress = progress * 0.6);
+          setState(() => _progress = progress * 0.8);
         },
       );
 
@@ -1612,7 +1612,7 @@ class _DownloadScreenState extends State<DownloadScreen>
         filePath: filePath,
         totalSize: audio.size,
         onProgress: (progress) {
-          setState(() => _progress = progress * 0.6);
+          setState(() => _progress = progress * 0.8);
         },
       );
 
@@ -1806,7 +1806,7 @@ class _DownloadScreenState extends State<DownloadScreen>
     }
 
     try {
-      setState(() => _progress = 0.65);
+      setState(() => _progress = 0.85);
 
       // 1. Convertir a MP3 (sin metadatos) directo en carpeta final
       final convertSession = await FFmpegKit.execute(
@@ -1883,7 +1883,7 @@ class _DownloadScreenState extends State<DownloadScreen>
         throw Exception('Error al escribir metadatos en el auido');
       }
 
-      setState(() => _progress = 0.9);
+      setState(() => _progress = 0.95);
 
       final currentMediaItem =
           audioHandler?.mediaItem.value; // O usa handler.mediaItem.value
@@ -1983,7 +1983,7 @@ class _DownloadScreenState extends State<DownloadScreen>
 
     try {
       // Escribir metadatos con audiotags
-      setState(() => _progress = 0.75);
+      setState(() => _progress = 0.85);
 
       final cleanedAuthor = limpiarMetadato(
         author.replaceFirst(RegExp(r' - Topic$', caseSensitive: false), ''),
@@ -2376,7 +2376,7 @@ class _DownloadScreenState extends State<DownloadScreen>
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
                                           TranslatedText('downloading'),
-                                          Text(' ${((_progress / 0.6).clamp(0, 1) * 100).toStringAsFixed(0)}%'),
+                                          Text(' ${(_progress * 100).toStringAsFixed(0)}%'),
                                         ],
                                       ))
                                 : TranslatedText('download_audio'),

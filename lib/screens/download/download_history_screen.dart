@@ -31,6 +31,12 @@ class _DownloadHistoryScreenState extends State<DownloadHistoryScreen> {
   void initState() {
     super.initState();
     _loadDownloadHistory();
+    _markAsViewed();
+  }
+
+  Future<void> _markAsViewed() async {
+    await DownloadHistoryService().markAllAsViewed();
+    hasNewDownloadsNotifier.value = false;
   }
 
   Future<void> _loadDownloadHistory() async {
@@ -152,76 +158,101 @@ class _DownloadHistoryScreenState extends State<DownloadHistoryScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      builder: (context) => SafeArea(
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Encabezado con información de la descarga
-              Container(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  children: [
-                    // Carátula de la canción
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: SizedBox(
-                        width: 60,
-                        height: 60,
-                        child: _buildModalArtwork(record),
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    // Título y artista
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
+      builder: (context) => FutureBuilder<bool>(
+        future: File(record.filePath).exists(),
+        builder: (context, snapshot) {
+          final fileExists = snapshot.data ?? true;
+          final opacity = fileExists ? 1.0 : 0.4;
+          
+          return SafeArea(
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Encabezado con información de la descarga
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    child: Opacity(
+                      opacity: opacity,
+                      child: Row(
                         children: [
-                          Text(
-                            record.title,
-                            maxLines: 1,
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
+                          // Carátula de la canción o icono de basurero
+                          fileExists
+                              ? ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: SizedBox(
+                                    width: 60,
+                                    height: 60,
+                                    child: _buildModalArtwork(record),
+                                  ),
+                                )
+                              : Container(
+                                  width: 60,
+                                  height: 60,
+                                  decoration: BoxDecoration(
+                                    color: Theme.of(context).colorScheme.secondaryContainer,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Icon(
+                                    Icons.delete_outline,
+                                    color: Theme.of(context).colorScheme.onSecondaryContainer,
+                                    size: 30,
+                                  ),
+                                ),
+                          const SizedBox(width: 16),
+                          // Título y artista
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  record.title,
+                                  maxLines: 1,
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  record.artist,
+                                  style: TextStyle(fontSize: 14),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
                             ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            record.artist,
-                            style: TextStyle(fontSize: 14),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
                           ),
                         ],
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                  
+                  // Opciones
+                  ListTile(
+                    leading: const Icon(Icons.delete),
+                    title: Text(LocaleProvider.tr('delete')),
+                    onTap: () {
+                      Navigator.pop(context);
+                      _showDeleteConfirmation(record);
+                    },
+                  ),
+                  
+                  ListTile(
+                    leading: const Icon(Icons.info_outline),
+                    title: Text(LocaleProvider.tr('song_info')),
+                    onTap: () {
+                      Navigator.pop(context);
+                      _showFileInfo(record);
+                    },
+                  ),
+                ],
               ),
-              
-              // Opciones
-              ListTile(
-                leading: const Icon(Icons.delete),
-                title: Text(LocaleProvider.tr('delete')),
-                onTap: () {
-                  Navigator.pop(context);
-                  _showDeleteConfirmation(record);
-                },
-              ),
-              
-              ListTile(
-                leading: const Icon(Icons.info_outline),
-                title: Text(LocaleProvider.tr('song_info')),
-                onTap: () {
-                  Navigator.pop(context);
-                  _showFileInfo(record);
-                },
-              ),
-            ],
-          ),
-        ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -575,38 +606,63 @@ class _DownloadHistoryScreenState extends State<DownloadHistoryScreen> {
                     final record = _downloadRecords[index];
                     final fileSize = _formatFileSize(record.fileSize);
                     
-                    return Material(
-                      color: Colors.transparent,
-                      child: InkWell(
-                        onLongPress: () => _showOptionsModal(context, record),
-                        child: ListTile(
-                          leading: ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: _buildAudioArtwork(record.filePath.replaceFirst('/storage/emulated/0', '')),
-                          ),
-                          title: Text(
-                            record.title,
-                            style: const TextStyle(fontWeight: FontWeight.w500),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          subtitle: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(fileSize),
-                              const SizedBox(height: 4),
-                              Text(
-                                record.filePath.replaceFirst('/storage/emulated/0', ''),
-                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+                    return FutureBuilder<bool>(
+                      future: File(record.filePath).exists(),
+                      builder: (context, snapshot) {
+                        final fileExists = snapshot.data ?? true;
+                        final opacity = fileExists ? 1.0 : 0.4;
+                        
+                        return Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            onLongPress: fileExists ? () => _showOptionsModal(context, record) : null,
+                            child: Opacity(
+                              opacity: opacity,
+                              child: ListTile(
+                                leading: fileExists
+                                    ? ClipRRect(
+                                        borderRadius: BorderRadius.circular(8),
+                                        child: _buildAudioArtwork(record.filePath.replaceFirst('/storage/emulated/0', '')),
+                                      )
+                                    : Container(
+                                        width: 48,
+                                        height: 48,
+                                        decoration: BoxDecoration(
+                                          color: Theme.of(context).colorScheme.secondaryContainer,
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        child: Icon(
+                                          Icons.delete_outline,
+                                          color: Theme.of(context).colorScheme.onSecondaryContainer,
+                                          size: 24,
+                                        ),
+                                      ),
+                                title: Text(
+                                  record.title,
+                                  style: const TextStyle(fontWeight: FontWeight.w500),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
+                                subtitle: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(fileSize),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      record.filePath.replaceFirst('/storage/emulated/0', ''),
+                                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
+                                ),
                               ),
-                            ],
+                            ),
                           ),
-                        ),
-                      ),
+                        );
+                      },
                     );
                   },
                 ),

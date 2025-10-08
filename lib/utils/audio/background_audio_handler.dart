@@ -12,6 +12,8 @@ import 'package:music/utils/db/songs_index_db.dart';
 import 'package:music/utils/db/mostplayer_db.dart';
 import 'package:music/utils/db/recent_db.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:music/utils/db/favorites_db.dart';
+import 'package:music/utils/notifiers.dart';
 
 AudioHandler? _audioHandler;
 
@@ -354,6 +356,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   // Control de operaciones pendientes para evitar sobrecarga
   String? _lastProcessedSongId;
   final Map<String, bool> _pendingArtworkOperations = {};
+  final Set<String> _favoriteIds = {};
 
   // Control de notificaciones del sistema
   Timer? _notificationUpdateTimer;
@@ -731,11 +734,18 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     }
   }
 
+  Future<bool> isFavorite(String songId) async {
+    return await FavoritesDB().isFavorite(songId);
+  }
+
   /// Transform a just_audio event into an audio_service state.
   /// Sigue exactamente el patrón de la documentación oficial de audio_service
   PlaybackState _transformPlaybackEvent(PlaybackEvent event) {
     // Sincronizar el estado del shuffle con el notifier
     _syncShuffleState();
+
+    final currentMediaItem = mediaItem.value;
+    final isFav = currentMediaItem != null && _favoriteIds.contains(currentMediaItem.id);
     
     // Determinar el modo de repetición basado en el loop mode del player
     AudioServiceRepeatMode repeatMode;
@@ -761,6 +771,14 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         MediaControl.skipToPrevious,
         if (_player.playing) MediaControl.pause else MediaControl.play,
         MediaControl.skipToNext,
+        MediaControl(
+          androidIcon: isFav
+            ? 'drawable/ic_isfavorite'
+            : 'drawable/ic_favorite',
+          label: 'Favorito',
+          action: MediaAction.custom,
+          customAction: CustomMediaAction(name: 'favorite'),
+        ),
       ],
       systemActions: const {
         MediaAction.seek,
@@ -791,6 +809,17 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     
     var currentMediaItem = _mediaQueue[index];
     final songPath = currentMediaItem.extras?['data'] as String?;
+    if (songPath != null) {
+      FavoritesDB().isFavorite(songPath).then((isFav) {
+        if (isFav) {
+          _favoriteIds.add(currentMediaItem.id);
+        } else {
+          _favoriteIds.remove(currentMediaItem.id);
+        }
+        // Actualiza el estado para que el icono de favorito cambie en la notificación
+        playbackState.add(_transformPlaybackEvent(_player.playbackEvent));
+      });
+    }
     final songId = currentMediaItem.extras?['songId'] as int?;
     final currentSongId = currentMediaItem.id;
 
@@ -2145,6 +2174,22 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     if (name == "saveSession") {
       await _saveSessionToPrefs();
     }
+    if (name == "favorite" || extras?['action'] == 'favorite') {
+    final item = mediaItem.value;
+    final songPath = item?.id;
+    if (songPath != null) {
+      final isFav = _favoriteIds.contains(songPath);
+      if (isFav) {
+        await FavoritesDB().removeFavorite(songPath);
+        _favoriteIds.remove(songPath);
+      } else {
+        await FavoritesDB().addFavoritePath(songPath);
+        _favoriteIds.add(songPath);
+      }
+      playbackState.add(_transformPlaybackEvent(_player.playbackEvent));
+      favoritesShouldReload.value = !favoritesShouldReload.value;
+    }
+  }
     return super.customAction(name, extras);
   }
 

@@ -251,6 +251,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     playlistsShouldReload.addListener(_onPlaylistsShouldReload);
     shortcutsShouldReload.addListener(_onShortcutsShouldReload);
     mostPlayedShouldReload.addListener(_onMostPlayedShouldReload);
+    colorSchemeNotifier.addListener(_onThemeChanged);
     _buscarActualizacion();
 
     // Inicializar con el valor actual si ya hay algo reproduciéndose
@@ -356,6 +357,16 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   void _onMostPlayedShouldReload() {
     _loadMostPlayed();
+  }
+
+  void _onThemeChanged() {
+    // Limpiar cachés de widgets cuando cambia el tema para forzar reconstrucción
+    _artistWidgetCache.clear();
+    _shortcutWidgetCache.clear();
+    _quickPickWidgetCache.clear();
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   Future<void> _loadOrderFilter() async {
@@ -1042,7 +1053,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   // Widget para mostrar un artista en círculo
   Widget _buildArtistWidget(Map<String, dynamic> artist, BuildContext context) {
-    final String artistKey = 'artist_${artist['name']}_${artist['song_count']}_${artist['thumbUrl'] ?? 'no_image'}';
+    final String artistKey = 'artist_${artist['name']}_${artist['song_count']}_${artist['thumbUrl'] ?? 'no_image'}_${colorSchemeNotifier.value.name}';
     
     // print('🎨 Construyendo widget para ${artist['name']} - ThumbUrl: ${artist['thumbUrl'] != null ? 'Sí' : 'No'}');
     
@@ -1166,16 +1177,23 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             const SizedBox(height: 12),
             SizedBox(
               width: 80,
-              child: Text(
-                artist['name'],
-                textAlign: TextAlign.center,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  fontWeight: FontWeight.w500,
-                  fontSize: 14,
-                  color: colorSchemeNotifier.value == AppColorScheme.amoled ? Colors.white : null,
-                ),
+              child: ValueListenableBuilder<AppColorScheme>(
+                valueListenable: colorSchemeNotifier,
+                builder: (context, colorScheme, child) {
+                  return Text(
+                    artist['name'],
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      fontWeight: FontWeight.w500,
+                      fontSize: 14,
+                      color: colorScheme == AppColorScheme.amoled 
+                          ? Colors.white 
+                          : Theme.of(context).colorScheme.onSurface,
+                    ),
+                  );
+                },
               ),
             ),
           ],
@@ -1969,6 +1987,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     playlistsShouldReload.removeListener(_onPlaylistsShouldReload);
     shortcutsShouldReload.removeListener(_onShortcutsShouldReload);
     mostPlayedShouldReload.removeListener(_onMostPlayedShouldReload);
+    colorSchemeNotifier.removeListener(_onThemeChanged);
     _pageController.dispose();
     _searchRecentsController.dispose();
     _searchRecentsFocus.dispose();

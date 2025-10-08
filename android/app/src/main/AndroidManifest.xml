@@ -22,6 +22,9 @@
 
     <!-- Permiso para mostrar notificaciones (Android 13+) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    
+    <!-- Eliminar permiso de vibración para que las notificaciones no vibren -->
+    <uses-permission android:name="android.permission.VIBRATE" tools:node="remove" />
 
     <queries>
         <intent>

@@ -64,6 +64,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _loadArtworkQuality();
     _initHeroAnimationSetting();
     _loadOverlayNextButtonSetting();
+    _loadTranslationLanguageSetting();
   }
 
   Future<void> _initHeroAnimationSetting() async {
@@ -76,6 +77,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final prefs = await SharedPreferences.getInstance();
     final nextButtonEnabled = prefs.getBool('overlay_next_button_enabled') ?? false;
     overlayNextButtonEnabled.value = nextButtonEnabled;
+  }
+
+  Future<void> _loadTranslationLanguageSetting() async {
+    final prefs = await SharedPreferences.getInstance();
+    final language = prefs.getString('translation_language') ?? 'auto';
+    translationLanguageNotifier.value = language;
   }
 
   Future<void> _loadArtworkQuality() async {
@@ -2594,6 +2601,199 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  void _showTranslationLanguageDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return ValueListenableBuilder<AppColorScheme>(
+          valueListenable: colorSchemeNotifier,
+          builder: (context, colorScheme, child) {
+            final isAmoled = colorScheme == AppColorScheme.amoled;
+            final isDark = Theme.of(context).brightness == Brightness.dark;
+
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: isAmoled && isDark
+                    ? const BorderSide(color: Colors.white, width: 1)
+                    : BorderSide.none,
+              ),
+              title: Center(
+                child: Text(
+                  LocaleProvider.tr('translation_language'),
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              content: SizedBox(
+                width: 400,
+                height: 500, // Altura fija para el diálogo
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(height: 18),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 4),
+                        child: Text(
+                          LocaleProvider.tr('translation_language_desc'),
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Theme.of(context).colorScheme.onSurface,
+                          ),
+                          textAlign: TextAlign.left,
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: 20),
+                    // Lista de idiomas con scroll
+                    Expanded(
+                      child: SingleChildScrollView(
+                        child: Column(
+                          children: _buildTranslationLanguageOptions(isAmoled, isDark),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  List<Widget> _buildTranslationLanguageOptions(bool isAmoled, bool isDark) {
+    final languages = [
+      {'code': 'auto', 'name': LocaleProvider.tr('auto_detect')},
+      {'code': 'es', 'name': LocaleProvider.tr('language_spanish')},
+      {'code': 'en', 'name': LocaleProvider.tr('language_english')},
+      {'code': 'fr', 'name': LocaleProvider.tr('language_french')},
+      {'code': 'de', 'name': LocaleProvider.tr('language_german')},
+      {'code': 'it', 'name': LocaleProvider.tr('language_italian')},
+      {'code': 'pt', 'name': LocaleProvider.tr('language_portuguese')},
+      {'code': 'ja', 'name': LocaleProvider.tr('language_japanese')},
+      {'code': 'ko', 'name': LocaleProvider.tr('language_korean')},
+      {'code': 'zh', 'name': LocaleProvider.tr('language_chinese')},
+      {'code': 'ru', 'name': LocaleProvider.tr('language_russian')},
+    ];
+
+    return languages.asMap().entries.map((entry) {
+      final index = entry.key;
+      final language = entry.value;
+      final isSelected = translationLanguageNotifier.value == language['code'];
+      final isFirst = index == 0;
+      final isLast = index == languages.length - 1;
+
+      return Column(
+        children: [
+          InkWell(
+            onTap: () async {
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.setString('translation_language', language['code']!);
+              translationLanguageNotifier.value = language['code']!;
+              if (!mounted) return;
+              Navigator.of(context).pop();
+            },
+            borderRadius: BorderRadius.circular(16),
+            child: Container(
+              width: double.infinity,
+              padding: EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? (isAmoled && isDark
+                        ? Colors.white.withValues(alpha: 0.2)
+                        : Theme.of(context).colorScheme.primaryContainer)
+                    : (isAmoled && isDark
+                        ? Colors.white.withValues(alpha: 0.1)
+                        : Theme.of(context).colorScheme.secondaryContainer),
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(isFirst ? 16 : 4),
+                  topRight: Radius.circular(isFirst ? 16 : 4),
+                  bottomLeft: Radius.circular(isLast ? 16 : 4),
+                  bottomRight: Radius.circular(isLast ? 16 : 4),
+                ),
+                border: Border.all(
+                  color: isSelected
+                      ? (isAmoled && isDark
+                          ? Colors.white.withValues(alpha: 0.4)
+                          : Theme.of(context).colorScheme.primary.withValues(alpha: 0.3))
+                      : (isAmoled && isDark
+                          ? Colors.white.withValues(alpha: 0.2)
+                          : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1)),
+                  width: isSelected ? 2 : 1,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      color: isSelected
+                          ? (isAmoled && isDark
+                              ? Colors.white.withValues(alpha: 0.2)
+                              : Theme.of(context).colorScheme.primary.withValues(alpha: 0.1))
+                          : Colors.transparent,
+                    ),
+                    child: Icon(
+                      language['code'] == 'auto' ? Icons.auto_awesome : Icons.translate,
+                      size: 30,
+                      color: isSelected
+                          ? (isAmoled && isDark
+                              ? Colors.white
+                              : Theme.of(context).colorScheme.primary)
+                          : (isAmoled && isDark
+                              ? Colors.white
+                              : Theme.of(context).colorScheme.onSurface),
+                    ),
+                  ),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          language['name']!,
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: isSelected
+                                ? (isAmoled && isDark
+                                    ? Colors.white
+                                    : Theme.of(context).colorScheme.primary)
+                                : (isAmoled && isDark
+                                    ? Colors.white
+                                    : Theme.of(context).colorScheme.onSurface),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (isSelected)
+                    Icon(
+                      Icons.check_circle,
+                      color: isAmoled && isDark
+                          ? Colors.white
+                          : Theme.of(context).colorScheme.primary,
+                      size: 24,
+                    ),
+                ],
+              ),
+            ),
+          ),
+          if (index < languages.length - 1) SizedBox(height: 4),
+        ],
+      );
+    }).toList();
+  }
+
   // Función para mostrar confirmación de eliminación de letras con el mismo diseño
   Future<void> _showDeleteLyricsConfirmation() async {
     showDialog<bool>(
@@ -3548,6 +3748,75 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             child: Column(
               children: [
+                ListTile(
+                  title: Text(LocaleProvider.tr('translation_language')),
+                  subtitle: ValueListenableBuilder<String>(
+                    valueListenable: translationLanguageNotifier,
+                    builder: (context, currentLanguage, child) {
+                      String displayText;
+                      switch (currentLanguage) {
+                        case 'auto':
+                          displayText = LocaleProvider.tr('auto_detect');
+                          break;
+                        case 'es':
+                          displayText = LocaleProvider.tr('language_spanish');
+                          break;
+                        case 'en':
+                          displayText = LocaleProvider.tr('language_english');
+                          break;
+                        case 'fr':
+                          displayText = LocaleProvider.tr('language_french');
+                          break;
+                        case 'de':
+                          displayText = LocaleProvider.tr('language_german');
+                          break;
+                        case 'it':
+                          displayText = LocaleProvider.tr('language_italian');
+                          break;
+                        case 'pt':
+                          displayText = LocaleProvider.tr('language_portuguese');
+                          break;
+                        case 'ja':
+                          displayText = LocaleProvider.tr('language_japanese');
+                          break;
+                        case 'ko':
+                          displayText = LocaleProvider.tr('language_korean');
+                          break;
+                        case 'zh':
+                          displayText = LocaleProvider.tr('language_chinese');
+                          break;
+                        case 'ru':
+                          displayText = LocaleProvider.tr('language_russian');
+                          break;
+                        default:
+                          displayText = LocaleProvider.tr('auto_detect');
+                      }
+                      return Text(
+                        displayText,
+                        style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7)),
+                      );
+                    },
+                  ),
+                  leading: const Icon(Icons.translate),
+                  onTap: () => _showTranslationLanguageDialog(context),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 4),
+          Card(
+            color: cardColor,
+            margin: EdgeInsets.zero,
+            shape: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(4),
+                topRight: Radius.circular(4),
+                bottomLeft: Radius.circular(4),
+                bottomRight: Radius.circular(4),
+              ),
+            ),
+            child: Column(
+              children: [
                 ValueListenableBuilder<bool>(
                   valueListenable: heroAnimationNotifier,
                   builder: (context, value, child) {
@@ -3889,7 +4158,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              '${LocaleProvider.tr('version')}: 1.5.8',
+                              '${LocaleProvider.tr('version')}: 1.6.0',
                               style: const TextStyle(fontSize: 15),
                               textAlign: TextAlign.center,
                             ),

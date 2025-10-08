@@ -15,6 +15,7 @@ import 'package:music/utils/db/playlists_db.dart';
 import 'package:music/utils/db/shortcuts_db.dart';
 import 'package:music/utils/audio/synced_lyrics_service.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:translator/translator.dart';
 
 import 'dart:async';
 import 'dart:math';
@@ -615,6 +616,9 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     _loadGesturePreferences();
     _setupLyricsUpdateListener();
     
+    // Escuchar cambios en favoritos desde otras fuentes (ej: notificación)
+    favoritesShouldReload.addListener(_onFavoritesChanged);
+    
     // Inicializar animación de fade
     _fadeController = AnimationController(
       duration: const Duration(milliseconds: 500),
@@ -635,6 +639,24 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
   /// Configura el listener para actualizaciones de letras
   void _setupLyricsUpdateListener() {
     lyricsUpdatedNotifier.addListener(_onLyricsUpdated);
+  }
+
+  /// Maneja cambios en favoritos desde otras fuentes (notificación, otras pantallas)
+  void _onFavoritesChanged() {
+    // Recalcular el estado de favorito de la canción actual
+    final currentMediaItem = audioHandler?.mediaItem.valueOrNull;
+    if (currentMediaItem != null) {
+      final path = currentMediaItem.extras?['data'] as String?;
+      if (path != null && path.isNotEmpty) {
+        FavoritesDB().isFavorite(path).then((isFav) {
+          if (mounted && _currentSongDataPath == path) {
+            setState(() {
+              _isCurrentFavorite = isFav;
+            });
+          }
+        });
+      }
+    }
   }
 
   /// Maneja las actualizaciones de letras
@@ -749,6 +771,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     _artworkLoadingNotifier.dispose();
     _lyricsUpdateNotifier.dispose();
     lyricsUpdatedNotifier.removeListener(_onLyricsUpdated);
+    favoritesShouldReload.removeListener(_onFavoritesChanged);
     // Eliminado: (audioHandler as MyAudioHandler).queueSourceNotifier.removeListener(_onQueueSourceChanged);
     super.dispose();
   }
@@ -1397,7 +1420,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
             ],
           ),
           actions: [
-            TextButton(
+            OutlinedButton(
               onPressed: () => Navigator.of(context).pop(),
               child: Text(LocaleProvider.tr('cancel')),
             ),
@@ -3312,18 +3335,20 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                 builder: (context, mediaSnapshot) {
                   final currentMediaItem = mediaSnapshot.data ?? mediaItem;
                   
-                  return Column(
+                  return Stack(
                     children: [
-                      // Handle bar
-                      Container(
-                        margin: EdgeInsets.symmetric(vertical: 8),
-                        width: 40,
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3),
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                      ),
+                      Column(
+                        children: [
+                          // Handle bar
+                          Container(
+                            margin: EdgeInsets.symmetric(vertical: 8),
+                            width: 40,
+                            height: 4,
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3),
+                              borderRadius: BorderRadius.circular(2),
+                            ),
+                          ),
                       // Song Info Header
                       Padding(
                         padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -3627,7 +3652,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                               );
                             }
                             
-                            return _LyricsModalListView(
+                            return _LyricsWithTranslationView(
                               lyricLines: parsed,
                               isAmoled: isAmoled,
                               isDark: isDark,
@@ -3700,7 +3725,9 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                           ),
                         ),
                       ),
-                    ],
+                        ],
+                      ), // Cierre del Column
+                    ], // Cierre del Stack
                   );
                 },
               ),
@@ -3710,6 +3737,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
       },
     );
   }
+
 
   Widget _buildLyricsModalArtwork(MediaItem mediaItem) {
     final artUri = mediaItem.artUri;
@@ -3815,15 +3843,135 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
   }
 }
 
+class _LyricsWithTranslationView extends StatefulWidget {
+  final List<LyricLine> lyricLines;
+  final bool isAmoled;
+  final bool isDark;
+
+  const _LyricsWithTranslationView({
+    required this.lyricLines,
+    required this.isAmoled,
+    required this.isDark,
+  });
+
+  @override
+  State<_LyricsWithTranslationView> createState() => _LyricsWithTranslationViewState();
+}
+
+class _LyricsWithTranslationViewState extends State<_LyricsWithTranslationView> {
+  bool _showTranslation = false;
+  bool _isTranslating = false;
+  List<String>? _translatedLines;
+
+  Future<void> _toggleTranslation() async {
+    if (_showTranslation) {
+      setState(() {
+        _showTranslation = false;
+        _translatedLines = null;
+      });
+      return;
+    }
+
+    setState(() {
+      _isTranslating = true;
+    });
+
+    try {
+      final lyricsText = widget.lyricLines.map((line) => line.text).join('\n');
+      final targetLanguage = translationLanguageNotifier.value == 'auto' 
+        ? Localizations.localeOf(context).languageCode
+        : translationLanguageNotifier.value;
+      
+      final translator = GoogleTranslator();
+      final translation = await translator.translate(
+        lyricsText,
+        to: targetLanguage,
+      );
+      
+      if (mounted) {
+        setState(() {
+          _translatedLines = translation.text.split('\n');
+          _showTranslation = true;
+          _isTranslating = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isTranslating = false;
+        });
+        
+        // Mostrar diálogo de error específico para traducción
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text(LocaleProvider.tr('translation_error')),
+            content: Text(LocaleProvider.tr('check_internet_connection')),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: Text(LocaleProvider.tr('ok')),
+              ),
+            ],
+          ),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        _LyricsModalListView(
+          lyricLines: widget.lyricLines,
+          isAmoled: widget.isAmoled,
+          isDark: widget.isDark,
+          showTranslation: _showTranslation,
+          translatedLines: _translatedLines,
+        ),
+        Positioned(
+          right: 24,
+          bottom: 80,
+          child: FloatingActionButton(
+            onPressed: _isTranslating ? null : _toggleTranslation,
+            tooltip: _showTranslation 
+              ? LocaleProvider.tr('hide_translation')
+              : LocaleProvider.tr('translate_lyrics'),
+            backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+            foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
+            child: _isTranslating 
+              ? SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      Theme.of(context).colorScheme.onPrimaryContainer,
+                    ),
+                  ),
+                )
+              : Icon(_showTranslation ? Icons.close : Icons.translate),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _LyricsModalListView extends StatefulWidget {
   final List<LyricLine> lyricLines;
   final bool isAmoled;
   final bool isDark;
+  final bool showTranslation;
+  final List<String>? translatedLines;
 
   const _LyricsModalListView({
     required this.lyricLines,
     required this.isAmoled,
     required this.isDark,
+    this.showTranslation = false,
+    this.translatedLines,
   });
 
   @override
@@ -3950,7 +4098,7 @@ class _LyricsModalListViewState extends State<_LyricsModalListView> {
                   ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5)
                   : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
           fontWeight: FontWeight.bold,
-          fontSize: isCurrent ? 24 : 22,
+          fontSize: 22,
         );
         
         return AutoScrollTag(
@@ -3979,11 +4127,37 @@ class _LyricsModalListViewState extends State<_LyricsModalListView> {
             },
             child: Container(
               padding: EdgeInsets.symmetric(vertical: 8, horizontal: 32),
-              child: Text(
-                widget.lyricLines[index].text,
-                textAlign: TextAlign.left,
-                style: textStyle,
-              ),
+              child: widget.showTranslation && widget.translatedLines != null && index < widget.translatedLines!.length
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Texto original (más claro y más pequeño)
+                      Text(
+                        widget.lyricLines[index].text,
+                        textAlign: TextAlign.left,
+                        style: textStyle.copyWith(
+                          color: textStyle.color?.withValues(alpha: 0.6),
+                          fontSize: 18, // Tamaño fijo para texto original
+                          fontWeight: FontWeight.normal,
+                        ),
+                      ),
+                      SizedBox(height: 4),
+                      // Traducción (más prominente)
+                      Text(
+                        widget.translatedLines![index],
+                        textAlign: TextAlign.left,
+                        style: textStyle.copyWith(
+                          fontSize: 22, // Tamaño fijo para traducción
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  )
+                : Text(
+                    widget.lyricLines[index].text,
+                    textAlign: TextAlign.left,
+                    style: textStyle,
+                  ),
             ),
           ),
         );

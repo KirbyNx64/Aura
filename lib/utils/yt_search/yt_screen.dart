@@ -1541,28 +1541,54 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                   ),
               ]
             : [
-                IconButton(
-                  icon: const Icon(Icons.history, size: 28),
-                  tooltip: LocaleProvider.tr('download_history'),
-                  onPressed: () {
-                    Navigator.of(context).push(
-                      PageRouteBuilder(
-                        pageBuilder: (context, animation, secondaryAnimation) =>
-                            const DownloadHistoryScreen(),
-                        transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                          const begin = Offset(1.0, 0.0);
-                          const end = Offset.zero;
-                          const curve = Curves.ease;
-                          final tween = Tween(
-                            begin: begin,
-                            end: end,
-                          ).chain(CurveTween(curve: curve));
-                          return SlideTransition(
-                            position: animation.drive(tween),
-                            child: child,
-                          );
-                        },
-                      ),
+                ValueListenableBuilder<bool>(
+                  valueListenable: hasNewDownloadsNotifier,
+                  builder: (context, hasNewDownloads, child) {
+                    return Stack(
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.history, size: 28),
+                          tooltip: LocaleProvider.tr('download_history'),
+                          onPressed: () {
+                            Navigator.of(context).push(
+                              PageRouteBuilder(
+                                pageBuilder: (context, animation, secondaryAnimation) =>
+                                    const DownloadHistoryScreen(),
+                                transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                                  const begin = Offset(1.0, 0.0);
+                                  const end = Offset.zero;
+                                  const curve = Curves.ease;
+                                  final tween = Tween(
+                                    begin: begin,
+                                    end: end,
+                                  ).chain(CurveTween(curve: curve));
+                                  return SlideTransition(
+                                    position: animation.drive(tween),
+                                    child: child,
+                                  );
+                                },
+                              ),
+                            );
+                          },
+                        ),
+                        if (hasNewDownloads)
+                          Positioned(
+                            right: 8,
+                            top: 8,
+                            child: Container(
+                              width: 10,
+                              height: 10,
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).colorScheme.primary,
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: Theme.of(context).scaffoldBackgroundColor,
+                                  width: 1.5,
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
                     );
                   },
                 ),
@@ -1718,14 +1744,16 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                             child: ValueListenableBuilder<AppColorScheme>(
                               valueListenable: colorSchemeNotifier,
                               builder: (context, colorScheme, child) {
-                                final isAmoled = colorScheme == AppColorScheme.amoled;
-                                final isDark = Theme.of(context).brightness == Brightness.dark;
                                 
                                 return Material(
                                   borderRadius: BorderRadius.circular(8),
-                                  color: isAmoled && isDark
-                                      ? Colors.white // Color personalizado para amoled
-                                      : Theme.of(context).colorScheme.primaryContainer,
+                                  color: colorScheme == AppColorScheme.amoled
+                                          ? Colors.white
+                                          : Theme.of(context).brightness == Brightness.light
+                                              ? Theme.of(context).colorScheme.primary
+                                              : colorScheme == AppColorScheme.system
+                                                ? Theme.of(context).colorScheme.primary
+                                                : Theme.of(context).colorScheme.primaryContainer,
                                   child: InkWell(
                                     borderRadius: BorderRadius.circular(8),
                                     onTap: _loading ? null : _search,
@@ -1736,9 +1764,13 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                           message: LocaleProvider.tr('search'),
                                           child: Icon(
                                             Icons.search,
-                                            color: isAmoled && isDark
-                                                ? Colors.black// Color blanco para amoled
-                                                : Theme.of(context).colorScheme.onSecondaryContainer,
+                                            color: colorScheme == AppColorScheme.amoled
+                                                    ? Colors.black
+                                                    : Theme.of(context).brightness == Brightness.light
+                                                      ? Theme.of(context).colorScheme.onPrimary
+                                                      : colorScheme == AppColorScheme.system
+                                                        ? Theme.of(context).colorScheme.onPrimary
+                                                        : Theme.of(context).colorScheme.onPrimaryContainer,
                                           ),
                                         );
                                       },

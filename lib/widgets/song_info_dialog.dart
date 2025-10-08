@@ -277,7 +277,7 @@ class SongInfoDialog {
                   child: _InfoItem(
                     icon: Icons.folder,
                     label: LocaleProvider.tr('file_path'),
-                    value: mediaItem.extras?['data'] ?? 'N/A',
+                    value: _cleanFilePath(mediaItem.extras?['data'] ?? ''),
                   ),
                 ),
               ],
@@ -346,6 +346,11 @@ class SongInfoDialog {
       default:
         return extension.toUpperCase();
     }
+  }
+
+  static String _cleanFilePath(String filePath) {
+    if (filePath.isEmpty) return 'N/A';
+    return filePath.replaceFirst('/storage/emulated/0', '');
   }
 
   // Función sobrecargada para SongModel
@@ -572,7 +577,7 @@ class SongInfoDialog {
                   child: _InfoItem(
                     icon: Icons.folder,
                     label: LocaleProvider.tr('file_path'),
-                    value: song.data,
+                    value: _cleanFilePath(song.data),
                   ),
                 ),
               ],

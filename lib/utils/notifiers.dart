@@ -47,3 +47,9 @@ final ValueNotifier<bool> gesturePreferencesChanged = ValueNotifier(false);
 
 // Notifier para notificar cuando se actualiza una letra
 final ValueNotifier<String?> lyricsUpdatedNotifier = ValueNotifier<String?>(null);
+
+// Notifier para el idioma de traducción
+final ValueNotifier<String> translationLanguageNotifier = ValueNotifier<String>('auto');
+
+// Notifier para el badge de descargas nuevas
+final ValueNotifier<bool> hasNewDownloadsNotifier = ValueNotifier<bool>(false);

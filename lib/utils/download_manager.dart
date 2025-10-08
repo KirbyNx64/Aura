@@ -224,7 +224,7 @@ class DownloadManager {
       await for (final chunk in stream) {
         received += chunk.length;
         sink.add(chunk);
-        _updateProgress(received / totalBytes * 0.6);
+        _updateProgress(received / totalBytes * 0.8);
       }
 
       await sink.flush();
@@ -356,7 +356,7 @@ class DownloadManager {
       filePath: filePath,
       totalSize: audio.size,
       onProgress: (progress) {
-        _updateProgress(progress * 0.6);
+        _updateProgress(progress * 0.8);
       },
     );
 
@@ -541,7 +541,7 @@ class DownloadManager {
 
     try {
       // Escribir metadatos con audiotags
-      _updateProgress(0.75);
+      _updateProgress(0.85);
 
       final cleanedAuthor = _limpiarMetadato(
         author.replaceFirst(RegExp(r' - Topic$', caseSensitive: false), ''),
@@ -569,7 +569,7 @@ class DownloadManager {
       // Indexar en Android
       MediaScanner.loadMedia(path: m4aPath);
 
-      _updateProgress(1.0);
+      _updateProgress(0.95);
       
       // Guardar en la base de datos de historial en segundo plano
       // usando Future.microtask para no bloquear la UI
@@ -589,12 +589,15 @@ class DownloadManager {
             status: 'completed',
           );
           await DownloadHistoryService().insertDownload(downloadRecord);
+          // Actualizar el notifier para mostrar el badge
+          hasNewDownloadsNotifier.value = true;
         } catch (e) {
           // No fallar la descarga si hay error al guardar en DB
           // print('Error al guardar en historial: $e');
         }
       });
       
+      _updateProgress(1.0);
       await Future.delayed(const Duration(seconds: 1));
       
       foldersShouldReload.value = !foldersShouldReload.value;

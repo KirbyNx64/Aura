@@ -47,15 +47,15 @@ Future<void> showDownloadProgressNotification(
         'download_channel_no_vibration',
         'Descargas',
         channelDescription: 'Notificaciones de progreso de descarga',
-        importance: Importance.defaultImportance,
-        priority: Priority.defaultPriority,
+        importance: Importance.low,
+        priority: Priority.low,
         showProgress: true,
         maxProgress: 100,
         progress: progress.toInt(),
         indeterminate: false,
         onlyAlertOnce: true,
         enableVibration: false,
-        vibrationPattern: null,
+        playSound: false,
         ongoing: true,
       );
   final NotificationDetails platformChannelSpecifics = NotificationDetails(
@@ -81,10 +81,10 @@ Future<void> showDownloadCompletedNotification(
         'download_channel_no_vibration',
         'Descargas',
         channelDescription: 'Notificaciones de progreso de descarga',
-        importance: Importance.defaultImportance,
-        priority: Priority.defaultPriority,
+        importance: Importance.low,
+        priority: Priority.low,
         enableVibration: false,
-        vibrationPattern: null,
+        playSound: false,
         ongoing: false, // No es persistente
       );
   final NotificationDetails platformChannelSpecifics = NotificationDetails(
@@ -110,10 +110,10 @@ Future<void> showDownloadFailedNotification(
         'download_channel_no_vibration',
         'Descargas',
         channelDescription: 'Notificaciones de progreso de descarga',
-        importance: Importance.defaultImportance,
-        priority: Priority.defaultPriority,
+        importance: Importance.low,
+        priority: Priority.low,
         enableVibration: false,
-        vibrationPattern: null,
+        playSound: false,
         ongoing: true,
         autoCancel: false,
       );
@@ -154,13 +154,14 @@ class NotificationService {
       onDidReceiveNotificationResponse: _onNotificationTapped,
     );
 
-    // Crear canal de notificaciones para descargas
+    // Crear canal de notificaciones para descargas SIN VIBRACIÓN
     const AndroidNotificationChannel channel = AndroidNotificationChannel(
       'download_channel_no_vibration',
       'Descargas',
       description: 'Notificaciones de progreso de descarga',
-      importance: Importance.defaultImportance,
+      importance: Importance.low,
       enableVibration: false,
+      playSound: false,
     );
 
     await flutterLocalNotificationsPlugin

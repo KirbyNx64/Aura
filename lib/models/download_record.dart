@@ -10,6 +10,7 @@ class DownloadRecord {
   final DateTime downloadDate;
   final String status; // 'completed', 'failed', 'downloading'
   final String? errorMessage;
+  final bool viewed; // true si el usuario ya vio esta descarga
 
   DownloadRecord({
     this.id,
@@ -23,6 +24,7 @@ class DownloadRecord {
     required this.downloadDate,
     required this.status,
     this.errorMessage,
+    this.viewed = false,
   });
 
   Map<String, dynamic> toMap() {
@@ -38,6 +40,7 @@ class DownloadRecord {
       'download_date': downloadDate.millisecondsSinceEpoch,
       'status': status,
       'error_message': errorMessage,
+      'viewed': viewed ? 1 : 0,
     };
   }
 
@@ -54,6 +57,7 @@ class DownloadRecord {
       downloadDate: DateTime.fromMillisecondsSinceEpoch(map['download_date']),
       status: map['status'],
       errorMessage: map['error_message'],
+      viewed: (map['viewed'] ?? 0) == 1,
     );
   }
 
@@ -69,6 +73,7 @@ class DownloadRecord {
     DateTime? downloadDate,
     String? status,
     String? errorMessage,
+    bool? viewed,
   }) {
     return DownloadRecord(
       id: id ?? this.id,
@@ -82,6 +87,7 @@ class DownloadRecord {
       downloadDate: downloadDate ?? this.downloadDate,
       status: status ?? this.status,
       errorMessage: errorMessage ?? this.errorMessage,
+      viewed: viewed ?? this.viewed,
     );
   }
 }

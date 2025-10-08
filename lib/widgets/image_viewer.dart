@@ -393,27 +393,27 @@ class _ImageViewerState extends State<ImageViewer>
                             ],
                           ),
                         ),
-                       IconButton(
-                         onPressed: _isDownloading ? null : _downloadImage,
-                         icon: _isDownloading
-                             ? const SizedBox(
-                                 width: 20,
-                                 height: 20,
-                                 child: CircularProgressIndicator(
-                                   strokeWidth: 2,
-                                   color: Colors.white,
-                                 ),
-                               )
-                             : const Icon(
-                                 Icons.download,
-                                 color: Colors.white,
-                                 size: 28,
-                               ),
-                         tooltip: 'Descargar imagen',
-                       ),
-                     ],
-                   ),
-                 ),
+                      IconButton(
+                        onPressed: _isDownloading ? null : _downloadImage,
+                        icon: _isDownloading
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Icon(
+                                Icons.download,
+                                color: Colors.white,
+                                size: 28,
+                              ),
+                        tooltip: LocaleProvider.tr('download_image'),
+                      ),
+                    ],
+                  ),
+                ),
                 // Imagen principal
                 Expanded(
                   child: Center(
