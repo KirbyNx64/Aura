@@ -1,9 +1,9 @@
 {
-  "version": "1.5.8",
+  "version": "1.6.0",
   "apk_urls": {
-    "arm64-v8a": "https://github.com/KirbyNx64/Aura/releases/download/v1.5.8/AuraMusic-v1.5.8-arm64-v8a.apk",
-    "armeabi-v7a": "https://github.com/KirbyNx64/Aura/releases/download/v1.5.8/AuraMusic-v1.5.8-armeabi-v7a.apk",
-    "x86_64": "https://github.com/KirbyNx64/Aura/releases/download/v1.5.8/AuraMusic-v1.5.8-x86_64.apk"
+    "arm64-v8a": "https://github.com/KirbyNx64/Aura/releases/download/v1.6.0/AuraMusic-v1.6.0-arm64-v8a.apk",
+    "armeabi-v7a": "https://github.com/KirbyNx64/Aura/releases/download/v1.6.0/AuraMusic-v1.6.0-armeabi-v7a.apk",
+    "x86_64": "https://github.com/KirbyNx64/Aura/releases/download/v1.6.0/AuraMusic-v1.6.0-x86_64.apk"
   },
-  "changelog": "• Corrección de errores: Solución de fallos menores y optimizaciones internas."
+  "changelog": "• Añadir a Me gusta desde la notificación: Ahora puedes marcar canciones como favoritas directamente desde el reproductor de la notificación del sistema (solo en Android 13+).\n\n• Traducción de letras en tiempo real: Traduce la letra de las canciones al instante mientras se reproducen.\n\n• Mejoras visuales: Pequeños ajustes en la interfaz para una experiencia más pulida.\n\n• Corrección de errores: Solución de fallos menores y optimizaciones internas."
 }
