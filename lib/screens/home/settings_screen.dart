@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:music/screens/home/ota_update_screen.dart';
+import 'package:music/screens/home/equalizer_screen.dart';
 import 'package:music/utils/theme_preferences.dart';
 import 'package:android_intent_plus/android_intent.dart';
 import 'package:android_intent_plus/flag.dart';
@@ -817,7 +818,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                     : Colors.transparent,
                               ),
                               child: Icon(
-                                Icons.brightness_auto,
+                                Symbols.brightness_auto_rounded,
+                                weight: 500,
+                                grade: 200,
                                 size: 30,
                                 color: _getCurrentThemeText(context) == LocaleProvider.tr('system_default')
                                     ? (isAmoled && isDark
@@ -911,7 +914,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                     : Colors.transparent,
                               ),
                               child: Icon(
-                                Icons.light_mode,
+                                Icons.light_mode_rounded,
+                                fill: 1,
                                 size: 30,
                                 color: _getCurrentThemeText(context) == LocaleProvider.tr('light_mode')
                                     ? (isAmoled && isDark
@@ -1005,7 +1009,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                     : Colors.transparent,
                               ),
                               child: Icon(
-                                Icons.dark_mode,
+                                Symbols.dark_mode_rounded,
+                                fill: 1,
                                 size: 30,
                                 color: _getCurrentThemeText(context) == LocaleProvider.tr('dark_mode')
                                     ? (isAmoled && isDark
@@ -3208,8 +3213,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget build(BuildContext context) {
     final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final isSystem = colorSchemeNotifier.value == AppColorScheme.system;
-    final cardColor = isSystem && isDark ? Theme.of(context).colorScheme.onSecondary.withValues(alpha: 0.5) : null; 
+    // final isSystem = colorSchemeNotifier.value == AppColorScheme.system;
+    final cardColor = isDark ? Theme.of(context).colorScheme.onSecondary.withValues(alpha: 0.5) : Theme.of(context).colorScheme.secondaryContainer.withValues(alpha: 0.5); 
     
     return Scaffold(
       appBar: AppBar(
@@ -3253,6 +3258,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Card(
             color: cardColor,
             margin: EdgeInsets.zero,
+            elevation: 0,
             shape: const RoundedRectangleBorder(
               borderRadius: BorderRadius.only(
                 topLeft: Radius.circular(16),
@@ -3266,8 +3272,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ListTile(
                   leading: Icon(
                     Theme.of(context).brightness == Brightness.dark
-                        ? Icons.dark_mode
-                        : Icons.light_mode,
+                        ? Symbols.dark_mode_rounded
+                        : Symbols.light_mode_rounded,
+                    fill: 1,
                   ),
                   title: TranslatedText('select_theme'),
                   subtitle: TranslatedText(
@@ -3283,6 +3290,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Card(
             color: cardColor,
             margin: EdgeInsets.zero,
+            elevation: 0,
             shape: const RoundedRectangleBorder(
               borderRadius: BorderRadius.only(
                 topLeft: Radius.circular(4),
@@ -3309,6 +3317,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Card(
             color: cardColor,
             margin: EdgeInsets.zero,
+            elevation: 0,
             shape: const RoundedRectangleBorder(
               borderRadius: BorderRadius.only(
                 topLeft: Radius.circular(4),
@@ -3335,6 +3344,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Card(
             color: cardColor,
             margin: EdgeInsets.zero,
+            elevation: 0,
             shape: const RoundedRectangleBorder(
               borderRadius: BorderRadius.only(
                 topLeft: Radius.circular(4),
@@ -3365,6 +3375,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Card(
             color: cardColor,
             margin: EdgeInsets.zero,
+            elevation: 0,
             shape: const RoundedRectangleBorder(
               borderRadius: BorderRadius.only(
                 topLeft: Radius.circular(16),
@@ -3412,6 +3423,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Card(
             color: cardColor,
             margin: EdgeInsets.zero,
+            elevation: 0,
             shape: const RoundedRectangleBorder(
               borderRadius: BorderRadius.only(
                 topLeft: Radius.circular(4),
@@ -3452,6 +3464,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Card(
             color: cardColor,
             margin: EdgeInsets.zero,
+            elevation: 0,
             shape: const RoundedRectangleBorder(
               borderRadius: BorderRadius.only(
                 topLeft: Radius.circular(4),
@@ -3482,6 +3495,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Card(
             color: cardColor,
             margin: EdgeInsets.zero,
+            elevation: 0,
             shape: const RoundedRectangleBorder(  
               borderRadius: BorderRadius.only(
                 topLeft: Radius.circular(4),
@@ -3512,6 +3526,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Card(
             color: cardColor,
             margin: EdgeInsets.zero,
+            elevation: 0,
             shape: const RoundedRectangleBorder(  
               borderRadius: BorderRadius.only(
                 topLeft: Radius.circular(4),
@@ -3542,6 +3557,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Card(
             color: cardColor,
             margin: EdgeInsets.zero,
+            elevation: 0,
             shape: const RoundedRectangleBorder(  
               borderRadius: BorderRadius.only(
                 topLeft: Radius.circular(4),
@@ -3601,6 +3617,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Card(
             color: cardColor,
             margin: EdgeInsets.zero,
+            elevation: 0,
             shape: const RoundedRectangleBorder(
               borderRadius: BorderRadius.only(
                 topLeft: Radius.circular(16),
@@ -3647,6 +3664,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Card(
             color: cardColor,
             margin: EdgeInsets.zero,
+            elevation: 0,
             shape: const RoundedRectangleBorder(
               borderRadius: BorderRadius.only(
                 topLeft: Radius.circular(4),
@@ -3677,8 +3695,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                       secondary: const Icon(Icons.library_music),
                       thumbIcon: WidgetStateProperty.resolveWith<Icon?>((Set<WidgetState> states) {
+                        final iconColor = isAmoled && isDark ? Colors.white : null;
                         if (states.contains(WidgetState.selected)) {
-                          return const Icon(Icons.check, size: 20);
+                          return Icon(Icons.check, size: 20, color: iconColor);
                         } else {
                           return const Icon(Icons.close, size: 20);
                         }
@@ -3693,6 +3712,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Card(
             color: cardColor,
             margin: EdgeInsets.zero,
+            elevation: 0,
             shape: const RoundedRectangleBorder(
               borderRadius: BorderRadius.only(
                 topLeft: Radius.circular(4),
@@ -3722,8 +3742,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                       secondary: const Icon(Symbols.slab_serif, weight: 600),
                       thumbIcon: WidgetStateProperty.resolveWith<Icon?>((Set<WidgetState> states) {
+                        final iconColor = isAmoled && isDark ? Colors.white : null;
                         if (states.contains(WidgetState.selected)) {
-                          return const Icon(Icons.check, size: 20);
+                          return Icon(Icons.check, size: 20, color: iconColor);
                         } else {
                           return const Icon(Icons.close, size: 20);
                         }
@@ -3738,6 +3759,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Card(
             color: cardColor,
             margin: EdgeInsets.zero,
+            elevation: 0,
             shape: const RoundedRectangleBorder(
               borderRadius: BorderRadius.only(
                 topLeft: Radius.circular(4),
@@ -3807,6 +3829,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Card(
             color: cardColor,
             margin: EdgeInsets.zero,
+            elevation: 0,
             shape: const RoundedRectangleBorder(
               borderRadius: BorderRadius.only(
                 topLeft: Radius.circular(4),
@@ -3835,8 +3858,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                       secondary: const Icon(Icons.animation),
                       thumbIcon: WidgetStateProperty.resolveWith<Icon?>((Set<WidgetState> states) {
+                        final iconColor = isAmoled && isDark ? Colors.white : null;
                         if (states.contains(WidgetState.selected)) {
-                          return const Icon(Icons.check, size: 20);
+                          return Icon(Icons.check, size: 20, color: iconColor);
                         } else {
                           return const Icon(Icons.close, size: 20);
                         }
@@ -3851,6 +3875,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Card(
             color: cardColor,
             margin: EdgeInsets.zero,
+            elevation: 0,
             shape: const RoundedRectangleBorder(
               borderRadius: BorderRadius.only(
                 topLeft: Radius.circular(4),
@@ -3879,8 +3904,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                       secondary: const Icon(Symbols.skip_next_rounded, grade: 200, fill: 1, size: 28),
                       thumbIcon: WidgetStateProperty.resolveWith<Icon?>((Set<WidgetState> states) {
+                        final iconColor = isAmoled && isDark ? Colors.white : null;
                         if (states.contains(WidgetState.selected)) {
-                          return const Icon(Icons.check, size: 20);
+                          return Icon(Icons.check, size: 20, color: iconColor);
                         } else {
                           return const Icon(Icons.close, size: 20);
                         }
@@ -3895,6 +3921,57 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Card(
             color: cardColor,
             margin: EdgeInsets.zero,
+            elevation: 0,
+            shape: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(4),
+                topRight: Radius.circular(4),
+                bottomLeft: Radius.circular(4),
+                bottomRight: Radius.circular(4),
+              ),
+            ),
+            child: Column(
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.equalizer_rounded),
+                  title: Text(LocaleProvider.tr('equalizer')),
+                  subtitle: Text(
+                    LocaleProvider.tr('equalizer_desc'),
+                    style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7)),
+                  ),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () {
+                    Navigator.of(context).push(
+                      PageRouteBuilder(
+                        pageBuilder:
+                            (context, animation, secondaryAnimation) =>
+                                const EqualizerScreen(),
+                        transitionsBuilder:
+                            (context, animation, secondaryAnimation, child) {
+                          const begin = Offset(1.0, 0.0);
+                          const end = Offset.zero;
+                          const curve = Curves.ease;
+                          final tween = Tween(
+                            begin: begin,
+                            end: end,
+                          ).chain(CurveTween(curve: curve));
+                          return SlideTransition(
+                            position: animation.drive(tween),
+                            child: child,
+                          );
+                        },
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 4),
+          Card(
+            color: cardColor,
+            margin: EdgeInsets.zero,
+            elevation: 0,
             shape: const RoundedRectangleBorder(
               borderRadius: BorderRadius.only(
                 topLeft: Radius.circular(4),
@@ -3921,6 +3998,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Card(
             color: cardColor,
             margin: EdgeInsets.zero,
+            elevation: 0,
             shape: const RoundedRectangleBorder(
               borderRadius: BorderRadius.only(
                 topLeft: Radius.circular(4),
@@ -3968,6 +4046,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Card(
             color: cardColor,
             margin: EdgeInsets.zero,
+            elevation: 0,
             shape: const RoundedRectangleBorder(
               borderRadius: BorderRadius.only(
                 topLeft: Radius.circular(16),
@@ -3994,6 +4073,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Card(
             color: cardColor,
             margin: EdgeInsets.zero,
+            elevation: 0,
             shape: const RoundedRectangleBorder(
               borderRadius: BorderRadius.only(
                 topLeft: Radius.circular(4),
@@ -4027,6 +4107,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Card(
             color: cardColor,
             margin: EdgeInsets.zero,
+            elevation: 0,
             shape: const RoundedRectangleBorder(
               borderRadius: BorderRadius.only(
                 topLeft: Radius.circular(16),
@@ -4053,6 +4134,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Card(
             color: cardColor,
             margin: EdgeInsets.zero,
+            elevation: 0,
             shape: const RoundedRectangleBorder(
               borderRadius: BorderRadius.only(
                 topLeft: Radius.circular(4),
@@ -4064,7 +4146,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: Column(
               children: [
                 ListTile(
-                  leading: const Icon(Icons.system_update_alt),
+                  leading: const Icon(Symbols.system_update_alt_rounded, weight: 500, grade: 200),
                   title: Text(LocaleProvider.tr('app_updates')),
                   subtitle: Text(
                     LocaleProvider.tr('check_for_updates'),
@@ -4101,6 +4183,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Card(
             color: cardColor,
             margin: EdgeInsets.zero,
+            elevation: 0,
             shape: const RoundedRectangleBorder(
               borderRadius: BorderRadius.only(
                 topLeft: Radius.circular(4),
@@ -4158,7 +4241,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              '${LocaleProvider.tr('version')}: 1.6.0',
+                              '${LocaleProvider.tr('version')}: 1.6.1',
                               style: const TextStyle(fontSize: 15),
                               textAlign: TextAlign.center,
                             ),

@@ -12,6 +12,76 @@ import 'package:music/utils/theme_preferences.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:music/utils/gesture_preferences.dart';
 
+/// Widget con animación de escala al presionar
+class ScaleAnimatedButton extends StatefulWidget {
+  final Widget child;
+  final VoidCallback onTap;
+  final double scaleFactor;
+
+  const ScaleAnimatedButton({
+    super.key,
+    required this.child,
+    required this.onTap,
+    this.scaleFactor = 0.85,
+  });
+
+  @override
+  State<ScaleAnimatedButton> createState() => _ScaleAnimatedButtonState();
+}
+
+class _ScaleAnimatedButtonState extends State<ScaleAnimatedButton>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _scaleAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 100),
+      vsync: this,
+    );
+    _scaleAnimation = Tween<double>(
+      begin: 1.0,
+      end: widget.scaleFactor,
+    ).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: Curves.easeInOut,
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _handleTap() {
+    // Ejecutar el callback inmediatamente
+    widget.onTap();
+    
+    // Ejecutar la animación visual en paralelo
+    _controller.forward().then((_) {
+      if (mounted) {
+        _controller.reverse();
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: _handleTap,
+      child: ScaleTransition(
+        scale: _scaleAnimation,
+        child: widget.child,
+      ),
+    );
+  }
+}
+
 class NowPlayingOverlay extends StatefulWidget {
   final bool showBar;
 
@@ -202,15 +272,14 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> {
                   child: ValueListenableBuilder<AppColorScheme>(
                     valueListenable: colorSchemeNotifier,
                     builder: (context, colorScheme, child) {
-                      final isSystem = colorScheme == AppColorScheme.system;
+                      // final isSystem = colorScheme == AppColorScheme.system;
                       final isLight = Theme.of(context).brightness == Brightness.light;
-                      final isDark = Theme.of(context).brightness == Brightness.dark;
+                      // final isDark = Theme.of(context).brightness == Brightness.dark;
                       return Container(
                         margin: const EdgeInsets.symmetric(horizontal: 12),
                         decoration: BoxDecoration(
-                          color: isSystem && isLight ? Theme.of(context).colorScheme.secondaryContainer 
-                                  : isSystem && isDark ? Theme.of(context).colorScheme.onSecondaryFixed 
-                                    : Theme.of(context).colorScheme.surfaceContainer,
+                          color: isLight ? Theme.of(context).colorScheme.secondaryContainer 
+                                  : Theme.of(context).colorScheme.onSecondaryFixed,
                           borderRadius: BorderRadius.circular(16),
                         ),
                     padding: const EdgeInsets.symmetric(
@@ -354,9 +423,7 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> {
                                                       ? Colors.white
                                                       : Theme.of(context).brightness == Brightness.light
                                                           ? Theme.of(context).colorScheme.onPrimaryContainer.withValues(alpha: 0.7)
-                                                          : colorScheme == AppColorScheme.system
-                                                            ? Theme.of(context).colorScheme.primary
-                                                            : Theme.of(context).colorScheme.primaryContainer,
+                                                          : Theme.of(context).colorScheme.primary,
                                                   borderRadius: BorderRadius.circular(
                                                     isPlaying ? (40 / 3) : (40 / 2),
                                                   ),
@@ -371,9 +438,7 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> {
                                                         ? Colors.black
                                                         : Theme.of(context).brightness == Brightness.light
                                                           ? Theme.of(context).colorScheme.secondaryContainer
-                                                          : colorScheme == AppColorScheme.system
-                                                            ? Theme.of(context).colorScheme.onPrimary
-                                                            : Theme.of(context).colorScheme.onPrimaryContainer,
+                                                          : Theme.of(context).colorScheme.onPrimary,
                                                   ),
                                                 ),
                                               ),
@@ -397,47 +462,35 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> {
                                         child: ValueListenableBuilder<AppColorScheme>(
                                           valueListenable: colorSchemeNotifier,
                                           builder: (context, colorScheme, child) {
-                                            return Material(
-                                              color: Colors.transparent,
-                                              child: InkWell(
-                                                customBorder: RoundedRectangleBorder(
+                                            return ScaleAnimatedButton(
+                                              onTap: () {
+                                                if (isLoading || !navigationEnabled) return;
+                                                audioHandler?.skipToNext();
+                                              },
+                                              child: AnimatedContainer(
+                                                duration: const Duration(milliseconds: 250),
+                                                curve: Curves.easeInOut,
+                                                width: 40,
+                                                height: 40,
+                                                decoration: BoxDecoration(
+                                                  color: colorScheme == AppColorScheme.amoled
+                                                      ? Colors.white
+                                                      : Theme.of(context).brightness == Brightness.light
+                                                          ? Theme.of(context).colorScheme.onPrimaryContainer.withValues(alpha: 0.7)
+                                                          : Theme.of(context).colorScheme.primary,
                                                   borderRadius: BorderRadius.circular(20),
                                                 ),
-                                                splashColor: Colors.transparent,
-                                                highlightColor: Colors.transparent,
-                                                onTap: () {
-                                                  if (isLoading || !navigationEnabled) return;
-                                                  audioHandler?.skipToNext();
-                                                },
-                                                child: AnimatedContainer(
-                                                  duration: const Duration(milliseconds: 250),
-                                                  curve: Curves.easeInOut,
-                                                  width: 40,
-                                                  height: 40,
-                                                  decoration: BoxDecoration(
+                                                child: Center(
+                                                  child: Icon(
+                                                    Symbols.skip_next_rounded,
+                                                    grade: 200,
+                                                    size: 24,
+                                                    fill: 1,
                                                     color: colorScheme == AppColorScheme.amoled
-                                                        ? Colors.white
+                                                        ? Colors.black
                                                         : Theme.of(context).brightness == Brightness.light
-                                                            ? Theme.of(context).colorScheme.onPrimaryContainer.withValues(alpha: 0.7)
-                                                            : colorScheme == AppColorScheme.system
-                                                              ? Theme.of(context).colorScheme.primary
-                                                              : Theme.of(context).colorScheme.primaryContainer,
-                                                    borderRadius: BorderRadius.circular(20),
-                                                  ),
-                                                  child: Center(
-                                                    child: Icon(
-                                                      Symbols.skip_next_rounded,
-                                                      grade: 200,
-                                                      size: 24,
-                                                      fill: 1,
-                                                      color: colorScheme == AppColorScheme.amoled
-                                                          ? Colors.black
-                                                          : Theme.of(context).brightness == Brightness.light
-                                                            ? Theme.of(context).colorScheme.secondaryContainer
-                                                            : colorScheme == AppColorScheme.system
-                                                              ? Theme.of(context).colorScheme.onPrimary
-                                                              : Theme.of(context).colorScheme.onPrimaryContainer,
-                                                    ),
+                                                          ? Theme.of(context).colorScheme.secondaryContainer
+                                                          : Theme.of(context).colorScheme.onPrimary,
                                                   ),
                                                 ),
                                               ),

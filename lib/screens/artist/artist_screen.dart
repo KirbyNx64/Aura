@@ -958,9 +958,8 @@ class _ArtistScreenState extends State<ArtistScreen> {
                         child: Container(
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: isSystem && isLight ? Theme.of(context).colorScheme.secondaryContainer
-                                  : isSystem && isDark ? Theme.of(context).colorScheme.onSecondaryFixed 
-                                    : Theme.of(context).colorScheme.surfaceContainer,
+                            color: isLight ? Theme.of(context).colorScheme.secondaryContainer
+                                  : Theme.of(context).colorScheme.onSecondaryFixed,
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Row(

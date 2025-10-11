@@ -4653,7 +4653,7 @@ class YtPreviewPlayerState extends State<YtPreviewPlayer>
     final isSystem = colorSchemeNotifier.value == AppColorScheme.system;
     return Card(
       shadowColor: Colors.transparent,
-      color: Theme.of(context).colorScheme.surfaceContainer,
+      color: Colors.transparent,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
         side: isAmoled && isDark

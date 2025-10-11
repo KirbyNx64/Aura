@@ -328,6 +328,7 @@ Map<String, dynamic> getOptimizedLoaderStats() {
 class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   AudioPlayer _player = AudioPlayer();
   AndroidLoudnessEnhancer? _loudnessEnhancer; // Para volume boost
+  AndroidEqualizer? _equalizer; // Para ecualizador
   final List<MediaItem> _mediaQueue = [];
   List<SongModel>? _originalSongList; // Guarda la lista original de SongModel
   List<SongModel> _currentSongList = [];
@@ -392,28 +393,37 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     _init();
   }
 
-  // Inicializar el AudioPlayer con LoudnessEnhancer desde el principio
+  // Inicializar el AudioPlayer con LoudnessEnhancer y Equalizer desde el principio
   void _initializePlayerWithEnhancer() {
     try {
-      // print('🔊 Inicializando AudioPlayer con AndroidLoudnessEnhancer...');
+      // print('🔊 Inicializando AudioPlayer con AndroidLoudnessEnhancer y AndroidEqualizer...');
+      
+      final List<AndroidAudioEffect> effects = [];
       
       // Crear el LoudnessEnhancer
       _loudnessEnhancer = AndroidLoudnessEnhancer();
       _loudnessEnhancer!.setTargetGain(0.0); // Inicialmente sin boost
       _loudnessEnhancer!.setEnabled(true);
+      effects.add(_loudnessEnhancer!);
       
-      // Crear el AudioPipeline con el enhancer
-      final pipeline = AudioPipeline(androidAudioEffects: [_loudnessEnhancer!]);
+      // Crear el Equalizer
+      _equalizer = AndroidEqualizer();
+      _equalizer!.setEnabled(false); // Inicialmente deshabilitado
+      effects.add(_equalizer!);
+      
+      // Crear el AudioPipeline con los efectos
+      final pipeline = AudioPipeline(androidAudioEffects: effects);
       
       // Crear AudioPlayer con el pipeline
       _player = AudioPlayer(audioPipeline: pipeline);
       
-      // print('🔊 AudioPlayer inicializado con AndroidLoudnessEnhancer exitosamente');
+      // print('🔊 AudioPlayer inicializado con AndroidLoudnessEnhancer y AndroidEqualizer exitosamente');
     } catch (e) {
-      // print('⚠️ Error inicializando con LoudnessEnhancer, usando player normal: $e');
+      // print('⚠️ Error inicializando con LoudnessEnhancer y Equalizer, usando player normal: $e');
       // Fallback: crear player normal
       _player = AudioPlayer();
       _loudnessEnhancer = null;
+      _equalizer = null;
     }
   }
 
@@ -1331,6 +1341,10 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   }
 
   AudioPlayer get player => _player;
+  
+  AndroidEqualizer? get equalizer => _equalizer;
+  
+  AndroidLoudnessEnhancer? get loudnessEnhancer => _loudnessEnhancer;
 
   // Inicializar el AudioPlayer con AndroidLoudnessEnhancer
 
@@ -1360,19 +1374,15 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       
       // Usar AndroidLoudnessEnhancer para el boost
       if (_loudnessEnhancer != null) {
-        if (_volumeBoost == 1.0) {
-          // Desactivar enhancer
-          _loudnessEnhancer!.setTargetGain(0.0);
-          _loudnessEnhancer!.setEnabled(false);
-          // ('🔊 LoudnessEnhancer desactivado (volumen normal)');
-        } else {
-          // Calcular gain en dB
-          // boostLevel 1.5 = 5dB, 2.0 = 10dB, 3.0 = 20dB
-          final gainInDb = ((_volumeBoost - 1.0) * 10).clamp(0.0, 20.0);
-          _loudnessEnhancer!.setTargetGain(gainInDb);
-          _loudnessEnhancer!.setEnabled(true);
-          // print('🔊 LoudnessEnhancer aplicado: ${gainInDb}dB (${_volumeBoost}x boost)');
-        }
+        // Calcular gain en dB
+        // boostLevel 1.0 = 0dB, 1.5 = 5dB, 2.0 = 10dB, 3.0 = 20dB
+        final gainInDb = ((_volumeBoost - 1.0) * 10).clamp(0.0, 20.0);
+        
+        // Mantener el enhancer siempre habilitado para compatibilidad con equalizer
+        _loudnessEnhancer!.setEnabled(true);
+        _loudnessEnhancer!.setTargetGain(gainInDb);
+        
+        // print('🔊 LoudnessEnhancer aplicado: ${gainInDb}dB (${_volumeBoost}x boost)');
       } else {
         // Fallback a setVolume si no hay enhancer
         await _player.setVolume(_volumeBoost);
@@ -1407,16 +1417,13 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       await _player.setVolume(1.0);
       
       if (_loudnessEnhancer != null) {
-        if (_volumeBoost == 1.0) {
-          _loudnessEnhancer!.setTargetGain(0.0);
-          _loudnessEnhancer!.setEnabled(false);
-          // print('🔊 Volume boost cargado: normal (LoudnessEnhancer desactivado)');
-        } else {
-          final gainInDb = ((_volumeBoost - 1.0) * 10).clamp(0.0, 20.0);
-          _loudnessEnhancer!.setTargetGain(gainInDb);
-          _loudnessEnhancer!.setEnabled(true);
-          // print('🔊 Volume boost cargado: ${_volumeBoost}x (${gainInDb}dB)');
-        }
+        final gainInDb = ((_volumeBoost - 1.0) * 10).clamp(0.0, 20.0);
+        
+        // Mantener el enhancer siempre habilitado para compatibilidad con equalizer
+        _loudnessEnhancer!.setEnabled(true);
+        _loudnessEnhancer!.setTargetGain(gainInDb);
+        
+        // print('🔊 Volume boost cargado: ${_volumeBoost}x (${gainInDb}dB)');
       } else {
         // Fallback
         await _player.setVolume(_volumeBoost);

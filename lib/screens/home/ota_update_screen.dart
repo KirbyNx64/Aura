@@ -7,6 +7,7 @@ import 'package:music/l10n/locale_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:music/utils/theme_preferences.dart';
 import 'package:music/utils/notifiers.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 class UpdateScreen extends StatefulWidget {
   const UpdateScreen({super.key});
@@ -223,7 +224,8 @@ class _UpdateScreenState extends State<UpdateScreen> {
                                 color: Colors.transparent,
                               ),
                               child: Icon(
-                                Icons.open_in_browser,
+                                Symbols.open_in_browser_rounded,
+                                grade: 300,
                                 size: 30,
                                 color: isAmoled && isDark
                                     ? Colors.white
@@ -355,8 +357,8 @@ class _UpdateScreenState extends State<UpdateScreen> {
 
     // Para 16:9 (≈1.77)
     // final is16by9 = (aspectRatio < 1.85);
-    final isSystem = colorSchemeNotifier.value == AppColorScheme.system;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    // final isSystem = colorSchemeNotifier.value == AppColorScheme.system;
+    // final isDark = Theme.of(context).brightness == Brightness.dark;
     final isLight = Theme.of(context).brightness == Brightness.light;
     
     return Scaffold(
@@ -416,9 +418,8 @@ class _UpdateScreenState extends State<UpdateScreen> {
                       padding: const EdgeInsets.all(12),
                       margin: const EdgeInsets.only(bottom: 16),
                       decoration: BoxDecoration(
-                        color: isSystem && isLight ? Theme.of(context).colorScheme.secondaryContainer
-                              : isSystem && isDark ? Theme.of(context).colorScheme.onSecondaryFixed 
-                                : Theme.of(context).colorScheme.surfaceContainer,
+                        color: isLight ? Theme.of(context).colorScheme.secondaryContainer
+                              : Theme.of(context).colorScheme.onSecondaryFixed,
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: SingleChildScrollView(
@@ -456,7 +457,8 @@ class _UpdateScreenState extends State<UpdateScreen> {
                             color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
                           ),
                           child: Icon(
-                            Icons.update,
+                            Symbols.update_rounded,
+                            grade: 300,
                             size: 80,
                             color:
                                 Theme.of(context).brightness == Brightness.light
@@ -555,7 +557,8 @@ class _UpdateScreenState extends State<UpdateScreen> {
                         color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
                       ),
                       child: Icon(
-                        Icons.check_circle_outline,
+                        Symbols.check_circle_outline_rounded,
+                        grade: 300,
                         size: 80,
                         color: Theme.of(context).brightness == Brightness.light
                                 ? Theme.of(
@@ -633,9 +636,8 @@ class _UpdateScreenState extends State<UpdateScreen> {
                       padding: const EdgeInsets.all(12),
                       margin: const EdgeInsets.only(bottom: 16),
                       decoration: BoxDecoration(
-                        color: isSystem && isLight ? Theme.of(context).colorScheme.secondaryContainer
-                              : isSystem && isDark ? Theme.of(context).colorScheme.onSecondaryFixed 
-                                : Theme.of(context).colorScheme.surfaceContainer,
+                        color: isLight ? Theme.of(context).colorScheme.secondaryContainer
+                              : Theme.of(context).colorScheme.onSecondaryFixed,
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: SingleChildScrollView(

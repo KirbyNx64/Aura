@@ -184,6 +184,9 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
                       overflow: TextOverflow.ellipsis,
                       fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                       fontSize: 12,
+                      color: isSelected 
+                          ? (isAmoled && isDark ? Colors.white : Theme.of(context).colorScheme.onPrimaryContainer)
+                          : null,
                     );
                   },
                 ),

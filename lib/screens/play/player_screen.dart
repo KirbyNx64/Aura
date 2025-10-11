@@ -29,6 +29,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:music/utils/gesture_preferences.dart';
 import 'package:music/screens/artist/artist_screen.dart';
 import 'package:music/screens/play/lyrics_search_screen.dart';
+import 'package:music/screens/home/equalizer_screen.dart';
 import 'package:like_button/like_button.dart';
 
 final OnAudioQuery _audioQuery = OnAudioQuery();
@@ -1064,6 +1065,28 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                     if (!context.mounted) return;
                     _showLyricsModal(context, mediaItem);
                   }
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.equalizer_rounded),
+                title: Text(LocaleProvider.tr('equalizer')),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  Navigator.of(context).push(
+                    PageRouteBuilder(
+                      pageBuilder: (context, animation, secondaryAnimation) => const EqualizerScreen(),
+                      transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                        const begin = Offset(1.0, 0.0);
+                        const end = Offset.zero;
+                        const curve = Curves.ease;
+                        final tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+                        return SlideTransition(
+                          position: animation.drive(tween),
+                          child: child,
+                        );
+                      },
+                    ),
+                  );
                 },
               ),
               ValueListenableBuilder<double>(
@@ -2155,9 +2178,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                               : Colors.black,
                                         ),
                                         bubblesColor: BubblesColor(
-                                          dotPrimaryColor: Theme.of(context).brightness == Brightness.dark 
-                                              ? Colors.white 
-                                              : Colors.black,
+                                          dotPrimaryColor: Theme.of(context).colorScheme.primary,
                                           dotSecondaryColor: Theme.of(context).brightness == Brightness.dark 
                                               ? Colors.white 
                                               : Colors.black,
@@ -3188,7 +3209,24 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                               onTap: isLoading
                                                   ? () {}
                                                   : () async {
-                                                      // Acción del botón
+                                                      final dataPath =
+                                                          currentMediaItem
+                                                                  .extras?['data']
+                                                              as String?;
+                                                      if (dataPath != null &&
+                                                          dataPath.isNotEmpty) {
+                                                        await SharePlus.instance
+                                                            .share(
+                                                              ShareParams(
+                                                                text:
+                                                                    currentMediaItem
+                                                                        .title,
+                                                                files: [
+                                                                  XFile(dataPath),
+                                                                ],
+                                                              ),
+                                                            );
+                                                      }
                                                     },
                                               child: Container(
                                                 decoration: BoxDecoration(
@@ -3203,63 +3241,35 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                   horizontal: isSmall ? 14 : 20,
                                                   vertical: 16,
                                                 ),
-                                                child: InkWell(
-                                                  splashColor:
-                                                      Colors.transparent,
-                                                  highlightColor:
-                                                      Colors.transparent,
-                                                  borderRadius:
-                                                      BorderRadius.circular(26),
-                                                  onTap: () async {
-                                                    final dataPath =
-                                                        currentMediaItem
-                                                                .extras?['data']
-                                                            as String?;
-                                                    if (dataPath != null &&
-                                                        dataPath.isNotEmpty) {
-                                                      await SharePlus.instance
-                                                          .share(
-                                                            ShareParams(
-                                                              text:
-                                                                  currentMediaItem
-                                                                      .title,
-                                                              files: [
-                                                                XFile(dataPath),
-                                                              ],
-                                                            ),
-                                                          );
-                                                    }
-                                                  },
-                                                  child: Row(
-                                                    children: [
-                                                      Icon(
-                                                        Icons.share,
-                                                        color: Theme.of(
-                                                          context,
-                                                        ).colorScheme.onSurface,
-                                                        size: isSmall ? 18 : 22,
+                                                child: Row(
+                                                  children: [
+                                                    Icon(
+                                                      Icons.share,
+                                                      color: Theme.of(
+                                                        context,
+                                                      ).colorScheme.onSurface,
+                                                      size: isSmall ? 18 : 22,
+                                                    ),
+                                                    SizedBox(
+                                                      width: isSmall ? 6 : 8,
+                                                    ),
+                                                    Text(
+                                                      LocaleProvider.tr(
+                                                        'share',
                                                       ),
-                                                      SizedBox(
-                                                        width: isSmall ? 6 : 8,
+                                                      style: TextStyle(
+                                                        color:
+                                                            Theme.of(context)
+                                                                .colorScheme
+                                                                .onSurface,
+                                                        fontWeight:
+                                                            FontWeight.w600,
+                                                        fontSize: isSmall
+                                                            ? 14
+                                                            : 16,
                                                       ),
-                                                      Text(
-                                                        LocaleProvider.tr(
-                                                          'share',
-                                                        ),
-                                                        style: TextStyle(
-                                                          color:
-                                                              Theme.of(context)
-                                                                  .colorScheme
-                                                                  .onSurface,
-                                                          fontWeight:
-                                                              FontWeight.w600,
-                                                          fontSize: isSmall
-                                                              ? 14
-                                                              : 16,
-                                                        ),
-                                                      ),
-                                                    ],
-                                                  ),
+                                                    ),
+                                                  ],
                                                 ),
                                               ),
                                             );
@@ -4403,14 +4413,50 @@ class AnimatedTapButton extends StatefulWidget {
 
 class _AnimatedTapButtonState extends State<AnimatedTapButton> {
   bool _pressed = false;
+  bool _isLongPress = false;
+
+  void _handleTapDown(TapDownDetails details) {
+    setState(() {
+      _pressed = true;
+      _isLongPress = true;
+    });
+  }
+
+  void _handleTapUp(TapUpDetails details) {
+    if (_isLongPress) {
+      setState(() => _pressed = false);
+    }
+    _isLongPress = false;
+  }
+
+  void _handleTapCancel() {
+    setState(() {
+      _pressed = false;
+      _isLongPress = false;
+    });
+  }
+
+  void _handleTap() {
+    // Si no fue un long press, hacer la animación automática
+    if (!_isLongPress) {
+      setState(() => _pressed = true);
+      Future.delayed(const Duration(milliseconds: 100), () {
+        if (mounted) {
+          setState(() => _pressed = false);
+        }
+      });
+    }
+    widget.onTap();
+  }
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: widget.onTap,
-      onTapDown: (_) => setState(() => _pressed = true),
-      onTapUp: (_) => setState(() => _pressed = false),
-      onTapCancel: () => setState(() => _pressed = false),
+      behavior: HitTestBehavior.opaque,
+      onTapDown: _handleTapDown,
+      onTapUp: _handleTapUp,
+      onTapCancel: _handleTapCancel,
+      onTap: _handleTap,
       child: AnimatedScale(
         scale: _pressed ? 0.93 : 1.0,
         duration: const Duration(milliseconds: 90),
