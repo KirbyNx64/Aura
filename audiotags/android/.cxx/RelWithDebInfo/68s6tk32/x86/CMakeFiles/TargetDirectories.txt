@@ -1,0 +1,2 @@
+C:/Users/kirby/OneDrive/Documents/Flutter/Aura/audiotags/android/.cxx/RelWithDebInfo/68s6tk32/x86/CMakeFiles/edit_cache.dir
+C:/Users/kirby/OneDrive/Documents/Flutter/Aura/audiotags/android/.cxx/RelWithDebInfo/68s6tk32/x86/CMakeFiles/rebuild_cache.dir

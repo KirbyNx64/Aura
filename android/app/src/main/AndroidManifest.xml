@@ -40,10 +40,20 @@
     </queries>
 
     <application
-        android:label="Aura Music"
-        android:requestLegacyExternalStorage="true"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:label="Aura Music"
+        android:icon="@mipmap/ic_launcher"
+        android:requestLegacyExternalStorage="true"
+        android:extractNativeLibs="false"
+        android:usesCleartextTraffic="false"
+        android:networkSecurityConfig="@xml/network_security_config">
+        
+        <!-- Política de privacidad -->
+        <meta-data
+            android:name="com.google.android.play.core.assetpacks.privacyPolicyUrl"
+            android:value="https://tusitio.com/politica-privacidad" />
+            
+        <!-- Configuración de FileProvider para compartir archivos de forma segura -->
         
         <provider
             android:name="androidx.core.content.FileProvider"

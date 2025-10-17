@@ -592,13 +592,15 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
     }
   }
 
-  // Función para validar y normalizar el ID de playlist
+  // Función mejorada para validar IDs de playlist (basada en Harmony Music)
   String _validatePlaylistId(String playlistId) {
-    // Remover prefijo VL si está presente
-    if (playlistId.startsWith('VL')) {
-      return playlistId.substring(2);
+    // Para playlists de canales (OLAK, OLAD, etc.), mantener el ID tal como está
+    if (playlistId.startsWith('OLAK') || playlistId.startsWith('OLAD') || 
+        playlistId.startsWith('OLAT') || playlistId.startsWith('OL')) {
+      return playlistId;
     }
-    return playlistId;
+    // Para playlists regulares, remover prefijo VL si existe
+    return playlistId.startsWith('VL') ? playlistId.substring(2) : playlistId;
   }
 
   // Función para extraer información del video desde el enlace
@@ -3348,6 +3350,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                     // print('🚀 Navegando a artista: $artistName con browseId: $browseId');
                                                     Navigator.of(context).push(
                                                       PageRouteBuilder(
+                                                        settings: const RouteSettings(name: '/artist'),
                                                         pageBuilder: (context, animation, secondaryAnimation) =>
                                                             ArtistScreen(artistName: artistName, browseId: browseId),
                                                         transitionsBuilder: (context, animation, secondaryAnimation, child) {
@@ -3418,6 +3421,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                           // print('🚀 Navegando a artista (botón): $artistName con browseId: $browseId');
                                                           Navigator.of(context).push(
                                                             PageRouteBuilder(
+                                                              settings: const RouteSettings(name: '/artist'),
                                                               pageBuilder: (context, animation, secondaryAnimation) =>
                                                                   ArtistScreen(artistName: artistName, browseId: browseId),
                                                               transitionsBuilder: (context, animation, secondaryAnimation, child) {
@@ -4324,6 +4328,7 @@ class YtPreviewPlayerState extends State<YtPreviewPlayer>
   final AudioPlayer _player = AudioPlayer();
   bool _loading = false;
   bool _playing = false;
+  bool _loadingArtist = false;
   Duration? _duration;
   String? _audioUrl;
   late int _currentIndex;
@@ -4747,7 +4752,141 @@ class YtPreviewPlayerState extends State<YtPreviewPlayer>
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             SimpleDownloadButton(item: _currentItem),
-                            
+                            const SizedBox(width: 8),
+                            // Botón para ir al artista
+                            SizedBox(
+                              height: 50,
+                              width: 50,
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: Material(
+                                  color: Theme.of(context).colorScheme.secondaryContainer,
+                                  child: InkWell(
+                                    borderRadius: BorderRadius.circular(8),
+                                    onTap: _loadingArtist ? null : () async {
+                                    final artistName = _currentItem.artist ?? widget.fallbackArtist;
+                                    if (artistName == null || artistName.trim().isEmpty) {
+                                      _showMessage('Error', LocaleProvider.tr('artist_unknown'));
+                                      return;
+                                    }
+                                    
+                                    setState(() {
+                                      _loadingArtist = true;
+                                    });
+                                    
+                                    try {
+                                      // Buscar el artista
+                                      final results = await searchArtists(artistName, limit: 1);
+                                      if (!mounted) return;
+                                      
+                                      setState(() {
+                                        _loadingArtist = false;
+                                      });
+                                      
+                                      if (results.isEmpty) {
+                                        _showMessage(LocaleProvider.tr('error'), LocaleProvider.tr('artist_not_found').replaceAll('{artistName}', artistName));
+                                        return;
+                                      }
+                                      
+                                      final artist = results.first;
+                                      final browseId = artist['browseId'];
+                                      if (browseId == null) {
+                                        _showMessage(LocaleProvider.tr('error'), LocaleProvider.tr('could_not_get_artist_info'));
+                                        return;
+                                      }
+                                      
+                                      if (!mounted) return;
+                                      
+                                      // Navegar a la pantalla del artista
+                                      if (!context.mounted) return;
+                                      
+                                      // Cerrar el modal primero y obtener el contexto raíz
+                                      Navigator.of(context).pop();
+                                      
+                                      // Esperar un frame para que el modal se cierre completamente
+                                      await Future.delayed(const Duration(milliseconds: 50));
+                                      if (!mounted || !context.mounted) return;
+                                      
+                                      // Usar el navigator raíz, no el del modal
+                                      final navigator = Navigator.of(context, rootNavigator: false);
+                                      
+                                      // Eliminar todas las ArtistScreen del stack usando popUntil
+                                      // Buscamos si hay alguna ArtistScreen en el stack
+                                      navigator.popUntil((route) {
+                                        // Si es la primera ruta (puede ser el home), detenemos
+                                        if (route.isFirst) {
+                                          return true;
+                                        }
+                                        
+                                        // Verificar las rutas por su nombre
+                                        final settings = route.settings;
+                                        
+                                        // Si encontramos una ruta que no es ArtistScreen, nos detenemos
+                                        if (settings.name != null && settings.name != '/artist') {
+                                          return true;
+                                        }
+                                        
+                                        // Si la ruta es ArtistScreen (sin nombre o con '/artist'),
+                                        // la eliminamos retornando false para continuar haciendo pop
+                                        if (settings.name == null || settings.name == '/artist') {
+                                          return false; // Continuar haciendo pop
+                                        }
+                                        
+                                        return true; // Detenernos por seguridad
+                                      });
+                                      
+                                      // Ahora hacer push de la nueva pantalla
+                                      navigator.push(
+                                        PageRouteBuilder(
+                                          settings: const RouteSettings(name: '/artist'),
+                                          pageBuilder: (context, animation, secondaryAnimation) =>
+                                              ArtistScreen(artistName: artistName, browseId: browseId),
+                                          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                                            const begin = Offset(1.0, 0.0);
+                                            const end = Offset.zero;
+                                            const curve = Curves.easeInOutCubic;
+                                            var tween = Tween(begin: begin, end: end).chain(
+                                              CurveTween(curve: curve),
+                                            );
+                                            var offsetAnimation = animation.drive(tween);
+                                            return SlideTransition(
+                                              position: offsetAnimation,
+                                              child: child,
+                                            );
+                                          },
+                                        ),
+                                      );
+                                    } catch (e) {
+                                      if (!mounted) return;
+                                      setState(() {
+                                        _loadingArtist = false;
+                                      });
+                                      _showMessage('Error', 'Error al buscar el artista: ${e.toString()}');
+                                    }
+                                  },
+                                  child: Center(
+                                    child: _loadingArtist
+                                        ? SizedBox(
+                                            width: 20,
+                                            height: 20,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2.5,
+                                              color: Theme.of(context).colorScheme.onSecondaryContainer,
+                                            ),
+                                          )
+                                        : Tooltip(
+                                            message: LocaleProvider.tr('go_to_artist'),
+                                            child: Icon(
+                                              Icons.person,
+                                              size: 24,
+                                              color: Theme.of(context).colorScheme.onSecondaryContainer,
+                                            ),
+                                          ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            ),
                           ],
                         ),
                       ),

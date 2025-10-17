@@ -272,14 +272,15 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> {
                   child: ValueListenableBuilder<AppColorScheme>(
                     valueListenable: colorSchemeNotifier,
                     builder: (context, colorScheme, child) {
-                      // final isSystem = colorScheme == AppColorScheme.system;
+                      final isSystem = colorScheme == AppColorScheme.system;
                       final isLight = Theme.of(context).brightness == Brightness.light;
                       // final isDark = Theme.of(context).brightness == Brightness.dark;
+                      final backgroundColor = Theme.of(context).colorScheme.onSecondaryFixed;
                       return Container(
                         margin: const EdgeInsets.symmetric(horizontal: 12),
                         decoration: BoxDecoration(
                           color: isLight ? Theme.of(context).colorScheme.secondaryContainer 
-                                  : Theme.of(context).colorScheme.onSecondaryFixed,
+                                  : isSystem ? backgroundColor : Color.lerp(backgroundColor, Colors.white, 0.05),
                           borderRadius: BorderRadius.circular(16),
                         ),
                     padding: const EdgeInsets.symmetric(

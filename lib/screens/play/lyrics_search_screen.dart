@@ -571,9 +571,13 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
                         width: 56,
                         child: Material(
                           borderRadius: BorderRadius.circular(8),
-                          color: isAmoled && isDark
-                              ? Colors.white // Color personalizado para amoled
-                              : Theme.of(context).colorScheme.primaryContainer,
+                          color: colorScheme == AppColorScheme.amoled
+                                  ? Colors.white
+                                  : Theme.of(context).brightness == Brightness.light
+                                      ? Theme.of(context).colorScheme.primary
+                                      : colorScheme == AppColorScheme.system
+                                        ? Theme.of(context).colorScheme.primary
+                                        : Theme.of(context).colorScheme.primaryContainer,
                           child: InkWell(
                             borderRadius: BorderRadius.circular(8),
                             onTap: _isSearching ? null : _performSearch,
@@ -581,9 +585,13 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
                               message: LocaleProvider.tr('search_lyrics'),
                               child: Icon(
                                 Icons.search,
-                                color: isAmoled && isDark
-                                    ? Colors.black // Color negro para amoled
-                                    : Theme.of(context).colorScheme.onSecondaryContainer,
+                                color: colorScheme == AppColorScheme.amoled
+                                        ? Colors.black
+                                        : Theme.of(context).brightness == Brightness.light
+                                          ? Theme.of(context).colorScheme.onPrimary
+                                          : colorScheme == AppColorScheme.system
+                                            ? Theme.of(context).colorScheme.onPrimary
+                                            : Theme.of(context).colorScheme.onPrimaryContainer,
                               ),
                             ),
                           ),

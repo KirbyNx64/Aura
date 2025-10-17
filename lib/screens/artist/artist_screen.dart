@@ -1038,10 +1038,40 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                 ),
                               ],
                             ),
-                            Column(
-                              children: [
-                                ..._songs.map((item) {
-                                final index = _songs.indexOf(item);
+                            ListView.builder(
+                              shrinkWrap: true,
+                              physics: const NeverScrollableScrollPhysics(),
+                              addAutomaticKeepAlives: false,
+                              addRepaintBoundaries: true,
+                              itemCount: _songs.length + (_loadingMoreSongs ? 1 : 0),
+                              itemBuilder: (context, index) {
+                                // Mostrar indicador de carga al final
+                                if (_loadingMoreSongs && index == _songs.length) {
+                                  return Container(
+                                    padding: const EdgeInsets.all(16),
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        const SizedBox(
+                                          width: 20,
+                                          height: 20,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        TranslatedText(
+                                          'loading_more',
+                                          style: const TextStyle(
+                                            fontSize: 14,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                }
+                                
+                                final item = _songs[index];
                                 final videoId = item.videoId;
                                 final isSelected = videoId != null && _selectedIndexes.contains('song-$videoId');
                                 
@@ -1157,34 +1187,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                     ),
                                   ),
                                 );
-                                }),
-                                
-                                // Indicador de carga automática al final de la lista (estilo yt_screen)
-                                if (_loadingMoreSongs) ...[
-                                  Container(
-                                    padding: const EdgeInsets.all(16),
-                                    child: Row(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: [
-                                        const SizedBox(
-                                          width: 20,
-                                          height: 20,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                          ),
-                                        ),
-                                        const SizedBox(width: 12),
-                                        TranslatedText(
-                                          'loading_more',
-                                          style: const TextStyle(
-                                            fontSize: 14,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ],
+                              },
                             ),
                           ],
                         ),
@@ -1265,10 +1268,15 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                 child: Text('No se encontraron canciones'),
                               )
                             else
-                              Column(
-                                children: _albumSongs.map((item) {
-                                  final index = _albumSongs.indexOf(item);
-                                    final videoId = item.videoId;
+                              ListView.builder(
+                                shrinkWrap: true,
+                                physics: const NeverScrollableScrollPhysics(),
+                                addAutomaticKeepAlives: false,
+                                addRepaintBoundaries: true,
+                                itemCount: _albumSongs.length,
+                                itemBuilder: (context, index) {
+                                  final item = _albumSongs[index];
+                                  final videoId = item.videoId;
                                   final isSelected = videoId != null && _selectedIndexes.contains('album-$videoId');
                                     
                                     return GestureDetector(
@@ -1399,7 +1407,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                         ),
                                       ),
                                     );
-                                  }).toList(),
+                                },
                               ),
                             ],
                           ),
@@ -1440,10 +1448,40 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                 ),
                               ],
                             ),
-                            Column(
-                              children: [
-                                ..._videos.map((item) {
-                                final index = _videos.indexOf(item);
+                            ListView.builder(
+                              shrinkWrap: true,
+                              physics: const NeverScrollableScrollPhysics(),
+                              addAutomaticKeepAlives: false,
+                              addRepaintBoundaries: true,
+                              itemCount: _videos.length + (_loadingMoreVideos ? 1 : 0),
+                              itemBuilder: (context, index) {
+                                // Mostrar indicador de carga al final
+                                if (_loadingMoreVideos && index == _videos.length) {
+                                  return Container(
+                                    padding: const EdgeInsets.all(16),
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        const SizedBox(
+                                          width: 20,
+                                          height: 20,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        TranslatedText(
+                                          'loading_more',
+                                          style: const TextStyle(
+                                            fontSize: 14,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                }
+                                
+                                final item = _videos[index];
                                 final videoId = item.videoId;
                                 final isSelected = videoId != null && _selectedIndexes.contains('video-$videoId');
                                 
@@ -1559,34 +1597,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                     ),
                                   ),
                                 );
-                              }),
-                                
-                                // Indicador de carga automática para videos (estilo yt_screen)
-                                if (_loadingMoreVideos) ...[
-                                  Container(
-                                    padding: const EdgeInsets.all(16),
-                                    child: Row(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: [
-                                        const SizedBox(
-                                          width: 20,
-                                          height: 20,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                          ),
-                                        ),
-                                        const SizedBox(width: 12),
-                                        TranslatedText(
-                                          'loading_more',
-                                          style: const TextStyle(
-                                            fontSize: 14,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ],
+                              },
                             ),
                           ],
                         ),
@@ -1627,9 +1638,14 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                 ),
                               ],
                             ),
-                            Column(
-                              children: _albums.map((album) {
-                                final index = _albums.indexOf(album);
+                            ListView.builder(
+                              shrinkWrap: true,
+                              physics: const NeverScrollableScrollPhysics(),
+                              addAutomaticKeepAlives: false,
+                              addRepaintBoundaries: true,
+                              itemCount: _albums.length,
+                              itemBuilder: (context, index) {
+                                final album = _albums[index];
                                 final isSelected = _selectedIndexes.contains('album-$index');
                                 
                                 return GestureDetector(
@@ -1744,7 +1760,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                     ),
                                   ),
                                 );
-                              }).toList(),
+                              },
                             ),
                           ],
                         ),

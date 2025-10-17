@@ -26,6 +26,8 @@ class _EqualizerScreenState extends State<EqualizerScreen> {
   // Volume Boost
   double _volumeBoost = 1.0;
   StreamSubscription<double>? _volumeBoostSubscription;
+  ValueNotifier<double>? _volumeBoostNotifier;
+  VoidCallback? _volumeBoostListener;
   
   @override
   void initState() {
@@ -37,6 +39,9 @@ class _EqualizerScreenState extends State<EqualizerScreen> {
   void dispose() {
     _enabledStreamSubscription?.cancel();
     _volumeBoostSubscription?.cancel();
+    if (_volumeBoostNotifier != null && _volumeBoostListener != null) {
+      _volumeBoostNotifier!.removeListener(_volumeBoostListener!);
+    }
     super.dispose();
   }
 
@@ -89,19 +94,45 @@ class _EqualizerScreenState extends State<EqualizerScreen> {
         }
       }
       
-      // Cargar volume boost
+      // Cargar volume boost desde el handler (que ya lo cargó de SharedPreferences)
       try {
-        _volumeBoost = (handler as dynamic).volumeBoost ?? 1.0;
-        _volumeBoostSubscription = (handler as dynamic).volumeBoostNotifier.listen((boost) {
+        // Obtener el valor actual del notifier del handler
+        _volumeBoostNotifier = (handler as dynamic).volumeBoostNotifier as ValueNotifier<double>;
+        
+        // Establecer el valor inicial
+        if (mounted) {
+          setState(() {
+            _volumeBoost = _volumeBoostNotifier!.value;
+          });
+        }
+        
+        // Crear y agregar listener para cambios futuros
+        _volumeBoostListener = () {
           if (mounted) {
             setState(() {
-              _volumeBoost = boost;
+              _volumeBoost = _volumeBoostNotifier!.value;
             });
           }
-        });
+        };
+        _volumeBoostNotifier!.addListener(_volumeBoostListener!);
       } catch (e) {
-        // Si hay error al cargar volume boost, usar valor por defecto
-        _volumeBoost = 1.0;
+        // Si hay error al cargar volume boost, intentar obtener directamente de SharedPreferences
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          final savedBoost = prefs.getDouble('volume_boost') ?? 1.0;
+          if (mounted) {
+            setState(() {
+              _volumeBoost = savedBoost;
+            });
+          }
+        } catch (e2) {
+          // Usar valor por defecto
+          if (mounted) {
+            setState(() {
+              _volumeBoost = 1.0;
+            });
+          }
+        }
       }
     } catch (e) {
       // Ignorar errores de inicialización

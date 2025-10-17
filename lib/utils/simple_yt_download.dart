@@ -451,13 +451,13 @@ class _SimpleDownloadButtonState extends State<SimpleDownloadButton> {
                 }
               : null,
               child: Tooltip(
-               message: _isDownloading || _isProcessing
+              message: _isDownloading || _isProcessing
                   ? (_isDownloading ? LocaleProvider.tr('downloading') : LocaleProvider.tr('add_to_queue'))
                   : LocaleProvider.tr('download_audio'),
                           child: Icon(
                 _isDownloading || _isProcessing ? Icons.downloading : Icons.download,
                 color: Theme.of(context).colorScheme.onPrimaryContainer,
-                size: 20,
+                size: 24,
               ),
           ),
         ),

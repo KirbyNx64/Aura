@@ -683,4 +683,8 @@ const Map<String, String> appLocalizationsEn = {
   'opening_in_browser': 'Opening in browser',
   'could_not_open': 'Could not open',
   'select_download_method': 'Select how you want to download the update',
+  
+  // YouTube search errors
+  'artist_not_found': 'Artist "{artistName}" not found',
+  'could_not_get_artist_info': 'Could not get artist information',
 };

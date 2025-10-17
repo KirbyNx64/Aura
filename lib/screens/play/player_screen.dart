@@ -854,7 +854,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                           color: Theme.of(
                                 context,
                             ).brightness == Brightness.dark
-                            ? Theme.of(context).colorScheme.primaryContainer
+                            ? Theme.of(context).colorScheme.primary
                             : Theme.of(context).colorScheme.onPrimaryContainer.withValues(alpha: 0.7),
                           borderRadius: BorderRadius.circular(12),
                         ),
@@ -867,7 +867,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                               color: Theme.of(
                                 context,
                               ).brightness == Brightness.dark
-                              ? Theme.of(context).colorScheme.onPrimaryContainer
+                              ? Theme.of(context).colorScheme.onPrimary
                               : Theme.of(context).colorScheme.surfaceContainer,
                             ),
                             const SizedBox(width: 8),
@@ -879,7 +879,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                 color: Theme.of(
                                     context,
                                 ).brightness == Brightness.dark
-                                ? Theme.of(context).colorScheme.onPrimaryContainer
+                                ? Theme.of(context).colorScheme.onPrimary
                                 : Theme.of(context).colorScheme.surfaceContainer,
                               ),
                             ),

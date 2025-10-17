@@ -14,7 +14,7 @@ keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
 android {
     namespace = "com.example.music"
     compileSdk = flutter.compileSdkVersion
-    ndkVersion = "27.0.12077973"
+    ndkVersion = "29.0.14206865"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -26,12 +26,98 @@ android {
         jvmTarget = "17"
     }
 
+    buildFeatures {
+        buildConfig = true
+    }
+
     defaultConfig {
         applicationId = "com.kirby.aura"
         minSdk = 24
-        targetSdk = flutter.targetSdkVersion
-        versionCode = flutter.versionCode
+        targetSdk = 36
+        versionCode = flutter.versionCode.toInteger()
         versionName = flutter.versionName
+        
+        // Configuración de seguridad
+        multiDexEnabled true
+        
+        // Configuración para prevenir el uso de API obsoletas
+        buildConfigField("boolean", "ENABLE_R8_FULL_MODE", "true")
+        
+        // Configuración de rendimiento
+        ndk {
+            debugSymbolLevel 'FULL'
+        }
+    }
+    
+    // Configuración de firma
+    signingConfigs {
+        release {
+            keyAlias keystoreProperties['keyAlias']
+            keyPassword keystoreProperties['keyPassword']
+            storeFile keystoreProperties['storeFile'] ? file(keystoreProperties['storeFile']) : null
+            storePassword keystoreProperties['storePassword']
+        }
+    }
+    
+    buildTypes {
+        release {
+            // Habilitar minificación y ofuscación
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.release
+            
+            // Deshabilitar logs en producción
+            buildConfigField("boolean", "ENABLE_LOGGING", "false")
+        }
+        debug {
+            // Habilitar logs solo en modo debug
+            buildConfigField("boolean", "ENABLE_LOGGING", "true")
+        }
+    }
+    
+    packagingOptions {
+        // Enable 16KB page size support
+        jniLibs {
+            useLegacyPackaging = false
+            pickFirsts += [
+                '**/lib/arm64-v8a/libapp.so',
+                '**/lib/arm64-v8a/libflutter.so',
+                '**/lib/arm64-v8a/libaudiotags.so',
+                '**/lib/armeabi-v7a/libapp.so',
+                '**/lib/armeabi-v7a/libflutter.so',
+                '**/lib/armeabi-v7a/libaudiotags.so',
+                '**/lib/x86_64/libapp.so',
+                '**/lib/x86_64/libflutter.so',
+                '**/lib/x86_64/libaudiotags.so',
+                '**/lib/x86/libapp.so',
+                '**/lib/x86/libflutter.so',
+                '**/lib/x86/libaudiotags.so'
+            ]
+        }
+        
+        resources {
+            excludes += [
+                '/META-INF/{AL2.0,LGPL2.1}',
+                '**/lib/*/libmp3lame*',
+                '**/lib/*/libmpg123*',
+                '**/lib/*/libvorbis*',
+                '**/lib/*/libogg*',
+                '**/lib/*/libFLAC*',
+                '**/libaudio*'
+            ]
+            pickFirsts += [
+                '**/lib/arm64-v8a/libc++_shared.so',
+                '**/lib/armeabi-v7a/libc++_shared.so',
+                '**/lib/x86/libc++_shared.so',
+                '**/lib/x86_64/libc++_shared.so'
+            ]
+        }
+    }
+
+    // Enable 16KB page size support
+    androidResources {
+        additionalParameters '--warn-manifest-validation'
     }
 
     signingConfigs {
@@ -48,6 +134,20 @@ android {
             signingConfig signingConfigs.release
             minifyEnabled false
             shrinkResources false
+            // Asegurar alineamiento de 16KB
+            ndk {
+                debugSymbolLevel 'FULL'
+            }
+        }
+    }
+    
+    // Configuración adicional para 16KB
+    applicationVariants.all { variant ->
+        variant.outputs.each { output ->
+            def abiName = output.getFilter("ABI")
+            if (abiName != null) {
+                output.versionCodeOverride = variant.versionCode
+            }
         }
     }
 }

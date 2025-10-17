@@ -701,4 +701,8 @@ const Map<String, String> appLocalizationsEs = {
   'opening_in_browser': 'Abriendo en navegador',
   'could_not_open': 'No se pudo abrir',
   'select_download_method': 'Selecciona cómo quieres descargar la actualización',
+  
+  // YouTube search errors
+  'artist_not_found': 'No se encontró el artista "{artistName}"',
+  'could_not_get_artist_info': 'No se pudo obtener información del artista',
 };

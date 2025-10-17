@@ -1314,19 +1314,20 @@ Future<List<Map<String, String>>> searchPlaylistsOnly(String query) async {
   return await searchPlaylistsWithPagination(query, maxPages: 1);
 }
 
-// Función auxiliar para parsear items de playlist individuales
+// Función auxiliar mejorada para parsear items de playlist individuales
 Map<String, String>? _parsePlaylistItem(Map<String, dynamic> renderer) {
   // Extraer browseId de los menús (más robusto que la implementación anterior)
   String? browseId;
-  final menuItems = renderer['menu']?['menuRenderer']?['items'];
+  final menuItems = nav(renderer, ['menu', 'menuRenderer', 'items']);
   
   if (menuItems is List) {
     for (var menuItem in menuItems) {
       final endpoint = menuItem['menuNavigationItemRenderer']?['navigationEndpoint']?['browseEndpoint'];
       if (endpoint != null && endpoint['browseId'] != null) {
         final id = endpoint['browseId'].toString();
-        // Aceptar diferentes tipos de IDs de playlist
-        if (id.startsWith('VL') || id.startsWith('PL') || id.startsWith('OL')) {
+        // Aceptar diferentes tipos de IDs de playlist, incluyendo playlists de canales
+        if (id.startsWith('VL') || id.startsWith('PL') || id.startsWith('OL') || 
+            id.startsWith('OLAK') || id.startsWith('OLAD') || id.startsWith('OLAT')) {
           browseId = id;
           break;
         }
@@ -1399,8 +1400,29 @@ Map<String, String>? _parsePlaylistItem(Map<String, dynamic> renderer) {
 
 // Función principal mejorada para obtener canciones de una lista de reproducción
 Future<List<YtMusicResult>> getPlaylistSongs(String playlistId, {int? limit}) async {
-  // Convertir el ID de playlist al formato correcto
-  String browseId = playlistId.startsWith("VL") ? playlistId : "VL$playlistId";
+  String browseId;
+  
+  // Manejar diferentes tipos de IDs de playlist
+  if (playlistId.startsWith("VL")) {
+    browseId = playlistId;
+  } else if (playlistId.startsWith("OLAK") || playlistId.startsWith("OLAD") || 
+             playlistId.startsWith("OLAT") || playlistId.startsWith("OL")) {
+    // Para playlists de canales, usar el ID tal como está
+    browseId = playlistId;
+    
+    // Si es un OLAK5uy, intentar obtener el browseId real del álbum
+    if (playlistId.contains("OLAK5uy")) {
+      try {
+        browseId = await getAlbumBrowseId(playlistId);
+      } catch (e) {
+        // Si falla, usar el ID original
+        browseId = playlistId;
+      }
+    }
+  } else {
+    // Para otros tipos de playlist, agregar prefijo VL
+    browseId = "VL$playlistId";
+  }
   
   final data = {
     ...ytServiceContext,
@@ -1963,9 +1985,52 @@ String? _getPlaylistContinuationTokenImproved(Map<String, dynamic> response) {
   return token;
 }
 
+// Función para obtener browseId de álbum (como en Harmony Music)
+Future<String> getAlbumBrowseId(String audioPlaylistId) async {
+  try {
+    final dio = Dio();
+    final response = await dio.get("${domain}playlist",
+        options: Options(headers: headers),
+        queryParameters: {"list": audioPlaylistId});
+    
+    final reg = RegExp(r'\"MPRE.+?\"');
+    final match = reg.firstMatch(response.data.toString());
+    if (match != null) {
+      final x = (match[0])!;
+      final res = (x.substring(1)).split("\\")[0];
+      return res;
+    }
+    return audioPlaylistId;
+  } catch (e) {
+    return audioPlaylistId;
+  }
+}
+
 // Función para obtener información de la playlist (título, autor, etc.)
 Future<Map<String, dynamic>?> getPlaylistInfo(String playlistId) async {
-  String browseId = playlistId.startsWith("VL") ? playlistId : "VL$playlistId";
+  String browseId;
+  
+  // Manejar diferentes tipos de IDs de playlist
+  if (playlistId.startsWith("VL")) {
+    browseId = playlistId;
+  } else if (playlistId.startsWith("OLAK") || playlistId.startsWith("OLAD") || 
+             playlistId.startsWith("OLAT") || playlistId.startsWith("OL")) {
+    // Para playlists de canales, usar el ID tal como está
+    browseId = playlistId;
+    
+    // Si es un OLAK5uy, intentar obtener el browseId real del álbum
+    if (playlistId.contains("OLAK5uy")) {
+      try {
+        browseId = await getAlbumBrowseId(playlistId);
+      } catch (e) {
+        // Si falla, usar el ID original
+        browseId = playlistId;
+      }
+    }
+  } else {
+    // Para otros tipos de playlist, agregar prefijo VL
+    browseId = "VL$playlistId";
+  }
   
   final data = {
     ...ytServiceContext,

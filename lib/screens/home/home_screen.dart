@@ -903,7 +903,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       ),
                       decoration: BoxDecoration(
                         color: Theme.of(context).brightness == Brightness.dark
-                          ? Theme.of(context).colorScheme.primaryContainer
+                          ? Theme.of(context).colorScheme.primary
                           : Theme.of(context).colorScheme.onPrimaryContainer.withValues(alpha: 0.7),
                         borderRadius: BorderRadius.circular(12),
                       ),
@@ -914,7 +914,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                             Icons.person_outline,
                             size: 20,
                             color: Theme.of(context).brightness == Brightness.dark
-                              ? Theme.of(context).colorScheme.onPrimaryContainer
+                              ? Theme.of(context).colorScheme.onPrimary
                               : Theme.of(context).colorScheme.surfaceContainer,
                           ),
                           const SizedBox(width: 8),
@@ -924,7 +924,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                               fontWeight: FontWeight.w600,
                               fontSize: 14,
                               color: Theme.of(context).brightness == Brightness.dark
-                                ? Theme.of(context).colorScheme.onPrimaryContainer
+                                ? Theme.of(context).colorScheme.onPrimary
                                 : Theme.of(context).colorScheme.surfaceContainer,
                             ),
                           ),
@@ -1491,7 +1491,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                             ),
                             decoration: BoxDecoration(
                               color: Theme.of(context).brightness == Brightness.dark
-                                ? Theme.of(context).colorScheme.primaryContainer
+                                ? Theme.of(context).colorScheme.primary
                                 : Theme.of(context).colorScheme.onPrimaryContainer.withValues(alpha: 0.7),
                               borderRadius: BorderRadius.circular(12),
                             ),
@@ -1502,7 +1502,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                   Icons.search,
                                   size: 20,
                                   color: Theme.of(context).brightness == Brightness.dark
-                                    ? Theme.of(context).colorScheme.onPrimaryContainer
+                                    ? Theme.of(context).colorScheme.onPrimary
                                     : Theme.of(context).colorScheme.surfaceContainer,
                                 ),
                                 const SizedBox(width: 8),
@@ -1512,7 +1512,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                     fontWeight: FontWeight.w600,
                                     fontSize: 14,
                                     color: Theme.of(context).brightness == Brightness.dark
-                                      ? Theme.of(context).colorScheme.onPrimaryContainer
+                                      ? Theme.of(context).colorScheme.onPrimary
                                       : Theme.of(context).colorScheme.surfaceContainer,
                                   ),
                                 ),
@@ -2268,7 +2268,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         ),
                         decoration: BoxDecoration(
                           color: Theme.of(context).brightness == Brightness.dark
-                            ? Theme.of(context).colorScheme.primaryContainer
+                            ? Theme.of(context).colorScheme.primary
                             : Theme.of(context).colorScheme.onPrimaryContainer.withValues(alpha: 0.7),
                           borderRadius: BorderRadius.circular(12),
                         ),
@@ -2279,7 +2279,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                               Icons.search,
                               size: 20,
                               color: Theme.of(context).brightness == Brightness.dark
-                                ? Theme.of(context).colorScheme.onPrimaryContainer
+                                ? Theme.of(context).colorScheme.onPrimary
                                 : Theme.of(context).colorScheme.surfaceContainer,
                             ),
                             const SizedBox(width: 8),
@@ -2289,7 +2289,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                 fontWeight: FontWeight.w600,
                                 fontSize: 14,
                                 color: Theme.of(context).brightness == Brightness.dark
-                                  ? Theme.of(context).colorScheme.onPrimaryContainer
+                                  ? Theme.of(context).colorScheme.onPrimary
                                   : Theme.of(context).colorScheme.surfaceContainer,
                               ),
                             ),
@@ -3466,7 +3466,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                                   ),
                                                                   decoration: BoxDecoration(
                                                                     color: Theme.of(context).brightness == Brightness.dark
-                                                                      ? Theme.of(context).colorScheme.primaryContainer
+                                                                      ? Theme.of(context).colorScheme.primary
                                                                       : Theme.of(context).colorScheme.onPrimaryContainer.withValues(alpha: 0.7),
                                                                     borderRadius: BorderRadius.circular(12),
                                                                   ),
@@ -3477,7 +3477,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                                         Icons.search,
                                                                         size: 20,
                                                                         color: Theme.of(context).brightness == Brightness.dark
-                                                                          ? Theme.of(context).colorScheme.onPrimaryContainer
+                                                                          ? Theme.of(context).colorScheme.onPrimary
                                                                           : Theme.of(context).colorScheme.surfaceContainer,
                                                                       ),
                                                                       const SizedBox(width: 8),
@@ -3487,7 +3487,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                                           fontWeight: FontWeight.w600,
                                                                           fontSize: 14,
                                                                           color: Theme.of(context).brightness == Brightness.dark
-                                                                            ? Theme.of(context).colorScheme.onPrimaryContainer
+                                                                            ? Theme.of(context).colorScheme.onPrimary
                                                                             : Theme.of(context).colorScheme.surfaceContainer,
                                                                         ),
                                                                       ),
@@ -3824,7 +3824,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                               ),
                                                               decoration: BoxDecoration(
                                                                 color: Theme.of(context).brightness == Brightness.dark
-                                                                  ? Theme.of(context).colorScheme.primaryContainer
+                                                                  ? Theme.of(context).colorScheme.primary
                                                                   : Theme.of(context).colorScheme.onPrimaryContainer.withValues(alpha: 0.7),
                                                                 borderRadius: BorderRadius.circular(12),
                                                               ),
@@ -3835,7 +3835,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                                     Icons.search,
                                                                     size: 20,
                                                                     color: Theme.of(context).brightness == Brightness.dark
-                                                                      ? Theme.of(context).colorScheme.onPrimaryContainer
+                                                                      ? Theme.of(context).colorScheme.onPrimary
                                                                       : Theme.of(context).colorScheme.surfaceContainer,
                                                                   ),
                                                                   const SizedBox(width: 8),
@@ -3845,7 +3845,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                                       fontWeight: FontWeight.w600,
                                                                       fontSize: 14,
                                                                       color: Theme.of(context).brightness == Brightness.dark
-                                                                        ? Theme.of(context).colorScheme.onPrimaryContainer
+                                                                        ? Theme.of(context).colorScheme.onPrimary
                                                                         : Theme.of(context).colorScheme.surfaceContainer,
                                                                     ),
                                                                   ),
@@ -4174,7 +4174,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                                 ),
                                                                 decoration: BoxDecoration(
                                                                   color: Theme.of(context).brightness == Brightness.dark
-                                                                    ? Theme.of(context).colorScheme.primaryContainer
+                                                                    ? Theme.of(context).colorScheme.primary
                                                                     : Theme.of(context).colorScheme.onPrimaryContainer.withValues(alpha: 0.7),
                                                                   borderRadius: BorderRadius.circular(12),
                                                                 ),
@@ -4185,7 +4185,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                                       Icons.search,
                                                                       size: 20,
                                                                       color: Theme.of(context).brightness == Brightness.dark
-                                                                        ? Theme.of(context).colorScheme.onPrimaryContainer
+                                                                        ? Theme.of(context).colorScheme.onPrimary
                                                                         : Theme.of(context).colorScheme.surfaceContainer,
                                                                     ),
                                                                     const SizedBox(width: 8),
@@ -4195,7 +4195,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                                         fontWeight: FontWeight.w600,
                                                                         fontSize: 14,
                                                                         color: Theme.of(context).brightness == Brightness.dark
-                                                                          ? Theme.of(context).colorScheme.onPrimaryContainer
+                                                                          ? Theme.of(context).colorScheme.onPrimary
                                                                           : Theme.of(context).colorScheme.surfaceContainer,
                                                                       ),
                                                                     ),
@@ -4685,7 +4685,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                             ),
                                                             decoration: BoxDecoration(
                                                               color: Theme.of(context).brightness == Brightness.dark
-                                                                ? Theme.of(context).colorScheme.primaryContainer
+                                                                ? Theme.of(context).colorScheme.primary
                                                                 : Theme.of(context).colorScheme.onPrimaryContainer.withValues(alpha: 0.7),
                                                               borderRadius: BorderRadius.circular(12),
                                                             ),
@@ -4696,7 +4696,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                                   Icons.search,
                                                                   size: 20,
                                                                   color: Theme.of(context).brightness == Brightness.dark
-                                                                    ? Theme.of(context).colorScheme.onPrimaryContainer
+                                                                    ? Theme.of(context).colorScheme.onPrimary
                                                                     : Theme.of(context).colorScheme.surfaceContainer,
                                                                 ),
                                                                 const SizedBox(width: 8),
@@ -4706,7 +4706,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                                     fontWeight: FontWeight.w600,
                                                                     fontSize: 14,
                                                                     color: Theme.of(context).brightness == Brightness.dark
-                                                                      ? Theme.of(context).colorScheme.onPrimaryContainer
+                                                                      ? Theme.of(context).colorScheme.onPrimary
                                                                       : Theme.of(context).colorScheme.surfaceContainer,
                                                                   ),
                                                                 ),
