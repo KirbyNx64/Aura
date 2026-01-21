@@ -1,9 +1,9 @@
 {
-  "version": "1.6.2",
+  "version": "1.6.3",
   "apk_urls": {
-    "arm64-v8a": "https://github.com/KirbyNx64/Aura/releases/download/v1.6.2/AuraMusic-v1.6.2-arm64-v8a.apk",
-    "armeabi-v7a": "https://github.com/KirbyNx64/Aura/releases/download/v1.6.2/AuraMusic-v1.6.2-armeabi-v7a.apk",
-    "x86_64": "https://github.com/KirbyNx64/Aura/releases/download/v1.6.2/AuraMusic-v1.6.2-x86_64.apk"
+    "arm64-v8a": "https://github.com/KirbyNx64/Aura/releases/download/v1.6.3/AuraMusic-v1.6.3-arm64-v8a.apk",
+    "armeabi-v7a": "https://github.com/KirbyNx64/Aura/releases/download/v1.6.3/AuraMusic-v1.6.3-armeabi-v7a.apk",
+    "x86_64": "https://github.com/KirbyNx64/Aura/releases/download/v1.6.3/AuraMusic-v1.6.3-x86_64.apk"
   },
-  "changelog": "• Mejoras visuales: Pequeños ajustes en la interfaz para una experiencia más pulida.\n\n• Corrección de errores: Solución de fallos menores y optimizaciones internas."
+  "changelog": "• Mejoras en el diseño general de la aplicación.\n\n• Se agregó un botón para descargar completamente una lista de reproducción o un álbum.\n\n• Se actualizaron las dependencias de la aplicación.\n\n• Se corrigió el recorte de las carátulas al descargar contenido usando la opción de baja calidad.\n\n• Se solucionó el parpadeo de la letra de las canciones al cerrar el modal mediante deslizamiento."
 }
