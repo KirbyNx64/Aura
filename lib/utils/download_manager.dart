@@ -8,7 +8,7 @@ import 'package:media_scanner/media_scanner.dart';
 import 'package:http/http.dart' as http;
 import 'package:dio/dio.dart';
 import 'package:music/screens/download/stream_provider.dart';
-import 'package:audiotags/audiotags.dart';  
+import 'package:audiotags/audiotags.dart';
 // import 'package:path/path.dart' as p;
 // import 'package:music/main.dart';
 import 'package:image/image.dart' as img;
@@ -24,10 +24,18 @@ import 'package:path/path.dart' as path;
 Uint8List? decodeAndCropImage(Uint8List bytes) {
   final original = img.decodeImage(bytes);
   if (original != null) {
-    final minSide = original.width < original.height ? original.width : original.height;
+    final minSide = original.width < original.height
+        ? original.width
+        : original.height;
     final offsetX = (original.width - minSide) ~/ 2;
     final offsetY = (original.height - minSide) ~/ 2;
-    final square = img.copyCrop(original, x: offsetX, y: offsetY, width: minSide, height: minSide);
+    final square = img.copyCrop(
+      original,
+      x: offsetX,
+      y: offsetY,
+      width: minSide,
+      height: minSide,
+    );
     return Uint8List.fromList(img.encodeJpg(square));
   }
   return null;
@@ -41,21 +49,21 @@ Uint8List? decodeAndCropImageHQ(Uint8List bytes) {
     // Las franjas negras están arriba y abajo
     final width = original.width;
     final height = original.height;
-    
-    // Calcular el área de contenido real (aproximadamente 60% del centro)
-    final contentHeight = (height * 0.6).round();
+
+    // Calcular el área de contenido real (aproximadamente 75% del centro)
+    final contentHeight = (height * 0.75).round();
     final offsetY = (height - contentHeight) ~/ 2;
-    
+
     // Crear un cuadrado del área de contenido
     final minSide = width < contentHeight ? width : contentHeight;
     final offsetX = (width - minSide) ~/ 2;
-    
+
     final square = img.copyCrop(
-      original, 
-      x: offsetX, 
-      y: offsetY, 
-      width: minSide, 
-      height: minSide
+      original,
+      x: offsetX,
+      y: offsetY,
+      width: minSide,
+      height: minSide,
     );
     return Uint8List.fromList(img.encodeJpg(square));
   }
@@ -83,10 +91,12 @@ class DownloadManager {
   // Estado
   bool _isDownloading = false;
   bool _isProcessing = false;
-  
+
   // Control de throttling para actualizaciones de progreso
   DateTime? _lastProgressUpdate;
-  static const _progressUpdateInterval = Duration(milliseconds: 100); // Actualizar máximo cada 100ms
+  static const _progressUpdateInterval = Duration(
+    milliseconds: 100,
+  ); // Actualizar máximo cada 100ms
 
   // Contexto opcional para mostrar diálogos directamente desde el manager
   BuildContext? _dialogContext;
@@ -94,11 +104,12 @@ class DownloadManager {
   // Inicializar configuración
   Future<void> initialize() async {
     final prefs = await SharedPreferences.getInstance();
-    _directoryPath = prefs.getString('download_directory') ?? '/storage/emulated/0/Music';
+    _directoryPath =
+        prefs.getString('download_directory') ?? '/storage/emulated/0/Music';
     _usarExplode = prefs.getBool('download_type_explode') ?? true;
     _usarFFmpeg = prefs.getBool('audio_processor_ffmpeg') ?? false;
     _audioQuality = prefs.getString('audio_quality') ?? 'high';
-    
+
     // Guardar el directorio por defecto si no existe
     if (!prefs.containsKey('download_directory')) {
       await prefs.setString('download_directory', '/storage/emulated/0/Music');
@@ -107,7 +118,8 @@ class DownloadManager {
 
   // Configurar callbacks
   void setCallbacks({
-    Function(String? title, String? artist, Uint8List? coverBytes)? onInfoUpdate,
+    Function(String? title, String? artist, Uint8List? coverBytes)?
+    onInfoUpdate,
     Function(double progress)? onProgressUpdate,
     Function(bool isDownloading, bool isProcessing)? onStateUpdate,
     Function(String title, String message)? onError,
@@ -189,7 +201,11 @@ class DownloadManager {
       final manifest = await yt.videos.streamsClient.getManifest(video.id);
 
       final audioList = manifest.audioOnly
-          .where((s) => s.codec.mimeType == 'audio/mp4' || s.codec.toString().contains('mp4a'))
+          .where(
+            (s) =>
+                s.codec.mimeType == 'audio/mp4' ||
+                s.codec.toString().contains('mp4a'),
+          )
           .toList();
       final audioStreamInfo = _selectAudioStream(audioList);
 
@@ -209,7 +225,10 @@ class DownloadManager {
       // Descargar portada
       final prefs = await SharedPreferences.getInstance();
       final highQuality = prefs.getBool('cover_quality_high') ?? true;
-      final coverBytes = await _downloadCover(video.id.toString(), highQuality: highQuality);
+      final coverBytes = await _downloadCover(
+        video.id.toString(),
+        highQuality: highQuality,
+      );
 
       onInfoUpdate?.call(video.title, video.author, coverBytes);
 
@@ -256,7 +275,6 @@ class DownloadManager {
           url,
         );
       }
-
     } finally {
       yt.close();
     }
@@ -313,7 +331,7 @@ class DownloadManager {
     // Ordenar por bitrate (mayor a menor)
     final sortedFormats = List<Audio>.from(audioFormats)
       ..sort((a, b) => b.bitrate.compareTo(a.bitrate));
-    
+
     Audio audio;
     switch (_audioQuality) {
       case 'high':
@@ -345,7 +363,10 @@ class DownloadManager {
     // Descargar portada
     final prefs = await SharedPreferences.getInstance();
     final highQuality = prefs.getBool('cover_quality_high') ?? true;
-    final coverBytes = await _downloadCover(video.id.toString(), highQuality: highQuality);
+    final coverBytes = await _downloadCover(
+      video.id.toString(),
+      highQuality: highQuality,
+    );
 
     onInfoUpdate?.call(video.title, video.author, coverBytes);
 
@@ -557,7 +578,7 @@ class DownloadManager {
               bytes: bytes,
               mimeType: null,
               pictureType: PictureType.other,
-            )
+            ),
           ],
         );
         await AudioTags.write(m4aPath, tag);
@@ -570,7 +591,7 @@ class DownloadManager {
       MediaScanner.loadMedia(path: m4aPath);
 
       _updateProgress(0.95);
-      
+
       // Guardar en la base de datos de historial en segundo plano
       // usando Future.microtask para no bloquear la UI
       Future.microtask(() async {
@@ -596,22 +617,18 @@ class DownloadManager {
           // print('Error al guardar en historial: $e');
         }
       });
-      
+
       _updateProgress(1.0);
       await Future.delayed(const Duration(seconds: 1));
-      
+
       foldersShouldReload.value = !foldersShouldReload.value;
 
       onSuccess?.call(
         songTitle ?? LocaleProvider.tr('download_completed'),
         LocaleProvider.tr('download_completed_desc'),
       );
-
     } catch (e) {
-      onError?.call(
-        LocaleProvider.tr('audio_processing_error'),
-        e.toString(),
-      );
+      onError?.call(LocaleProvider.tr('audio_processing_error'), e.toString());
     }
   }
 
@@ -674,24 +691,28 @@ class DownloadManager {
           );
 
           final bytes = <int>[];
-          await response.data!.stream.listen(
-            (chunk) {
-              bytes.addAll(chunk);
-              synchronized(lock, () {
-                downloaded += chunk.length;
-                onProgress(downloaded / totalSize);
-              });
-            },
-            onDone: () {},
-            onError: (e) => throw Exception('Error en chunk $index: $e'),
-          ).asFuture();
+          await response.data!.stream
+              .listen(
+                (chunk) {
+                  bytes.addAll(chunk);
+                  synchronized(lock, () {
+                    downloaded += chunk.length;
+                    onProgress(downloaded / totalSize);
+                  });
+                },
+                onDone: () {},
+                onError: (e) => throw Exception('Error en chunk $index: $e'),
+              )
+              .asFuture();
 
           raf.setPositionSync(start);
           raf.writeFromSync(bytes);
           break; // Éxito, salimos del while
         } catch (e) {
           if (attempt >= maxRetries) {
-            throw Exception('Error permanente en el chunk $index después de $attempt intentos: $e');
+            throw Exception(
+              'Error permanente en el chunk $index después de $attempt intentos: $e',
+            );
           } else {
             await Future.delayed(const Duration(seconds: 1));
           }
@@ -708,7 +729,10 @@ class DownloadManager {
     return await Future.sync(() => func());
   }
 
-  Future<Uint8List?> _downloadCover(String videoId, {bool highQuality = true}) async {
+  Future<Uint8List?> _downloadCover(
+    String videoId, {
+    bool highQuality = true,
+  }) async {
     final coverUrlMax = 'https://img.youtube.com/vi/$videoId/maxresdefault.jpg';
     final coverUrlHQ = 'https://img.youtube.com/vi/$videoId/hqdefault.jpg';
 
@@ -721,13 +745,17 @@ class DownloadManager {
           final request = await client.getUrl(Uri.parse(coverUrlMax));
           final response = await request.close();
           if (response.statusCode == 200) {
-            bytes = Uint8List.fromList(await _consolidateResponseBytes(response));
+            bytes = Uint8List.fromList(
+              await _consolidateResponseBytes(response),
+            );
           } else {
             // Si maxresdefault falla, intentar hqdefault
             final requestHQ = await client.getUrl(Uri.parse(coverUrlHQ));
             final responseHQ = await requestHQ.close();
             if (responseHQ.statusCode == 200) {
-              bytes = Uint8List.fromList(await _consolidateResponseBytes(responseHQ));
+              bytes = Uint8List.fromList(
+                await _consolidateResponseBytes(responseHQ),
+              );
             } else {
               // Si hqdefault también falla, usar http
               final httpResponse = await http.get(Uri.parse(coverUrlHQ));
@@ -753,7 +781,9 @@ class DownloadManager {
           final requestHQ = await client.getUrl(Uri.parse(coverUrlHQ));
           final responseHQ = await requestHQ.close();
           if (responseHQ.statusCode == 200) {
-            bytes = Uint8List.fromList(await _consolidateResponseBytes(responseHQ));
+            bytes = Uint8List.fromList(
+              await _consolidateResponseBytes(responseHQ),
+            );
           } else {
             // Si hqdefault falla, usar http
             final httpResponse = await http.get(Uri.parse(coverUrlHQ));
@@ -819,11 +849,11 @@ class DownloadManager {
     _isProcessing = isProcessing;
     onStateUpdate?.call(isDownloading, isProcessing);
   }
-  
+
   // Actualizar progreso con throttling para no saturar la UI
   void _updateProgress(double progress) {
     final now = DateTime.now();
-    if (_lastProgressUpdate == null || 
+    if (_lastProgressUpdate == null ||
         now.difference(_lastProgressUpdate!) >= _progressUpdateInterval ||
         progress >= 1.0) {
       _lastProgressUpdate = now;
@@ -857,11 +887,11 @@ class DownloadManager {
   // Método para seleccionar stream de audio según calidad
   AudioStreamInfo? _selectAudioStream(List<AudioStreamInfo> audioStreams) {
     if (audioStreams.isEmpty) return null;
-    
+
     // Ordenar por bitrate (mayor a menor)
     final sortedStreams = List<AudioStreamInfo>.from(audioStreams)
       ..sort((a, b) => b.bitrate.compareTo(a.bitrate));
-    
+
     switch (_audioQuality) {
       case 'high':
         // Mejor calidad disponible
@@ -885,4 +915,4 @@ class DownloadManager {
   bool get usarExplode => _usarExplode;
   bool get usarFFmpeg => _usarFFmpeg;
   String get audioQuality => _audioQuality;
-} 
+}

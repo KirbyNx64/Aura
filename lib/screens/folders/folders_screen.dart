@@ -60,7 +60,7 @@ class _FoldersScreenState extends State<FoldersScreen>
   Map<String, List<String>> songPathsByFolder = {};
   Map<String, String> folderDisplayNames = {};
   String? carpetaSeleccionada;
-  
+
   // Cache de carpetas ignoradas para evitar parpadeos
   Set<String> _ignoredFoldersCache = {};
   List<SongModel> _filteredSongs = [];
@@ -90,7 +90,7 @@ class _FoldersScreenState extends State<FoldersScreen>
   double _lastBottomInset = 0.0;
 
   bool _isLoading = true;
-  
+
   // Variable para verificar si estamos en Android 10+
   bool _isAndroid10OrHigher = false;
 
@@ -202,7 +202,7 @@ class _FoldersScreenState extends State<FoldersScreen>
     if (carpetaSeleccionada != null) {
       // Sincronizar el índice de carpetas
       await _sincronizarMapaCarpetas();
-      
+
       // Actualizar solo la carpeta actual
       await _actualizarCarpetaActual();
     }
@@ -439,14 +439,11 @@ class _FoldersScreenState extends State<FoldersScreen>
     final folders = await SongsIndexDB().getFolders();
     // Incluir también carpetas ignoradas para poder restaurarlas
     final ignored = await getIgnoredFolders();
-    
+
     // Cargar cache de carpetas ignoradas para evitar parpadeos
     _ignoredFoldersCache = Set<String>.from(ignored);
-    
-    final allFolderKeys = {
-      ...folders,
-      ...ignored,
-    };
+
+    final allFolderKeys = {...folders, ...ignored};
     final Map<String, List<String>> agrupado = {};
     final Map<String, String> displayNames = {};
     for (final folder in allFolderKeys) {
@@ -497,10 +494,12 @@ class _FoldersScreenState extends State<FoldersScreen>
         return segments.last;
       }
     }
-    
+
     // Si no hay canciones en songPathsByFolder, intentar obtenerlas directamente
     try {
-      final paths = await SongsIndexDB().getSongsFromFolder(normalizedFolderPath);
+      final paths = await SongsIndexDB().getSongsFromFolder(
+        normalizedFolderPath,
+      );
       if (paths.isNotEmpty) {
         final firstSongPath = paths.first;
         final directory = Directory(p.dirname(firstSongPath));
@@ -509,7 +508,7 @@ class _FoldersScreenState extends State<FoldersScreen>
     } catch (e) {
       // Fallback: usar el último segmento de la ruta normalizada
     }
-    
+
     // Fallback: usar el último segmento de la ruta normalizada
     final segments = normalizedFolderPath.split(RegExp(r'[\\/]'));
     return segments.last;
@@ -527,7 +526,9 @@ class _FoldersScreenState extends State<FoldersScreen>
       isScrollControlled: true,
       useSafeArea: true,
       builder: (context) {
-        final maxHeight = MediaQuery.of(context).size.height - MediaQuery.of(context).padding.top;
+        final maxHeight =
+            MediaQuery.of(context).size.height -
+            MediaQuery.of(context).padding.top;
         return Container(
           constraints: BoxConstraints(maxHeight: maxHeight),
           child: SafeArea(
@@ -567,7 +568,8 @@ class _FoldersScreenState extends State<FoldersScreen>
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                song.artist ?? LocaleProvider.tr('unknown_artist'),
+                                song.artist ??
+                                    LocaleProvider.tr('unknown_artist'),
                                 style: TextStyle(fontSize: 14),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
@@ -576,7 +578,7 @@ class _FoldersScreenState extends State<FoldersScreen>
                           ),
                         ),
                         const SizedBox(width: 8),
-                                            // Botón para buscar la canción en YouTube o YouTube Music
+                        // Botón para buscar la canción en YouTube o YouTube Music
                         GestureDetector(
                           onTap: () async {
                             Navigator.of(context).pop();
@@ -588,11 +590,14 @@ class _FoldersScreenState extends State<FoldersScreen>
                               vertical: 8,
                             ),
                             decoration: BoxDecoration(
-                              color: Theme.of(
-                                context,
-                              ).brightness == Brightness.dark
-                              ? Theme.of(context).colorScheme.primary
-                              : Theme.of(context).colorScheme.onPrimaryContainer.withValues(alpha: 0.7),
+                              color:
+                                  Theme.of(context).brightness ==
+                                      Brightness.dark
+                                  ? Theme.of(context).colorScheme.primary
+                                  : Theme.of(context)
+                                        .colorScheme
+                                        .onPrimaryContainer
+                                        .withValues(alpha: 0.7),
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Row(
@@ -601,11 +606,13 @@ class _FoldersScreenState extends State<FoldersScreen>
                                 Icon(
                                   Icons.search,
                                   size: 20,
-                                  color: Theme.of(
-                                    context,
-                                  ).brightness == Brightness.dark
-                                  ? Theme.of(context).colorScheme.onPrimary
-                                  : Theme.of(context).colorScheme.surfaceContainer,
+                                  color:
+                                      Theme.of(context).brightness ==
+                                          Brightness.dark
+                                      ? Theme.of(context).colorScheme.onPrimary
+                                      : Theme.of(
+                                          context,
+                                        ).colorScheme.surfaceContainer,
                                 ),
                                 const SizedBox(width: 8),
                                 TranslatedText(
@@ -613,11 +620,15 @@ class _FoldersScreenState extends State<FoldersScreen>
                                   style: TextStyle(
                                     fontWeight: FontWeight.w600,
                                     fontSize: 14,
-                                    color: Theme.of(
-                                      context,
-                                    ).brightness == Brightness.dark
-                                    ? Theme.of(context).colorScheme.onPrimary
-                                    : Theme.of(context).colorScheme.surfaceContainer,
+                                    color:
+                                        Theme.of(context).brightness ==
+                                            Brightness.dark
+                                        ? Theme.of(
+                                            context,
+                                          ).colorScheme.onPrimary
+                                        : Theme.of(
+                                            context,
+                                          ).colorScheme.surfaceContainer,
                                   ),
                                 ),
                               ],
@@ -632,14 +643,16 @@ class _FoldersScreenState extends State<FoldersScreen>
                     title: TranslatedText('add_to_queue'),
                     onTap: () async {
                       Navigator.of(context).pop();
-                      await (audioHandler as MyAudioHandler).addSongsToQueueEnd([
-                        song,
-                      ]);
+                      await (audioHandler as MyAudioHandler).addSongsToQueueEnd(
+                        [song],
+                      );
                     },
                   ),
                   ListTile(
                     leading: Icon(
-                      isFavorite ? Icons.delete_outline : Symbols.favorite_rounded,
+                      isFavorite
+                          ? Icons.delete_outline
+                          : Symbols.favorite_rounded,
                       weight: isFavorite ? null : 600,
                     ),
                     title: TranslatedText(
@@ -650,10 +663,12 @@ class _FoldersScreenState extends State<FoldersScreen>
 
                       if (isFavorite) {
                         await FavoritesDB().removeFavorite(song.data);
-                        favoritesShouldReload.value = !favoritesShouldReload.value;
+                        favoritesShouldReload.value =
+                            !favoritesShouldReload.value;
                       } else {
                         await _addToFavorites(song);
-                        favoritesShouldReload.value = !favoritesShouldReload.value;
+                        favoritesShouldReload.value =
+                            !favoritesShouldReload.value;
                       }
                     },
                   ),
@@ -673,7 +688,10 @@ class _FoldersScreenState extends State<FoldersScreen>
                       final dataPath = song.data;
                       if (dataPath.isNotEmpty) {
                         await SharePlus.instance.share(
-                          ShareParams(text: song.title, files: [XFile(dataPath)]),
+                          ShareParams(
+                            text: song.title,
+                            files: [XFile(dataPath)],
+                          ),
                         );
                       }
                     },
@@ -689,7 +707,7 @@ class _FoldersScreenState extends State<FoldersScreen>
                       });
                     },
                   ),
-                  
+
                   // Botón "Más" para mostrar opciones adicionales
                   ListTile(
                     leading: const Icon(Icons.more_horiz),
@@ -708,13 +726,20 @@ class _FoldersScreenState extends State<FoldersScreen>
     );
   }
 
-  void _showMoreOptionsModal(BuildContext context, SongModel song, bool isPinned, bool isIgnored) {
+  void _showMoreOptionsModal(
+    BuildContext context,
+    SongModel song,
+    bool isPinned,
+    bool isIgnored,
+  ) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
       builder: (context) {
-        final maxHeight = MediaQuery.of(context).size.height - MediaQuery.of(context).padding.top;
+        final maxHeight =
+            MediaQuery.of(context).size.height -
+            MediaQuery.of(context).padding.top;
         return Container(
           constraints: BoxConstraints(maxHeight: maxHeight),
           child: SafeArea(
@@ -754,7 +779,8 @@ class _FoldersScreenState extends State<FoldersScreen>
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                song.artist ?? LocaleProvider.tr('unknown_artist'),
+                                song.artist ??
+                                    LocaleProvider.tr('unknown_artist'),
                                 style: TextStyle(fontSize: 14),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
@@ -771,7 +797,7 @@ class _FoldersScreenState extends State<FoldersScreen>
                       ],
                     ),
                   ),
-                  
+
                   // Opciones adicionales
                   ListTile(
                     leading: Icon(
@@ -788,7 +814,8 @@ class _FoldersScreenState extends State<FoldersScreen>
                         await ShortcutsDB().addShortcut(song.data);
                       }
                       if (mounted) setState(() {});
-                      shortcutsShouldReload.value = !shortcutsShouldReload.value;
+                      shortcutsShouldReload.value =
+                          !shortcutsShouldReload.value;
                     },
                   ),
                   if ((song.artist ?? '').trim().isNotEmpty)
@@ -801,21 +828,28 @@ class _FoldersScreenState extends State<FoldersScreen>
                         if (name.isEmpty) return;
                         Navigator.of(context).push(
                           PageRouteBuilder(
-                            pageBuilder: (context, animation, secondaryAnimation) =>
-                                ArtistScreen(artistName: name),
-                            transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                              const begin = Offset(1.0, 0.0);
-                              const end = Offset.zero;
-                              const curve = Curves.ease;
-                              final tween = Tween(
-                                begin: begin,
-                                end: end,
-                              ).chain(CurveTween(curve: curve));
-                              return SlideTransition(
-                                position: animation.drive(tween),
-                                child: child,
-                              );
-                            },
+                            pageBuilder:
+                                (context, animation, secondaryAnimation) =>
+                                    ArtistScreen(artistName: name),
+                            transitionsBuilder:
+                                (
+                                  context,
+                                  animation,
+                                  secondaryAnimation,
+                                  child,
+                                ) {
+                                  const begin = Offset(1.0, 0.0);
+                                  const end = Offset.zero;
+                                  const curve = Curves.ease;
+                                  final tween = Tween(
+                                    begin: begin,
+                                    end: end,
+                                  ).chain(CurveTween(curve: curve));
+                                  return SlideTransition(
+                                    position: animation.drive(tween),
+                                    child: child,
+                                  );
+                                },
                           ),
                         );
                       },
@@ -876,7 +910,11 @@ class _FoldersScreenState extends State<FoldersScreen>
                     title: TranslatedText('song_info'),
                     onTap: () async {
                       Navigator.of(context).pop();
-                      await SongInfoDialog.showFromSong(context, song, colorSchemeNotifier);
+                      await SongInfoDialog.showFromSong(
+                        context,
+                        song,
+                        colorSchemeNotifier,
+                      );
                     },
                   ),
                 ],
@@ -1004,7 +1042,7 @@ class _FoldersScreenState extends State<FoldersScreen>
       // Limpiar la cola y el MediaItem antes de mostrar la nueva canción
       handler.queue.add([]);
       handler.mediaItem.add(null);
-      
+
       // Limpiar el fallback de las carátulas para evitar parpadeo
       ArtworkHeroCached.clearFallback();
 
@@ -1298,7 +1336,9 @@ class _FoldersScreenState extends State<FoldersScreen>
 
     // Buscar en nombres de carpetas
     final folderMatches = songPathsByFolder.entries.where((entry) {
-      final folderName = quitarDiacriticos(folderDisplayNames[entry.key] ?? '').toLowerCase();
+      final folderName = quitarDiacriticos(
+        folderDisplayNames[entry.key] ?? '',
+      ).toLowerCase();
       return folderName.contains(query);
     }).toList();
 
@@ -1309,7 +1349,7 @@ class _FoldersScreenState extends State<FoldersScreen>
       for (final song in allSongs) {
         final title = quitarDiacriticos(song.title).toLowerCase();
         final artist = quitarDiacriticos(song.artist ?? '').toLowerCase();
-        
+
         if (title.contains(query) || artist.contains(query)) {
           // Encontrar la carpeta que contiene esta canción
           final folderPath = _getFolderPath(song.data);
@@ -1324,12 +1364,12 @@ class _FoldersScreenState extends State<FoldersScreen>
 
     // Combinar resultados de búsqueda de carpetas y canciones
     final allMatches = <String, List<String>>{};
-    
+
     // Agregar coincidencias de carpetas
     for (final entry in folderMatches) {
       allMatches[entry.key] = entry.value;
     }
-    
+
     // Agregar coincidencias de canciones (sin duplicar)
     for (final folderPath in songMatches) {
       if (!allMatches.containsKey(folderPath)) {
@@ -1357,7 +1397,11 @@ class _FoldersScreenState extends State<FoldersScreen>
         width: 60,
         height: 60,
         decoration: BoxDecoration(
-          color: isSystem ? Theme.of(context).colorScheme.secondaryContainer.withValues(alpha: 0.5) : Theme.of(context).colorScheme.surfaceContainer,
+          color: isSystem
+              ? Theme.of(
+                  context,
+                ).colorScheme.secondaryContainer.withValues(alpha: 0.5)
+              : Theme.of(context).colorScheme.surfaceContainer,
           borderRadius: BorderRadius.circular(8),
         ),
         child: Icon(Icons.music_note, size: 30),
@@ -1409,9 +1453,10 @@ class _FoldersScreenState extends State<FoldersScreen>
 
       // Codificar la consulta para la URL
       final encodedQuery = Uri.encodeComponent(searchQuery);
-      
+
       // URL correcta para búsqueda en YouTube Music
-      final ytMusicSearchUrl = 'https://music.youtube.com/search?q=$encodedQuery';
+      final ytMusicSearchUrl =
+          'https://music.youtube.com/search?q=$encodedQuery';
 
       // Intentar abrir YouTube Music en el navegador o en la app
       final url = Uri.parse(ytMusicSearchUrl);
@@ -1434,10 +1479,9 @@ class _FoldersScreenState extends State<FoldersScreen>
         return ValueListenableBuilder<AppColorScheme>(
           valueListenable: colorSchemeNotifier,
           builder: (context, colorScheme, child) {
-            
             final isAmoled = colorScheme == AppColorScheme.amoled;
             final isDark = Theme.of(context).brightness == Brightness.dark;
-            
+
             return AlertDialog(
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
@@ -1448,10 +1492,7 @@ class _FoldersScreenState extends State<FoldersScreen>
               title: Center(
                 child: TranslatedText(
                   'search_song',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
                 ),
               ),
               content: SizedBox(
@@ -1488,8 +1529,12 @@ class _FoldersScreenState extends State<FoldersScreen>
                         padding: EdgeInsets.all(16),
                         decoration: BoxDecoration(
                           color: isAmoled && isDark
-                              ? Colors.white.withValues(alpha: 0.1) // Color personalizado para amoled
-                              : Theme.of(context).colorScheme.secondaryContainer,
+                              ? Colors.white.withValues(
+                                  alpha: 0.1,
+                                ) // Color personalizado para amoled
+                              : Theme.of(
+                                  context,
+                                ).colorScheme.secondaryContainer,
                           borderRadius: BorderRadius.only(
                             topLeft: Radius.circular(16),
                             topRight: Radius.circular(16),
@@ -1498,8 +1543,12 @@ class _FoldersScreenState extends State<FoldersScreen>
                           ),
                           border: Border.all(
                             color: isAmoled && isDark
-                                ? Colors.white.withValues(alpha: 0.2) // Borde personalizado para amoled
-                                : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
+                                ? Colors.white.withValues(
+                                    alpha: 0.2,
+                                  ) // Borde personalizado para amoled
+                                : Theme.of(
+                                    context,
+                                  ).colorScheme.outline.withValues(alpha: 0.1),
                             width: 1,
                           ),
                         ),
@@ -1524,7 +1573,8 @@ class _FoldersScreenState extends State<FoldersScreen>
                                   fontSize: 16,
                                   fontWeight: FontWeight.w600,
                                   color: isAmoled && isDark
-                                      ? Colors.white // Texto blanco para amoled
+                                      ? Colors
+                                            .white // Texto blanco para amoled
                                       : Theme.of(context).colorScheme.onSurface,
                                 ),
                               ),
@@ -1546,8 +1596,12 @@ class _FoldersScreenState extends State<FoldersScreen>
                         padding: EdgeInsets.all(16),
                         decoration: BoxDecoration(
                           color: isAmoled && isDark
-                              ? Colors.white.withValues(alpha: 0.1) // Color personalizado para amoled
-                              : Theme.of(context).colorScheme.secondaryContainer,
+                              ? Colors.white.withValues(
+                                  alpha: 0.1,
+                                ) // Color personalizado para amoled
+                              : Theme.of(
+                                  context,
+                                ).colorScheme.secondaryContainer,
                           borderRadius: BorderRadius.only(
                             topLeft: Radius.circular(4),
                             topRight: Radius.circular(4),
@@ -1556,8 +1610,12 @@ class _FoldersScreenState extends State<FoldersScreen>
                           ),
                           border: Border.all(
                             color: isAmoled && isDark
-                                ? Colors.white.withValues(alpha: 0.2) // Borde personalizado para amoled
-                                : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
+                                ? Colors.white.withValues(
+                                    alpha: 0.2,
+                                  ) // Borde personalizado para amoled
+                                : Theme.of(
+                                    context,
+                                  ).colorScheme.outline.withValues(alpha: 0.1),
                             width: 1,
                           ),
                         ),
@@ -1582,7 +1640,8 @@ class _FoldersScreenState extends State<FoldersScreen>
                                   fontSize: 16,
                                   fontWeight: FontWeight.w600,
                                   color: isAmoled && isDark
-                                      ? Colors.white // Texto blanco para amoled
+                                      ? Colors
+                                            .white // Texto blanco para amoled
                                       : Theme.of(context).colorScheme.onSurface,
                                 ),
                               ),
@@ -1591,7 +1650,6 @@ class _FoldersScreenState extends State<FoldersScreen>
                         ),
                       ),
                     ),
-                    
                   ],
                 ),
               ),
@@ -1610,10 +1668,9 @@ class _FoldersScreenState extends State<FoldersScreen>
         return ValueListenableBuilder<AppColorScheme>(
           valueListenable: colorSchemeNotifier,
           builder: (context, colorScheme, child) {
-            
             final isAmoled = colorScheme == AppColorScheme.amoled;
             final isDark = Theme.of(context).brightness == Brightness.dark;
-            
+
             return AlertDialog(
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
@@ -1624,10 +1681,7 @@ class _FoldersScreenState extends State<FoldersScreen>
               title: Center(
                 child: TranslatedText(
                   'delete_song',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
                 ),
               ),
               content: SizedBox(
@@ -1665,7 +1719,10 @@ class _FoldersScreenState extends State<FoldersScreen>
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(16),
                                 side: isAmoled && isDark
-                                    ? const BorderSide(color: Colors.white, width: 1)
+                                    ? const BorderSide(
+                                        color: Colors.white,
+                                        width: 1,
+                                      )
                                     : BorderSide.none,
                               ),
                               title: TranslatedText('error'),
@@ -1686,7 +1743,9 @@ class _FoldersScreenState extends State<FoldersScreen>
                         padding: EdgeInsets.all(16),
                         decoration: BoxDecoration(
                           color: isAmoled && isDark
-                              ? Colors.red.withValues(alpha: 0.2) // Color personalizado para amoled
+                              ? Colors.red.withValues(
+                                  alpha: 0.2,
+                                ) // Color personalizado para amoled
                               : Theme.of(context).colorScheme.errorContainer,
                           borderRadius: BorderRadius.only(
                             topLeft: Radius.circular(16),
@@ -1696,8 +1755,12 @@ class _FoldersScreenState extends State<FoldersScreen>
                           ),
                           border: Border.all(
                             color: isAmoled && isDark
-                                ? Colors.red.withValues(alpha: 0.4) // Borde personalizado para amoled
-                                : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
+                                ? Colors.red.withValues(
+                                    alpha: 0.4,
+                                  ) // Borde personalizado para amoled
+                                : Theme.of(
+                                    context,
+                                  ).colorScheme.outline.withValues(alpha: 0.1),
                             width: 1,
                           ),
                         ),
@@ -1712,8 +1775,11 @@ class _FoldersScreenState extends State<FoldersScreen>
                                 Icons.delete_forever,
                                 size: 30,
                                 color: isAmoled && isDark
-                                    ? Colors.red // Ícono rojo para amoled
-                                    : Theme.of(context).colorScheme.onErrorContainer,
+                                    ? Colors
+                                          .red // Ícono rojo para amoled
+                                    : Theme.of(
+                                        context,
+                                      ).colorScheme.onErrorContainer,
                               ),
                             ),
                             SizedBox(width: 8),
@@ -1724,8 +1790,11 @@ class _FoldersScreenState extends State<FoldersScreen>
                                   fontSize: 16,
                                   fontWeight: FontWeight.w600,
                                   color: isAmoled && isDark
-                                      ? Colors.red // Texto rojo para amoled
-                                      : Theme.of(context).colorScheme.onErrorContainer,
+                                      ? Colors
+                                            .red // Texto rojo para amoled
+                                      : Theme.of(
+                                          context,
+                                        ).colorScheme.onErrorContainer,
                                 ),
                               ),
                             ),
@@ -1745,8 +1814,12 @@ class _FoldersScreenState extends State<FoldersScreen>
                         padding: EdgeInsets.all(16),
                         decoration: BoxDecoration(
                           color: isAmoled && isDark
-                              ? Colors.white.withValues(alpha: 0.1) // Color personalizado para amoled
-                              : Theme.of(context).colorScheme.secondaryContainer,
+                              ? Colors.white.withValues(
+                                  alpha: 0.1,
+                                ) // Color personalizado para amoled
+                              : Theme.of(
+                                  context,
+                                ).colorScheme.secondaryContainer,
                           borderRadius: BorderRadius.only(
                             bottomLeft: Radius.circular(16),
                             bottomRight: Radius.circular(16),
@@ -1755,8 +1828,12 @@ class _FoldersScreenState extends State<FoldersScreen>
                           ),
                           border: Border.all(
                             color: isAmoled && isDark
-                                ? Colors.white.withValues(alpha: 0.2) // Borde personalizado para amoled
-                                : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
+                                ? Colors.white.withValues(
+                                    alpha: 0.2,
+                                  ) // Borde personalizado para amoled
+                                : Theme.of(
+                                    context,
+                                  ).colorScheme.outline.withValues(alpha: 0.1),
                             width: 1,
                           ),
                         ),
@@ -1771,7 +1848,8 @@ class _FoldersScreenState extends State<FoldersScreen>
                                 Icons.cancel_outlined,
                                 size: 30,
                                 color: isAmoled && isDark
-                                    ? Colors.white // Ícono blanco para amoled
+                                    ? Colors
+                                          .white // Ícono blanco para amoled
                                     : Theme.of(context).colorScheme.onSurface,
                               ),
                             ),
@@ -1783,7 +1861,8 @@ class _FoldersScreenState extends State<FoldersScreen>
                                   fontSize: 16,
                                   fontWeight: FontWeight.w600,
                                   color: isAmoled && isDark
-                                      ? Colors.white // Texto blanco para amoled
+                                      ? Colors
+                                            .white // Texto blanco para amoled
                                       : Theme.of(context).colorScheme.onSurface,
                                 ),
                               ),
@@ -1802,14 +1881,18 @@ class _FoldersScreenState extends State<FoldersScreen>
     );
   }
 
-
   // Función para mostrar diálogo de renombrado de carpeta
-  Future<void> _showRenameFolderDialog(String folderKey, String currentName) async {
-    final TextEditingController nameController = TextEditingController(text: currentName);
+  Future<void> _showRenameFolderDialog(
+    String folderKey,
+    String currentName,
+  ) async {
+    final TextEditingController nameController = TextEditingController(
+      text: currentName,
+    );
 
     final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -1826,10 +1909,7 @@ class _FoldersScreenState extends State<FoldersScreen>
               title: Center(
                 child: TranslatedText(
                   'rename_folder',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
                 ),
               ),
               content: SizedBox(
@@ -1910,11 +1990,11 @@ class _FoldersScreenState extends State<FoldersScreen>
     try {
       // Obtener la ruta original de la carpeta
       final originalPath = folderKey;
-      
+
       // Intentar encontrar la ruta real de la carpeta
       String realPath = originalPath;
       final directory = Directory(originalPath);
-      
+
       // Si la ruta normalizada no existe, intentar encontrar la ruta real
       if (!await directory.exists()) {
         // Buscar en las canciones de la carpeta para obtener la ruta real
@@ -1925,36 +2005,38 @@ class _FoldersScreenState extends State<FoldersScreen>
           final realDirPath = p.dirname(firstSongPath);
           realPath = realDirPath;
         } else {
-          throw Exception('Carpeta no encontrada - no hay canciones en la carpeta');
+          throw Exception(
+            'Carpeta no encontrada - no hay canciones en la carpeta',
+          );
         }
       }
-      
+
       final realDirectory = Directory(realPath);
-      
+
       // Verificar que la carpeta real existe
       if (!await realDirectory.exists()) {
         throw Exception('Carpeta no encontrada');
       }
-      
+
       // Crear la nueva ruta con el nuevo nombre
       final parentDir = realDirectory.parent;
       final newPath = p.join(parentDir.path, newName);
       final newDirectory = Directory(newPath);
-      
+
       // Verificar que no existe una carpeta con el nuevo nombre
       if (await newDirectory.exists()) {
         throw Exception('Ya existe una carpeta con ese nombre');
       }
-      
+
       // Renombrar la carpeta física
       await realDirectory.rename(newPath);
-      
+
       // Obtener todas las canciones de la carpeta original
       final songsInFolder = songPathsByFolder[folderKey] ?? [];
-      
+
       // Actualizar todas las rutas de las canciones en la base de datos de una vez
       await SongsIndexDB().updateFolderPaths(realPath, newPath);
-      
+
       // Actualizar los mapas locales
       setState(() {
         // Crear nueva entrada con la nueva ruta
@@ -1962,15 +2044,15 @@ class _FoldersScreenState extends State<FoldersScreen>
           final songFileName = p.basename(songPath);
           return p.join(newPath, songFileName);
         }).toList();
-        
+
         // Actualizar el nombre de visualización
         folderDisplayNames[newPath] = newName;
-        
+
         // Eliminar la entrada antigua
         songPathsByFolder.remove(folderKey);
         folderDisplayNames.remove(folderKey);
       });
-      
+
       // Mostrar mensaje de éxito
       if (mounted) {
         _showMessage(
@@ -1989,12 +2071,13 @@ class _FoldersScreenState extends State<FoldersScreen>
         errorMessage = LocaleProvider.tr('folder_name_already_exists');
       } else if (e.toString().contains('Carpeta no encontrada')) {
         errorMessage = LocaleProvider.tr('folder_not_found');
-      } else if (e.toString().contains('Permission denied') || e.toString().contains('Acceso denegado')) {
+      } else if (e.toString().contains('Permission denied') ||
+          e.toString().contains('Acceso denegado')) {
         errorMessage = LocaleProvider.tr('permission_denied_rename');
       } else {
         errorMessage = LocaleProvider.tr('error_renaming_folder');
       }
-      
+
       if (mounted) {
         // print('DEBUG: Mostrando mensaje de error para renombrar carpeta');
         _showMessage(
@@ -2009,17 +2092,19 @@ class _FoldersScreenState extends State<FoldersScreen>
   }
 
   // Función para mostrar confirmación de borrado de carpeta con el mismo diseño
-  Future<void> _showDeleteFolderConfirmation(String folderKey, String folderName) async {
+  Future<void> _showDeleteFolderConfirmation(
+    String folderKey,
+    String folderName,
+  ) async {
     showDialog(
       context: context,
       builder: (BuildContext context) {
         return ValueListenableBuilder<AppColorScheme>(
           valueListenable: colorSchemeNotifier,
           builder: (context, colorScheme, child) {
-            
             final isAmoled = colorScheme == AppColorScheme.amoled;
             final isDark = Theme.of(context).brightness == Brightness.dark;
-            
+
             return AlertDialog(
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
@@ -2030,10 +2115,7 @@ class _FoldersScreenState extends State<FoldersScreen>
               title: Center(
                 child: TranslatedText(
                   'delete_folder',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
                 ),
               ),
               content: SizedBox(
@@ -2071,11 +2153,16 @@ class _FoldersScreenState extends State<FoldersScreen>
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(16),
                                 side: isAmoled && isDark
-                                    ? const BorderSide(color: Colors.white, width: 1)
+                                    ? const BorderSide(
+                                        color: Colors.white,
+                                        width: 1,
+                                      )
                                     : BorderSide.none,
                               ),
                               title: TranslatedText('error'),
-                              content: TranslatedText('could_not_delete_folder'),
+                              content: TranslatedText(
+                                'could_not_delete_folder',
+                              ),
                               actions: [
                                 TextButton(
                                   onPressed: () => Navigator.of(context).pop(),
@@ -2092,7 +2179,9 @@ class _FoldersScreenState extends State<FoldersScreen>
                         padding: EdgeInsets.all(16),
                         decoration: BoxDecoration(
                           color: isAmoled && isDark
-                              ? Colors.red.withValues(alpha: 0.2) // Color personalizado para amoled
+                              ? Colors.red.withValues(
+                                  alpha: 0.2,
+                                ) // Color personalizado para amoled
                               : Theme.of(context).colorScheme.errorContainer,
                           borderRadius: BorderRadius.only(
                             topLeft: Radius.circular(16),
@@ -2102,8 +2191,12 @@ class _FoldersScreenState extends State<FoldersScreen>
                           ),
                           border: Border.all(
                             color: isAmoled && isDark
-                                ? Colors.red.withValues(alpha: 0.4) // Borde personalizado para amoled
-                                : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
+                                ? Colors.red.withValues(
+                                    alpha: 0.4,
+                                  ) // Borde personalizado para amoled
+                                : Theme.of(
+                                    context,
+                                  ).colorScheme.outline.withValues(alpha: 0.1),
                             width: 1,
                           ),
                         ),
@@ -2118,8 +2211,11 @@ class _FoldersScreenState extends State<FoldersScreen>
                                 Icons.folder_delete,
                                 size: 30,
                                 color: isAmoled && isDark
-                                    ? Colors.red // Ícono rojo para amoled
-                                    : Theme.of(context).colorScheme.onErrorContainer,
+                                    ? Colors
+                                          .red // Ícono rojo para amoled
+                                    : Theme.of(
+                                        context,
+                                      ).colorScheme.onErrorContainer,
                               ),
                             ),
                             SizedBox(width: 8),
@@ -2130,8 +2226,11 @@ class _FoldersScreenState extends State<FoldersScreen>
                                   fontSize: 16,
                                   fontWeight: FontWeight.w600,
                                   color: isAmoled && isDark
-                                      ? Colors.red // Texto rojo para amoled
-                                      : Theme.of(context).colorScheme.onErrorContainer,
+                                      ? Colors
+                                            .red // Texto rojo para amoled
+                                      : Theme.of(
+                                          context,
+                                        ).colorScheme.onErrorContainer,
                                 ),
                               ),
                             ),
@@ -2151,8 +2250,12 @@ class _FoldersScreenState extends State<FoldersScreen>
                         padding: EdgeInsets.all(16),
                         decoration: BoxDecoration(
                           color: isAmoled && isDark
-                              ? Colors.white.withValues(alpha: 0.1) // Color personalizado para amoled
-                              : Theme.of(context).colorScheme.secondaryContainer,
+                              ? Colors.white.withValues(
+                                  alpha: 0.1,
+                                ) // Color personalizado para amoled
+                              : Theme.of(
+                                  context,
+                                ).colorScheme.secondaryContainer,
                           borderRadius: BorderRadius.only(
                             bottomLeft: Radius.circular(16),
                             bottomRight: Radius.circular(16),
@@ -2161,8 +2264,12 @@ class _FoldersScreenState extends State<FoldersScreen>
                           ),
                           border: Border.all(
                             color: isAmoled && isDark
-                                ? Colors.white.withValues(alpha: 0.2) // Borde personalizado para amoled
-                                : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
+                                ? Colors.white.withValues(
+                                    alpha: 0.2,
+                                  ) // Borde personalizado para amoled
+                                : Theme.of(
+                                    context,
+                                  ).colorScheme.outline.withValues(alpha: 0.1),
                             width: 1,
                           ),
                         ),
@@ -2177,7 +2284,8 @@ class _FoldersScreenState extends State<FoldersScreen>
                                 Icons.cancel_outlined,
                                 size: 30,
                                 color: isAmoled && isDark
-                                    ? Colors.white // Ícono blanco para amoled
+                                    ? Colors
+                                          .white // Ícono blanco para amoled
                                     : Theme.of(context).colorScheme.onSurface,
                               ),
                             ),
@@ -2189,7 +2297,8 @@ class _FoldersScreenState extends State<FoldersScreen>
                                   fontSize: 16,
                                   fontWeight: FontWeight.w600,
                                   color: isAmoled && isDark
-                                      ? Colors.white // Texto blanco para amoled
+                                      ? Colors
+                                            .white // Texto blanco para amoled
                                       : Theme.of(context).colorScheme.onSurface,
                                 ),
                               ),
@@ -2211,7 +2320,7 @@ class _FoldersScreenState extends State<FoldersScreen>
   Future<void> _removeSongsFromAllDatabases(String folderPath) async {
     // Obtener todas las canciones de la carpeta antes de eliminarlas
     final songsInFolder = songPathsByFolder[folderPath] ?? [];
-    
+
     // Eliminar de RecentsDB
     for (final songPath in songsInFolder) {
       try {
@@ -2220,7 +2329,7 @@ class _FoldersScreenState extends State<FoldersScreen>
         // Ignorar errores si la canción no está en recientes
       }
     }
-    
+
     // Eliminar de MostPlayedDB
     for (final songPath in songsInFolder) {
       try {
@@ -2229,18 +2338,20 @@ class _FoldersScreenState extends State<FoldersScreen>
         // Ignorar errores si la canción no está en más reproducidas
       }
     }
-    
+
     // Eliminar de ShortcutsDB
     try {
       final shortcuts = await ShortcutsDB().getShortcuts();
-      final shortcutsToRemove = shortcuts.where((path) => songsInFolder.contains(path)).toList();
+      final shortcutsToRemove = shortcuts
+          .where((path) => songsInFolder.contains(path))
+          .toList();
       for (final path in shortcutsToRemove) {
         await ShortcutsDB().removeShortcut(path);
       }
     } catch (e) {
       // Ignorar errores
     }
-    
+
     // Eliminar de FavoritesDB
     for (final songPath in songsInFolder) {
       try {
@@ -2260,10 +2371,9 @@ class _FoldersScreenState extends State<FoldersScreen>
         return ValueListenableBuilder<AppColorScheme>(
           valueListenable: colorSchemeNotifier,
           builder: (context, colorScheme, child) {
-            
             final isAmoled = colorScheme == AppColorScheme.amoled;
             final isDark = Theme.of(context).brightness == Brightness.dark;
-            
+
             return AlertDialog(
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
@@ -2274,10 +2384,7 @@ class _FoldersScreenState extends State<FoldersScreen>
               title: Center(
                 child: TranslatedText(
                   'ignore_folder',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
                 ),
               ),
               content: SizedBox(
@@ -2291,7 +2398,9 @@ class _FoldersScreenState extends State<FoldersScreen>
                       child: Padding(
                         padding: EdgeInsets.symmetric(horizontal: 4),
                         child: Text(
-                          LocaleProvider.tr('ignore_folder_confirm').replaceAll('{folder}', folderName),
+                          LocaleProvider.tr(
+                            'ignore_folder_confirm',
+                          ).replaceAll('{folder}', folderName),
                           style: TextStyle(
                             fontSize: 14,
                             color: Theme.of(context).colorScheme.onSurface,
@@ -2314,7 +2423,9 @@ class _FoldersScreenState extends State<FoldersScreen>
                         padding: EdgeInsets.all(16),
                         decoration: BoxDecoration(
                           color: isAmoled && isDark
-                              ? Colors.orange.withValues(alpha: 0.2) // Color personalizado para amoled
+                              ? Colors.orange.withValues(
+                                  alpha: 0.2,
+                                ) // Color personalizado para amoled
                               : Theme.of(context).colorScheme.primaryContainer,
                           borderRadius: BorderRadius.only(
                             topLeft: Radius.circular(16),
@@ -2324,8 +2435,12 @@ class _FoldersScreenState extends State<FoldersScreen>
                           ),
                           border: Border.all(
                             color: isAmoled && isDark
-                                ? Colors.orange.withValues(alpha: 0.4) // Borde personalizado para amoled
-                                : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
+                                ? Colors.orange.withValues(
+                                    alpha: 0.4,
+                                  ) // Borde personalizado para amoled
+                                : Theme.of(
+                                    context,
+                                  ).colorScheme.outline.withValues(alpha: 0.1),
                             width: 1,
                           ),
                         ),
@@ -2340,8 +2455,11 @@ class _FoldersScreenState extends State<FoldersScreen>
                                 Icons.visibility_off,
                                 size: 30,
                                 color: isAmoled && isDark
-                                    ? Colors.orange // Ícono naranja para amoled
-                                    : Theme.of(context).colorScheme.onPrimaryContainer,
+                                    ? Colors
+                                          .orange // Ícono naranja para amoled
+                                    : Theme.of(
+                                        context,
+                                      ).colorScheme.onPrimaryContainer,
                               ),
                             ),
                             SizedBox(width: 8),
@@ -2352,8 +2470,11 @@ class _FoldersScreenState extends State<FoldersScreen>
                                   fontSize: 16,
                                   fontWeight: FontWeight.w600,
                                   color: isAmoled && isDark
-                                      ? Colors.orange // Texto naranja para amoled
-                                      : Theme.of(context).colorScheme.onPrimaryContainer,
+                                      ? Colors
+                                            .orange // Texto naranja para amoled
+                                      : Theme.of(
+                                          context,
+                                        ).colorScheme.onPrimaryContainer,
                                 ),
                               ),
                             ),
@@ -2373,8 +2494,12 @@ class _FoldersScreenState extends State<FoldersScreen>
                         padding: EdgeInsets.all(16),
                         decoration: BoxDecoration(
                           color: isAmoled && isDark
-                              ? Colors.white.withValues(alpha: 0.1) // Color personalizado para amoled
-                              : Theme.of(context).colorScheme.secondaryContainer,
+                              ? Colors.white.withValues(
+                                  alpha: 0.1,
+                                ) // Color personalizado para amoled
+                              : Theme.of(
+                                  context,
+                                ).colorScheme.secondaryContainer,
                           borderRadius: BorderRadius.only(
                             bottomLeft: Radius.circular(16),
                             bottomRight: Radius.circular(16),
@@ -2383,8 +2508,12 @@ class _FoldersScreenState extends State<FoldersScreen>
                           ),
                           border: Border.all(
                             color: isAmoled && isDark
-                                ? Colors.white.withValues(alpha: 0.2) // Borde personalizado para amoled
-                                : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
+                                ? Colors.white.withValues(
+                                    alpha: 0.2,
+                                  ) // Borde personalizado para amoled
+                                : Theme.of(
+                                    context,
+                                  ).colorScheme.outline.withValues(alpha: 0.1),
                             width: 1,
                           ),
                         ),
@@ -2399,7 +2528,8 @@ class _FoldersScreenState extends State<FoldersScreen>
                                 Icons.cancel_outlined,
                                 size: 30,
                                 color: isAmoled && isDark
-                                    ? Colors.white // Ícono blanco para amoled
+                                    ? Colors
+                                          .white // Ícono blanco para amoled
                                     : Theme.of(context).colorScheme.onSurface,
                               ),
                             ),
@@ -2411,7 +2541,8 @@ class _FoldersScreenState extends State<FoldersScreen>
                                   fontSize: 16,
                                   fontWeight: FontWeight.w600,
                                   color: isAmoled && isDark
-                                      ? Colors.white // Texto blanco para amoled
+                                      ? Colors
+                                            .white // Texto blanco para amoled
                                       : Theme.of(context).colorScheme.onSurface,
                                 ),
                               ),
@@ -2431,7 +2562,7 @@ class _FoldersScreenState extends State<FoldersScreen>
     if (confirmed != true) return;
 
     await ignoreFolder(folderKey);
-    
+
     // Eliminar canciones de todas las bases de datos
     await SongsIndexDB().deleteFolderEntries(folderKey);
     await _removeSongsFromAllDatabases(folderKey);
@@ -2445,7 +2576,10 @@ class _FoldersScreenState extends State<FoldersScreen>
     });
 
     if (!mounted) return;
-    _showMessage(LocaleProvider.tr('success'), description: LocaleProvider.tr('folder_ignored_success'));
+    _showMessage(
+      LocaleProvider.tr('success'),
+      description: LocaleProvider.tr('folder_ignored_success'),
+    );
   }
 
   Future<void> _unignoreFolderFlow(String folderKey) async {
@@ -2454,7 +2588,10 @@ class _FoldersScreenState extends State<FoldersScreen>
     if (!mounted) return;
     await cargarCanciones(forceIndex: true);
     if (!mounted) return;
-    _showMessage(LocaleProvider.tr('success'), description: LocaleProvider.tr('folder_unignored_success'));
+    _showMessage(
+      LocaleProvider.tr('success'),
+      description: LocaleProvider.tr('folder_unignored_success'),
+    );
   }
 
   @override
@@ -2495,7 +2632,7 @@ class _FoldersScreenState extends State<FoldersScreen>
   Widget build(BuildContext context) {
     final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+
     if (_isLoading) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
@@ -2510,9 +2647,10 @@ class _FoldersScreenState extends State<FoldersScreen>
             physics: const AlwaysScrollableScrollPhysics(),
             child: ConstrainedBox(
               constraints: BoxConstraints(
-                minHeight: MediaQuery.of(context).size.height - 
-                    MediaQuery.of(context).padding.top - 
-                    kToolbarHeight - 
+                minHeight:
+                    MediaQuery.of(context).size.height -
+                    MediaQuery.of(context).padding.top -
+                    kToolbarHeight -
                     MediaQuery.of(context).viewInsets.bottom,
               ),
               child: Center(
@@ -2550,107 +2688,175 @@ class _FoldersScreenState extends State<FoldersScreen>
 
     if (carpetaSeleccionada == null) {
       return Scaffold(
-          resizeToAvoidBottomInset: true,
-          appBar: AppBar(
-            backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-            surfaceTintColor: Colors.transparent,
-            elevation: 0,
-            scrolledUnderElevation: 0,
-            title: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.folder_outlined, size: 28),
-                const SizedBox(width: 8),
-                TranslatedText('folders_title'),
-              ],
-            ),
-            actions: [
-              IconButton(
-                icon: const Icon(Icons.info_outline, size: 28),
-                tooltip: LocaleProvider.tr('information'),
-                onPressed: () {
-                  showDialog(
-                    context: context,
-                    builder: (context) => AlertDialog(
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        side: isAmoled && isDark
-                            ? const BorderSide(color: Colors.white, width: 1)
-                            : BorderSide.none,
-                      ),
-                      title: TranslatedText('info'),
-                      content: TranslatedText('folders_and_songs_info'),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.of(context).pop(),
-                          child: TranslatedText('ok'),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              ),
+        resizeToAvoidBottomInset: true,
+        appBar: AppBar(
+          backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+          surfaceTintColor: Colors.transparent,
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          title: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.folder_outlined, size: 28),
+              const SizedBox(width: 8),
+              TranslatedText('folders_title'),
             ],
-            bottom: PreferredSize(
-              preferredSize: const Size.fromHeight(56),
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                child: TextField(
-                  controller: _folderSearchController,
-                  focusNode: _folderSearchFocusNode,
-                  onChanged: (_) => _onFolderSearchChanged(),
-                  onEditingComplete: () {
-                    _folderSearchFocusNode.unfocus();
-                  },
-                  decoration: InputDecoration(
-                    hintText: LocaleProvider.tr('search_folders_and_songs'),
-                    prefixIcon: const Icon(Icons.search),
-                    suffixIcon: _folderSearchController.text.isNotEmpty
-                        ? IconButton(
-                            icon: const Icon(Icons.close),
-                            onPressed: () {
-                              _folderSearchController.clear();
-                              _onFolderSearchChanged();
-                              setState(() {});
-                            },
-                          )
-                        : null,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(24),
+          ),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.info_outline, size: 28),
+              tooltip: LocaleProvider.tr('information'),
+              onPressed: () {
+                showDialog(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      side: isAmoled && isDark
+                          ? const BorderSide(color: Colors.white, width: 1)
+                          : BorderSide.none,
                     ),
-                    contentPadding: const EdgeInsets.symmetric(vertical: 0),
+                    title: Center(
+                      child: Text(
+                        LocaleProvider.tr('info'),
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    content: TranslatedText('folders_and_songs_info'),
+                    actions: [
+                      SizedBox(height: 16),
+                      InkWell(
+                        onTap: () => Navigator.of(context).pop(),
+                        borderRadius: BorderRadius.circular(16),
+                        child: Container(
+                          width: double.infinity,
+                          padding: EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: isAmoled && isDark
+                                ? Colors.white.withValues(alpha: 0.2)
+                                : Theme.of(
+                                    context,
+                                  ).colorScheme.primaryContainer,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: isAmoled && isDark
+                                  ? Colors.white.withValues(alpha: 0.4)
+                                  : Theme.of(context).colorScheme.primary
+                                        .withValues(alpha: 0.3),
+                              width: 2,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(12),
+                                  color: isAmoled && isDark
+                                      ? Colors.white.withValues(alpha: 0.2)
+                                      : Theme.of(context).colorScheme.primary
+                                            .withValues(alpha: 0.1),
+                                ),
+                                child: Icon(
+                                  Icons.check_circle,
+                                  size: 30,
+                                  color: isAmoled && isDark
+                                      ? Colors.white
+                                      : Theme.of(context).colorScheme.primary,
+                                ),
+                              ),
+                              SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      LocaleProvider.tr('ok'),
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600,
+                                        color: isAmoled && isDark
+                                            ? Colors.white
+                                            : Theme.of(
+                                                context,
+                                              ).colorScheme.primary,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
+                );
+              },
+            ),
+          ],
+          bottom: PreferredSize(
+            preferredSize: const Size.fromHeight(56),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: TextField(
+                controller: _folderSearchController,
+                focusNode: _folderSearchFocusNode,
+                onChanged: (_) => _onFolderSearchChanged(),
+                onEditingComplete: () {
+                  _folderSearchFocusNode.unfocus();
+                },
+                decoration: InputDecoration(
+                  hintText: LocaleProvider.tr('search_folders_and_songs'),
+                  prefixIcon: const Icon(Icons.search),
+                  suffixIcon: _folderSearchController.text.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.close),
+                          onPressed: () {
+                            _folderSearchController.clear();
+                            _onFolderSearchChanged();
+                            setState(() {});
+                          },
+                        )
+                      : null,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(vertical: 0),
                 ),
               ),
             ),
           ),
-          body: RefreshIndicator(
-            onRefresh: () async {
-              // Recargar las carpetas al hacer scroll hacia abajo
-              await cargarCanciones(forceIndex: true);
-            },
-            child: ValueListenableBuilder<MediaItem?>(
-              valueListenable: _currentMediaItemNotifier,
-              builder: (context, current, child) {
-                final space = current != null ? 100.0 : 0.0;
-                return Padding(
-                  padding: EdgeInsets.only(bottom: space),
-                  child: ListView.builder(
-                          physics: const AlwaysScrollableScrollPhysics(),
-                          itemCount: _folderSearchController.text.isNotEmpty
-                              ? _filteredFolders.length
-                              : songPathsByFolder.length,
-                          itemBuilder: (context, i) {
-                            final sortedEntries = _folderSearchController.text.isNotEmpty
-                                ? _filteredFolders
-                                : songPathsByFolder.entries.toList()
-                                  ..sort(
-                                    (a, b) =>
-                                        folderDisplayNames[a.key]!.toLowerCase().compareTo(
-                                          folderDisplayNames[b.key]!.toLowerCase(),
-                                        ),
-                                  );
-                            final entry = sortedEntries[i];
+        ),
+        body: RefreshIndicator(
+          onRefresh: () async {
+            // Recargar las carpetas al hacer scroll hacia abajo
+            await cargarCanciones(forceIndex: true);
+          },
+          child: ValueListenableBuilder<MediaItem?>(
+            valueListenable: _currentMediaItemNotifier,
+            builder: (context, current, child) {
+              final space = current != null ? 100.0 : 0.0;
+              return Padding(
+                padding: EdgeInsets.only(bottom: space),
+                child: ListView.builder(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  itemCount: _folderSearchController.text.isNotEmpty
+                      ? _filteredFolders.length
+                      : songPathsByFolder.length,
+                  itemBuilder: (context, i) {
+                    final sortedEntries =
+                        _folderSearchController.text.isNotEmpty
+                              ? _filteredFolders
+                              : songPathsByFolder.entries.toList()
+                          ..sort(
+                            (a, b) => folderDisplayNames[a.key]!
+                                .toLowerCase()
+                                .compareTo(
+                                  folderDisplayNames[b.key]!.toLowerCase(),
+                                ),
+                          );
+                    final entry = sortedEntries[i];
                     final nombre = folderDisplayNames[entry.key]!;
                     final canciones = entry.value;
 
@@ -2666,20 +2872,28 @@ class _FoldersScreenState extends State<FoldersScreen>
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),
-                        subtitle: ignored && canciones.isEmpty 
-                            ? null 
+                        subtitle: ignored && canciones.isEmpty
+                            ? null
                             : Text(
                                 '${canciones.length} ${LocaleProvider.tr('songs')}',
                               ),
-                        onTap: ignored ? null : () async {
-                          await _loadSongsForFolder(entry);
-                        },
+                        onTap: ignored
+                            ? null
+                            : () async {
+                                await _loadSongsForFolder(entry);
+                              },
                         trailing: PopupMenuButton<String>(
                           onSelected: (value) async {
                             if (value == 'rename') {
-                              await _showRenameFolderDialog(entry.key, folderDisplayNames[entry.key] ?? '');
+                              await _showRenameFolderDialog(
+                                entry.key,
+                                folderDisplayNames[entry.key] ?? '',
+                              );
                             } else if (value == 'delete') {
-                              await _showDeleteFolderConfirmation(entry.key, folderDisplayNames[entry.key] ?? '');
+                              await _showDeleteFolderConfirmation(
+                                entry.key,
+                                folderDisplayNames[entry.key] ?? '',
+                              );
                             } else if (value == 'toggle_ignore') {
                               if (ignored) {
                                 await _unignoreFolderFlow(entry.key);
@@ -2713,9 +2927,17 @@ class _FoldersScreenState extends State<FoldersScreen>
                               value: 'toggle_ignore',
                               child: Row(
                                 children: [
-                                  Icon(ignored ? Icons.visibility : Icons.visibility_off),
+                                  Icon(
+                                    ignored
+                                        ? Icons.visibility
+                                        : Icons.visibility_off,
+                                  ),
                                   SizedBox(width: 8),
-                                  TranslatedText(ignored ? 'unignore_folder' : 'ignore_folder'),
+                                  TranslatedText(
+                                    ignored
+                                        ? 'unignore_folder'
+                                        : 'ignore_folder',
+                                  ),
                                 ],
                               ),
                             ),
@@ -2723,417 +2945,414 @@ class _FoldersScreenState extends State<FoldersScreen>
                         ),
                       ),
                     );
-                  
-              },
-            ),
-          );
-              }
-            ),
+                  },
+                ),
+              );
+            },
           ),
-        );
+        ),
+      );
     }
 
     return GestureDetector(
-        behavior: HitTestBehavior.translucent,
-        onTap: () {
-          FocusScope.of(context).unfocus();
-        },
-        child: Scaffold(
-          appBar: AppBar(
-            backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-            surfaceTintColor: Colors.transparent,
-            elevation: 0,
-        scrolledUnderElevation: 0,
-            leading: _isSelecting
-                ? IconButton(
-                    icon: const Icon(Icons.close),
-                    tooltip: LocaleProvider.tr('cancel_selection'),
-                    onPressed: () {
-                      setState(() {
-                        _isSelecting = false;
-                        _selectedSongPaths.clear();
-                      });
-                    },
-                  )
-                : IconButton(
-                    constraints: const BoxConstraints(
-                      minWidth: 40,
-                      minHeight: 40,
-                      maxWidth: 40,
-                      maxHeight: 40,
-                    ),
-                    padding: EdgeInsets.zero,
-                    icon: Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
-                      ),
-                      child: const Icon(
-                        Icons.arrow_back,
-                        size: 24,
-                      ),
-                    ),
-                    onPressed: () async {
-                      setState(() {
-                        carpetaSeleccionada = null;
-                        _searchController.clear();
-                        _filteredSongs.clear();
-                        _displaySongs.clear();
-                        // Al salir, limpiar selección múltiple
-                        _isSelecting = false;
-                        _selectedSongPaths.clear();
-                      });
-                      // Recargar la lista de carpetas para mostrar el estado actual
-                      await cargarCanciones(forceIndex: false);
-                    },
-                  ),
-            title: _isSelecting
-                ? Text(
-                    '${_selectedSongPaths.length} ${LocaleProvider.tr('selected')}',
-                  )
-                : Text(
-                    folderDisplayNames[carpetaSeleccionada] ??
-                        LocaleProvider.tr('folders'),
-                  ),
-            actions: [
-              if (_isSelecting) ...[
-                IconButton(
-                  icon: const Icon(Icons.select_all),
-                  tooltip: LocaleProvider.tr('select_all'),
+      behavior: HitTestBehavior.translucent,
+      onTap: () {
+        FocusScope.of(context).unfocus();
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+          surfaceTintColor: Colors.transparent,
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          leading: _isSelecting
+              ? IconButton(
+                  icon: const Icon(Icons.close),
+                  tooltip: LocaleProvider.tr('cancel_selection'),
                   onPressed: () {
                     setState(() {
-                      if (_selectedSongPaths.length == _displaySongs.length) {
-                        // Si todos están seleccionados, deseleccionar todos
-                        _selectedSongPaths.clear();
-                        if (_selectedSongPaths.isEmpty) {
-                          _isSelecting = false;
-                        }
-                      } else {
-                        // Seleccionar todos
-                        _selectedSongPaths.addAll(
-                          _displaySongs.map((s) => s.data),
-                        );
+                      _isSelecting = false;
+                      _selectedSongPaths.clear();
+                    });
+                  },
+                )
+              : IconButton(
+                  constraints: const BoxConstraints(
+                    minWidth: 40,
+                    minHeight: 40,
+                    maxWidth: 40,
+                    maxHeight: 40,
+                  ),
+                  padding: EdgeInsets.zero,
+                  icon: Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.primary.withValues(alpha: 0.08),
+                    ),
+                    child: const Icon(Icons.arrow_back, size: 24),
+                  ),
+                  onPressed: () async {
+                    setState(() {
+                      carpetaSeleccionada = null;
+                      _searchController.clear();
+                      _filteredSongs.clear();
+                      _displaySongs.clear();
+                      // Al salir, limpiar selección múltiple
+                      _isSelecting = false;
+                      _selectedSongPaths.clear();
+                    });
+                    // Recargar la lista de carpetas para mostrar el estado actual
+                    await cargarCanciones(forceIndex: false);
+                  },
+                ),
+          title: _isSelecting
+              ? Text(
+                  '${_selectedSongPaths.length} ${LocaleProvider.tr('selected')}',
+                )
+              : Text(
+                  folderDisplayNames[carpetaSeleccionada] ??
+                      LocaleProvider.tr('folders'),
+                ),
+          actions: [
+            if (_isSelecting) ...[
+              IconButton(
+                icon: const Icon(Icons.select_all),
+                tooltip: LocaleProvider.tr('select_all'),
+                onPressed: () {
+                  setState(() {
+                    if (_selectedSongPaths.length == _displaySongs.length) {
+                      // Si todos están seleccionados, deseleccionar todos
+                      _selectedSongPaths.clear();
+                      if (_selectedSongPaths.isEmpty) {
+                        _isSelecting = false;
                       }
-                    });
-                  },
-                ),
-                PopupMenuButton<String>(
-                  icon: const Icon(Icons.more_vert),
-                  tooltip: LocaleProvider.tr('options'),
-                  onSelected: (String value) async {
-                    switch (value) {
-                      case 'add_to_favorites':
-                        if (_selectedSongPaths.isNotEmpty) {
-                          final selectedSongs = _displaySongs.where(
-                            (s) => _selectedSongPaths.contains(s.data),
-                          );
-                          for (final song in selectedSongs) {
-                            await _addToFavorites(song);
-                          }
-                          favoritesShouldReload.value =
-                              !favoritesShouldReload.value;
-                          setState(() {
-                            _isSelecting = false;
-                            _selectedSongPaths.clear();
-                          });
-                        }
-                        break;
-                      case 'add_to_playlist':
-                        if (_selectedSongPaths.isNotEmpty) {
-                          await _handleAddToPlaylistMassive(context);
-                        }
-                        break;
-                      case 'copy_to_folder':
-                        if (_selectedSongPaths.isNotEmpty) {
-                          await _handleCopyToFolder(context);
-                        }
-                        break;
-                      case 'move_to_folder':
-                        if (_selectedSongPaths.isNotEmpty) {
-                          await _handleMoveToFolder(context);
-                        }
-                        break;
-                      case 'delete_songs':
-                        if (_selectedSongPaths.isNotEmpty) {
-                          await _handleDeleteSongs(context);
-                        }
-                        break;
+                    } else {
+                      // Seleccionar todos
+                      _selectedSongPaths.addAll(
+                        _displaySongs.map((s) => s.data),
+                      );
                     }
-                  },
-                  itemBuilder: (BuildContext context) => [
-                    PopupMenuItem<String>(
-                      value: 'add_to_favorites',
-                      enabled: _selectedSongPaths.isNotEmpty,
-                      child: Row(
-                        children: [
-                          const Icon(Symbols.favorite_rounded, weight: 600),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(LocaleProvider.tr('add_to_favorites')),
-                          ),
-                        ],
-                      ),
-                    ),
-                    PopupMenuItem<String>(
-                      value: 'add_to_playlist',
-                      enabled: _selectedSongPaths.isNotEmpty,
-                      child: Row(
-                        children: [
-                          const Icon(Icons.playlist_add),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(LocaleProvider.tr('add_to_playlist')),
-                          ),
-                        ],
-                      ),
-                    ),
-                    if (_isAndroid10OrHigher)
-                      PopupMenuItem<String>(
-                        value: 'copy_to_folder',
-                        enabled: _selectedSongPaths.isNotEmpty,
-                        child: Row(
-                          children: [
-                            const Icon(Icons.copy),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(LocaleProvider.tr('copy_to_folder')),
-                            ),
-                          ],
+                  });
+                },
+              ),
+              PopupMenuButton<String>(
+                icon: const Icon(Icons.more_vert),
+                tooltip: LocaleProvider.tr('options'),
+                onSelected: (String value) async {
+                  switch (value) {
+                    case 'add_to_favorites':
+                      if (_selectedSongPaths.isNotEmpty) {
+                        final selectedSongs = _displaySongs.where(
+                          (s) => _selectedSongPaths.contains(s.data),
+                        );
+                        for (final song in selectedSongs) {
+                          await _addToFavorites(song);
+                        }
+                        favoritesShouldReload.value =
+                            !favoritesShouldReload.value;
+                        setState(() {
+                          _isSelecting = false;
+                          _selectedSongPaths.clear();
+                        });
+                      }
+                      break;
+                    case 'add_to_playlist':
+                      if (_selectedSongPaths.isNotEmpty) {
+                        await _handleAddToPlaylistMassive(context);
+                      }
+                      break;
+                    case 'copy_to_folder':
+                      if (_selectedSongPaths.isNotEmpty) {
+                        await _handleCopyToFolder(context);
+                      }
+                      break;
+                    case 'move_to_folder':
+                      if (_selectedSongPaths.isNotEmpty) {
+                        await _handleMoveToFolder(context);
+                      }
+                      break;
+                    case 'delete_songs':
+                      if (_selectedSongPaths.isNotEmpty) {
+                        await _handleDeleteSongs(context);
+                      }
+                      break;
+                  }
+                },
+                itemBuilder: (BuildContext context) => [
+                  PopupMenuItem<String>(
+                    value: 'add_to_favorites',
+                    enabled: _selectedSongPaths.isNotEmpty,
+                    child: Row(
+                      children: [
+                        const Icon(Symbols.favorite_rounded, weight: 600),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(LocaleProvider.tr('add_to_favorites')),
                         ),
-                      ),
-                    if (_isAndroid10OrHigher)
-                      PopupMenuItem<String>(
-                        value: 'move_to_folder',
-                        enabled: _selectedSongPaths.isNotEmpty,
-                        child: Row(
-                          children: [
-                            const Icon(Icons.drive_file_move),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(LocaleProvider.tr('move_to_folder')),
-                            ),
-                          ],
+                      ],
+                    ),
+                  ),
+                  PopupMenuItem<String>(
+                    value: 'add_to_playlist',
+                    enabled: _selectedSongPaths.isNotEmpty,
+                    child: Row(
+                      children: [
+                        const Icon(Icons.playlist_add),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(LocaleProvider.tr('add_to_playlist')),
                         ),
-                      ),
+                      ],
+                    ),
+                  ),
+                  if (_isAndroid10OrHigher)
                     PopupMenuItem<String>(
-                      value: 'delete_songs',
+                      value: 'copy_to_folder',
                       enabled: _selectedSongPaths.isNotEmpty,
                       child: Row(
                         children: [
-                          const Icon(Icons.delete),
+                          const Icon(Icons.copy),
                           const SizedBox(width: 8),
                           Expanded(
-                            child: Text(LocaleProvider.tr('delete_songs')),
+                            child: Text(LocaleProvider.tr('copy_to_folder')),
                           ),
                         ],
                       ),
                     ),
-                  ],
+                  if (_isAndroid10OrHigher)
+                    PopupMenuItem<String>(
+                      value: 'move_to_folder',
+                      enabled: _selectedSongPaths.isNotEmpty,
+                      child: Row(
+                        children: [
+                          const Icon(Icons.drive_file_move),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(LocaleProvider.tr('move_to_folder')),
+                          ),
+                        ],
+                      ),
+                    ),
+                  PopupMenuItem<String>(
+                    value: 'delete_songs',
+                    enabled: _selectedSongPaths.isNotEmpty,
+                    child: Row(
+                      children: [
+                        const Icon(Icons.delete),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(LocaleProvider.tr('delete_songs')),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ] else ...[
+              IconButton(
+                icon: const Icon(
+                  Symbols.shuffle_rounded,
+                  size: 28,
+                  weight: 600,
                 ),
-              ] else ...[
-                IconButton(
-                  icon: const Icon(Symbols.shuffle_rounded, size: 28, weight: 600),
-                  tooltip: LocaleProvider.tr('shuffle'),
-                  onPressed: () {
-                    if (_displaySongs.isNotEmpty) {
-                      final random = (_displaySongs.toList()..shuffle()).first;
-                      unawaited(_preloadArtworkForSong(random));
-                      _playSongAndOpenPlayer(random.data);
-                    }
-                  },
-                ),
-                PopupMenuButton<OrdenCarpetas>(
-                  icon: const Icon(Icons.sort, size: 28),
-                  tooltip: LocaleProvider.tr('filters'),
-                  onSelected: (orden) async {
-                    setState(() {
-                      _orden = orden;
-                    });
-                    await _ordenarCanciones();
-                    _saveOrderFilter();
-                  },
-                  itemBuilder: (context) => [
-                    PopupMenuItem(
-                      value: OrdenCarpetas.normal,
-                      child: TranslatedText('default'),
-                    ),
-                    PopupMenuItem(
-                      value: OrdenCarpetas.ultimoAgregado,
-                      child: TranslatedText('invert_order'),
-                    ),
-                    PopupMenuItem(
-                      value: OrdenCarpetas.alfabetico,
-                      child: TranslatedText('alphabetical_az'),
-                    ),
-                    PopupMenuItem(
-                      value: OrdenCarpetas.invertido,
-                      child: TranslatedText('alphabetical_za'),
-                    ),
-                    PopupMenuItem(
-                      value: OrdenCarpetas.fechaEdicionDesc,
-                      child: TranslatedText('edit_date_newest_first'),
-                    ),
-                    PopupMenuItem(
-                      value: OrdenCarpetas.fechaEdicionAsc,
-                      child: TranslatedText('edit_date_oldest_first'),
-                    ),
-                  ],
-                ),
-              ],
+                tooltip: LocaleProvider.tr('shuffle'),
+                onPressed: () {
+                  if (_displaySongs.isNotEmpty) {
+                    final random = (_displaySongs.toList()..shuffle()).first;
+                    unawaited(_preloadArtworkForSong(random));
+                    _playSongAndOpenPlayer(random.data);
+                  }
+                },
+              ),
+              PopupMenuButton<OrdenCarpetas>(
+                icon: const Icon(Icons.sort, size: 28),
+                tooltip: LocaleProvider.tr('filters'),
+                onSelected: (orden) async {
+                  setState(() {
+                    _orden = orden;
+                  });
+                  await _ordenarCanciones();
+                  _saveOrderFilter();
+                },
+                itemBuilder: (context) => [
+                  PopupMenuItem(
+                    value: OrdenCarpetas.normal,
+                    child: TranslatedText('default'),
+                  ),
+                  PopupMenuItem(
+                    value: OrdenCarpetas.ultimoAgregado,
+                    child: TranslatedText('invert_order'),
+                  ),
+                  PopupMenuItem(
+                    value: OrdenCarpetas.alfabetico,
+                    child: TranslatedText('alphabetical_az'),
+                  ),
+                  PopupMenuItem(
+                    value: OrdenCarpetas.invertido,
+                    child: TranslatedText('alphabetical_za'),
+                  ),
+                  PopupMenuItem(
+                    value: OrdenCarpetas.fechaEdicionDesc,
+                    child: TranslatedText('edit_date_newest_first'),
+                  ),
+                  PopupMenuItem(
+                    value: OrdenCarpetas.fechaEdicionAsc,
+                    child: TranslatedText('edit_date_oldest_first'),
+                  ),
+                ],
+              ),
             ],
-            bottom: PreferredSize(
-              preferredSize: const Size.fromHeight(56),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 8,
-                ),
-                child: ValueListenableBuilder<String>(
-                  valueListenable: languageNotifier,
-                  builder: (context, lang, child) {
-                    return TextField(
-                      controller: _searchController,
-                      focusNode: _searchFocusNode,
-                      onChanged: (_) => _onSearchChanged(),
-                      onEditingComplete: () {
-                        _searchFocusNode.unfocus();
-                      },
-                      decoration: InputDecoration(
-                        hintText: LocaleProvider.tr(
-                          'search_by_title_or_artist',
-                        ),
-                        prefixIcon: const Icon(Icons.search),
-                        suffixIcon: _searchController.text.isNotEmpty
-                            ? IconButton(
-                                icon: const Icon(Icons.close),
-                                onPressed: () {
-                                  _searchController.clear();
-                                  _onSearchChanged();
-                                  setState(() {});
-                                },
-                              )
-                            : null,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(24),
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(vertical: 0),
+          ],
+          bottom: PreferredSize(
+            preferredSize: const Size.fromHeight(56),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: ValueListenableBuilder<String>(
+                valueListenable: languageNotifier,
+                builder: (context, lang, child) {
+                  return TextField(
+                    controller: _searchController,
+                    focusNode: _searchFocusNode,
+                    onChanged: (_) => _onSearchChanged(),
+                    onEditingComplete: () {
+                      _searchFocusNode.unfocus();
+                    },
+                    decoration: InputDecoration(
+                      hintText: LocaleProvider.tr('search_by_title_or_artist'),
+                      prefixIcon: const Icon(Icons.search),
+                      suffixIcon: _searchController.text.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(Icons.close),
+                              onPressed: () {
+                                _searchController.clear();
+                                _onSearchChanged();
+                                setState(() {});
+                              },
+                            )
+                          : null,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(24),
                       ),
-                    );
-                  },
-                ),
+                      contentPadding: const EdgeInsets.symmetric(vertical: 0),
+                    ),
+                  );
+                },
               ),
             ),
           ),
-          body: RefreshIndicator(
-            onRefresh: _refreshCurrentFolder,
-            child: ValueListenableBuilder<MediaItem?>(
-              valueListenable: _currentMediaItemNotifier,
-              builder: (context, debouncedMediaItem, child) {
-                // Detectar si el tema AMOLED está activo
-                final isAmoledTheme =
-                    colorSchemeNotifier.value == AppColorScheme.amoled;
-                final space = debouncedMediaItem != null ? 100.0 : 0.0;
+        ),
+        body: RefreshIndicator(
+          onRefresh: _refreshCurrentFolder,
+          child: ValueListenableBuilder<MediaItem?>(
+            valueListenable: _currentMediaItemNotifier,
+            builder: (context, debouncedMediaItem, child) {
+              // Detectar si el tema AMOLED está activo
+              final isAmoledTheme =
+                  colorSchemeNotifier.value == AppColorScheme.amoled;
+              final space = debouncedMediaItem != null ? 100.0 : 0.0;
 
-                return Padding(
-                  padding: EdgeInsets.only(bottom: space),
-                  child: _filteredSongs.isEmpty
-                      ? SingleChildScrollView(
-                          physics: const AlwaysScrollableScrollPhysics(),
-                          child: SizedBox(
-                            height: MediaQuery.of(context).size.height - 200,
-                            child: Center(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(
-                                    Icons.folder_off,
-                                    size: 48,
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.onSurface.withValues(alpha: 0.6),
+              return Padding(
+                padding: EdgeInsets.only(bottom: space),
+                child: _filteredSongs.isEmpty
+                    ? SingleChildScrollView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        child: SizedBox(
+                          height: MediaQuery.of(context).size.height - 200,
+                          child: Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.folder_off,
+                                  size: 48,
+                                  color: Theme.of(context).colorScheme.onSurface
+                                      .withValues(alpha: 0.6),
+                                ),
+                                const SizedBox(height: 16),
+                                TranslatedText(
+                                  'no_songs_in_folder',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurface
+                                        .withValues(alpha: 0.6),
                                   ),
-                                  const SizedBox(height: 16),
-                                  TranslatedText(
-                                    'no_songs_in_folder',
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      color: Theme.of(
-                                        context,
-                                      ).colorScheme.onSurface.withValues(alpha: 0.6),
-                                    ),
-                                  ),
-                                ],
-                              ),
+                                ),
+                              ],
                             ),
                           ),
-                        )
-                      : ValueListenableBuilder<MediaItem?>(
-                          valueListenable: _immediateMediaItemNotifier,
-                          builder: (context, immediateMediaItem, child) {
-                            return ListView.builder(
-                              controller: _scrollController,
-                              physics: const AlwaysScrollableScrollPhysics(),
-                              itemCount: _displaySongs.length,
-                              itemBuilder: (context, i) {
-                                final song = _displaySongs[i];
-                                final path = song.data;
-                                final isCurrent =
-                                    (immediateMediaItem?.id != null &&
-                                    path.isNotEmpty &&
-                                    (immediateMediaItem!.id == path ||
-                                        immediateMediaItem.extras?['data'] ==
-                                            path));
-                                final isSelected = _selectedSongPaths.contains(
-                                  path,
-                                );
-                                final isIgnoredFuture = isSongIgnored(path);
-                                return FutureBuilder<bool>(
-                                  future: isIgnoredFuture,
-                                  builder: (context, snapshot) {
-                                    final isIgnored = snapshot.data ?? false;
-
-                                    // Solo usar ValueListenableBuilder para la canción actual
-                                    if (isCurrent) {
-                                      return ValueListenableBuilder<bool>(
-                                        valueListenable: _isPlayingNotifier,
-                                        builder: (context, playing, child) {
-                                          return _buildOptimizedListTile(
-                                            context,
-                                            song,
-                                            isCurrent,
-                                            playing,
-                                            isAmoledTheme,
-                                            isIgnored,
-                                            isSelected,
-                                          );
-                                        },
-                                      );
-                                    } else {
-                                      // Para canciones que no están reproduciéndose, no usar StreamBuilder
-                                      return _buildOptimizedListTile(
-                                        context,
-                                        song,
-                                        isCurrent,
-                                        false, // No playing
-                                        isAmoledTheme,
-                                        isIgnored,
-                                        isSelected,
-                                      );
-                                    }
-                                  },
-                                );
-                              },
-                            );
-                          },
                         ),
-                      );
-              },
-            ),
+                      )
+                    : ValueListenableBuilder<MediaItem?>(
+                        valueListenable: _immediateMediaItemNotifier,
+                        builder: (context, immediateMediaItem, child) {
+                          return ListView.builder(
+                            controller: _scrollController,
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            itemCount: _displaySongs.length,
+                            itemBuilder: (context, i) {
+                              final song = _displaySongs[i];
+                              final path = song.data;
+                              final isCurrent =
+                                  (immediateMediaItem?.id != null &&
+                                  path.isNotEmpty &&
+                                  (immediateMediaItem!.id == path ||
+                                      immediateMediaItem.extras?['data'] ==
+                                          path));
+                              final isSelected = _selectedSongPaths.contains(
+                                path,
+                              );
+                              final isIgnoredFuture = isSongIgnored(path);
+                              return FutureBuilder<bool>(
+                                future: isIgnoredFuture,
+                                builder: (context, snapshot) {
+                                  final isIgnored = snapshot.data ?? false;
+
+                                  // Solo usar ValueListenableBuilder para la canción actual
+                                  if (isCurrent) {
+                                    return ValueListenableBuilder<bool>(
+                                      valueListenable: _isPlayingNotifier,
+                                      builder: (context, playing, child) {
+                                        return _buildOptimizedListTile(
+                                          context,
+                                          song,
+                                          isCurrent,
+                                          playing,
+                                          isAmoledTheme,
+                                          isIgnored,
+                                          isSelected,
+                                        );
+                                      },
+                                    );
+                                  } else {
+                                    // Para canciones que no están reproduciéndose, no usar StreamBuilder
+                                    return _buildOptimizedListTile(
+                                      context,
+                                      song,
+                                      isCurrent,
+                                      false, // No playing
+                                      isAmoledTheme,
+                                      isIgnored,
+                                      isSelected,
+                                    );
+                                  }
+                                },
+                              );
+                            },
+                          );
+                        },
+                      ),
+              );
+            },
           ),
         ),
-        );
+      ),
+    );
   }
 
   Widget _buildOptimizedListTile(
@@ -3200,7 +3419,10 @@ class _FoldersScreenState extends State<FoldersScreen>
                   artworkWidth: 50,
                   keepOldArtwork: true,
                   nullArtworkWidget: Container(
-                    color: isSystem ? Theme.of(context).colorScheme.secondaryContainer.withValues(alpha: 0.5) : Theme.of(context).colorScheme.surfaceContainer,
+                    color: isSystem
+                        ? Theme.of(context).colorScheme.secondaryContainer
+                              .withValues(alpha: 0.5)
+                        : Theme.of(context).colorScheme.surfaceContainer,
                     width: 50,
                     height: 50,
                     child: Icon(
@@ -3259,7 +3481,9 @@ class _FoldersScreenState extends State<FoldersScreen>
             ? IconButton(
                 icon: Icon(
                   isCurrent
-                      ? (playing ? Symbols.pause_rounded : Symbols.play_arrow_rounded)
+                      ? (playing
+                            ? Symbols.pause_rounded
+                            : Symbols.play_arrow_rounded)
                       : Symbols.play_arrow_rounded,
                   fill: 1,
                   grade: 200,
@@ -3283,13 +3507,13 @@ class _FoldersScreenState extends State<FoldersScreen>
         selected: isCurrent,
         selectedTileColor: isCurrent
             ? (isAmoledTheme
-                ? Colors.transparent
-                : Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.8))
+                  ? Colors.transparent
+                  : Theme.of(
+                      context,
+                    ).colorScheme.primaryContainer.withValues(alpha: 0.8))
             : null,
         shape: isCurrent
-            ? RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              )
+            ? RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))
             : null,
       ),
     );
@@ -3382,13 +3606,13 @@ class _FoldersScreenState extends State<FoldersScreen>
 
   Future<void> _handleCopyToFolder(BuildContext context) async {
     if (!context.mounted) return;
-    
-    final selectedSongs = _displaySongs.where(
-      (s) => _selectedSongPaths.contains(s.data),
-    ).toList();
-    
+
+    final selectedSongs = _displaySongs
+        .where((s) => _selectedSongPaths.contains(s.data))
+        .toList();
+
     if (selectedSongs.isEmpty) return;
-    
+
     // Usar la función existente para mostrar el selector de carpetas
     // pero adaptada para múltiples canciones
     await _showFolderSelectorMultiple(selectedSongs, isMove: false);
@@ -3396,13 +3620,13 @@ class _FoldersScreenState extends State<FoldersScreen>
 
   Future<void> _handleMoveToFolder(BuildContext context) async {
     if (!context.mounted) return;
-    
-    final selectedSongs = _displaySongs.where(
-      (s) => _selectedSongPaths.contains(s.data),
-    ).toList();
-    
+
+    final selectedSongs = _displaySongs
+        .where((s) => _selectedSongPaths.contains(s.data))
+        .toList();
+
     if (selectedSongs.isEmpty) return;
-    
+
     // Usar la función existente para mostrar el selector de carpetas
     // pero adaptada para múltiples canciones
     await _showFolderSelectorMultiple(selectedSongs, isMove: true);
@@ -3410,20 +3634,20 @@ class _FoldersScreenState extends State<FoldersScreen>
 
   Future<void> _handleDeleteSongs(BuildContext context) async {
     if (!context.mounted) return;
-    
-    final selectedSongs = _displaySongs.where(
-      (s) => _selectedSongPaths.contains(s.data),
-    ).toList();
-    
+
+    final selectedSongs = _displaySongs
+        .where((s) => _selectedSongPaths.contains(s.data))
+        .toList();
+
     if (selectedSongs.isEmpty) return;
-    
+
     // Mostrar diálogo de confirmación con el mismo diseño que el individual
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) {
         final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
         final isDark = Theme.of(context).brightness == Brightness.dark;
-        
+
         return AlertDialog(
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
@@ -3434,10 +3658,7 @@ class _FoldersScreenState extends State<FoldersScreen>
           title: Center(
             child: Text(
               LocaleProvider.tr('delete_songs'),
-              style: const TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.w600,
-              ),
+              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
             ),
           ),
           content: SizedBox(
@@ -3451,8 +3672,9 @@ class _FoldersScreenState extends State<FoldersScreen>
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 4),
                     child: Text(
-                      LocaleProvider.tr('delete_songs_confirm')
-                          .replaceAll('{count}', selectedSongs.length.toString()),
+                      LocaleProvider.tr(
+                        'delete_songs_confirm',
+                      ).replaceAll('{count}', selectedSongs.length.toString()),
                       style: TextStyle(
                         fontSize: 14,
                         color: Theme.of(context).colorScheme.onSurface,
@@ -3486,7 +3708,9 @@ class _FoldersScreenState extends State<FoldersScreen>
                       border: Border.all(
                         color: isAmoled && isDark
                             ? Colors.red.withValues(alpha: 0.4)
-                            : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
+                            : Theme.of(
+                                context,
+                              ).colorScheme.outline.withValues(alpha: 0.1),
                         width: 1,
                       ),
                     ),
@@ -3502,7 +3726,9 @@ class _FoldersScreenState extends State<FoldersScreen>
                             size: 30,
                             color: isAmoled && isDark
                                 ? Colors.red
-                                : Theme.of(context).colorScheme.onErrorContainer,
+                                : Theme.of(
+                                    context,
+                                  ).colorScheme.onErrorContainer,
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -3514,7 +3740,9 @@ class _FoldersScreenState extends State<FoldersScreen>
                               fontWeight: FontWeight.w600,
                               color: isAmoled && isDark
                                   ? Colors.red
-                                  : Theme.of(context).colorScheme.onErrorContainer,
+                                  : Theme.of(
+                                      context,
+                                    ).colorScheme.onErrorContainer,
                             ),
                           ),
                         ),
@@ -3545,7 +3773,9 @@ class _FoldersScreenState extends State<FoldersScreen>
                       border: Border.all(
                         color: isAmoled && isDark
                             ? Colors.white.withValues(alpha: 0.2)
-                            : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
+                            : Theme.of(
+                                context,
+                              ).colorScheme.outline.withValues(alpha: 0.1),
                         width: 1,
                       ),
                     ),
@@ -3587,7 +3817,7 @@ class _FoldersScreenState extends State<FoldersScreen>
         );
       },
     );
-    
+
     if (confirmed == true) {
       await _deleteMultipleSongs(selectedSongs);
     }
@@ -3598,7 +3828,7 @@ class _FoldersScreenState extends State<FoldersScreen>
     int successCount = 0;
     int errorCount = 0;
     final List<String> songPaths = songs.map((s) => s.data).toList();
-    
+
     try {
       // Primero retirar todas las canciones de la cola de una vez
       try {
@@ -3612,14 +3842,14 @@ class _FoldersScreenState extends State<FoldersScreen>
           final file = File(song.data);
           if (await file.exists()) {
             await file.delete();
-            
+
             // Notificar al MediaStore de Android que el archivo fue eliminado
             try {
               await MediaScanner.loadMedia(path: song.data);
             } catch (_) {}
-            
+
             successCount++;
-            
+
             // Limpiar caché de artwork
             try {
               removeArtworkFromCache(song.data);
@@ -3653,7 +3883,9 @@ class _FoldersScreenState extends State<FoldersScreen>
       try {
         final playlists = await PlaylistsDB().getAllPlaylists();
         for (final p in playlists) {
-          final toRemove = p.songPaths.where((sp) => songPaths.contains(sp)).toList();
+          final toRemove = p.songPaths
+              .where((sp) => songPaths.contains(sp))
+              .toList();
           for (final sp in toRemove) {
             await PlaylistsDB().removeSongFromPlaylist(p.id, sp);
           }
@@ -3683,11 +3915,10 @@ class _FoldersScreenState extends State<FoldersScreen>
         shortcutsShouldReload.value = !shortcutsShouldReload.value;
         playlistsShouldReload.value = !playlistsShouldReload.value;
       } catch (_) {}
-
     } catch (e) {
       // No hacer nada
     }
-    
+
     if (mounted) {
       _showMessage(
         LocaleProvider.tr('songs_deleted'),
@@ -3696,7 +3927,7 @@ class _FoldersScreenState extends State<FoldersScreen>
             .replaceAll('{success}', successCount.toString())
             .replaceAll('{error}', errorCount.toString()),
       );
-      
+
       setState(() {
         _isSelecting = false;
         _selectedSongPaths.clear();
@@ -3706,40 +3937,43 @@ class _FoldersScreenState extends State<FoldersScreen>
 
   // Función para mostrar el selector de carpetas para múltiples canciones
   // Reutiliza la lógica de _showFolderSelector pero adaptada para múltiples canciones
-  Future<void> _showFolderSelectorMultiple(List<SongModel> songs, {required bool isMove}) async {
+  Future<void> _showFolderSelectorMultiple(
+    List<SongModel> songs, {
+    required bool isMove,
+  }) async {
     // Verificar permisos para la primera canción (asumimos que todas están en la misma ubicación)
     if (songs.isNotEmpty) {
       await _checkFilePermissions(songs.first.data);
     }
-    
+
     final folders = await SongsIndexDB().getFolders();
-    
+
     // Crear mapa de carpetas con sus rutas completas originales
     final Map<String, String> folderMap = {};
     for (final folder in folders) {
       // Obtener la ruta original completa desde las canciones
       final songsInFolder = await SongsIndexDB().getSongsFromFolder(folder);
       String originalPath = folder;
-      
+
       if (songsInFolder.isNotEmpty) {
         // Usar la ruta del primer archivo para obtener la carpeta original
         final firstSongPath = songsInFolder.first;
         final originalFolder = p.dirname(firstSongPath);
         originalPath = originalFolder;
       }
-      
+
       folderMap[folder] = originalPath;
     }
-    
+
     // Para simplificar, mostrar todas las carpetas disponibles
     // El usuario puede elegir cualquier carpeta, incluso la actual
     final availableFolders = folders;
 
     if (availableFolders.isEmpty) {
       _showMessage(
-        isMove 
-          ? 'No hay otras carpetas disponibles para mover las canciones.' 
-          : 'No hay carpetas disponibles para copiar las canciones.',
+        isMove
+            ? 'No hay otras carpetas disponibles para mover las canciones.'
+            : 'No hay carpetas disponibles para copiar las canciones.',
         isError: true,
       );
       return;
@@ -3748,10 +3982,10 @@ class _FoldersScreenState extends State<FoldersScreen>
     // Ordenar las carpetas alfabéticamente igual que en la pantalla principal
     availableFolders.sort((a, b) {
       // Usar folderDisplayNames si está disponible, sino usar el nombre de la carpeta de la ruta
-      final nameA = folderDisplayNames.containsKey(a) 
+      final nameA = folderDisplayNames.containsKey(a)
           ? folderDisplayNames[a]!.toLowerCase()
           : p.basename(folderMap[a] ?? '').toLowerCase();
-      final nameB = folderDisplayNames.containsKey(b) 
+      final nameB = folderDisplayNames.containsKey(b)
           ? folderDisplayNames[b]!.toLowerCase()
           : p.basename(folderMap[b] ?? '').toLowerCase();
       return nameA.compareTo(nameB);
@@ -3776,7 +4010,9 @@ class _FoldersScreenState extends State<FoldersScreen>
                 decoration: BoxDecoration(
                   border: Border(
                     bottom: BorderSide(
-                      color: Theme.of(context).dividerColor.withValues(alpha: 0.1),
+                      color: Theme.of(
+                        context,
+                      ).dividerColor.withValues(alpha: 0.1),
                     ),
                   ),
                 ),
@@ -3784,12 +4020,16 @@ class _FoldersScreenState extends State<FoldersScreen>
                   children: [
                     Icon(
                       isMove ? Icons.drive_file_move : Icons.copy,
-                      color: Theme.of(context).colorScheme.inverseSurface.withValues(alpha: 0.95),
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.inverseSurface.withValues(alpha: 0.95),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
-                        isMove ? LocaleProvider.tr('move_to_folder') : LocaleProvider.tr('copy_to_folder'),
+                        isMove
+                            ? LocaleProvider.tr('move_to_folder')
+                            : LocaleProvider.tr('copy_to_folder'),
                         style: const TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.w600,
@@ -3811,12 +4051,11 @@ class _FoldersScreenState extends State<FoldersScreen>
                   itemBuilder: (context, index) {
                     final folder = availableFolders[index];
                     final originalPath = folderMap[folder] ?? folder;
-                    final displayName = folderDisplayNames[folder] ?? p.basename(originalPath);
-                    
+                    final displayName =
+                        folderDisplayNames[folder] ?? p.basename(originalPath);
+
                     return ListTile(
-                      leading: Icon(
-                        Icons.folder,
-                      ),
+                      leading: Icon(Icons.folder),
                       title: Text(
                         displayName,
                         maxLines: 1,
@@ -3827,7 +4066,11 @@ class _FoldersScreenState extends State<FoldersScreen>
                       ),
                       onTap: () async {
                         Navigator.of(context).pop();
-                        await _processMultipleSongs(songs, originalPath, isMove: isMove);
+                        await _processMultipleSongs(
+                          songs,
+                          originalPath,
+                          isMove: isMove,
+                        );
                       },
                     );
                   },
@@ -3841,13 +4084,17 @@ class _FoldersScreenState extends State<FoldersScreen>
   }
 
   // Función para procesar múltiples canciones (copiar o mover)
-  Future<void> _processMultipleSongs(List<SongModel> songs, String destinationFolder, {required bool isMove}) async {
+  Future<void> _processMultipleSongs(
+    List<SongModel> songs,
+    String destinationFolder, {
+    required bool isMove,
+  }) async {
     int successCount = 0;
     int errorCount = 0;
-    
+
     // ValueNotifier para actualizar el progreso en tiempo real
     final progressNotifier = ValueNotifier<String>('0 / ${songs.length}');
-    
+
     // Mostrar diálogo de progreso
     if (!mounted) return;
     showDialog(
@@ -3869,9 +4116,9 @@ class _FoldersScreenState extends State<FoldersScreen>
                     const CircularProgressIndicator(),
                     const SizedBox(height: 24),
                     Text(
-                      isMove 
-                        ? LocaleProvider.tr('moving_songs')
-                        : LocaleProvider.tr('copying_songs'),
+                      isMove
+                          ? LocaleProvider.tr('moving_songs')
+                          : LocaleProvider.tr('copying_songs'),
                       style: const TextStyle(fontSize: 16),
                       textAlign: TextAlign.center,
                     ),
@@ -3889,7 +4136,7 @@ class _FoldersScreenState extends State<FoldersScreen>
         );
       },
     );
-    
+
     for (final song in songs) {
       try {
         if (isMove) {
@@ -3901,43 +4148,46 @@ class _FoldersScreenState extends State<FoldersScreen>
       } catch (e) {
         errorCount++;
       }
-      
+
       // Actualizar el progreso
       progressNotifier.value = '${successCount + errorCount} / ${songs.length}';
     }
-    
+
     // Limpiar el notifier
     progressNotifier.dispose();
-    
+
     // Cerrar diálogo de progreso
     if (mounted) Navigator.of(context).pop();
-    
+
     if (mounted) {
       _showMessage(
-        isMove 
-          ? LocaleProvider.tr('song_moved')
-          : LocaleProvider.tr('song_copied'),
+        isMove
+            ? LocaleProvider.tr('song_moved')
+            : LocaleProvider.tr('song_copied'),
         isError: false,
-        description: isMove 
-          ? LocaleProvider.tr('move_completed')
-              .replaceAll('{success}', successCount.toString())
-              .replaceAll('{error}', errorCount.toString())
-          : LocaleProvider.tr('copy_completed')
-              .replaceAll('{success}', successCount.toString())
-              .replaceAll('{error}', errorCount.toString()),
+        description: isMove
+            ? LocaleProvider.tr('move_completed')
+                  .replaceAll('{success}', successCount.toString())
+                  .replaceAll('{error}', errorCount.toString())
+            : LocaleProvider.tr('copy_completed')
+                  .replaceAll('{success}', successCount.toString())
+                  .replaceAll('{error}', errorCount.toString()),
       );
-      
+
       setState(() {
         _isSelecting = false;
         _selectedSongPaths.clear();
       });
-      
+
       // No recargar la pantalla, las funciones internas ya actualizaron el estado local
     }
   }
 
   // Versión interna de _copySongToFolder sin diálogos de confirmación
-  Future<void> _copySongToFolderInternal(SongModel song, String destinationFolder) async {
+  Future<void> _copySongToFolderInternal(
+    SongModel song,
+    String destinationFolder,
+  ) async {
     try {
       final sourceFile = File(song.data);
       if (!await sourceFile.exists()) {
@@ -3962,7 +4212,7 @@ class _FoldersScreenState extends State<FoldersScreen>
           destinationFile = File(finalDestinationPath);
           counter++;
         } while (await destinationFile.exists());
-        
+
         await sourceFile.copy(finalDestinationPath);
       } else {
         await sourceFile.copy(destinationPath);
@@ -3970,7 +4220,7 @@ class _FoldersScreenState extends State<FoldersScreen>
 
       // Actualizar el archivo nuevo en el sistema de medios de Android
       await MediaScanner.loadMedia(path: destinationPath);
-      
+
       // Actualizar la base de datos para indexar los cambios
       await SongsIndexDB().forceReindex();
 
@@ -3998,7 +4248,10 @@ class _FoldersScreenState extends State<FoldersScreen>
   }
 
   // Versión interna de _moveSongToFolder sin diálogos de confirmación
-  Future<void> _moveSongToFolderInternal(SongModel song, String destinationFolder) async {
+  Future<void> _moveSongToFolderInternal(
+    SongModel song,
+    String destinationFolder,
+  ) async {
     try {
       final sourceFile = File(song.data);
       if (!await sourceFile.exists()) {
@@ -4023,7 +4276,7 @@ class _FoldersScreenState extends State<FoldersScreen>
           destinationFile = File(finalDestinationPath);
           counter++;
         } while (await destinationFile.exists());
-        
+
         await sourceFile.rename(finalDestinationPath);
       } else {
         await sourceFile.rename(destinationPath);
@@ -4033,10 +4286,10 @@ class _FoldersScreenState extends State<FoldersScreen>
       try {
         await MediaScanner.loadMedia(path: song.data);
       } catch (_) {}
-      
+
       // Actualizar el archivo nuevo en el sistema de medios de Android
       await MediaScanner.loadMedia(path: destinationPath);
-      
+
       // Actualizar la base de datos para indexar los cambios
       await SongsIndexDB().forceReindex();
 
@@ -4279,38 +4532,43 @@ class _FoldersScreenState extends State<FoldersScreen>
   }
 
   // Función para mostrar el selector de carpetas
-  Future<void> _showFolderSelector(SongModel song, {required bool isMove}) async {
+  Future<void> _showFolderSelector(
+    SongModel song, {
+    required bool isMove,
+  }) async {
     // Verificar permisos antes de continuar
     await _checkFilePermissions(song.data);
-    
+
     final folders = await SongsIndexDB().getFolders();
     final currentFolder = _getFolderPath(song.data);
-    
+
     // Crear mapa de carpetas con sus rutas completas originales
     final Map<String, String> folderMap = {};
     for (final folder in folders) {
       // Obtener la ruta original completa desde las canciones
       final songsInFolder = await SongsIndexDB().getSongsFromFolder(folder);
       String originalPath = folder;
-      
+
       if (songsInFolder.isNotEmpty) {
         // Usar la ruta del primer archivo para obtener la carpeta original
         final firstSongPath = songsInFolder.first;
         final originalFolder = p.dirname(firstSongPath);
         originalPath = originalFolder;
       }
-      
+
       folderMap[folder] = originalPath;
     }
-    
+
     // Filtrar la carpeta actual si es mover
-    final availableFolders = isMove 
+    final availableFolders = isMove
         ? folders.where((folder) => folder != currentFolder).toList()
         : folders;
 
     if (availableFolders.isEmpty) {
       _showMessage(
-        isMove ? 'No hay otras carpetas disponibles para mover la canción.' : 'No hay carpetas disponibles para copiar la canción.',
+        isMove
+            ? 'No hay otras carpetas disponibles para mover la canción.'
+            : 'No hay carpetas disponibles para copiar la canción.',
         isError: true,
       );
       return;
@@ -4319,10 +4577,10 @@ class _FoldersScreenState extends State<FoldersScreen>
     // Ordenar las carpetas alfabéticamente igual que en la pantalla principal
     availableFolders.sort((a, b) {
       // Usar folderDisplayNames si está disponible, sino usar el nombre de la carpeta de la ruta
-      final nameA = folderDisplayNames.containsKey(a) 
+      final nameA = folderDisplayNames.containsKey(a)
           ? folderDisplayNames[a]!.toLowerCase()
           : p.basename(folderMap[a] ?? '').toLowerCase();
-      final nameB = folderDisplayNames.containsKey(b) 
+      final nameB = folderDisplayNames.containsKey(b)
           ? folderDisplayNames[b]!.toLowerCase()
           : p.basename(folderMap[b] ?? '').toLowerCase();
       return nameA.compareTo(nameB);
@@ -4347,7 +4605,9 @@ class _FoldersScreenState extends State<FoldersScreen>
                 decoration: BoxDecoration(
                   border: Border(
                     bottom: BorderSide(
-                      color: Theme.of(context).dividerColor.withValues(alpha: 0.1),
+                      color: Theme.of(
+                        context,
+                      ).dividerColor.withValues(alpha: 0.1),
                     ),
                   ),
                 ),
@@ -4355,12 +4615,16 @@ class _FoldersScreenState extends State<FoldersScreen>
                   children: [
                     Icon(
                       isMove ? Icons.drive_file_move : Icons.copy,
-                      color: Theme.of(context).colorScheme.inverseSurface.withValues(alpha: 0.95),
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.inverseSurface.withValues(alpha: 0.95),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
-                        isMove ? LocaleProvider.tr('move_song') : LocaleProvider.tr('copy_song'),
+                        isMove
+                            ? LocaleProvider.tr('move_song')
+                            : LocaleProvider.tr('copy_song'),
                         style: const TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.w600,
@@ -4383,7 +4647,7 @@ class _FoldersScreenState extends State<FoldersScreen>
                     final folder = availableFolders[index];
                     final originalPath = folderMap[folder]!;
                     final displayName = p.basename(originalPath);
-                    
+
                     return ListTile(
                       leading: const Icon(Icons.folder),
                       title: Text(
@@ -4411,7 +4675,10 @@ class _FoldersScreenState extends State<FoldersScreen>
   }
 
   // Función para mover una canción a otra carpeta
-  Future<void> _moveSongToFolder(SongModel song, String destinationFolder) async {
+  Future<void> _moveSongToFolder(
+    SongModel song,
+    String destinationFolder,
+  ) async {
     // Mostrar diálogo de carga
     if (!mounted) return;
     showDialog(
@@ -4456,16 +4723,23 @@ class _FoldersScreenState extends State<FoldersScreen>
       // Verificar si ya existe un archivo con el mismo nombre
       if (await destinationFile.exists()) {
         if (mounted) Navigator.of(context).pop(); // Cerrar diálogo
-        _showMessage(LocaleProvider.tr('error_moving_song'), description: LocaleProvider.tr('file_already_exists'), isError: true);
+        _showMessage(
+          LocaleProvider.tr('error_moving_song'),
+          description: LocaleProvider.tr('file_already_exists'),
+          isError: true,
+        );
         return;
       }
 
       // Verificar que la carpeta de destino existe y es accesible
       final destinationDir = Directory(destinationFolder);
-      
+
       if (!await destinationDir.exists()) {
         if (mounted) Navigator.of(context).pop(); // Cerrar diálogo
-        _showMessage('La carpeta de destino no existe o no es accesible.\n\nRuta: $destinationFolder', isError: true);
+        _showMessage(
+          'La carpeta de destino no existe o no es accesible.\n\nRuta: $destinationFolder',
+          isError: true,
+        );
         return;
       }
 
@@ -4503,13 +4777,13 @@ class _FoldersScreenState extends State<FoldersScreen>
       try {
         await MediaScanner.loadMedia(path: song.data);
       } catch (_) {}
-      
+
       // Actualizar el archivo nuevo en el sistema de medios de Android
       await MediaScanner.loadMedia(path: destinationPath);
-      
+
       // Actualizar la base de datos para indexar los cambios
       await SongsIndexDB().forceReindex();
-      
+
       // Actualizar el estado local sin recargar toda la pantalla
       if (carpetaSeleccionada != null) {
         setState(() {
@@ -4523,7 +4797,7 @@ class _FoldersScreenState extends State<FoldersScreen>
           );
         });
       }
-      
+
       // Notificar a otras pantallas que deben refrescar
       try {
         favoritesShouldReload.value = !favoritesShouldReload.value;
@@ -4537,21 +4811,24 @@ class _FoldersScreenState extends State<FoldersScreen>
         LocaleProvider.tr('song_moved'),
         description: LocaleProvider.tr('song_moved_desc'),
       );
-
     } catch (e) {
       // Cerrar diálogo de carga en caso de error
       if (mounted) Navigator.of(context).pop();
-      
+
       _showMessage(
         LocaleProvider.tr('error_moving_song'),
-        description: '${LocaleProvider.tr('error_moving_song_desc')}\n\nError: ${e.toString()}',
+        description:
+            '${LocaleProvider.tr('error_moving_song_desc')}\n\nError: ${e.toString()}',
         isError: true,
       );
     }
   }
 
   // Función para copiar una canción a otra carpeta
-  Future<void> _copySongToFolder(SongModel song, String destinationFolder) async {
+  Future<void> _copySongToFolder(
+    SongModel song,
+    String destinationFolder,
+  ) async {
     // Mostrar diálogo de carga
     if (!mounted) return;
     showDialog(
@@ -4596,16 +4873,23 @@ class _FoldersScreenState extends State<FoldersScreen>
       // Verificar si ya existe un archivo con el mismo nombre
       if (await destinationFile.exists()) {
         if (mounted) Navigator.of(context).pop(); // Cerrar diálogo
-        _showMessage(LocaleProvider.tr('error_copying_song'), description: LocaleProvider.tr('file_already_exists'), isError: true);
+        _showMessage(
+          LocaleProvider.tr('error_copying_song'),
+          description: LocaleProvider.tr('file_already_exists'),
+          isError: true,
+        );
         return;
       }
 
       // Verificar que la carpeta de destino existe y es accesible
       final destinationDir = Directory(destinationFolder);
-      
+
       if (!await destinationDir.exists()) {
         if (mounted) Navigator.of(context).pop(); // Cerrar diálogo
-        _showMessage('La carpeta de destino no existe o no es accesible.\n\nRuta: $destinationFolder', isError: true);
+        _showMessage(
+          'La carpeta de destino no existe o no es accesible.\n\nRuta: $destinationFolder',
+          isError: true,
+        );
         return;
       }
 
@@ -4619,10 +4903,10 @@ class _FoldersScreenState extends State<FoldersScreen>
 
       // Actualizar el archivo nuevo en el sistema de medios de Android
       await MediaScanner.loadMedia(path: destinationPath);
-      
+
       // Actualizar la base de datos para indexar los cambios
       await SongsIndexDB().forceReindex();
-      
+
       // Notificar a otras pantallas que deben refrescar
       try {
         favoritesShouldReload.value = !favoritesShouldReload.value;
@@ -4636,14 +4920,14 @@ class _FoldersScreenState extends State<FoldersScreen>
         LocaleProvider.tr('song_copied'),
         description: LocaleProvider.tr('song_copied_desc'),
       );
-
     } catch (e) {
       // Cerrar diálogo de carga en caso de error
       if (mounted) Navigator.of(context).pop();
-      
+
       _showMessage(
         LocaleProvider.tr('error_copying_song'),
-        description: '${LocaleProvider.tr('error_copying_song_desc')}\n\nError: ${e.toString()}',
+        description:
+            '${LocaleProvider.tr('error_copying_song_desc')}\n\nError: ${e.toString()}',
         isError: true,
       );
     }
@@ -4668,23 +4952,24 @@ class _FoldersScreenState extends State<FoldersScreen>
     try {
       final file = File(filePath);
       final parentDir = Directory(p.dirname(filePath));
-      
+
       // Verificar si podemos leer el archivo
       if (!await file.exists()) {
         return;
       }
-      
+
       // Verificar si podemos leer el directorio padre
       if (!await parentDir.exists()) {
         return;
       }
-      
+
       // Intentar listar el directorio para verificar permisos
       await parentDir.list().first;
     } catch (e) {
       _showMessage(
         'Advertencia de permisos',
-        description: 'Puede haber problemas con los permisos de archivos. Error: ${e.toString()}',
+        description:
+            'Puede haber problemas con los permisos de archivos. Error: ${e.toString()}',
         isError: true,
       );
     }
@@ -4693,7 +4978,7 @@ class _FoldersScreenState extends State<FoldersScreen>
   // Función para mostrar mensajes de confirmación o error
   void _showMessage(String title, {String? description, bool isError = false}) {
     if (!mounted) return;
-    
+
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -4702,7 +4987,7 @@ class _FoldersScreenState extends State<FoldersScreen>
           builder: (context, colorScheme, child) {
             final isAmoled = colorScheme == AppColorScheme.amoled;
             final isDark = Theme.of(context).brightness == Brightness.dark;
-            
+
             return AlertDialog(
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
@@ -4713,10 +4998,7 @@ class _FoldersScreenState extends State<FoldersScreen>
               title: Center(
                 child: Text(
                   title,
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
                 ),
               ),
               content: SizedBox(
@@ -4759,7 +5041,9 @@ class _FoldersScreenState extends State<FoldersScreen>
                           border: Border.all(
                             color: isAmoled && isDark
                                 ? Colors.white.withValues(alpha: 0.4)
-                                : Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
+                                : Theme.of(
+                                    context,
+                                  ).colorScheme.primary.withValues(alpha: 0.3),
                             width: 2,
                           ),
                         ),
@@ -4772,8 +5056,11 @@ class _FoldersScreenState extends State<FoldersScreen>
                                 color: isError
                                     ? null
                                     : (isAmoled && isDark
-                                        ? Colors.white.withValues(alpha: 0.2)
-                                        : Theme.of(context).colorScheme.primary.withValues(alpha: 0.1)),
+                                          ? Colors.white.withValues(alpha: 0.2)
+                                          : Theme.of(context)
+                                                .colorScheme
+                                                .primary
+                                                .withValues(alpha: 0.1)),
                               ),
                               child: Icon(
                                 isError ? Icons.error : Icons.check_circle,
@@ -4855,4 +5142,3 @@ class _FoldersScreenState extends State<FoldersScreen>
   }
   */
 }
-

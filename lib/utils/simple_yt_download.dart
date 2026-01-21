@@ -20,13 +20,15 @@ class DownloadQueue {
   DownloadTask? _currentTask;
   bool _isFirstDownload = true;
   int _nextNotificationId = 1; // Contador para IDs únicos de notificación
-  
+
   // Callbacks globales para actualizar la UI
   Function(double progress, int notificationId)? _onProgressCallback;
   Function(bool isDownloading, bool isProcessing)? _onStateChangeCallback;
-  Function(String title, String message, int notificationId)? _onSuccessCallback;
+  Function(String title, String message, int notificationId)?
+  _onSuccessCallback;
   Function(String title, String message)? _onErrorCallback;
-  Function(String title, String artist, int notificationId)? _onDownloadStartCallback;
+  Function(String title, String artist, int notificationId)?
+  _onDownloadStartCallback;
   Function(String title, String artist)? _onDownloadAddedToQueueCallback;
 
   void setCallbacks({
@@ -59,12 +61,16 @@ class DownloadQueue {
       artist: artist,
       notificationId: _nextNotificationId++, // Asignar ID único
     );
-    
+
     _queue.add(task);
-    
+
     // Si no hay ninguna descarga en proceso, mostrar el título inmediatamente e iniciar el procesamiento
     if (!_isProcessing) {
-      _onDownloadStartCallback?.call(task.title, task.artist, task.notificationId);
+      _onDownloadStartCallback?.call(
+        task.title,
+        task.artist,
+        task.notificationId,
+      );
       // Usar el servicio global de notificaciones
       DownloadNotificationThrottler().setTitle(task.title);
       _processQueue();
@@ -77,28 +83,31 @@ class DownloadQueue {
   // Procesar la cola de descargas
   Future<void> _processQueue() async {
     if (_isProcessing || _queue.isEmpty) return;
-    
+
     _isProcessing = true;
-    
+
     while (_queue.isNotEmpty) {
       _isFirstDownload = false;
       final task = _queue.removeAt(0);
       _currentTask = task;
-      
+
       try {
         // Para descargas adicionales (no la primera), notificar el inicio
         if (!_isFirstDownload) {
-          _onDownloadStartCallback?.call(task.title, task.artist, task.notificationId);
+          _onDownloadStartCallback?.call(
+            task.title,
+            task.artist,
+            task.notificationId,
+          );
           // Usar el servicio global de notificaciones
           DownloadNotificationThrottler().setTitle(task.title);
         }
-        
+
         // Iniciar la descarga
         await _downloadTask(task);
-        
+
         // Pequeña pausa entre descargas
         await Future.delayed(const Duration(milliseconds: 500));
-        
       } catch (e) {
         // Manejar errores individuales sin detener la cola
         _onErrorCallback?.call(
@@ -109,13 +118,13 @@ class DownloadQueue {
         _currentTask = null;
       }
     }
-    
+
     // Cuando la cola está vacía, notificar que no hay más descargas
     if (_queue.isEmpty) {
       _onStateChangeCallback?.call(false, false);
       _isFirstDownload = true; // Resetear para la próxima descarga
     }
-    
+
     _isProcessing = false;
   }
 
@@ -127,7 +136,7 @@ class DownloadQueue {
     if (task.context.mounted) {
       downloadManager.setDialogContext(task.context);
     }
-    
+
     downloadManager.setCallbacks(
       onInfoUpdate: (title, artist, coverBytes) {
         // print('Descargando: $title - $artist');
@@ -136,7 +145,10 @@ class DownloadQueue {
         // print('Progreso: ${(progress * 100).toStringAsFixed(1)}%');
         _onProgressCallback?.call(progress, task.notificationId);
         // Usar el servicio global de notificaciones
-        DownloadNotificationThrottler().show(progress * 100, notificationId: task.notificationId);
+        DownloadNotificationThrottler().show(
+          progress * 100,
+          notificationId: task.notificationId,
+        );
       },
       onStateUpdate: (isDownloading, isProcessing) {
         // print('Estado: Descargando=$isDownloading, Procesando=$isProcessing');
@@ -155,7 +167,7 @@ class DownloadQueue {
         showDownloadCompletedNotification(title, task.notificationId);
       },
     );
-    
+
     await downloadManager.downloadAudio(url: videoUrl, songTitle: task.title);
   }
 
@@ -188,7 +200,7 @@ class DownloadQueue {
       _showSnackbarGlobal(title, message);
     }
   }
-  
+
   // Método para mostrar snackbar global
   void _showSnackbarGlobal(String title, String message) {
     // Usar un enfoque más simple: mostrar en consola y usar un callback global si está disponible
@@ -201,7 +213,7 @@ class DownloadQueue {
   int get queueLength => _queue.length;
   List<DownloadTask> get queue => List.unmodifiable(_queue);
   DownloadTask? get currentTask => _currentTask;
-  
+
   // Obtener el número total de descargas (actual + en cola)
   int get totalDownloads => (_currentTask != null ? 1 : 0) + _queue.length;
 }
@@ -225,7 +237,6 @@ class DownloadTask {
 
 // Clase simple para manejar descargas en YouTube
 class SimpleYtDownload {
-  
   // Método para descargar un video con callbacks de progreso
   static Future<void> downloadVideo(
     BuildContext context,
@@ -241,7 +252,7 @@ class SimpleYtDownload {
       artist: title, // Usar el título como artista por defecto
     );
   }
-  
+
   // Método para descargar un video con artista específico
   static Future<void> downloadVideoWithArtist(
     BuildContext context,
@@ -263,11 +274,8 @@ class SimpleYtDownload {
 // Widget simple para botón de descarga con cambio de ícono
 class SimpleDownloadButton extends StatefulWidget {
   final YtMusicResult item;
-  
-  const SimpleDownloadButton({
-    super.key,
-    required this.item,
-  });
+
+  const SimpleDownloadButton({super.key, required this.item});
 
   @override
   State<SimpleDownloadButton> createState() => _SimpleDownloadButtonState();
@@ -293,12 +301,12 @@ class _SimpleDownloadButtonState extends State<SimpleDownloadButton> {
 
   void _setupDownloadStateListener() {
     // Escuchar cambios en el estado de descarga global
-    _downloadStateSubscription = Stream.periodic(const Duration(milliseconds: 100))
-        .listen((_) {
-      if (mounted) {
-        _checkDownloadState();
-      }
-    });
+    _downloadStateSubscription =
+        Stream.periodic(const Duration(milliseconds: 100)).listen((_) {
+          if (mounted) {
+            _checkDownloadState();
+          }
+        });
   }
 
   void _checkDownloadState() {
@@ -306,14 +314,14 @@ class _SimpleDownloadButtonState extends State<SimpleDownloadButton> {
     final downloadQueue = DownloadQueue();
     final currentTask = downloadQueue.currentTask;
     final queue = downloadQueue.queue;
-    
+
     // Verificar si está siendo descargada actualmente
-    bool isCurrentlyDownloading = currentTask != null && 
-        currentTask.videoId == widget.item.videoId;
-    
+    bool isCurrentlyDownloading =
+        currentTask != null && currentTask.videoId == widget.item.videoId;
+
     // Verificar si está en la cola de descargas pendientes
     bool isInQueue = queue.any((task) => task.videoId == widget.item.videoId);
-    
+
     if (isCurrentlyDownloading || isInQueue) {
       // Esta canción está siendo descargada o está en cola
       if (!_isDownloading && !_isProcessing) {
@@ -331,12 +339,12 @@ class _SimpleDownloadButtonState extends State<SimpleDownloadButton> {
     final downloadQueue = DownloadQueue();
     final currentTask = downloadQueue.currentTask;
     final queue = downloadQueue.queue;
-    
+
     // Determinar si está descargándose o en cola
-    bool isCurrentlyDownloading = currentTask != null && 
-        currentTask.videoId == widget.item.videoId;
+    bool isCurrentlyDownloading =
+        currentTask != null && currentTask.videoId == widget.item.videoId;
     bool isInQueue = queue.any((task) => task.videoId == widget.item.videoId);
-    
+
     setState(() {
       _isDownloading = isCurrentlyDownloading;
       _isProcessing = isInQueue && !isCurrentlyDownloading;
@@ -354,14 +362,14 @@ class _SimpleDownloadButtonState extends State<SimpleDownloadButton> {
   /// Retorna true si se otorgaron los permisos, false si se canceló
   Future<bool> _mostrarDialogoPermisos(BuildContext context) async {
     bool permisoOtorgado = false;
-    
+
     await showDialog(
       context: context,
       barrierDismissible: false, // No se puede cerrar tocando fuera
       builder: (context) => AlertDialog(
         title: Text(LocaleProvider.tr('grant_all_files_permission')),
         content: Text(
-          '${LocaleProvider.tr('grant_all_files_permission_desc')}\n\n${LocaleProvider.tr('permission_required_for_download')}'
+          '${LocaleProvider.tr('grant_all_files_permission_desc')}\n\n${LocaleProvider.tr('permission_required_for_download')}',
         ),
         actions: [
           TextButton(
@@ -383,7 +391,7 @@ class _SimpleDownloadButtonState extends State<SimpleDownloadButton> {
         ],
       ),
     );
-    
+
     return permisoOtorgado;
   }
 
@@ -393,32 +401,37 @@ class _SimpleDownloadButtonState extends State<SimpleDownloadButton> {
       height: 50,
       width: 50,
       child: Material(
-        color: Theme.of(context).colorScheme.primaryContainer,
+        color: Theme.of(context).colorScheme.primary,
         borderRadius: BorderRadius.circular(8),
         child: InkWell(
           borderRadius: BorderRadius.circular(8),
-          onTap: widget.item.videoId != null && !_isDownloading && !_isProcessing
+          onTap:
+              widget.item.videoId != null && !_isDownloading && !_isProcessing
               ? () async {
                   _startDownloadAnimation();
-                  
+
                   // Navigator.pop(context); // Ya no cerramos el modal al descargar
                   // Usar un pequeño delay para asegurar que el modal se cierre antes de iniciar la descarga
                   await Future.delayed(const Duration(milliseconds: 100));
-                  
+
                   // Verificar permisos de acceso a todos los archivos antes de descargar
-                  final tienePermisos = await verificarPermisosTodosLosArchivos();
+                  final tienePermisos =
+                      await verificarPermisosTodosLosArchivos();
                   if (!tienePermisos) {
                     if (context.mounted) {
                       _stopDownloadAnimation();
-                      final permisoOtorgado = await _mostrarDialogoPermisos(context);
+                      final permisoOtorgado = await _mostrarDialogoPermisos(
+                        context,
+                      );
                       if (!permisoOtorgado) {
                         return; // Cancelar descarga si no se otorgan los permisos
                       }
                     }
                   }
-                  
+
                   // Verificar conexión a internet antes de descargar
-                  final List<ConnectivityResult> connectivityResult = await Connectivity().checkConnectivity();
+                  final List<ConnectivityResult> connectivityResult =
+                      await Connectivity().checkConnectivity();
                   if (connectivityResult.contains(ConnectivityResult.none)) {
                     if (context.mounted) {
                       _stopDownloadAnimation();
@@ -426,7 +439,9 @@ class _SimpleDownloadButtonState extends State<SimpleDownloadButton> {
                         context: context,
                         builder: (context) => AlertDialog(
                           title: Text(LocaleProvider.tr('error')),
-                          content: Text(LocaleProvider.tr('no_internet_connection')),
+                          content: Text(
+                            LocaleProvider.tr('no_internet_connection'),
+                          ),
                           actions: [
                             TextButton(
                               onPressed: () => Navigator.of(context).pop(),
@@ -450,15 +465,19 @@ class _SimpleDownloadButtonState extends State<SimpleDownloadButton> {
                   }
                 }
               : null,
-              child: Tooltip(
-              message: _isDownloading || _isProcessing
-                  ? (_isDownloading ? LocaleProvider.tr('downloading') : LocaleProvider.tr('add_to_queue'))
-                  : LocaleProvider.tr('download_audio'),
-                          child: Icon(
-                _isDownloading || _isProcessing ? Icons.downloading : Icons.download,
-                color: Theme.of(context).colorScheme.onPrimaryContainer,
-                size: 24,
-              ),
+          child: Tooltip(
+            message: _isDownloading || _isProcessing
+                ? (_isDownloading
+                      ? LocaleProvider.tr('downloading')
+                      : LocaleProvider.tr('add_to_queue'))
+                : LocaleProvider.tr('download_audio'),
+            child: Icon(
+              _isDownloading || _isProcessing
+                  ? Icons.downloading
+                  : Icons.download,
+              color: Theme.of(context).colorScheme.onPrimary,
+              size: 24,
+            ),
           ),
         ),
       ),
@@ -472,7 +491,7 @@ class ModalExample {
     final url = item.videoId != null
         ? 'https://music.youtube.com/watch?v=${item.videoId}'
         : null;
-        
+
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.all(24),
@@ -552,7 +571,9 @@ class ModalExample {
                         message: LocaleProvider.tr('copy_link'),
                         child: Icon(
                           Icons.link,
-                          color: Theme.of(context).colorScheme.onSecondaryContainer,
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onSecondaryContainer,
                           size: 20,
                         ),
                       ),
@@ -566,4 +587,4 @@ class ModalExample {
       ),
     );
   }
-} 
+}

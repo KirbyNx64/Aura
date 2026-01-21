@@ -98,7 +98,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
   bool _disableOpenPlaylistGesture = false;
   bool _disableChangeSongGesture = false;
   String? _lastArtworkSongId;
-  
+
   // Control de indicadores de doble toque
   bool _showDoubleTapIndicators = false;
   bool _showLeftIndicator = false;
@@ -106,7 +106,6 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
   Timer? _hideIndicatorsTimer;
   late AnimationController _fadeController;
   late Animation<double> _fadeAnimation;
-
 
   // Flag para usar initialArtworkUri solo en el primer build
   // bool _usedInitialArtwork = false;
@@ -116,7 +115,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
       ValueNotifier<double?>(null);
   String? _currentSongDataPath;
   bool _isCurrentFavorite = false;
-  final int _lyricsUpdateCounter = 0;
+  // final int _lyricsUpdateCounter = 0;
   final ValueNotifier<int> _lyricsUpdateNotifier = ValueNotifier<int>(0);
 
   String _formatDuration(Duration duration) {
@@ -145,11 +144,11 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
 
   Widget buildArtwork(MediaItem mediaItem, double size) {
     final artUri = mediaItem.artUri;
-    
+
     // Prioridad 1: Si hay artUri, usarlo directamente
     if (artUri != null) {
       final scheme = artUri.scheme.toLowerCase();
-      
+
       // Si es un archivo local, usar Image.file (más rápido)
       if (scheme == 'file' || scheme == 'content') {
         return ClipRRect(
@@ -163,7 +162,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
           ),
         );
       }
-      
+
       // Si es una URL de red, usar Image.network con optimizaciones
       if (scheme == 'http' || scheme == 'https') {
         return ClipRRect(
@@ -187,17 +186,19 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                     ),
                   ),
             // Optimización: Cache de imagen
-            cacheWidth: (size * MediaQuery.of(context).devicePixelRatio).round(),
-            cacheHeight: (size * MediaQuery.of(context).devicePixelRatio).round(),
+            cacheWidth: (size * MediaQuery.of(context).devicePixelRatio)
+                .round(),
+            cacheHeight: (size * MediaQuery.of(context).devicePixelRatio)
+                .round(),
           ),
         );
       }
     }
-    
+
     // Prioridad 2: Verificar caché si no hay artUri
     final songId = mediaItem.extras?['songId'];
     final songPath = mediaItem.extras?['data'];
-    
+
     if (songId != null && songPath != null) {
       final cachedArtwork = _getCachedArtwork(songPath);
       if (cachedArtwork != null) {
@@ -216,7 +217,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
         _loadArtworkAsync(songId, songPath);
       }
     }
-    
+
     // Si no hay carátula disponible, mostrar placeholder
     return _defaultArtwork(size);
   }
@@ -227,13 +228,14 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
       width: size,
       height: size,
       decoration: BoxDecoration(
-        color: isSystem ? Theme.of(context).colorScheme.secondaryContainer.withValues(alpha: 0.5) : Theme.of(context).colorScheme.surfaceContainer,
+        color: isSystem
+            ? Theme.of(
+                context,
+              ).colorScheme.secondaryContainer.withValues(alpha: 0.5)
+            : Theme.of(context).colorScheme.surfaceContainer,
         borderRadius: BorderRadius.circular(16),
       ),
-      child: Icon(
-        Icons.music_note,
-        size: size * 0.5,
-      ),
+      child: Icon(Icons.music_note, size: size * 0.5),
     );
   }
 
@@ -283,7 +285,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     // Si no hay artUri, verificar caché primero
     final songId = mediaItem.extras?['songId'];
     final songPath = mediaItem.extras?['data'];
-    
+
     if (songId != null && songPath != null) {
       // Verificar si está en caché primero
       final cachedArtwork = _getCachedArtwork(songPath);
@@ -314,7 +316,11 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
       width: 60,
       height: 60,
       decoration: BoxDecoration(
-        color: isSystem ? Theme.of(context).colorScheme.secondaryContainer.withValues(alpha: 0.5) : Theme.of(context).colorScheme.surfaceContainer,
+        color: isSystem
+            ? Theme.of(
+                context,
+              ).colorScheme.secondaryContainer.withValues(alpha: 0.5)
+            : Theme.of(context).colorScheme.surfaceContainer,
         borderRadius: BorderRadius.circular(8),
       ),
       child: Icon(Icons.music_note, size: 30),
@@ -364,9 +370,10 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
 
       // Codificar la consulta para la URL
       final encodedQuery = Uri.encodeComponent(searchQuery);
-      
+
       // URL correcta para búsqueda en YouTube Music
-      final ytMusicSearchUrl = 'https://music.youtube.com/search?q=$encodedQuery';
+      final ytMusicSearchUrl =
+          'https://music.youtube.com/search?q=$encodedQuery';
 
       // Intentar abrir YouTube Music en el navegador o en la app
       final url = Uri.parse(ytMusicSearchUrl);
@@ -391,7 +398,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
           builder: (context, colorScheme, child) {
             final isAmoled = colorScheme == AppColorScheme.amoled;
             final isDark = Theme.of(context).brightness == Brightness.dark;
-            
+
             return AlertDialog(
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
@@ -402,10 +409,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
               title: Center(
                 child: TranslatedText(
                   'search_song',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
                 ),
               ),
               content: SizedBox(
@@ -442,8 +446,12 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                         padding: EdgeInsets.all(16),
                         decoration: BoxDecoration(
                           color: isAmoled && isDark
-                              ? Colors.white.withValues(alpha: 0.1) // Color personalizado para amoled
-                              : Theme.of(context).colorScheme.secondaryContainer,
+                              ? Colors.white.withValues(
+                                  alpha: 0.1,
+                                ) // Color personalizado para amoled
+                              : Theme.of(
+                                  context,
+                                ).colorScheme.secondaryContainer,
                           borderRadius: BorderRadius.only(
                             topLeft: Radius.circular(16),
                             topRight: Radius.circular(16),
@@ -452,8 +460,12 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                           ),
                           border: Border.all(
                             color: isAmoled && isDark
-                                ? Colors.white.withValues(alpha: 0.2) // Borde personalizado para amoled
-                                : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
+                                ? Colors.white.withValues(
+                                    alpha: 0.2,
+                                  ) // Borde personalizado para amoled
+                                : Theme.of(
+                                    context,
+                                  ).colorScheme.outline.withValues(alpha: 0.1),
                             width: 1,
                           ),
                         ),
@@ -478,7 +490,8 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                   fontSize: 16,
                                   fontWeight: FontWeight.w600,
                                   color: isAmoled && isDark
-                                      ? Colors.white // Texto blanco para amoled
+                                      ? Colors
+                                            .white // Texto blanco para amoled
                                       : Theme.of(context).colorScheme.onSurface,
                                 ),
                               ),
@@ -500,8 +513,12 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                         padding: EdgeInsets.all(16),
                         decoration: BoxDecoration(
                           color: isAmoled && isDark
-                              ? Colors.white.withValues(alpha: 0.1) // Color personalizado para amoled
-                              : Theme.of(context).colorScheme.secondaryContainer,
+                              ? Colors.white.withValues(
+                                  alpha: 0.1,
+                                ) // Color personalizado para amoled
+                              : Theme.of(
+                                  context,
+                                ).colorScheme.secondaryContainer,
                           borderRadius: BorderRadius.only(
                             topLeft: Radius.circular(4),
                             topRight: Radius.circular(4),
@@ -510,8 +527,12 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                           ),
                           border: Border.all(
                             color: isAmoled && isDark
-                                ? Colors.white.withValues(alpha: 0.2) // Borde personalizado para amoled
-                                : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
+                                ? Colors.white.withValues(
+                                    alpha: 0.2,
+                                  ) // Borde personalizado para amoled
+                                : Theme.of(
+                                    context,
+                                  ).colorScheme.outline.withValues(alpha: 0.1),
                             width: 1,
                           ),
                         ),
@@ -536,7 +557,8 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                   fontSize: 16,
                                   fontWeight: FontWeight.w600,
                                   color: isAmoled && isDark
-                                      ? Colors.white // Texto blanco para amoled
+                                      ? Colors
+                                            .white // Texto blanco para amoled
                                       : Theme.of(context).colorScheme.onSurface,
                                 ),
                               ),
@@ -545,7 +567,6 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                         ),
                       ),
                     ),
-                    
                   ],
                 ),
               ),
@@ -566,7 +587,9 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
       _noConnection = false;
     });
 
-    final result = await SyncedLyricsService.getSyncedLyricsWithResult(mediaItem);
+    final result = await SyncedLyricsService.getSyncedLyricsWithResult(
+      mediaItem,
+    );
     if (!mounted) return;
 
     if (result.type == LyricsResultType.found && result.data?.synced != null) {
@@ -616,23 +639,19 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     _prefsFuture = SharedPreferences.getInstance();
     _loadGesturePreferences();
     _setupLyricsUpdateListener();
-    
+
     // Escuchar cambios en favoritos desde otras fuentes (ej: notificación)
     favoritesShouldReload.addListener(_onFavoritesChanged);
-    
+
     // Inicializar animación de fade
     _fadeController = AnimationController(
       duration: const Duration(milliseconds: 500),
       vsync: this,
     );
-    _fadeAnimation = Tween<double>(
-      begin: 0.0,
-      end: 1.0,
-    ).animate(CurvedAnimation(
-      parent: _fadeController,
-      curve: Curves.easeInOut,
-    ));
-    
+    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _fadeController, curve: Curves.easeInOut),
+    );
+
     // Eliminado: _loadQueueSource();
     // Eliminado: (audioHandler as MyAudioHandler).queueSourceNotifier.addListener(_onQueueSourceChanged);
   }
@@ -701,18 +720,20 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
   void _loadArtworkAsync(int songId, String songPath) {
     // Verificar si ya se está cargando para evitar duplicados
     if (_lastArtworkSongId == songId.toString()) return;
-    
+
     _lastArtworkSongId = songId.toString();
-    
+
     // Cargar de forma asíncrona usando el sistema unificado
-    getOrCacheArtwork(songId, songPath).then((artUri) {
-      if (artUri != null && mounted) {
-        // Forzar rebuild para mostrar la carátula cargada
-        setState(() {});
-      }
-    }).catchError((error) {
-      // print('❌ Error cargando carátula en player screen: $error');
-    });
+    getOrCacheArtwork(songId, songPath)
+        .then((artUri) {
+          if (artUri != null && mounted) {
+            // Forzar rebuild para mostrar la carátula cargada
+            setState(() {});
+          }
+        })
+        .catchError((error) {
+          // print('❌ Error cargando carátula en player screen: $error');
+        });
   }
 
   /// Maneja el cambio de carátula cuando cambia la canción
@@ -722,19 +743,24 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
 
     if (_lastArtworkSongId != newSongId) {
       _lastArtworkSongId = newSongId;
-      
+
       // Verificar si la carátula está disponible inmediatamente
       if (newMediaItem != null) {
         final songId = newMediaItem.extras?['songId'] as int?;
         final songPath = newMediaItem.extras?['data'] as String?;
         final hasArtUri = newMediaItem.artUri != null;
-        final hasCachedArtwork = songPath != null ? _getCachedArtwork(songPath) != null : false;
-        
+        final hasCachedArtwork = songPath != null
+            ? _getCachedArtwork(songPath) != null
+            : false;
+
         // Solo mostrar loading si no hay carátula disponible en ningún lugar
         _artworkLoadingNotifier.value = !hasArtUri && !hasCachedArtwork;
-        
+
         // Precargar carátula en background si no está disponible
-        if (!hasArtUri && !hasCachedArtwork && songId != null && songPath != null) {
+        if (!hasArtUri &&
+            !hasCachedArtwork &&
+            songId != null &&
+            songPath != null) {
           _preloadArtworkInBackground(songId, songPath);
         }
       } else {
@@ -851,11 +877,10 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                           vertical: 8,
                         ),
                         decoration: BoxDecoration(
-                          color: Theme.of(
-                                context,
-                            ).brightness == Brightness.dark
-                            ? Theme.of(context).colorScheme.primary
-                            : Theme.of(context).colorScheme.onPrimaryContainer.withValues(alpha: 0.7),
+                          color: Theme.of(context).brightness == Brightness.dark
+                              ? Theme.of(context).colorScheme.primary
+                              : Theme.of(context).colorScheme.onPrimaryContainer
+                                    .withValues(alpha: 0.7),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Row(
@@ -864,11 +889,13 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                             Icon(
                               Icons.search,
                               size: 20,
-                              color: Theme.of(
-                                context,
-                              ).brightness == Brightness.dark
-                              ? Theme.of(context).colorScheme.onPrimary
-                              : Theme.of(context).colorScheme.surfaceContainer,
+                              color:
+                                  Theme.of(context).brightness ==
+                                      Brightness.dark
+                                  ? Theme.of(context).colorScheme.onPrimary
+                                  : Theme.of(
+                                      context,
+                                    ).colorScheme.surfaceContainer,
                             ),
                             const SizedBox(width: 8),
                             TranslatedText(
@@ -876,11 +903,13 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                               style: TextStyle(
                                 fontWeight: FontWeight.w600,
                                 fontSize: 14,
-                                color: Theme.of(
-                                    context,
-                                ).brightness == Brightness.dark
-                                ? Theme.of(context).colorScheme.onPrimary
-                                : Theme.of(context).colorScheme.surfaceContainer,
+                                color:
+                                    Theme.of(context).brightness ==
+                                        Brightness.dark
+                                    ? Theme.of(context).colorScheme.onPrimary
+                                    : Theme.of(
+                                        context,
+                                      ).colorScheme.surfaceContainer,
                               ),
                             ),
                           ],
@@ -967,19 +996,20 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                       PageRouteBuilder(
                         pageBuilder: (context, animation, secondaryAnimation) =>
                             ArtistScreen(artistName: name),
-                        transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                          const begin = Offset(1.0, 0.0);
-                          const end = Offset.zero;
-                          const curve = Curves.ease;
-                          final tween = Tween(
-                            begin: begin,
-                            end: end,
-                          ).chain(CurveTween(curve: curve));
-                          return SlideTransition(
-                            position: animation.drive(tween),
-                            child: child,
-                          );
-                        },
+                        transitionsBuilder:
+                            (context, animation, secondaryAnimation, child) {
+                              const begin = Offset(1.0, 0.0);
+                              const end = Offset.zero;
+                              const curve = Curves.ease;
+                              final tween = Tween(
+                                begin: begin,
+                                end: end,
+                              ).chain(CurveTween(curve: curve));
+                              return SlideTransition(
+                                position: animation.drive(tween),
+                                child: child,
+                              );
+                            },
                       ),
                     );
                   },
@@ -1043,11 +1073,12 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                 title: Text(LocaleProvider.tr('show_lyrics')),
                 onTap: () async {
                   Navigator.of(context).pop();
-                  
+
                   // Check if lyrics on cover is enabled
                   final prefs = await SharedPreferences.getInstance();
-                  final showLyricsOnCover = prefs.getBool('show_lyrics_on_cover') ?? false;
-                  
+                  final showLyricsOnCover =
+                      prefs.getBool('show_lyrics_on_cover') ?? false;
+
                   if (showLyricsOnCover) {
                     // Original behavior: toggle lyrics display on cover
                     if (!_showLyrics) {
@@ -1074,23 +1105,29 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                   Navigator.of(context).pop();
                   Navigator.of(context).push(
                     PageRouteBuilder(
-                      pageBuilder: (context, animation, secondaryAnimation) => const EqualizerScreen(),
-                      transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                        const begin = Offset(1.0, 0.0);
-                        const end = Offset.zero;
-                        const curve = Curves.ease;
-                        final tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
-                        return SlideTransition(
-                          position: animation.drive(tween),
-                          child: child,
-                        );
-                      },
+                      pageBuilder: (context, animation, secondaryAnimation) =>
+                          const EqualizerScreen(),
+                      transitionsBuilder:
+                          (context, animation, secondaryAnimation, child) {
+                            const begin = Offset(1.0, 0.0);
+                            const end = Offset.zero;
+                            const curve = Curves.ease;
+                            final tween = Tween(
+                              begin: begin,
+                              end: end,
+                            ).chain(CurveTween(curve: curve));
+                            return SlideTransition(
+                              position: animation.drive(tween),
+                              child: child,
+                            );
+                          },
                     ),
                   );
                 },
               ),
               ValueListenableBuilder<double>(
-                valueListenable: (audioHandler as MyAudioHandler).volumeBoostNotifier,
+                valueListenable:
+                    (audioHandler as MyAudioHandler).volumeBoostNotifier,
                 builder: (context, volumeBoost, child) {
                   return ListTile(
                     leading: const Icon(Icons.volume_up),
@@ -1148,7 +1185,11 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                 title: Text(LocaleProvider.tr('song_info')),
                 onTap: () async {
                   Navigator.of(context).pop();
-                  await SongInfoDialog.show(context, mediaItem, colorSchemeNotifier);
+                  await SongInfoDialog.show(
+                    context,
+                    mediaItem,
+                    colorSchemeNotifier,
+                  );
                 },
               ),
             ],
@@ -1184,95 +1225,100 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
             top: 24,
           ),
           child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              LocaleProvider.tr('save_to_playlist'),
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-            ),
-            const SizedBox(height: 16),
-            if (playlists.isEmpty)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: Text(
-                  LocaleProvider.tr('no_playlists_yet'),
-                  textAlign: TextAlign.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                LocaleProvider.tr('save_to_playlist'),
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18,
                 ),
               ),
-            if (playlists.isNotEmpty)
-              Flexible(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxHeight: 240),
-                  child: ListView.builder(
-                    shrinkWrap: true,
-                    itemCount: playlists.length,
-                    itemBuilder: (context, i) {
-                      final pl = playlists[i];
-                      return ListTile(
-                        leading: const Icon(Icons.queue_music, size: 32),
-                        title: Text(
-                          pl.name,
-                          style: const TextStyle(fontSize: 18),
-                        ),
-                        onTap: () async {
-                          final allSongs = await _audioQuery.querySongs();
-                          final songList = allSongs
-                              .where(
-                                (s) =>
-                                    s.data == (mediaItem.extras?['data'] ?? ''),
-                              )
-                              .toList();
-
-                          if (songList.isNotEmpty) {
-                            await PlaylistsDB().addSongToPlaylist(
-                              pl.id,
-                              songList.first,
-                            );
-                            playlistsShouldReload.value =
-                                !playlistsShouldReload.value;
-                            if (context.mounted) Navigator.of(context).pop();
-                          }
-                        },
-                      );
-                    },
+              const SizedBox(height: 16),
+              if (playlists.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Text(
+                    LocaleProvider.tr('no_playlists_yet'),
+                    textAlign: TextAlign.center,
                   ),
                 ),
-              ),
-            const Divider(height: 28),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: controller,
-                    autofocus: true,
-                    decoration: InputDecoration(
-                      labelText: LocaleProvider.tr('new_playlist'),
+              if (playlists.isNotEmpty)
+                Flexible(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxHeight: 240),
+                    child: ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: playlists.length,
+                      itemBuilder: (context, i) {
+                        final pl = playlists[i];
+                        return ListTile(
+                          leading: const Icon(Icons.queue_music, size: 32),
+                          title: Text(
+                            pl.name,
+                            style: const TextStyle(fontSize: 18),
+                          ),
+                          onTap: () async {
+                            final allSongs = await _audioQuery.querySongs();
+                            final songList = allSongs
+                                .where(
+                                  (s) =>
+                                      s.data ==
+                                      (mediaItem.extras?['data'] ?? ''),
+                                )
+                                .toList();
+
+                            if (songList.isNotEmpty) {
+                              await PlaylistsDB().addSongToPlaylist(
+                                pl.id,
+                                songList.first,
+                              );
+                              playlistsShouldReload.value =
+                                  !playlistsShouldReload.value;
+                              if (context.mounted) Navigator.of(context).pop();
+                            }
+                          },
+                        );
+                      },
                     ),
-                    onSubmitted: (value) async {
+                  ),
+                ),
+              const Divider(height: 28),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: controller,
+                      autofocus: true,
+                      decoration: InputDecoration(
+                        labelText: LocaleProvider.tr('new_playlist'),
+                      ),
+                      onSubmitted: (value) async {
+                        await _createPlaylistAndAddSong(
+                          context,
+                          controller,
+                          mediaItem,
+                        );
+                      },
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.add),
+                    onPressed: () async {
                       await _createPlaylistAndAddSong(
                         context,
                         controller,
                         mediaItem,
                       );
+                      playlistsShouldReload.value =
+                          !playlistsShouldReload.value;
                     },
                   ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.add),
-                  onPressed: () async {
-                    await _createPlaylistAndAddSong(
-                      context,
-                      controller,
-                      mediaItem,
-                    );
-                    playlistsShouldReload.value = !playlistsShouldReload.value;
-                  },
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-          ],
-        ),
+                ],
+              ),
+              const SizedBox(height: 12),
+            ],
+          ),
         ),
       ),
     );
@@ -1304,7 +1350,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
 
     final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
@@ -1333,10 +1379,14 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surfaceContainer.withValues(alpha: 0.5),
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.surfaceContainer.withValues(alpha: 0.5),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
-                    color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.outline.withValues(alpha: 0.3),
                   ),
                 ),
                 child: Column(
@@ -1352,10 +1402,11 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                         const SizedBox(width: 8),
                         Text(
                           LocaleProvider.tr('important_information'),
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            fontWeight: FontWeight.w600,
-                            color: Theme.of(context).colorScheme.primary,
-                          ),
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                fontWeight: FontWeight.w600,
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
                         ),
                       ],
                     ),
@@ -1363,7 +1414,9 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                     Text(
                       LocaleProvider.tr('volume_boost_info'),
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withValues(alpha: 0.7),
                         height: 1.3,
                       ),
                     ),
@@ -1409,12 +1462,13 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                         ),
                         Text(
                           '${tempBoost}x',
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                            color: tempBoost > 1.0 
-                              ? Theme.of(context).colorScheme.primary
-                              : null,
-                          ),
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: tempBoost > 1.0
+                                    ? Theme.of(context).colorScheme.primary
+                                    : null,
+                              ),
                         ),
                       ],
                     ),
@@ -1428,12 +1482,13 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                         ),
                         Text(
                           '${(tempBoost * 100).toInt()}%',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            fontWeight: FontWeight.w500,
-                            color: tempBoost > 1.0 
-                              ? Theme.of(context).colorScheme.primary
-                              : null,
-                          ),
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                fontWeight: FontWeight.w500,
+                                color: tempBoost > 1.0
+                                    ? Theme.of(context).colorScheme.primary
+                                    : null,
+                              ),
                         ),
                       ],
                     ),
@@ -1451,24 +1506,30 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
               onPressed: () async {
                 try {
                   // print('🎵 Intentando aplicar volume boost: ${tempBoost}x');
-                  
+
                   if (audioHandler == null) {
                     // print('❌ AudioHandler es null');
                     if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                          content: Text(LocaleProvider.tr('error_audiohandler_not_available')),
+                          content: Text(
+                            LocaleProvider.tr(
+                              'error_audiohandler_not_available',
+                            ),
+                          ),
                           backgroundColor: Colors.red,
                         ),
                       );
                     }
                     return;
                   }
-                  
-                  await (audioHandler as MyAudioHandler).setVolumeBoost(tempBoost);
-                  
+
+                  await (audioHandler as MyAudioHandler).setVolumeBoost(
+                    tempBoost,
+                  );
+
                   // print('🎵 Volume boost aplicado exitosamente');
-                  
+
                   if (context.mounted) {
                     Navigator.of(context).pop();
                   }
@@ -1477,7 +1538,9 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        content: Text('${LocaleProvider.tr('error_applying_volume_boost')}: $e'),
+                        content: Text(
+                          '${LocaleProvider.tr('error_applying_volume_boost')}: $e',
+                        ),
                         backgroundColor: Colors.red,
                       ),
                     );
@@ -1495,7 +1558,8 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
   void _showPlaylistDialog(BuildContext context) {
     final queue = audioHandler?.queue.value;
     // Usar el área disponible excluyendo la barra de estado
-    final maxHeight = MediaQuery.of(context).size.height - MediaQuery.of(context).padding.top;
+    final maxHeight =
+        MediaQuery.of(context).size.height - MediaQuery.of(context).padding.top;
 
     showModalBottomSheet(
       context: context,
@@ -1595,41 +1659,43 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
               isScrollControlled: true,
               // Asegurar que el modal respete la barra de estado
               useSafeArea: true,
-            builder: (context) {
-              final queue = audioHandler?.queue.value;
-              // Usar el área disponible excluyendo la barra de estado
-              final maxHeight = MediaQuery.of(context).size.height - MediaQuery.of(context).padding.top;
-              return Container(
-                constraints: BoxConstraints(maxHeight: maxHeight),
-                child: StreamBuilder<MediaItem?>(
-                  stream: audioHandler?.mediaItem,
-                  builder: (context, snapshot) {
-                    final currentMediaItem =
-                        snapshot.data ?? audioHandler?.mediaItem.valueOrNull;
+              builder: (context) {
+                final queue = audioHandler?.queue.value;
+                // Usar el área disponible excluyendo la barra de estado
+                final maxHeight =
+                    MediaQuery.of(context).size.height -
+                    MediaQuery.of(context).padding.top;
+                return Container(
+                  constraints: BoxConstraints(maxHeight: maxHeight),
+                  child: StreamBuilder<MediaItem?>(
+                    stream: audioHandler?.mediaItem,
+                    builder: (context, snapshot) {
+                      final currentMediaItem =
+                          snapshot.data ?? audioHandler?.mediaItem.valueOrNull;
 
-                    // Encontrar el índice de la canción actual
-                    int currentIndex = -1;
-                    if (currentMediaItem != null) {
-                      for (int i = 0; i < queue!.length; i++) {
-                        if (queue[i].id == currentMediaItem.id) {
-                          currentIndex = i;
-                          break;
+                      // Encontrar el índice de la canción actual
+                      int currentIndex = -1;
+                      if (currentMediaItem != null) {
+                        for (int i = 0; i < queue!.length; i++) {
+                          if (queue[i].id == currentMediaItem.id) {
+                            currentIndex = i;
+                            break;
+                          }
                         }
                       }
-                    }
 
-                    return _PlaylistListView(
-                      queue: queue ?? [],
-                      currentMediaItem: currentMediaItem,
-                      currentIndex: currentIndex,
-                      maxHeight: maxHeight,
-                    );
-                  },
-                ),
-              );
-            },
-          );
-        }
+                      return _PlaylistListView(
+                        queue: queue ?? [],
+                        currentMediaItem: currentMediaItem,
+                        currentIndex: currentIndex,
+                        maxHeight: maxHeight,
+                      );
+                    },
+                  ),
+                );
+              },
+            );
+          }
         }
       },
       child: StreamBuilder<MediaItem?>(
@@ -1697,7 +1763,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                 backgroundColor: Theme.of(context).scaffoldBackgroundColor,
                 surfaceTintColor: Colors.transparent,
                 elevation: 0,
-              scrolledUnderElevation: 0,
+                scrolledUnderElevation: 0,
                 leading: ValueListenableBuilder<bool>(
                   valueListenable: playLoadingNotifier,
                   builder: (context, isLoading, _) {
@@ -1794,7 +1860,8 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                   onHorizontalDragEnd: (details) {
                                     // Detectar la dirección del deslizamiento horizontal solo en la carátula
                                     // Solo si el gesto de cambiar canción no está desactivado
-                                    if (!_disableChangeSongGesture && details.primaryVelocity != null) {
+                                    if (!_disableChangeSongGesture &&
+                                        details.primaryVelocity != null) {
                                       if (details.primaryVelocity! > 0) {
                                         // Deslizar hacia la derecha: canción anterior
                                         audioHandler?.skipToPrevious();
@@ -1806,9 +1873,12 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                   },
                                   onTap: () async {
                                     // Check if lyrics on cover is enabled
-                                    final prefs = await SharedPreferences.getInstance();
-                                    final showLyricsOnCover = prefs.getBool('show_lyrics_on_cover') ?? false;
-                                    
+                                    final prefs =
+                                        await SharedPreferences.getInstance();
+                                    final showLyricsOnCover =
+                                        prefs.getBool('show_lyrics_on_cover') ??
+                                        false;
+
                                     if (showLyricsOnCover) {
                                       // Original behavior: toggle lyrics display on cover
                                       setState(() {
@@ -1827,22 +1897,33 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                   },
                                   onDoubleTapDown: (details) async {
                                     // Solo activar cuando las letras se muestran en modal
-                                    final prefs = await SharedPreferences.getInstance();
-                                    final showLyricsOnCover = prefs.getBool('show_lyrics_on_cover') ?? false;
-                                    
+                                    final prefs =
+                                        await SharedPreferences.getInstance();
+                                    final showLyricsOnCover =
+                                        prefs.getBool('show_lyrics_on_cover') ??
+                                        false;
+
                                     if (!showLyricsOnCover) {
                                       // Obtener la posición del tap relativa al centro de la carátula
                                       if (!context.mounted) return;
-                                      final RenderBox renderBox = context.findRenderObject() as RenderBox;
-                                      final localPosition = renderBox.globalToLocal(details.globalPosition);
+                                      final RenderBox renderBox =
+                                          context.findRenderObject()
+                                              as RenderBox;
+                                      final localPosition = renderBox
+                                          .globalToLocal(
+                                            details.globalPosition,
+                                          );
                                       final centerX = renderBox.size.width / 2;
-                                      
+
                                       // Obtener la posición actual de reproducción
-                                      final currentPosition = (audioHandler as MyAudioHandler).player.position;
-                                      
+                                      final currentPosition =
+                                          (audioHandler as MyAudioHandler)
+                                              .player
+                                              .position;
+
                                       // Cancelar timer anterior si existe
                                       _hideIndicatorsTimer?.cancel();
-                                      
+
                                       if (localPosition.dx < centerX) {
                                         // Doble toque en el lado izquierdo: retroceder 10 segundos
                                         setState(() {
@@ -1850,11 +1931,13 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                           _showLeftIndicator = true;
                                           _showRightIndicator = false;
                                         });
-                                        
+
                                         // Aparecer inmediatamente (sin animación)
                                         _fadeController.value = 1.0;
-                                        
-                                        final newPosition = currentPosition - const Duration(seconds: 10);
+
+                                        final newPosition =
+                                            currentPosition -
+                                            const Duration(seconds: 10);
                                         if (newPosition.inMilliseconds >= 0) {
                                           audioHandler?.seek(newPosition);
                                         } else {
@@ -1867,29 +1950,35 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                           _showLeftIndicator = false;
                                           _showRightIndicator = true;
                                         });
-                                        
+
                                         // Aparecer inmediatamente (sin animación)
                                         _fadeController.value = 1.0;
-                                        
-                                        final newPosition = currentPosition + const Duration(seconds: 10);
+
+                                        final newPosition =
+                                            currentPosition +
+                                            const Duration(seconds: 10);
                                         // No hay límite superior, se puede avanzar más allá de la duración
                                         audioHandler?.seek(newPosition);
                                       }
-                                      
+
                                       // Iniciar animación de desvanecimiento después de 1.5 segundos
-                                      _hideIndicatorsTimer = Timer(const Duration(milliseconds: 1500), () {
-                                        if (mounted) {
-                                          _fadeController.reverse().then((_) {
-                                            if (mounted) {
-                                              setState(() {
-                                                _showDoubleTapIndicators = false;
-                                                _showLeftIndicator = false;
-                                                _showRightIndicator = false;
-                                              });
-                                            }
-                                          });
-                                        }
-                                      });
+                                      _hideIndicatorsTimer = Timer(
+                                        const Duration(milliseconds: 1500),
+                                        () {
+                                          if (mounted) {
+                                            _fadeController.reverse().then((_) {
+                                              if (mounted) {
+                                                setState(() {
+                                                  _showDoubleTapIndicators =
+                                                      false;
+                                                  _showLeftIndicator = false;
+                                                  _showRightIndicator = false;
+                                                });
+                                              }
+                                            });
+                                          }
+                                        },
+                                      );
                                     }
                                   },
                                   child: RepaintBoundary(
@@ -1897,32 +1986,48 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                       valueListenable: _artworkLoadingNotifier,
                                       builder: (context, isArtworkLoading, child) {
                                         return FutureBuilder<bool>(
-                                          future: SharedPreferences.getInstance().then((prefs) => 
-                                            prefs.getBool('show_lyrics_on_cover') ?? false),
+                                          future: SharedPreferences.getInstance()
+                                              .then(
+                                                (prefs) =>
+                                                    prefs.getBool(
+                                                      'show_lyrics_on_cover',
+                                                    ) ??
+                                                    false,
+                                              ),
                                           builder: (context, snapshot) {
-                                            final showLyricsOnCover = snapshot.data ?? false;
-                                            
+                                            final showLyricsOnCover =
+                                                snapshot.data ?? false;
+
                                             return Stack(
                                               children: [
                                                 ArtworkHeroCached(
-                                                  artUri: currentMediaItem!.artUri,
+                                                  artUri:
+                                                      currentMediaItem!.artUri,
                                                   size: artworkSize,
-                                                  borderRadius: BorderRadius.circular(
-                                                    artworkSize * 0.06,
-                                                  ),
+                                                  borderRadius:
+                                                      BorderRadius.circular(
+                                                        artworkSize * 0.06,
+                                                      ),
                                                   heroTag:
                                                       'now_playing_artwork_${(currentMediaItem.extras?['songId'] ?? currentMediaItem.id).toString()}',
-                                                  showPlaceholderIcon: !_showLyrics,
-                                                  songPath: currentMediaItem.extras?['data'] as String?,
+                                                  showPlaceholderIcon:
+                                                      !_showLyrics,
+                                                  songPath:
+                                                      currentMediaItem
+                                                              .extras?['data']
+                                                          as String?,
                                                 ),
                                                 // Indicadores de doble toque solo cuando las letras se muestran en modal y se ha hecho doble toque
-                                                if (!showLyricsOnCover && _showDoubleTapIndicators)
+                                                if (!showLyricsOnCover &&
+                                                    _showDoubleTapIndicators)
                                                   Positioned.fill(
                                                     child: Container(
                                                       decoration: BoxDecoration(
-                                                        borderRadius: BorderRadius.circular(
-                                                          artworkSize * 0.06,
-                                                        ),
+                                                        borderRadius:
+                                                            BorderRadius.circular(
+                                                              artworkSize *
+                                                                  0.06,
+                                                            ),
                                                       ),
                                                       child: Stack(
                                                         children: [
@@ -1933,23 +2038,34 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                               top: 0,
                                                               bottom: 0,
                                                               child: AnimatedBuilder(
-                                                                animation: _fadeAnimation,
+                                                                animation:
+                                                                    _fadeAnimation,
                                                                 builder: (context, child) {
                                                                   return Opacity(
-                                                                    opacity: _fadeAnimation.value,
+                                                                    opacity:
+                                                                        _fadeAnimation
+                                                                            .value,
                                                                     child: Center(
                                                                       child: Container(
-                                                                        width: 50,
-                                                                        height: 50,
+                                                                        width:
+                                                                            50,
+                                                                        height:
+                                                                            50,
                                                                         decoration: BoxDecoration(
-                                                                          color: Colors.black.withValues(alpha: 0.5),
-                                                                          shape: BoxShape.circle,
+                                                                          color: Colors.black.withValues(
+                                                                            alpha:
+                                                                                0.5,
+                                                                          ),
+                                                                          shape:
+                                                                              BoxShape.circle,
                                                                         ),
                                                                         child: Center(
                                                                           child: Icon(
                                                                             Icons.replay_10,
-                                                                            color: Colors.white,
-                                                                            size: 28,
+                                                                            color:
+                                                                                Colors.white,
+                                                                            size:
+                                                                                28,
                                                                           ),
                                                                         ),
                                                                       ),
@@ -1965,23 +2081,34 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                               top: 0,
                                                               bottom: 0,
                                                               child: AnimatedBuilder(
-                                                                animation: _fadeAnimation,
+                                                                animation:
+                                                                    _fadeAnimation,
                                                                 builder: (context, child) {
                                                                   return Opacity(
-                                                                    opacity: _fadeAnimation.value,
+                                                                    opacity:
+                                                                        _fadeAnimation
+                                                                            .value,
                                                                     child: Center(
                                                                       child: Container(
-                                                                        width: 50,
-                                                                        height: 50,
+                                                                        width:
+                                                                            50,
+                                                                        height:
+                                                                            50,
                                                                         decoration: BoxDecoration(
-                                                                          color: Colors.black.withValues(alpha: 0.5),
-                                                                          shape: BoxShape.circle,
+                                                                          color: Colors.black.withValues(
+                                                                            alpha:
+                                                                                0.5,
+                                                                          ),
+                                                                          shape:
+                                                                              BoxShape.circle,
                                                                         ),
                                                                         child: Center(
                                                                           child: Icon(
                                                                             Icons.forward_10,
-                                                                            color: Colors.white,
-                                                                            size: 28,
+                                                                            color:
+                                                                                Colors.white,
+                                                                            size:
+                                                                                28,
                                                                           ),
                                                                         ),
                                                                       ),
@@ -2038,36 +2165,39 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                             )
                                           : _lyricLines.isEmpty
                                           ? _noConnection
-                                              ? Column(
-                                                  mainAxisAlignment: MainAxisAlignment.center,
-                                                  children: [
-                                                    Text(
-                                                      LocaleProvider.tr(
-                                                        'lyrics_no_connection',
+                                                ? Column(
+                                                    mainAxisAlignment:
+                                                        MainAxisAlignment
+                                                            .center,
+                                                    children: [
+                                                      Text(
+                                                        LocaleProvider.tr(
+                                                          'lyrics_no_connection',
+                                                        ),
+                                                        style: const TextStyle(
+                                                          color: Colors.white70,
+                                                          fontSize: 16,
+                                                        ),
+                                                        textAlign:
+                                                            TextAlign.center,
                                                       ),
-                                                      style: const TextStyle(
-                                                        color: Colors.white70,
-                                                        fontSize: 16,
-                                                      ),
-                                                      textAlign: TextAlign.center,
+                                                    ],
+                                                  )
+                                                : Text(
+                                                    _apiUnavailable
+                                                        ? LocaleProvider.tr(
+                                                            'lyrics_api_unavailable',
+                                                          )
+                                                        : (_syncedLyrics ??
+                                                              LocaleProvider.tr(
+                                                                'lyrics_not_found',
+                                                              )),
+                                                    style: const TextStyle(
+                                                      color: Colors.white,
+                                                      fontSize: 16,
                                                     ),
-                                                  ],
-                                                )
-                                              : Text(
-                                                  _apiUnavailable
-                                                      ? LocaleProvider.tr(
-                                                          'lyrics_api_unavailable',
-                                                        )
-                                                      : (_syncedLyrics ??
-                                                          LocaleProvider.tr(
-                                                            'lyrics_not_found',
-                                                          )),
-                                                  style: const TextStyle(
-                                                    color: Colors.white,
-                                                    fontSize: 16,
-                                                  ),
-                                                  textAlign: TextAlign.center,
-                                                )
+                                                    textAlign: TextAlign.center,
+                                                  )
                                           : StreamBuilder<Duration>(
                                               stream:
                                                   (audioHandler
@@ -2121,9 +2251,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                           child: TitleMarquee(
                             text: currentMediaItem!.title,
                             maxWidth: artworkSize,
-                            style: Theme.of(context)
-                                .textTheme
-                                .headlineSmall
+                            style: Theme.of(context).textTheme.headlineSmall
                                 ?.copyWith(
                                   color: Theme.of(
                                     context,
@@ -2141,7 +2269,9 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                               Expanded(
                                 child: Text(
                                   (currentMediaItem.artist == null ||
-                                          currentMediaItem.artist!.trim().isEmpty)
+                                          currentMediaItem.artist!
+                                              .trim()
+                                              .isEmpty)
                                       ? LocaleProvider.tr('unknown_artist')
                                       : currentMediaItem.artist!,
                                   style: Theme.of(context).textTheme.titleMedium
@@ -2165,29 +2295,42 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                     valueListenable: playLoadingNotifier,
                                     builder: (context, isLoading, _) {
                                       return LikeButton(
-                                        key: ValueKey('like_button_$_currentSongDataPath'),
+                                        key: ValueKey(
+                                          'like_button_$_currentSongDataPath',
+                                        ),
                                         isLiked: isFav,
                                         size: 32,
-                                        animationDuration: const Duration(milliseconds: 800),
+                                        animationDuration: const Duration(
+                                          milliseconds: 800,
+                                        ),
                                         circleColor: CircleColor(
-                                          start: Theme.of(context).brightness == Brightness.dark 
-                                              ? Colors.white 
+                                          start:
+                                              Theme.of(context).brightness ==
+                                                  Brightness.dark
+                                              ? Colors.white
                                               : Colors.black,
-                                          end: Theme.of(context).brightness == Brightness.dark 
-                                              ? Colors.white 
+                                          end:
+                                              Theme.of(context).brightness ==
+                                                  Brightness.dark
+                                              ? Colors.white
                                               : Colors.black,
                                         ),
                                         bubblesColor: BubblesColor(
-                                          dotPrimaryColor: Theme.of(context).colorScheme.primary,
-                                          dotSecondaryColor: Theme.of(context).brightness == Brightness.dark 
-                                              ? Colors.white 
+                                          dotPrimaryColor: Theme.of(
+                                            context,
+                                          ).colorScheme.primary,
+                                          dotSecondaryColor:
+                                              Theme.of(context).brightness ==
+                                                  Brightness.dark
+                                              ? Colors.white
                                               : Colors.black,
                                         ),
                                         likeBuilder: (bool isLiked) {
                                           return Icon(
                                             isLiked
                                                 ? Symbols.favorite_rounded
-                                                : Symbols.favorite_border_rounded,
+                                                : Symbols
+                                                      .favorite_border_rounded,
                                             grade: 200,
                                             fill: isLiked ? 1 : 0,
                                             size: 32,
@@ -2198,16 +2341,17 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                         },
                                         onTap: (isLiked) async {
                                           if (isLoading) return false;
-                                          
+
                                           final path =
                                               currentMediaItem
                                                   .extras?['data'] ??
                                               '';
                                           if (path.isEmpty) return false;
-                                          
+
                                           if (isLiked) {
-                                            await FavoritesDB()
-                                                .removeFavorite(path);
+                                            await FavoritesDB().removeFavorite(
+                                              path,
+                                            );
                                             favoritesShouldReload.value =
                                                 !favoritesShouldReload.value;
                                             if (!context.mounted) return false;
@@ -2222,7 +2366,9 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                 .where((s) => s.data == path)
                                                 .toList();
                                             if (songList.isEmpty) {
-                                              if (!context.mounted) return false;
+                                              if (!context.mounted) {
+                                                return false;
+                                              }
                                               ScaffoldMessenger.of(
                                                 context,
                                               ).showSnackBar(
@@ -2323,92 +2469,104 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                     width: progressBarWidth,
                                                     child: ClipRect(
                                                       child: TweenAnimationBuilder<double>(
-                                                      duration: const Duration(
-                                                        milliseconds: 400,
-                                                      ),
-                                                      curve: Curves.easeInOut,
-                                                      tween: Tween<double>(
-                                                        begin: isPlaying
-                                                            ? 0.0
-                                                            : 0.0,
-                                                        end: isPlaying
-                                                            ? 3.0
-                                                            : 0.0,
-                                                      ),
-                                                      builder: (context, amplitude, child) {
-                                                        return SquigglySlider(
-                                                          min: 0.0,
-                                                          max: durationMs
-                                                              .toDouble(),
-                                                          value: sliderValueMs
-                                                              .toDouble(),
-                                                          inactiveColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
-                                                          onChanged: (value) {
-                                                            _dragValueSecondsNotifier
-                                                                    .value =
-                                                                value / 1000.0;
-                                                          },
-                                                          onChangeEnd: (value) {
-                                                            final now =
-                                                                DateTime.now();
-                                                            final ms = value
-                                                                .toInt();
-                                                            if (now
-                                                                    .difference(
-                                                                      _lastSeekTime,
+                                                        duration:
+                                                            const Duration(
+                                                              milliseconds: 400,
+                                                            ),
+                                                        curve: Curves.easeInOut,
+                                                        tween: Tween<double>(
+                                                          begin: isPlaying
+                                                              ? 0.0
+                                                              : 0.0,
+                                                          end: isPlaying
+                                                              ? 3.0
+                                                              : 0.0,
+                                                        ),
+                                                        builder: (context, amplitude, child) {
+                                                          return SquigglySlider(
+                                                            min: 0.0,
+                                                            max: durationMs
+                                                                .toDouble(),
+                                                            value: sliderValueMs
+                                                                .toDouble(),
+                                                            inactiveColor:
+                                                                Theme.of(
+                                                                      context,
                                                                     )
-                                                                    .inMilliseconds >
-                                                                _seekThrottleMs) {
-                                                              audioHandler?.seek(
-                                                                Duration(
-                                                                  milliseconds:
-                                                                      ms,
-                                                                ),
-                                                              );
-                                                              _lastSeekTime =
-                                                                  now;
-                                                            } else {
-                                                              _lastSeekMs = ms;
-                                                              Future.delayed(
-                                                                Duration(
-                                                                  milliseconds:
-                                                                      _seekThrottleMs,
-                                                                ),
-                                                                () {
-                                                                  if (_lastSeekMs !=
-                                                                          null &&
-                                                                      DateTime.now()
-                                                                              .difference(
-                                                                                _lastSeekTime,
-                                                                              )
-                                                                              .inMilliseconds >=
-                                                                          _seekThrottleMs) {
-                                                                    audioHandler?.seek(
-                                                                      Duration(
-                                                                        milliseconds:
-                                                                            _lastSeekMs!,
-                                                                      ),
-                                                                    );
-                                                                    _lastSeekTime =
-                                                                        DateTime.now();
-                                                                    _lastSeekMs =
-                                                                        null;
-                                                                  }
-                                                                },
-                                                              );
-                                                            }
-                                                            _dragValueSecondsNotifier
-                                                                    .value =
-                                                                null;
-                                                          },
-                                                          squiggleAmplitude:
-                                                              amplitude,
-                                                          squiggleWavelength:
-                                                              6.0,
-                                                          squiggleSpeed: 0.05,
-                                                        );
-                                                      },
-                                                    ),
+                                                                    .colorScheme
+                                                                    .primary
+                                                                    .withValues(
+                                                                      alpha:
+                                                                          0.3,
+                                                                    ),
+                                                            onChanged: (value) {
+                                                              _dragValueSecondsNotifier
+                                                                      .value =
+                                                                  value /
+                                                                  1000.0;
+                                                            },
+                                                            onChangeEnd: (value) {
+                                                              final now =
+                                                                  DateTime.now();
+                                                              final ms = value
+                                                                  .toInt();
+                                                              if (now
+                                                                      .difference(
+                                                                        _lastSeekTime,
+                                                                      )
+                                                                      .inMilliseconds >
+                                                                  _seekThrottleMs) {
+                                                                audioHandler?.seek(
+                                                                  Duration(
+                                                                    milliseconds:
+                                                                        ms,
+                                                                  ),
+                                                                );
+                                                                _lastSeekTime =
+                                                                    now;
+                                                              } else {
+                                                                _lastSeekMs =
+                                                                    ms;
+                                                                Future.delayed(
+                                                                  Duration(
+                                                                    milliseconds:
+                                                                        _seekThrottleMs,
+                                                                  ),
+                                                                  () {
+                                                                    if (_lastSeekMs !=
+                                                                            null &&
+                                                                        DateTime.now()
+                                                                                .difference(
+                                                                                  _lastSeekTime,
+                                                                                )
+                                                                                .inMilliseconds >=
+                                                                            _seekThrottleMs) {
+                                                                      audioHandler?.seek(
+                                                                        Duration(
+                                                                          milliseconds:
+                                                                              _lastSeekMs!,
+                                                                        ),
+                                                                      );
+                                                                      _lastSeekTime =
+                                                                          DateTime.now();
+                                                                      _lastSeekMs =
+                                                                          null;
+                                                                    }
+                                                                  },
+                                                                );
+                                                              }
+                                                              _dragValueSecondsNotifier
+                                                                      .value =
+                                                                  null;
+                                                            },
+                                                            squiggleAmplitude:
+                                                                amplitude,
+                                                            squiggleWavelength:
+                                                                6.0,
+                                                            squiggleSpeed: 0.05,
+                                                          );
+                                                        },
+                                                      ),
                                                     ),
                                                   ),
                                                   Padding(
@@ -2522,7 +2680,6 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                             ).colorScheme.onSurface);
                             }
 
-
                             return LayoutBuilder(
                               builder: (context, constraints) {
                                 // Cálculo responsivo de tamaños
@@ -2591,7 +2748,8 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                               ),
                                                               child: IconButton(
                                                                 icon: const Icon(
-                                                                  Symbols.shuffle_rounded,
+                                                                  Symbols
+                                                                      .shuffle_rounded,
                                                                   weight: 600,
                                                                 ),
                                                                 color: Colors
@@ -2616,7 +2774,8 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                             )
                                                           : IconButton(
                                                               icon: const Icon(
-                                                                Symbols.shuffle_rounded,
+                                                                Symbols
+                                                                    .shuffle_rounded,
                                                                 grade: 200,
                                                               ),
                                                               color: isShuffle
@@ -2673,7 +2832,8 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                             ),
                                                       IconButton(
                                                         icon: const Icon(
-                                                          Symbols.skip_previous_rounded,
+                                                          Symbols
+                                                              .skip_previous_rounded,
                                                           grade: 200,
                                                           fill: 1,
                                                         ),
@@ -2799,10 +2959,13 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                                         ),
                                                                       )
                                                                     : Icon(
-                                                                        isPlaying ? Symbols.pause_rounded : Symbols.play_arrow_rounded,
+                                                                        isPlaying
+                                                                            ? Symbols.pause_rounded
+                                                                            : Symbols.play_arrow_rounded,
                                                                         size:
                                                                             playIconSize,
-                                                                        grade: 200,
+                                                                        grade:
+                                                                            200,
                                                                         fill: 1,
                                                                         color:
                                                                             Theme.of(
@@ -2825,7 +2988,8 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                       ),
                                                       IconButton(
                                                         icon: const Icon(
-                                                          Symbols.skip_next_rounded,
+                                                          Symbols
+                                                              .skip_next_rounded,
                                                           grade: 200,
                                                           fill: 1,
                                                         ),
@@ -3052,6 +3216,98 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                           },
                                         ),
 
+                                        // Botón Letra
+                                        ValueListenableBuilder<bool>(
+                                          valueListenable: playLoadingNotifier,
+                                          builder: (context, isLoading, _) {
+                                            return AnimatedTapButton(
+                                              onTap: isLoading
+                                                  ? () {}
+                                                  : () async {
+                                                      // Check if lyrics on cover is enabled
+                                                      final prefs =
+                                                          await SharedPreferences.getInstance();
+                                                      final showLyricsOnCover =
+                                                          prefs.getBool(
+                                                            'show_lyrics_on_cover',
+                                                          ) ??
+                                                          false;
+
+                                                      if (showLyricsOnCover) {
+                                                        // Original behavior: toggle lyrics display on cover
+                                                        if (!_showLyrics) {
+                                                          setState(() {
+                                                            _showLyrics = true;
+                                                          });
+                                                          await _loadLyrics(
+                                                            currentMediaItem,
+                                                          );
+                                                        } else {
+                                                          setState(() {
+                                                            _showLyrics = false;
+                                                          });
+                                                        }
+                                                      } else {
+                                                        // New behavior: show lyrics in modal
+                                                        if (!context.mounted) {
+                                                          return;
+                                                        }
+                                                        _showLyricsModal(
+                                                          context,
+                                                          currentMediaItem,
+                                                        );
+                                                      }
+                                                    },
+                                              child: Container(
+                                                decoration: BoxDecoration(
+                                                  color: Theme.of(context)
+                                                      .colorScheme
+                                                      .primary
+                                                      .withValues(alpha: 0.08),
+                                                  borderRadius:
+                                                      BorderRadius.circular(26),
+                                                ),
+                                                padding: EdgeInsets.symmetric(
+                                                  horizontal: isSmall ? 14 : 20,
+                                                  vertical: 14,
+                                                ),
+                                                margin: EdgeInsets.only(
+                                                  right: isSmall ? 8 : 12,
+                                                ),
+                                                child: Row(
+                                                  children: [
+                                                    Icon(
+                                                      Icons.lyrics_outlined,
+                                                      color: Theme.of(
+                                                        context,
+                                                      ).colorScheme.onSurface,
+                                                      size: isSmall ? 20 : 24,
+                                                    ),
+                                                    SizedBox(
+                                                      width: isSmall ? 6 : 8,
+                                                    ),
+                                                    Text(
+                                                      LocaleProvider.tr(
+                                                        'lyrics',
+                                                      ),
+                                                      style: TextStyle(
+                                                        color: Theme.of(
+                                                          context,
+                                                        ).colorScheme.onSurface,
+                                                        fontWeight:
+                                                            FontWeight.w600,
+                                                        fontSize: isSmall
+                                                            ? 14
+                                                            : 16,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            );
+                                          },
+                                        ),
+
                                         // Botón Guardar
                                         ValueListenableBuilder<bool>(
                                           valueListenable: playLoadingNotifier,
@@ -3119,88 +3375,6 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                           },
                                         ),
 
-                                        // Botón Letra
-                                        ValueListenableBuilder<bool>(
-                                          valueListenable: playLoadingNotifier,
-                                          builder: (context, isLoading, _) {
-                                            return AnimatedTapButton(
-                                              onTap: isLoading
-                                                  ? () {}
-                                                  : () async {
-                                                      // Check if lyrics on cover is enabled
-                                                      final prefs = await SharedPreferences.getInstance();
-                                                      final showLyricsOnCover = prefs.getBool('show_lyrics_on_cover') ?? false;
-                                                      
-                                                      if (showLyricsOnCover) {
-                                                        // Original behavior: toggle lyrics display on cover
-                                                        if (!_showLyrics) {
-                                                          setState(() {
-                                                            _showLyrics = true;
-                                                          });
-                                                          await _loadLyrics(
-                                                            currentMediaItem,
-                                                          );
-                                                        } else {
-                                                          setState(() {
-                                                            _showLyrics = false;
-                                                          });
-                                                        }
-                                                      } else {
-                                                        // New behavior: show lyrics in modal
-                                                        if (!context.mounted) return;
-                                                        _showLyricsModal(context, currentMediaItem);
-                                                      }
-                                                    },
-                                              child: Container(
-                                                decoration: BoxDecoration(
-                                                  color: Theme.of(context)
-                                                      .colorScheme
-                                                      .primary
-                                                      .withValues(alpha: 0.08),
-                                                  borderRadius:
-                                                      BorderRadius.circular(26),
-                                                ),
-                                                padding: EdgeInsets.symmetric(
-                                                  horizontal: isSmall ? 14 : 20,
-                                                  vertical: 14,
-                                                ),
-                                                margin: EdgeInsets.only(
-                                                  right: isSmall ? 8 : 12,
-                                                ),
-                                                child: Row(
-                                                  children: [
-                                                    Icon(
-                                                      Icons.lyrics_outlined,
-                                                      color: Theme.of(
-                                                        context,
-                                                      ).colorScheme.onSurface,
-                                                      size: isSmall ? 20 : 24,
-                                                    ),
-                                                    SizedBox(
-                                                      width: isSmall ? 6 : 8,
-                                                    ),
-                                                    Text(
-                                                      LocaleProvider.tr(
-                                                        'lyrics',
-                                                      ),
-                                                      style: TextStyle(
-                                                        color: Theme.of(
-                                                          context,
-                                                        ).colorScheme.onSurface,
-                                                        fontWeight:
-                                                            FontWeight.w600,
-                                                        fontSize: isSmall
-                                                            ? 14
-                                                            : 16,
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                              ),
-                                            );
-                                          },
-                                        ),
-
                                         // Botón Compartir
                                         ValueListenableBuilder<bool>(
                                           valueListenable: playLoadingNotifier,
@@ -3222,7 +3396,9 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                                     currentMediaItem
                                                                         .title,
                                                                 files: [
-                                                                  XFile(dataPath),
+                                                                  XFile(
+                                                                    dataPath,
+                                                                  ),
                                                                 ],
                                                               ),
                                                             );
@@ -3258,10 +3434,9 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                         'share',
                                                       ),
                                                       style: TextStyle(
-                                                        color:
-                                                            Theme.of(context)
-                                                                .colorScheme
-                                                                .onSurface,
+                                                        color: Theme.of(
+                                                          context,
+                                                        ).colorScheme.onSurface,
                                                         fontWeight:
                                                             FontWeight.w600,
                                                         fontSize: isSmall
@@ -3300,16 +3475,16 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
 
   Future<LyricsResult> _loadLyricsWithDelay(MediaItem mediaItem) async {
     final cacheKey = mediaItem.id;
-    
+
     // Si ya está en cache, usar ese Future
     if (_lyricsCache.containsKey(cacheKey)) {
       return await _lyricsCache[cacheKey]!;
     }
-    
+
     // Crear nuevo Future y cachearlo
     final future = _loadLyricsInternal(mediaItem);
     _lyricsCache[cacheKey] = future;
-    
+
     return await future;
   }
 
@@ -3320,8 +3495,10 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     return await SyncedLyricsService.getSyncedLyricsWithResult(mediaItem);
   }
 
-
-  Future<void> _showLyricsModal(BuildContext context, MediaItem mediaItem) async {
+  Future<void> _showLyricsModal(
+    BuildContext context,
+    MediaItem mediaItem,
+  ) async {
     if (!context.mounted) return;
 
     showModalBottomSheet(
@@ -3330,424 +3507,15 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       useSafeArea: true,
       builder: (BuildContext context) {
-        return ValueListenableBuilder<AppColorScheme>(
-          valueListenable: colorSchemeNotifier,
-          builder: (context, colorScheme, child) {
-            final isAmoled = colorScheme == AppColorScheme.amoled;
-            final isDark = Theme.of(context).brightness == Brightness.dark;
-            
-            return Container(
-              constraints: BoxConstraints(
-                maxHeight: MediaQuery.of(context).size.height - MediaQuery.of(context).padding.top,
-              ),
-              child: StreamBuilder<MediaItem?>(
-                stream: audioHandler?.mediaItem.distinct((prev, next) => prev?.id == next?.id),
-                builder: (context, mediaSnapshot) {
-                  final currentMediaItem = mediaSnapshot.data ?? mediaItem;
-                  
-                  return Stack(
-                    children: [
-                      Column(
-                        children: [
-                          // Handle bar
-                          Container(
-                            margin: EdgeInsets.symmetric(vertical: 8),
-                            width: 40,
-                            height: 4,
-                            decoration: BoxDecoration(
-                              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3),
-                              borderRadius: BorderRadius.circular(2),
-                            ),
-                          ),
-                      // Song Info Header
-                      Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        child: Row(
-                          children: [
-                            // Album Artwork
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: SizedBox(
-                                width: 52,
-                                height: 52,
-                                child: _buildLyricsModalArtwork(currentMediaItem),
-                              ),
-                            ),
-                            SizedBox(width: 12),
-                            // Song Info
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  TitleMarquee(
-                                    text: currentMediaItem.title,
-                                    maxWidth: MediaQuery.of(context).size.width - 140, // Account for artwork, spacing, and play button
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                      color: Theme.of(context).colorScheme.onSurface,
-                                    ),
-                                  ),
-                                  Text(
-                                    currentMediaItem.artist ?? LocaleProvider.tr('unknown_artist'),
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ],
-                              ),
-                            ),
-                            // Buttons Row
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                // Lyrics Search Button
-                                IconButton(
-                                  onPressed: () async {
-                                    // Cerrar el modal de letras antes de abrir la pantalla de búsqueda
-                                    Navigator.of(context).pop();
-                                    await Navigator.of(context).push(
-                                      PageRouteBuilder(
-                                        pageBuilder: (context, animation, secondaryAnimation) =>
-                                            LyricsSearchScreen(
-                                              currentSong: currentMediaItem,
-                                            ),
-                                        transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                                          const begin = Offset(1.0, 0.0);
-                                          const end = Offset.zero;
-                                          const curve = Curves.ease;
-                                          final tween = Tween(
-                                            begin: begin,
-                                            end: end,
-                                          ).chain(CurveTween(curve: curve));
-                                          return SlideTransition(
-                                            position: animation.drive(tween),
-                                            child: child,
-                                          );
-                                        },
-                                      ),
-                                    );
-                                  },
-                                  icon: Icon(
-                                    Icons.lyrics_outlined,
-                                    size: 24,
-                                  ),
-                                  tooltip: LocaleProvider.tr('search_lyrics'),
-                                ),
-                                // Play/Pause Button
-                                StreamBuilder<PlaybackState>(
-                                  stream: audioHandler?.playbackState,
-                                  builder: (context, snapshot) {
-                                    final playbackState = snapshot.data;
-                                    final isPlaying = playbackState?.playing ?? false;
-                                    
-                                    return IconButton(
-                                      onPressed: () {
-                                        if (isPlaying) {
-                                          audioHandler?.pause();
-                                        } else {
-                                          audioHandler?.play();
-                                        }
-                                      },
-                                      icon: Icon(
-                                        isPlaying ? Symbols.pause_rounded : Symbols.play_arrow_rounded,
-                                        size: 34,
-                                        grade: 200,
-                                        fill: 1,
-                                      ),
-                                    );
-                                  },
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                      // Content
-                      Expanded(
-                        child: ShaderMask(
-                          shaderCallback: (Rect bounds) {
-                            return LinearGradient(
-                              begin: Alignment.topCenter,
-                              end: Alignment.bottomCenter,
-                              colors: [
-                                Colors.transparent,
-                                Colors.white,
-                                Colors.white,
-                                Colors.transparent,
-                              ],
-                              stops: const [0.0, 0.1, 0.9, 1.0],
-                            ).createShader(bounds);
-                          },
-                          blendMode: BlendMode.dstIn,
-                          child: StreamBuilder<MediaItem?>(
-                            stream: audioHandler?.mediaItem.distinct((prev, next) => prev?.id == next?.id),
-                            builder: (context, mediaStreamSnapshot) {
-                              final currentMediaItemForLyrics = mediaStreamSnapshot.data ?? currentMediaItem;
-                              
-                              return ValueListenableBuilder<String?>(
-                                valueListenable: lyricsUpdatedNotifier,
-                                builder: (context, updatedSongId, child) {
-                                  // Forzar reconstrucción si se actualizó esta canción específica
-                                  final shouldRebuild = updatedSongId == currentMediaItemForLyrics.id;
-                                  return FutureBuilder<LyricsResult>(
-                                    key: ValueKey('${currentMediaItemForLyrics.id}_${shouldRebuild ? DateTime.now().millisecondsSinceEpoch : _lyricsUpdateCounter}'), // Rebuild when song changes or lyrics are updated
-                                    future: _loadLyricsWithDelay(currentMediaItemForLyrics),
-                                    builder: (context, snapshot) {
-                          if (snapshot.connectionState == ConnectionState.waiting) {
-                            return Center(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  CircularProgressIndicator(
-                                    valueColor: AlwaysStoppedAnimation<Color>(
-                                      Theme.of(context).colorScheme.primary,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            );
-                          }
-                          
-                          if (snapshot.hasError) {
-                            return Center(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(
-                                    Icons.error_outline,
-                                    size: 64,
-                                    color: Theme.of(context).colorScheme.error,
-                                  ),
-                                  SizedBox(height: 16),
-                                  Text(
-                                    LocaleProvider.tr('api_unavailable'),
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      color: Theme.of(context).colorScheme.onSurface,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            );
-                          }
-                          
-                          final result = snapshot.data!;
-                          
-                          if (result.type == LyricsResultType.apiUnavailable) {
-                            return Center(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(
-                                    Icons.error_outline,
-                                    size: 64,
-                                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
-                                  ),
-                                  SizedBox(height: 16),
-                                  Text(
-                                    LocaleProvider.tr('api_unavailable'),
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            );
-                          } else if (result.type == LyricsResultType.noConnection) {
-                            return Center(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(
-                                    Icons.wifi_off,
-                                    size: 64,
-                                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
-                                  ),
-                                  SizedBox(height: 16),
-                                  Text(
-                                    LocaleProvider.tr('no_connection'),
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            );
-                          } else if (result.type == LyricsResultType.found && result.data?.synced != null) {
-                            // Parse lyrics
-                            final synced = result.data!.synced!;
-                            final lines = synced.split('\n');
-                            final parsed = <LyricLine>[];
-                            final reg = RegExp(r'\[(\d{2}):(\d{2})(?:\.(\d{2,3}))?\](.*)');
-                            for (final line in lines) {
-                              final match = reg.firstMatch(line);
-                              if (match != null) {
-                                final min = int.parse(match.group(1)!);
-                                final sec = int.parse(match.group(2)!);
-                                final ms = match.group(3) != null
-                                    ? int.parse(match.group(3)!.padRight(3, '0'))
-                                    : 0;
-                                final text = match.group(4)!.trim();
-                                parsed.add(
-                                  LyricLine(
-                                    Duration(minutes: min, seconds: sec, milliseconds: ms),
-                                    text,
-                                  ),
-                                );
-                              }
-                            }
-                            
-                            if (parsed.isEmpty) {
-                              return Center(
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(
-                                      Icons.lyrics_outlined,
-                                      size: 64,
-                                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
-                                    ),
-                                    SizedBox(height: 16),
-                                    Text(
-                                      LocaleProvider.tr('no_lyrics_found'),
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
-                                      ),
-                                    ),
-                                    SizedBox(height: 24),
-                                    ElevatedButton.icon(
-                                      onPressed: () async {
-                                        Navigator.of(context).pop();
-                                        await Navigator.of(context).push(
-                                          PageRouteBuilder(
-                                            pageBuilder: (context, animation, secondaryAnimation) =>
-                                                LyricsSearchScreen(
-                                                  currentSong: currentMediaItemForLyrics,
-                                                ),
-                                            transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                                              const begin = Offset(1.0, 0.0);
-                                              const end = Offset.zero;
-                                              const curve = Curves.ease;
-                                              final tween = Tween(
-                                                begin: begin,
-                                                end: end,
-                                              ).chain(CurveTween(curve: curve));
-                                              return SlideTransition(
-                                                position: animation.drive(tween),
-                                                child: child,
-                                              );
-                                            },
-                                          ),
-                                        );
-                                      },
-                                      icon: Icon(Symbols.search_rounded),
-                                      label: Text(LocaleProvider.tr('search_lyrics')),
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: Theme.of(context).colorScheme.primary,
-                                        foregroundColor: Theme.of(context).colorScheme.onPrimary,
-                                        padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(12),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            }
-                            
-                            return _LyricsWithTranslationView(
-                              lyricLines: parsed,
-                              isAmoled: isAmoled,
-                              isDark: isDark,
-                            );
-                          } else {
-                            return Center(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(
-                                    Icons.lyrics_outlined,
-                                    size: 64,
-                                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
-                                  ),
-                                  SizedBox(height: 16),
-                                  Text(
-                                    LocaleProvider.tr('no_lyrics_found'),
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
-                                    ),
-                                  ),
-                                  SizedBox(height: 24),
-                                  ElevatedButton.icon(
-                                    onPressed: () async {
-                                      // Cerrar el modal de letras antes de abrir la pantalla de búsqueda
-                                      Navigator.of(context).pop();
-                                      await Navigator.of(context).push(
-                                        PageRouteBuilder(
-                                          pageBuilder: (context, animation, secondaryAnimation) =>
-                                              LyricsSearchScreen(
-                                                currentSong: currentMediaItemForLyrics,
-                                              ),
-                                          transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                                            const begin = Offset(1.0, 0.0);
-                                            const end = Offset.zero;
-                                            const curve = Curves.ease;
-                                            final tween = Tween(
-                                              begin: begin,
-                                              end: end,
-                                            ).chain(CurveTween(curve: curve));
-                                            return SlideTransition(
-                                              position: animation.drive(tween),
-                                              child: child,
-                                            );
-                                          },
-                                        ),
-                                      );
-                                    },
-                                    icon: Icon(Symbols.search_rounded),
-                                    label: Text(LocaleProvider.tr('search_lyrics')),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: Theme.of(context).colorScheme.primary,
-                                      foregroundColor: Theme.of(context).colorScheme.onPrimary,
-                                      padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            );
-                          }
-                                },
-                              );
-                                },
-                              );
-                            },
-                          ),
-                        ),
-                      ),
-                        ],
-                      ), // Cierre del Column
-                    ], // Cierre del Stack
-                  );
-                },
-              ),
-            );
-          },
+        return _LyricsModalContent(
+          mediaItem: mediaItem,
+          loadLyricsWithDelay: _loadLyricsWithDelay,
+          buildLyricsModalArtwork: _buildLyricsModalArtwork,
+          lyricsCache: _lyricsCache,
         );
       },
     );
   }
-
 
   Widget _buildLyricsModalArtwork(MediaItem mediaItem) {
     final artUri = mediaItem.artUri;
@@ -3789,7 +3557,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     // Si no hay artUri o no se puede cargar, verificar caché primero
     final songId = mediaItem.extras?['songId'];
     final songPath = mediaItem.extras?['data'];
-    
+
     if (songId != null && songPath != null) {
       // Verificar si está en caché primero
       final cachedArtwork = _getCachedArtwork(songPath);
@@ -3808,7 +3576,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
         // Si no está en cache, cargar de forma asíncrona
         _loadArtworkAsync(songId, songPath);
       }
-      
+
       // Si no está en caché, cargar desde la base de datos
       // print('🔄 LYRICS MODAL: Cargando carátula desde BD para: ${songPath.split('/').last}');
       return FutureBuilder<Uri?>(
@@ -3841,13 +3609,485 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
       width: 50,
       height: 50,
       decoration: BoxDecoration(
-        color: isSystem ? Theme.of(context).colorScheme.secondaryContainer.withValues(alpha: 0.5) : Theme.of(context).colorScheme.surfaceContainer,
+        color: isSystem
+            ? Theme.of(
+                context,
+              ).colorScheme.secondaryContainer.withValues(alpha: 0.5)
+            : Theme.of(context).colorScheme.surfaceContainer,
         borderRadius: BorderRadius.circular(8),
       ),
       child: Icon(
         Icons.music_note,
         size: 24,
         color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+      ),
+    );
+  }
+}
+
+// Widget separado para el contenido del modal de letras que maneja su propio estado
+// Esto evita que el FutureBuilder se reconstruya durante la animación de deslizamiento
+class _LyricsModalContent extends StatefulWidget {
+  final MediaItem mediaItem;
+  final Future<LyricsResult> Function(MediaItem) loadLyricsWithDelay;
+  final Widget Function(MediaItem) buildLyricsModalArtwork;
+  final Map<String, Future<LyricsResult>> lyricsCache;
+
+  const _LyricsModalContent({
+    required this.mediaItem,
+    required this.loadLyricsWithDelay,
+    required this.buildLyricsModalArtwork,
+    required this.lyricsCache,
+  });
+
+  @override
+  State<_LyricsModalContent> createState() => _LyricsModalContentState();
+}
+
+class _LyricsModalContentState extends State<_LyricsModalContent> {
+  LyricsResult? _lyricsResult;
+  bool _isLoading = true;
+  bool _hasError = false;
+  List<LyricLine>? _parsedLyrics;
+  MediaItem? _currentMediaItem;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentMediaItem = widget.mediaItem;
+    _loadLyrics();
+  }
+
+  Future<void> _loadLyrics() async {
+    if (!mounted) return;
+
+    setState(() {
+      _isLoading = true;
+      _hasError = false;
+    });
+
+    try {
+      final result = await widget.loadLyricsWithDelay(_currentMediaItem!);
+      if (!mounted) return;
+
+      List<LyricLine>? parsed;
+      if (result.type == LyricsResultType.found &&
+          result.data?.synced != null) {
+        final synced = result.data!.synced!;
+        final lines = synced.split('\n');
+        parsed = <LyricLine>[];
+        final reg = RegExp(r'\[(\d{2}):(\d{2})(?:\.(\d{2,3}))?\](.*)');
+        for (final line in lines) {
+          final match = reg.firstMatch(line);
+          if (match != null) {
+            final min = int.parse(match.group(1)!);
+            final sec = int.parse(match.group(2)!);
+            final ms = match.group(3) != null
+                ? int.parse(match.group(3)!.padRight(3, '0'))
+                : 0;
+            final text = match.group(4)!.trim();
+            parsed.add(
+              LyricLine(
+                Duration(minutes: min, seconds: sec, milliseconds: ms),
+                text,
+              ),
+            );
+          }
+        }
+      }
+
+      setState(() {
+        _lyricsResult = result;
+        _parsedLyrics = parsed;
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _hasError = true;
+        _isLoading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<AppColorScheme>(
+      valueListenable: colorSchemeNotifier,
+      builder: (context, colorScheme, child) {
+        final isAmoled = colorScheme == AppColorScheme.amoled;
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+
+        return Container(
+          constraints: BoxConstraints(
+            maxHeight:
+                MediaQuery.of(context).size.height -
+                MediaQuery.of(context).padding.top,
+          ),
+          child: StreamBuilder<MediaItem?>(
+            stream: audioHandler?.mediaItem.distinct(
+              (prev, next) => prev?.id == next?.id,
+            ),
+            builder: (context, mediaSnapshot) {
+              final currentMediaItem = mediaSnapshot.data ?? widget.mediaItem;
+
+              // Si la canción cambió, recargar letras
+              if (_currentMediaItem?.id != currentMediaItem.id) {
+                _currentMediaItem = currentMediaItem;
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  _loadLyrics();
+                });
+              }
+
+              return Stack(
+                children: [
+                  Column(
+                    children: [
+                      // Handle bar
+                      Container(
+                        margin: EdgeInsets.symmetric(vertical: 8),
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onSurface.withValues(alpha: 0.3),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                      // Song Info Header
+                      Padding(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
+                        child: Row(
+                          children: [
+                            // Album Artwork
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: SizedBox(
+                                width: 52,
+                                height: 52,
+                                child: widget.buildLyricsModalArtwork(
+                                  currentMediaItem,
+                                ),
+                              ),
+                            ),
+                            SizedBox(width: 12),
+                            // Song Info
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  TitleMarquee(
+                                    text: currentMediaItem.title,
+                                    maxWidth:
+                                        MediaQuery.of(context).size.width - 140,
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.onSurface,
+                                    ),
+                                  ),
+                                  Text(
+                                    currentMediaItem.artist ??
+                                        LocaleProvider.tr('unknown_artist'),
+                                    style: TextStyle(fontSize: 14),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
+                              ),
+                            ),
+                            // Buttons Row
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                // Lyrics Search Button
+                                IconButton(
+                                  onPressed: () async {
+                                    Navigator.of(context).pop();
+                                    await Navigator.of(context).push(
+                                      PageRouteBuilder(
+                                        pageBuilder:
+                                            (
+                                              context,
+                                              animation,
+                                              secondaryAnimation,
+                                            ) => LyricsSearchScreen(
+                                              currentSong: currentMediaItem,
+                                            ),
+                                        transitionsBuilder:
+                                            (
+                                              context,
+                                              animation,
+                                              secondaryAnimation,
+                                              child,
+                                            ) {
+                                              const begin = Offset(1.0, 0.0);
+                                              const end = Offset.zero;
+                                              const curve = Curves.ease;
+                                              final tween = Tween(
+                                                begin: begin,
+                                                end: end,
+                                              ).chain(CurveTween(curve: curve));
+                                              return SlideTransition(
+                                                position: animation.drive(
+                                                  tween,
+                                                ),
+                                                child: child,
+                                              );
+                                            },
+                                      ),
+                                    );
+                                  },
+                                  icon: Icon(Icons.lyrics_outlined, size: 24),
+                                  tooltip: LocaleProvider.tr('search_lyrics'),
+                                ),
+                                // Play/Pause Button
+                                StreamBuilder<PlaybackState>(
+                                  stream: audioHandler?.playbackState,
+                                  builder: (context, snapshot) {
+                                    final playbackState = snapshot.data;
+                                    final isPlaying =
+                                        playbackState?.playing ?? false;
+
+                                    return IconButton(
+                                      onPressed: () {
+                                        if (isPlaying) {
+                                          audioHandler?.pause();
+                                        } else {
+                                          audioHandler?.play();
+                                        }
+                                      },
+                                      icon: Icon(
+                                        isPlaying
+                                            ? Symbols.pause_rounded
+                                            : Symbols.play_arrow_rounded,
+                                        size: 34,
+                                        grade: 200,
+                                        fill: 1,
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      // Content
+                      Expanded(
+                        child: ShaderMask(
+                          shaderCallback: (Rect bounds) {
+                            return LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [
+                                Colors.transparent,
+                                Colors.white,
+                                Colors.white,
+                                Colors.transparent,
+                              ],
+                              stops: const [0.0, 0.1, 0.9, 1.0],
+                            ).createShader(bounds);
+                          },
+                          blendMode: BlendMode.dstIn,
+                          child: _buildLyricsContent(
+                            context,
+                            isAmoled,
+                            isDark,
+                            currentMediaItem,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildLyricsContent(
+    BuildContext context,
+    bool isAmoled,
+    bool isDark,
+    MediaItem currentMediaItem,
+  ) {
+    if (_isLoading) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation<Color>(
+                Theme.of(context).colorScheme.primary,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (_hasError) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.error_outline,
+              size: 64,
+              color: Theme.of(context).colorScheme.error,
+            ),
+            SizedBox(height: 16),
+            Text(
+              LocaleProvider.tr('api_unavailable'),
+              style: TextStyle(
+                fontSize: 16,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final result = _lyricsResult;
+    if (result == null) {
+      return _buildNoLyricsFound(context, currentMediaItem);
+    }
+
+    if (result.type == LyricsResultType.apiUnavailable) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.error_outline,
+              size: 64,
+              color: Theme.of(
+                context,
+              ).colorScheme.onSurface.withValues(alpha: 0.5),
+            ),
+            SizedBox(height: 16),
+            Text(
+              LocaleProvider.tr('api_unavailable'),
+              style: TextStyle(
+                fontSize: 16,
+                color: Theme.of(
+                  context,
+                ).colorScheme.onSurface.withValues(alpha: 0.7),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (result.type == LyricsResultType.noConnection) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.wifi_off,
+              size: 64,
+              color: Theme.of(
+                context,
+              ).colorScheme.onSurface.withValues(alpha: 0.5),
+            ),
+            SizedBox(height: 16),
+            Text(
+              LocaleProvider.tr('no_connection'),
+              style: TextStyle(
+                fontSize: 16,
+                color: Theme.of(
+                  context,
+                ).colorScheme.onSurface.withValues(alpha: 0.7),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (_parsedLyrics != null && _parsedLyrics!.isNotEmpty) {
+      return _LyricsWithTranslationView(
+        lyricLines: _parsedLyrics!,
+        isAmoled: isAmoled,
+        isDark: isDark,
+      );
+    }
+
+    return _buildNoLyricsFound(context, currentMediaItem);
+  }
+
+  Widget _buildNoLyricsFound(BuildContext context, MediaItem currentMediaItem) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.lyrics_outlined,
+            size: 64,
+            color: Theme.of(
+              context,
+            ).colorScheme.onSurface.withValues(alpha: 0.5),
+          ),
+          SizedBox(height: 16),
+          Text(
+            LocaleProvider.tr('no_lyrics_found'),
+            style: TextStyle(
+              fontSize: 16,
+              color: Theme.of(
+                context,
+              ).colorScheme.onSurface.withValues(alpha: 0.7),
+            ),
+          ),
+          SizedBox(height: 24),
+          ElevatedButton.icon(
+            onPressed: () async {
+              Navigator.of(context).pop();
+              await Navigator.of(context).push(
+                PageRouteBuilder(
+                  pageBuilder: (context, animation, secondaryAnimation) =>
+                      LyricsSearchScreen(currentSong: currentMediaItem),
+                  transitionsBuilder:
+                      (context, animation, secondaryAnimation, child) {
+                        const begin = Offset(1.0, 0.0);
+                        const end = Offset.zero;
+                        const curve = Curves.ease;
+                        final tween = Tween(
+                          begin: begin,
+                          end: end,
+                        ).chain(CurveTween(curve: curve));
+                        return SlideTransition(
+                          position: animation.drive(tween),
+                          child: child,
+                        );
+                      },
+                ),
+              );
+            },
+            icon: Icon(Symbols.search_rounded),
+            label: Text(LocaleProvider.tr('search_lyrics')),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.primary,
+              foregroundColor: Theme.of(context).colorScheme.onPrimary,
+              padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -3865,10 +4105,12 @@ class _LyricsWithTranslationView extends StatefulWidget {
   });
 
   @override
-  State<_LyricsWithTranslationView> createState() => _LyricsWithTranslationViewState();
+  State<_LyricsWithTranslationView> createState() =>
+      _LyricsWithTranslationViewState();
 }
 
-class _LyricsWithTranslationViewState extends State<_LyricsWithTranslationView> {
+class _LyricsWithTranslationViewState
+    extends State<_LyricsWithTranslationView> {
   bool _showTranslation = false;
   bool _isTranslating = false;
   List<String>? _translatedLines;
@@ -3888,16 +4130,16 @@ class _LyricsWithTranslationViewState extends State<_LyricsWithTranslationView> 
 
     try {
       final lyricsText = widget.lyricLines.map((line) => line.text).join('\n');
-      final targetLanguage = translationLanguageNotifier.value == 'auto' 
-        ? Localizations.localeOf(context).languageCode
-        : translationLanguageNotifier.value;
-      
+      final targetLanguage = translationLanguageNotifier.value == 'auto'
+          ? Localizations.localeOf(context).languageCode
+          : translationLanguageNotifier.value;
+
       final translator = GoogleTranslator();
       final translation = await translator.translate(
         lyricsText,
         to: targetLanguage,
       );
-      
+
       if (mounted) {
         setState(() {
           _translatedLines = translation.text.split('\n');
@@ -3910,7 +4152,7 @@ class _LyricsWithTranslationViewState extends State<_LyricsWithTranslationView> 
         setState(() {
           _isTranslating = false;
         });
-        
+
         // Mostrar diálogo de error específico para traducción
         showDialog(
           context: context,
@@ -3945,23 +4187,23 @@ class _LyricsWithTranslationViewState extends State<_LyricsWithTranslationView> 
           bottom: 80,
           child: FloatingActionButton(
             onPressed: _isTranslating ? null : _toggleTranslation,
-            tooltip: _showTranslation 
-              ? LocaleProvider.tr('hide_translation')
-              : LocaleProvider.tr('translate_lyrics'),
+            tooltip: _showTranslation
+                ? LocaleProvider.tr('hide_translation')
+                : LocaleProvider.tr('translate_lyrics'),
             backgroundColor: Theme.of(context).colorScheme.primaryContainer,
             foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
-            child: _isTranslating 
-              ? SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                      Theme.of(context).colorScheme.onPrimaryContainer,
+            child: _isTranslating
+                ? SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        Theme.of(context).colorScheme.onPrimaryContainer,
+                      ),
                     ),
-                  ),
-                )
-              : Icon(_showTranslation ? Icons.close : Icons.translate),
+                  )
+                : Icon(_showTranslation ? Icons.close : Icons.translate),
           ),
         ),
       ],
@@ -3999,23 +4241,24 @@ class _LyricsModalListViewState extends State<_LyricsModalListView> {
   void initState() {
     super.initState();
     _scrollController = AutoScrollController();
-    
+
     // Calculate initial current lyric index
     _calculateCurrentLyricIndex();
-    
+
     _startPositionListener();
     // Scroll to current lyric when modal opens
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _scrollToCurrentLyric();
     });
-    
+
     // Listen for manual scroll events
     _scrollController.addListener(_onScroll);
   }
-  
+
   void _onScroll() {
     // Detect if user is manually scrolling
-    if (_scrollController.hasClients && _scrollController.position.isScrollingNotifier.value) {
+    if (_scrollController.hasClients &&
+        _scrollController.position.isScrollingNotifier.value) {
       _isManualScrolling = true;
       // Reset flag after scroll ends
       Timer(Duration(milliseconds: 500), () {
@@ -4027,8 +4270,9 @@ class _LyricsModalListViewState extends State<_LyricsModalListView> {
   }
 
   void _calculateCurrentLyricIndex() {
-    final position = audioHandler?.playbackState.value.position ?? Duration.zero;
-    
+    final position =
+        audioHandler?.playbackState.value.position ?? Duration.zero;
+
     // Find current lyric line
     int currentIndex = 0;
     for (int i = 0; i < widget.lyricLines.length; i++) {
@@ -4038,7 +4282,7 @@ class _LyricsModalListViewState extends State<_LyricsModalListView> {
         break;
       }
     }
-    
+
     _currentLyricIndex = currentIndex;
     _lastCurrentIndex = currentIndex;
   }
@@ -4054,9 +4298,10 @@ class _LyricsModalListViewState extends State<_LyricsModalListView> {
   void _startPositionListener() {
     _scrollTimer = Timer.periodic(Duration(milliseconds: 500), (timer) {
       if (!mounted) return;
-      
-      final position = audioHandler?.playbackState.value.position ?? Duration.zero;
-      
+
+      final position =
+          audioHandler?.playbackState.value.position ?? Duration.zero;
+
       // Find current lyric line
       int currentIndex = 0;
       for (int i = 0; i < widget.lyricLines.length; i++) {
@@ -4066,12 +4311,12 @@ class _LyricsModalListViewState extends State<_LyricsModalListView> {
           break;
         }
       }
-      
+
       if (currentIndex != _currentLyricIndex) {
         setState(() {
           _currentLyricIndex = currentIndex;
         });
-        
+
         // Only scroll if the index actually changed and user is not manually scrolling
         if (_currentLyricIndex != _lastCurrentIndex && !_isManualScrolling) {
           _lastCurrentIndex = _currentLyricIndex;
@@ -4082,7 +4327,8 @@ class _LyricsModalListViewState extends State<_LyricsModalListView> {
   }
 
   Future<void> _scrollToCurrentLyric() async {
-    if (_currentLyricIndex >= 0 && _currentLyricIndex < widget.lyricLines.length) {
+    if (_currentLyricIndex >= 0 &&
+        _currentLyricIndex < widget.lyricLines.length) {
       await _scrollController.scrollToIndex(
         _currentLyricIndex,
         preferPosition: AutoScrollPosition.middle,
@@ -4095,22 +4341,25 @@ class _LyricsModalListViewState extends State<_LyricsModalListView> {
   Widget build(BuildContext context) {
     return ListView.builder(
       controller: _scrollController,
-      padding: EdgeInsets.only(top: 60, bottom: MediaQuery.of(context).padding.bottom),
+      padding: EdgeInsets.only(
+        top: 60,
+        bottom: MediaQuery.of(context).padding.bottom,
+      ),
       itemCount: widget.lyricLines.length,
       itemBuilder: (context, index) {
         final isCurrent = index == _currentLyricIndex;
         final textStyle = TextStyle(
           color: isCurrent
               ? (widget.isAmoled && widget.isDark
-                  ? Colors.white
-                  : Theme.of(context).colorScheme.primary)
+                    ? Colors.white
+                    : Theme.of(context).colorScheme.primary)
               : widget.isAmoled && widget.isDark
-                  ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5)
-                  : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+              ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5)
+              : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
           fontWeight: FontWeight.bold,
           fontSize: 22,
         );
-        
+
         return AutoScrollTag(
           key: ValueKey(index),
           controller: _scrollController,
@@ -4120,16 +4369,16 @@ class _LyricsModalListViewState extends State<_LyricsModalListView> {
               // Seek to the time of this lyric line
               final targetTime = widget.lyricLines[index].time;
               audioHandler?.seek(targetTime);
-              
+
               // Set manual scrolling flag
               _isManualScrolling = true;
-              
+
               // Update current index immediately
               setState(() {
                 _currentLyricIndex = index;
                 _lastCurrentIndex = index;
               });
-              
+
               // Reset manual scrolling flag after a delay
               Timer(Duration(seconds: 3), () {
                 _isManualScrolling = false;
@@ -4137,37 +4386,40 @@ class _LyricsModalListViewState extends State<_LyricsModalListView> {
             },
             child: Container(
               padding: EdgeInsets.symmetric(vertical: 8, horizontal: 32),
-              child: widget.showTranslation && widget.translatedLines != null && index < widget.translatedLines!.length
-                ? Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Texto original (más claro y más pequeño)
-                      Text(
-                        widget.lyricLines[index].text,
-                        textAlign: TextAlign.left,
-                        style: textStyle.copyWith(
-                          color: textStyle.color?.withValues(alpha: 0.6),
-                          fontSize: 18, // Tamaño fijo para texto original
-                          fontWeight: FontWeight.normal,
+              child:
+                  widget.showTranslation &&
+                      widget.translatedLines != null &&
+                      index < widget.translatedLines!.length
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Texto original (más claro y más pequeño)
+                        Text(
+                          widget.lyricLines[index].text,
+                          textAlign: TextAlign.left,
+                          style: textStyle.copyWith(
+                            color: textStyle.color?.withValues(alpha: 0.6),
+                            fontSize: 18, // Tamaño fijo para texto original
+                            fontWeight: FontWeight.normal,
+                          ),
                         ),
-                      ),
-                      SizedBox(height: 4),
-                      // Traducción (más prominente)
-                      Text(
-                        widget.translatedLines![index],
-                        textAlign: TextAlign.left,
-                        style: textStyle.copyWith(
-                          fontSize: 22, // Tamaño fijo para traducción
-                          fontWeight: FontWeight.bold,
+                        SizedBox(height: 4),
+                        // Traducción (más prominente)
+                        Text(
+                          widget.translatedLines![index],
+                          textAlign: TextAlign.left,
+                          style: textStyle.copyWith(
+                            fontSize: 22, // Tamaño fijo para traducción
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
-                      ),
-                    ],
-                  )
-                : Text(
-                    widget.lyricLines[index].text,
-                    textAlign: TextAlign.left,
-                    style: textStyle,
-                  ),
+                      ],
+                    )
+                  : Text(
+                      widget.lyricLines[index].text,
+                      textAlign: TextAlign.left,
+                      style: textStyle,
+                    ),
             ),
           ),
         );
@@ -4203,7 +4455,7 @@ class _TitleMarqueeState extends State<TitleMarquee> {
       // Cancelar timer anterior si existe
       _marqueeTimer?.cancel();
       setState(() => _showMarquee = false);
-      
+
       // Crear nuevo timer para la nueva canción
       _marqueeTimer = Timer(const Duration(milliseconds: 3000), () {
         if (mounted) setState(() => _showMarquee = true);
@@ -4608,7 +4860,12 @@ class _VerticalMarqueeLyricsState extends State<VerticalMarqueeLyrics>
               child: ListView.builder(
                 controller: _scrollController,
                 physics: const AlwaysScrollableScrollPhysics(),
-                padding: EdgeInsets.only(top: 60, bottom: 0, left: 10, right: 10),
+                padding: EdgeInsets.only(
+                  top: 60,
+                  bottom: 0,
+                  left: 10,
+                  right: 10,
+                ),
                 itemCount: lines.length,
                 itemBuilder: (context, index) {
                   final isCurrent = index == idx;
@@ -4685,14 +4942,16 @@ class _PlaylistListViewState extends State<_PlaylistListView> {
   /// Carga carátula de forma asíncrona si no está en cache (para playlist)
   void _loadArtworkAsync(int songId, String songPath) {
     // Cargar de forma asíncrona usando el sistema unificado
-    getOrCacheArtwork(songId, songPath).then((artUri) {
-      if (artUri != null && mounted) {
-        // Forzar rebuild para mostrar la carátula cargada
-        setState(() {});
-      }
-    }).catchError((error) {
-      // print('❌ Error cargando carátula en playlist: $error');
-    });
+    getOrCacheArtwork(songId, songPath)
+        .then((artUri) {
+          if (artUri != null && mounted) {
+            // Forzar rebuild para mostrar la carátula cargada
+            setState(() {});
+          }
+        })
+        .catchError((error) {
+          // print('❌ Error cargando carátula en playlist: $error');
+        });
   }
 
   @override
@@ -4757,7 +5016,7 @@ class _PlaylistListViewState extends State<_PlaylistListView> {
     // Si no hay artUri o no se puede cargar, verificar caché primero
     final songId = mediaItem.extras?['songId'];
     final songPath = mediaItem.extras?['data'];
-    
+
     if (songId != null && songPath != null) {
       // Verificar si está en caché primero
       final cachedArtwork = _getCachedArtwork(songPath);
@@ -4776,7 +5035,7 @@ class _PlaylistListViewState extends State<_PlaylistListView> {
         // Si no está en cache, cargar de forma asíncrona
         _loadArtworkAsync(songId, songPath);
       }
-      
+
       // Si no está en caché, cargar desde la base de datos
       // print('🔄 PLAYLIST: Cargando carátula desde BD para: ${songPath.split('/').last}');
       return FutureBuilder<Uri?>(
@@ -4809,7 +5068,11 @@ class _PlaylistListViewState extends State<_PlaylistListView> {
       width: 50,
       height: 50,
       decoration: BoxDecoration(
-        color: isSystem ? Theme.of(context).colorScheme.secondaryContainer.withValues(alpha: 0.5) : Theme.of(context).colorScheme.surfaceContainer,
+        color: isSystem
+            ? Theme.of(
+                context,
+              ).colorScheme.secondaryContainer.withValues(alpha: 0.5)
+            : Theme.of(context).colorScheme.surfaceContainer,
         borderRadius: BorderRadius.circular(8),
       ),
       child: Icon(
@@ -4829,8 +5092,14 @@ class _PlaylistListViewState extends State<_PlaylistListView> {
           controller: _scrollController,
           shrinkWrap: true,
           padding: EdgeInsets.only(
-            top: 80 + MediaQuery.of(context).padding.top, // Reducir padding para evitar recorte de la primera canción
-            bottom: MediaQuery.of(context).padding.bottom, // Padding inferior para evitar que se oculte detrás de la barra de navegación
+            top:
+                80 +
+                MediaQuery.of(context)
+                    .padding
+                    .top, // Reducir padding para evitar recorte de la primera canción
+            bottom: MediaQuery.of(context)
+                .padding
+                .bottom, // Padding inferior para evitar que se oculte detrás de la barra de navegación
           ),
           itemCount: widget.queue.length,
           itemBuilder: (context, index) {
@@ -4840,11 +5109,11 @@ class _PlaylistListViewState extends State<_PlaylistListView> {
                 colorSchemeNotifier.value == AppColorScheme.amoled;
             final songId = item.extras?['songId'] ?? 0;
             final songPath = item.extras?['data'] ?? '';
-            
+
             // Agregar padding adicional al primer y último elemento para evitar recorte
             final isFirstItem = index == 0;
             final isLastItem = index == widget.queue.length - 1;
-            
+
             return Padding(
               padding: EdgeInsets.only(
                 top: isFirstItem ? 42.0 : 0.0,
@@ -4878,8 +5147,9 @@ class _PlaylistListViewState extends State<_PlaylistListView> {
                 selected: isCurrent,
                 selectedTileColor: isCurrent
                     ? (isAmoledTheme
-                        ? null
-                        : Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.8))
+                          ? null
+                          : Theme.of(context).colorScheme.primaryContainer
+                                .withValues(alpha: 0.8))
                     : null,
                 shape: isCurrent
                     ? RoundedRectangleBorder(
@@ -4894,7 +5164,7 @@ class _PlaylistListViewState extends State<_PlaylistListView> {
             );
           },
         ),
-        
+
         // Encabezado fijo en la parte superior con bordes redondeados
         Positioned(
           top: MediaQuery.of(context).padding.top, // Respeta la barra de estado
@@ -4930,7 +5200,9 @@ class _PlaylistListViewState extends State<_PlaylistListView> {
                         child: SizedBox(
                           width: 54,
                           height: 54,
-                          child: _buildCurrentSongArtwork(widget.currentMediaItem!),
+                          child: _buildCurrentSongArtwork(
+                            widget.currentMediaItem!,
+                          ),
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -4954,7 +5226,11 @@ class _PlaylistListViewState extends State<_PlaylistListView> {
                                   LocaleProvider.tr('unknown_artist'),
                               style: TextStyle(
                                 fontSize: 13,
-                                color: Theme.of(context).textTheme.bodyMedium?.color?.withValues(alpha: 1),
+                                color: Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.color
+                                    ?.withValues(alpha: 1),
                               ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
@@ -4965,26 +5241,32 @@ class _PlaylistListViewState extends State<_PlaylistListView> {
                       const SizedBox(width: 12),
                       // Ícono de aleatorio
                       InkWell(
-                        onTap: _isShuffling ? null : () async {
-                          if (widget.queue.isNotEmpty && !_isShuffling) {
-                            setState(() {
-                              _isShuffling = true;
-                            });
-                            
-                            final random = Random();
-                            final randomIndex = random.nextInt(widget.queue.length);
-                            audioHandler?.skipToQueueItem(randomIndex);
-                            
-                            // Delay de 500ms antes de permitir otro toque
-                            await Future.delayed(const Duration(milliseconds: 500));
-                            
-                            if (mounted) {
-                              setState(() {
-                                _isShuffling = false;
-                              });
-                            }
-                          }
-                        },
+                        onTap: _isShuffling
+                            ? null
+                            : () async {
+                                if (widget.queue.isNotEmpty && !_isShuffling) {
+                                  setState(() {
+                                    _isShuffling = true;
+                                  });
+
+                                  final random = Random();
+                                  final randomIndex = random.nextInt(
+                                    widget.queue.length,
+                                  );
+                                  audioHandler?.skipToQueueItem(randomIndex);
+
+                                  // Delay de 500ms antes de permitir otro toque
+                                  await Future.delayed(
+                                    const Duration(milliseconds: 500),
+                                  );
+
+                                  if (mounted) {
+                                    setState(() {
+                                      _isShuffling = false;
+                                    });
+                                  }
+                                }
+                              },
                         borderRadius: BorderRadius.circular(20),
                         child: Container(
                           padding: const EdgeInsets.all(8),
@@ -5044,7 +5326,7 @@ class _ArtworkListTileState extends State<ArtworkListTile> {
       setState(() => _artUri = widget.artUri);
       return;
     }
-    
+
     // Verificar si está en caché primero
     final cache = artworkCache;
     final cachedArtwork = cache[widget.songPath];
@@ -5053,7 +5335,7 @@ class _ArtworkListTileState extends State<ArtworkListTile> {
       if (mounted) setState(() => _artUri = cachedArtwork);
       return;
     }
-    
+
     // Si no está en caché, cargar desde la base de datos
     // print('🔄 ARTWORK LIST TILE: Cargando carátula desde BD para: ${widget.songPath.split('/').last}');
     final uri = await getOrCacheArtwork(widget.songId, widget.songPath);
@@ -5118,15 +5400,18 @@ class _ArtworkListTileState extends State<ArtworkListTile> {
       width: widget.size,
       height: widget.size,
       decoration: BoxDecoration(
-        color: isSystem ? Theme.of(context).colorScheme.secondaryContainer.withValues(alpha: 0.5) : Theme.of(context).colorScheme.surfaceContainer,
+        color: isSystem
+            ? Theme.of(
+                context,
+              ).colorScheme.secondaryContainer.withValues(alpha: 0.5)
+            : Theme.of(context).colorScheme.surfaceContainer,
         borderRadius: widget.borderRadius,
       ),
       child: Icon(
-        Icons.music_note, 
+        Icons.music_note,
         size: widget.size * 0.5,
         color: Theme.of(context).colorScheme.onSurface,
       ),
     );
   }
 }
-

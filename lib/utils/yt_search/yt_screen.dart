@@ -33,10 +33,18 @@ import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 Uint8List? decodeAndCropImage(Uint8List bytes) {
   final original = img.decodeImage(bytes);
   if (original != null) {
-    final minSide = original.width < original.height ? original.width : original.height;
+    final minSide = original.width < original.height
+        ? original.width
+        : original.height;
     final offsetX = (original.width - minSide) ~/ 2;
     final offsetY = (original.height - minSide) ~/ 2;
-    final square = img.copyCrop(original, x: offsetX, y: offsetY, width: minSide, height: minSide);
+    final square = img.copyCrop(
+      original,
+      x: offsetX,
+      y: offsetY,
+      width: minSide,
+      height: minSide,
+    );
     return Uint8List.fromList(img.encodeJpg(square));
   }
   return null;
@@ -50,21 +58,21 @@ Uint8List? decodeAndCropImageHQ(Uint8List bytes) {
     // Las franjas negras están arriba y abajo
     final width = original.width;
     final height = original.height;
-    
+
     // Calcular el área de contenido real (aproximadamente 75% del centro - menos agresivo)
     final contentHeight = (height * 0.75).round();
     final offsetY = (height - contentHeight) ~/ 2;
-    
+
     // Crear un cuadrado del área de contenido
     final minSide = width < contentHeight ? width : contentHeight;
     final offsetX = (width - minSide) ~/ 2;
-    
+
     final square = img.copyCrop(
-      original, 
-      x: offsetX, 
-      y: offsetY, 
-      width: minSide, 
-      height: minSide
+      original,
+      x: offsetX,
+      y: offsetY,
+      width: minSide,
+      height: minSide,
     );
     return Uint8List.fromList(img.encodeJpg(square));
   }
@@ -107,13 +115,13 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
   List<YtMusicResult> _playlistSongs = [];
   Map<String, dynamic>? _currentPlaylist;
   bool _loadingPlaylistSongs = false;
-  
+
   // Variables para manejar enlaces de YouTube
   bool _isUrlSearch = false;
   Video? _urlVideoResult;
   bool _loadingUrlVideo = false;
   String? _urlVideoError;
-  
+
   // Variables para manejar playlists de YouTube
   bool _isUrlPlaylistSearch = false;
   List<YtMusicResult> _urlPlaylistVideos = [];
@@ -239,21 +247,21 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
     if (_controller.text.trim().isEmpty) {
       return;
     }
-    
+
     // Verificar si es un enlace de playlist de YouTube
     if (_isYouTubePlaylistUrl(_controller.text)) {
       _focusNode.unfocus();
       await _processUrlPlaylist(_controller.text);
       return;
     }
-    
+
     // Verificar si es un enlace de video de YouTube
     if (_isYouTubeUrl(_controller.text)) {
       _focusNode.unfocus();
       await _processUrlVideo(_controller.text);
       return;
     }
-    
+
     // Salir de la vista expandida al hacer una nueva búsqueda
     if (_expandedCategory != null) {
       setState(() {
@@ -331,7 +339,13 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
       final albumFuture = searchAlbumsOnly(_controller.text);
       final playlistFuture = searchPlaylistsOnly(_controller.text);
       final artistFuture = searchArtists(_controller.text, limit: 10);
-      final results = await Future.wait([songFuture, videoFuture, albumFuture, playlistFuture, artistFuture]);
+      final results = await Future.wait([
+        songFuture,
+        videoFuture,
+        albumFuture,
+        playlistFuture,
+        artistFuture,
+      ]);
       if (!mounted) return;
       setState(() {
         _songResults = (results[0] as List).cast<YtMusicResult>();
@@ -377,7 +391,9 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
       ) {
         if (!mounted) return;
         setState(() {
-          final existingIds = _playlistResults.map((e) => e['browseId']).toSet();
+          final existingIds = _playlistResults
+              .map((e) => e['browseId'])
+              .toSet();
           final newOnes = morePlaylists
               .where((e) => !existingIds.contains(e['browseId']))
               .toList();
@@ -474,11 +490,17 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
   }
 
   // Función helper para manejar imágenes de red de forma segura
-  Widget _buildSafeNetworkImage(String? imageUrl, {double? width, double? height, BoxFit? fit, Widget? fallback}) {
+  Widget _buildSafeNetworkImage(
+    String? imageUrl, {
+    double? width,
+    double? height,
+    BoxFit? fit,
+    Widget? fallback,
+  }) {
     if (imageUrl == null || imageUrl.isEmpty) {
       return fallback ?? const Icon(Icons.music_note, size: 32);
     }
-    
+
     return Image.network(
       imageUrl,
       width: width,
@@ -500,7 +522,8 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
             child: CircularProgressIndicator(
               color: Colors.transparent,
               value: loadingProgress.expectedTotalBytes != null
-                  ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                  ? loadingProgress.cumulativeBytesLoaded /
+                        loadingProgress.expectedTotalBytes!
                   : null,
             ),
           ),
@@ -554,38 +577,39 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
   bool _isYouTubeUrl(String text) {
     final trimmedText = text.trim();
     return trimmedText.contains('youtube.com/watch') ||
-           trimmedText.contains('youtu.be/') ||
-           trimmedText.contains('youtube.com/embed/') ||
-           trimmedText.contains('youtube.com/v/') ||
-           trimmedText.contains('m.youtube.com/watch');
+        trimmedText.contains('youtu.be/') ||
+        trimmedText.contains('youtube.com/embed/') ||
+        trimmedText.contains('youtube.com/v/') ||
+        trimmedText.contains('m.youtube.com/watch');
   }
 
   // Función para detectar si el texto es un enlace de playlist de YouTube Music
   bool _isYouTubePlaylistUrl(String text) {
     final trimmedText = text.trim();
     return trimmedText.contains('music.youtube.com/playlist') ||
-           trimmedText.contains('youtube.com/playlist') ||
-           trimmedText.contains('playlist?list=') ||
-           (trimmedText.contains('youtube.com/watch') && trimmedText.contains('list='));
+        trimmedText.contains('youtube.com/playlist') ||
+        trimmedText.contains('playlist?list=') ||
+        (trimmedText.contains('youtube.com/watch') &&
+            trimmedText.contains('list='));
   }
 
   // Función para extraer el ID de playlist de la URL
   String? _extractPlaylistId(String url) {
     try {
       final uri = Uri.parse(url);
-      
+
       // Caso 1: URL directa de playlist
-      if (uri.pathSegments.isNotEmpty && 
+      if (uri.pathSegments.isNotEmpty &&
           uri.pathSegments[0] == "playlist" &&
           uri.queryParameters.containsKey("list")) {
         return uri.queryParameters['list'];
       }
-      
+
       // Caso 2: URL de video con parámetro list (playlist)
       if (uri.queryParameters.containsKey("list")) {
         return uri.queryParameters['list'];
       }
-      
+
       return null;
     } catch (e) {
       return null;
@@ -595,8 +619,10 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
   // Función mejorada para validar IDs de playlist (basada en Harmony Music)
   String _validatePlaylistId(String playlistId) {
     // Para playlists de canales (OLAK, OLAD, etc.), mantener el ID tal como está
-    if (playlistId.startsWith('OLAK') || playlistId.startsWith('OLAD') || 
-        playlistId.startsWith('OLAT') || playlistId.startsWith('OL')) {
+    if (playlistId.startsWith('OLAK') ||
+        playlistId.startsWith('OLAD') ||
+        playlistId.startsWith('OLAT') ||
+        playlistId.startsWith('OL')) {
       return playlistId;
     }
     // Para playlists regulares, remover prefijo VL si existe
@@ -615,7 +641,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
       final yt = YoutubeExplode();
       final video = await yt.videos.get(url);
       yt.close();
-      
+
       setState(() {
         _urlVideoResult = video;
         _loadingUrlVideo = false;
@@ -645,22 +671,23 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
 
       // Validar y normalizar el ID
       final validatedId = _validatePlaylistId(playlistId);
-      
+
       // Obtener información de la playlist
       final playlistInfo = await getPlaylistInfo(validatedId);
       if (playlistInfo == null) {
         throw Exception('No se pudo obtener información de la playlist');
       }
-      
+
       // Obtener todas las canciones de la playlist usando el servicio existente (sin límite)
-      final allSongs = await getPlaylistSongs(validatedId); // Sin límite para obtener todas
-      
+      final allSongs = await getPlaylistSongs(
+        validatedId,
+      ); // Sin límite para obtener todas
+
       setState(() {
         _urlPlaylistTitle = playlistInfo['title'];
         _urlPlaylistVideos = allSongs;
         _loadingUrlPlaylist = false;
       });
-      
     } catch (e) {
       setState(() {
         _urlPlaylistError = 'Error al procesar la playlist: ${e.toString()}';
@@ -672,9 +699,9 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
   // Función para construir la UI del resultado del video
   Widget _buildUrlVideoResult() {
     final isSystem = colorSchemeNotifier.value == AppColorScheme.system;
-    
+
     if (_urlVideoResult == null) return const SizedBox.shrink();
-    
+
     return SingleChildScrollView(
       child: Column(
         children: [
@@ -683,7 +710,11 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
             width: double.infinity,
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: isSystem ? Theme.of(context).colorScheme.secondaryContainer.withValues(alpha: 0.5) : Theme.of(context).colorScheme.surfaceContainer,
+              color: isSystem
+                  ? Theme.of(
+                      context,
+                    ).colorScheme.secondaryContainer.withValues(alpha: 0.5)
+                  : Theme.of(context).colorScheme.surfaceContainer,
               borderRadius: BorderRadius.circular(16),
               boxShadow: [
                 BoxShadow(
@@ -722,7 +753,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                       ),
                     ),
                     const SizedBox(width: 16),
-                    
+
                     // Información del video
                     Expanded(
                       child: Column(
@@ -739,9 +770,14 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            _urlVideoResult!.author.replaceFirst(RegExp(r' - Topic$'), ''),
+                            _urlVideoResult!.author.replaceFirst(
+                              RegExp(r' - Topic$'),
+                              '',
+                            ),
                             style: TextStyle(
-                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSurfaceVariant,
                               fontSize: 14,
                             ),
                             maxLines: 1,
@@ -752,9 +788,9 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                     ),
                   ],
                 ),
-                
+
                 const SizedBox(height: 16),
-                
+
                 // Botón de acción
                 SizedBox(
                   width: double.infinity,
@@ -767,9 +803,12 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                           context: context,
                           videoId: _urlVideoResult!.id.toString(),
                           title: _urlVideoResult!.title,
-                          artist: _urlVideoResult!.author.replaceFirst(RegExp(r' - Topic$'), ''),
+                          artist: _urlVideoResult!.author.replaceFirst(
+                            RegExp(r' - Topic$'),
+                            '',
+                          ),
                         );
-                        
+
                         // Mostrar mensaje de confirmación
                         _showMessage(
                           LocaleProvider.tr('success'),
@@ -796,184 +835,216 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
   // Función para construir la UI del resultado de la playlist
   Widget _buildUrlPlaylistResult() {
     final isSystem = colorSchemeNotifier.value == AppColorScheme.system;
-    
+
     if (_urlPlaylistVideos.isEmpty) return const SizedBox.shrink();
-    
+
     return StreamBuilder<MediaItem?>(
       stream: audioHandler?.mediaItem,
       builder: (context, snapshot) {
         final mediaItem = snapshot.data;
         // Calcular espacio inferior considerando overlay de reproducción
         double bottomSpace = mediaItem != null ? 100.0 : 0.0;
-        
+
         return Padding(
           padding: EdgeInsets.only(bottom: bottomSpace),
           child: SingleChildScrollView(
             child: Column(
-        children: [
-          // Resultado de la playlist
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: isSystem ? Theme.of(context).colorScheme.secondaryContainer.withValues(alpha: 0.5) : Theme.of(context).colorScheme.surfaceContainer,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withAlpha((0.05 * 255).toInt()),
-                  blurRadius: 6,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Título de la playlist
-                Row(
-                  children: [
-                    Icon(
-                      Icons.playlist_play,
-                      size: 24,
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        _urlPlaylistTitle ?? 'Playlist',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 18,
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    IconButton(
-                      onPressed: () async {
-                        final downloadQueue = DownloadQueue();
-                        for (final song in _urlPlaylistVideos) {
-                          await downloadQueue.addToQueue(
-                            context: context,
-                            videoId: song.videoId ?? '',
-                            title: song.title ?? 'Sin título',
-                            artist: song.artist?.replaceFirst(RegExp(r' - Topic$'), '') ?? 'Artista desconocido',
-                          );
-                        }
-                        _showMessage(
-                          LocaleProvider.tr('success'),
-                          '${_urlPlaylistVideos.length} canciones agregadas a la cola de descarga',
-                        );
-                      },
-                      icon: const Icon(Icons.download),
-                      style: IconButton.styleFrom(
-                        backgroundColor: Theme.of(context).colorScheme.primary,
-                        foregroundColor: Theme.of(context).colorScheme.onPrimary,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Text(
-                      '${_urlPlaylistVideos.length} canciones',
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        fontSize: 14,
-                      ),
-                    ),
-                    if (_loadingUrlPlaylist) ...[
-                      const SizedBox(width: 8),
-                      SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                            Theme.of(context).colorScheme.primary,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Cargando...',
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.primary,
-                          fontSize: 12,
-                        ),
+                // Resultado de la playlist
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: isSystem
+                        ? Theme.of(context).colorScheme.secondaryContainer
+                              .withValues(alpha: 0.5)
+                        : Theme.of(context).colorScheme.surfaceContainer,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withAlpha((0.05 * 255).toInt()),
+                        blurRadius: 6,
+                        offset: const Offset(0, 2),
                       ),
                     ],
-                  ],
-                ),
-                const SizedBox(height: 16),
-                
-                // Lista de canciones
-                ListView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: _urlPlaylistVideos.length,
-                  itemBuilder: (context, index) {
-                    final song = _urlPlaylistVideos[index];
-                    return ListTile(
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 0, vertical: 2),
-                      dense: true,
-                      leading: ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: Image.network(
-                          song.thumbUrl ?? 'https://img.youtube.com/vi/${song.videoId}/maxresdefault.jpg',
-                          width: 48,
-                          height: 48,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) {
-                            return Container(
-                              width: 48,
-                              height: 48,
-                              decoration: BoxDecoration(
-                                color: Colors.grey[300],
-                                borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Título de la playlist
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.playlist_play,
+                            size: 24,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              _urlPlaylistTitle ?? 'Playlist',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 18,
                               ),
-                              child: const Icon(Icons.music_video, size: 20),
-                            );
-                          },
-                        ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          IconButton(
+                            onPressed: () async {
+                              final downloadQueue = DownloadQueue();
+                              for (final song in _urlPlaylistVideos) {
+                                await downloadQueue.addToQueue(
+                                  context: context,
+                                  videoId: song.videoId ?? '',
+                                  title: song.title ?? 'Sin título',
+                                  artist:
+                                      song.artist?.replaceFirst(
+                                        RegExp(r' - Topic$'),
+                                        '',
+                                      ) ??
+                                      'Artista desconocido',
+                                );
+                              }
+                              _showMessage(
+                                LocaleProvider.tr('success'),
+                                '${_urlPlaylistVideos.length} ${LocaleProvider.tr('songs_added_to_queue')}',
+                              );
+                            },
+                            icon: const Icon(Icons.download),
+                            style: IconButton.styleFrom(
+                              backgroundColor: Theme.of(
+                                context,
+                              ).colorScheme.primary,
+                              foregroundColor: Theme.of(
+                                context,
+                              ).colorScheme.onPrimary,
+                            ),
+                          ),
+                        ],
                       ),
-                      title: Text(
-                        song.title ?? 'Sin título',
-                        style: const TextStyle(fontSize: 14),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Text(
+                            '${_urlPlaylistVideos.length} canciones',
+                            style: TextStyle(
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSurfaceVariant,
+                              fontSize: 14,
+                            ),
+                          ),
+                          if (_loadingUrlPlaylist) ...[
+                            const SizedBox(width: 8),
+                            SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  Theme.of(context).colorScheme.primary,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Cargando...',
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.primary,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
-                      subtitle: Text(
-                        song.artist?.replaceFirst(RegExp(r' - Topic$'), '') ?? 'Artista desconocido',
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                          fontSize: 12,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      trailing: IconButton(
-                        icon: const Icon(Icons.download),
-                        onPressed: () async {
-                          // Agregar a la cola de descargas
-                          final downloadQueue = DownloadQueue();
-                          await downloadQueue.addToQueue(
-                            context: context,
-                            videoId: song.videoId ?? '',
-                            title: song.title ?? 'Sin título',
-                            artist: song.artist?.replaceFirst(RegExp(r' - Topic$'), '') ?? 'Artista desconocido',
+                      const SizedBox(height: 16),
+
+                      // Lista de canciones
+                      ListView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        itemCount: _urlPlaylistVideos.length,
+                        itemBuilder: (context, index) {
+                          final song = _urlPlaylistVideos[index];
+                          return ListTile(
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 0,
+                              vertical: 2,
+                            ),
+                            dense: true,
+                            leading: ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: Image.network(
+                                song.thumbUrl ??
+                                    'https://img.youtube.com/vi/${song.videoId}/maxresdefault.jpg',
+                                width: 48,
+                                height: 48,
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) {
+                                  return Container(
+                                    width: 48,
+                                    height: 48,
+                                    decoration: BoxDecoration(
+                                      color: Colors.grey[300],
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: const Icon(
+                                      Icons.music_video,
+                                      size: 20,
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                            title: Text(
+                              song.title ?? 'Sin título',
+                              style: const TextStyle(fontSize: 14),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            subtitle: Text(
+                              song.artist?.replaceFirst(
+                                    RegExp(r' - Topic$'),
+                                    '',
+                                  ) ??
+                                  'Artista desconocido',
+                              style: TextStyle(
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurfaceVariant,
+                                fontSize: 12,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            trailing: IconButton(
+                              icon: const Icon(Icons.download),
+                              onPressed: () async {
+                                // Agregar a la cola de descargas
+                                final downloadQueue = DownloadQueue();
+                                await downloadQueue.addToQueue(
+                                  context: context,
+                                  videoId: song.videoId ?? '',
+                                  title: song.title ?? 'Sin título',
+                                  artist:
+                                      song.artist?.replaceFirst(
+                                        RegExp(r' - Topic$'),
+                                        '',
+                                      ) ??
+                                      'Artista desconocido',
+                                );
+                              },
+                            ),
                           );
                         },
                       ),
-                    );
-                  },
+                    ],
+                  ),
                 ),
               ],
-            ),
-          ),
-        ],
             ),
           ),
         );
@@ -1107,10 +1178,10 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
   Future<void> _incrementFolderUsage(String path) async {
     final prefs = await SharedPreferences.getInstance();
     Map<String, int> folderUsage = {};
-    
+
     // Obtener el mapa actual de uso de carpetas
     final usageList = prefs.getStringList('folder_usage') ?? [];
-    
+
     if (usageList.isNotEmpty) {
       // Convertir la lista de vuelta a un mapa
       for (int i = 0; i < usageList.length - 1; i += 2) {
@@ -1119,26 +1190,26 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
         folderUsage[path] = usage;
       }
     }
-    
+
     // Incrementar el contador para esta carpeta
     folderUsage[path] = (folderUsage[path] ?? 0) + 1;
-    
+
     // Guardar como lista de pares key-value
     final List<String> newUsageList = [];
     folderUsage.forEach((key, value) {
       newUsageList.add(key);
       newUsageList.add(value.toString());
     });
-    
+
     await prefs.setStringList('folder_usage', newUsageList);
   }
 
   Future<List<String>> _getMostUsedFolders() async {
     final prefs = await SharedPreferences.getInstance();
     final usageList = prefs.getStringList('folder_usage') ?? [];
-    
+
     if (usageList.isEmpty) return [];
-    
+
     // Convertir la lista de vuelta a un mapa
     Map<String, int> folderUsage = {};
     for (int i = 0; i < usageList.length - 1; i += 2) {
@@ -1146,11 +1217,11 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
       final usage = int.tryParse(usageList[i + 1]) ?? 0;
       folderUsage[path] = usage;
     }
-    
+
     // Ordenar por uso (mayor a menor) y tomar las 5 más usadas
     final sortedFolders = folderUsage.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
-    
+
     return sortedFolders.take(5).map((e) => e.key).toList();
   }
 
@@ -1203,9 +1274,9 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
 
   Future<void> _showFolderSelectionDialog() async {
     final commonFolders = await _getMostUsedFolders();
-    
+
     if (!mounted) return;
-    
+
     showDialog(
       context: context,
       builder: (context) {
@@ -1214,7 +1285,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
           builder: (context, colorScheme, child) {
             final isAmoled = colorScheme == AppColorScheme.amoled;
             final isDark = Theme.of(context).brightness == Brightness.dark;
-            
+
             return AlertDialog(
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
@@ -1222,7 +1293,12 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                     ? const BorderSide(color: Colors.white, width: 1)
                     : BorderSide.none,
               ),
-              title: TranslatedText('select_common_folder'),
+              title: Center(
+                child: Text(
+                  LocaleProvider.tr('select_common_folder'),
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
               content: SizedBox(
                 width: double.maxFinite,
                 child: Column(
@@ -1238,22 +1314,26 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                         ),
                       )
                     else
-                      ...commonFolders.map((folder) => ListTile(
-                        leading: const Icon(Icons.folder),
-                        title: Text(
-                          folder.split('/').last.isEmpty ? folder : folder.split('/').last,
-                          overflow: TextOverflow.ellipsis,
+                      ...commonFolders.map(
+                        (folder) => ListTile(
+                          leading: const Icon(Icons.folder),
+                          title: Text(
+                            folder.split('/').last.isEmpty
+                                ? folder
+                                : folder.split('/').last,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          subtitle: Text(
+                            formatFolderPath(folder),
+                            style: Theme.of(context).textTheme.bodySmall,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          onTap: () {
+                            Navigator.of(context).pop();
+                            _selectFolder(folder);
+                          },
                         ),
-                        subtitle: Text(
-                          formatFolderPath(folder),
-                          style: Theme.of(context).textTheme.bodySmall,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        onTap: () {
-                          Navigator.of(context).pop();
-                          _selectFolder(folder);
-                        },
-                      )),
+                      ),
                     if (commonFolders.isNotEmpty) SizedBox(height: 16),
                     // Botón para elegir otra carpeta con diseño especial
                     InkWell(
@@ -1273,7 +1353,9 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                           border: Border.all(
                             color: (isAmoled && isDark
                                 ? Colors.white.withValues(alpha: 0.4)
-                                : Theme.of(context).colorScheme.primary.withValues(alpha: 0.3)),
+                                : Theme.of(
+                                    context,
+                                  ).colorScheme.primary.withValues(alpha: 0.3)),
                             width: 2,
                           ),
                         ),
@@ -1285,7 +1367,8 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                 borderRadius: BorderRadius.circular(12),
                                 color: (isAmoled && isDark
                                     ? Colors.white.withValues(alpha: 0.2)
-                                    : Theme.of(context).colorScheme.primary.withValues(alpha: 0.1)),
+                                    : Theme.of(context).colorScheme.primary
+                                          .withValues(alpha: 0.1)),
                               ),
                               child: Icon(
                                 Icons.folder_open,
@@ -1418,9 +1501,14 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
       }
     }
     _clearSelection();
-    
+
     // Mostrar mensaje de confirmación
-    _showMessage(LocaleProvider.tr('success'), LocaleProvider.tr('download_started_for_elements').replaceAll('@count', items.length.toString()));
+    _showMessage(
+      LocaleProvider.tr('success'),
+      LocaleProvider.tr(
+        'download_started_for_elements',
+      ).replaceAll('@count', items.length.toString()),
+    );
   }
 
   Future<void> _loadMoreSongs() async {
@@ -1509,7 +1597,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
     final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final isSystem = colorSchemeNotifier.value == AppColorScheme.system;
-    
+
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -1554,21 +1642,28 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                           onPressed: () {
                             Navigator.of(context).push(
                               PageRouteBuilder(
-                                pageBuilder: (context, animation, secondaryAnimation) =>
-                                    const DownloadHistoryScreen(),
-                                transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                                  const begin = Offset(1.0, 0.0);
-                                  const end = Offset.zero;
-                                  const curve = Curves.ease;
-                                  final tween = Tween(
-                                    begin: begin,
-                                    end: end,
-                                  ).chain(CurveTween(curve: curve));
-                                  return SlideTransition(
-                                    position: animation.drive(tween),
-                                    child: child,
-                                  );
-                                },
+                                pageBuilder:
+                                    (context, animation, secondaryAnimation) =>
+                                        const DownloadHistoryScreen(),
+                                transitionsBuilder:
+                                    (
+                                      context,
+                                      animation,
+                                      secondaryAnimation,
+                                      child,
+                                    ) {
+                                      const begin = Offset(1.0, 0.0);
+                                      const end = Offset.zero;
+                                      const curve = Curves.ease;
+                                      final tween = Tween(
+                                        begin: begin,
+                                        end: end,
+                                      ).chain(CurveTween(curve: curve));
+                                      return SlideTransition(
+                                        position: animation.drive(tween),
+                                        child: child,
+                                      );
+                                    },
                               ),
                             );
                           },
@@ -1584,7 +1679,9 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                 color: Theme.of(context).colorScheme.primary,
                                 shape: BoxShape.circle,
                                 border: Border.all(
-                                  color: Theme.of(context).scaffoldBackgroundColor,
+                                  color: Theme.of(
+                                    context,
+                                  ).scaffoldBackgroundColor,
                                   width: 1.5,
                                 ),
                               ),
@@ -1619,15 +1716,95 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(16),
                               side: isAmoled && isDark
-                                  ? const BorderSide(color: Colors.white, width: 1)
+                                  ? const BorderSide(
+                                      color: Colors.white,
+                                      width: 1,
+                                    )
                                   : BorderSide.none,
                             ),
-                            title: TranslatedText('info'),
+                            title: Center(
+                              child: Text(
+                                LocaleProvider.tr('info'),
+                                style: TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                            ),
                             content: TranslatedText('search_music_in_ytm'),
                             actions: [
-                              TextButton(
-                                onPressed: () => Navigator.of(context).pop(),
-                                child: TranslatedText('ok'),
+                              SizedBox(height: 16),
+                              InkWell(
+                                onTap: () => Navigator.of(context).pop(),
+                                borderRadius: BorderRadius.circular(16),
+                                child: Container(
+                                  width: double.infinity,
+                                  padding: EdgeInsets.all(16),
+                                  decoration: BoxDecoration(
+                                    color: isAmoled && isDark
+                                        ? Colors.white.withValues(alpha: 0.2)
+                                        : Theme.of(
+                                            context,
+                                          ).colorScheme.primaryContainer,
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(
+                                      color: isAmoled && isDark
+                                          ? Colors.white.withValues(alpha: 0.4)
+                                          : Theme.of(context)
+                                                .colorScheme
+                                                .primary
+                                                .withValues(alpha: 0.3),
+                                      width: 2,
+                                    ),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        padding: EdgeInsets.all(8),
+                                        decoration: BoxDecoration(
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                          color: isAmoled && isDark
+                                              ? Colors.white.withValues(
+                                                  alpha: 0.2,
+                                                )
+                                              : Theme.of(context)
+                                                    .colorScheme
+                                                    .primary
+                                                    .withValues(alpha: 0.1),
+                                        ),
+                                        child: Icon(
+                                          Icons.check_circle,
+                                          size: 30,
+                                          color: isAmoled && isDark
+                                              ? Colors.white
+                                              : Theme.of(
+                                                  context,
+                                                ).colorScheme.primary,
+                                        ),
+                                      ),
+                                      SizedBox(width: 12),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              LocaleProvider.tr('ok'),
+                                              style: TextStyle(
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.w600,
+                                                color: isAmoled && isDark
+                                                    ? Colors.white
+                                                    : Theme.of(
+                                                        context,
+                                                      ).colorScheme.primary,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               ),
                             ],
                           ),
@@ -1746,16 +1923,17 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                             child: ValueListenableBuilder<AppColorScheme>(
                               valueListenable: colorSchemeNotifier,
                               builder: (context, colorScheme, child) {
-                                
                                 return Material(
                                   borderRadius: BorderRadius.circular(8),
                                   color: colorScheme == AppColorScheme.amoled
-                                          ? Colors.white
-                                          : Theme.of(context).brightness == Brightness.light
-                                              ? Theme.of(context).colorScheme.primary
-                                              : colorScheme == AppColorScheme.system
-                                                ? Theme.of(context).colorScheme.primary
-                                                : Theme.of(context).colorScheme.primaryContainer,
+                                      ? Colors.white
+                                      : Theme.of(context).brightness ==
+                                            Brightness.light
+                                      ? Theme.of(context)
+                                            .colorScheme
+                                            .onPrimaryContainer
+                                            .withValues(alpha: 0.7)
+                                      : Theme.of(context).colorScheme.primary,
                                   child: InkWell(
                                     borderRadius: BorderRadius.circular(8),
                                     onTap: _loading ? null : _search,
@@ -1766,13 +1944,20 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                           message: LocaleProvider.tr('search'),
                                           child: Icon(
                                             Icons.search,
-                                            color: colorScheme == AppColorScheme.amoled
-                                                    ? Colors.black
-                                                    : Theme.of(context).brightness == Brightness.light
-                                                      ? Theme.of(context).colorScheme.onPrimary
-                                                      : colorScheme == AppColorScheme.system
-                                                        ? Theme.of(context).colorScheme.onPrimary
-                                                        : Theme.of(context).colorScheme.onPrimaryContainer,
+                                            color:
+                                                colorScheme ==
+                                                    AppColorScheme.amoled
+                                                ? Colors.black
+                                                : Theme.of(
+                                                        context,
+                                                      ).brightness ==
+                                                      Brightness.light
+                                                ? Theme.of(
+                                                    context,
+                                                  ).colorScheme.onPrimary
+                                                : Theme.of(
+                                                    context,
+                                                  ).colorScheme.onPrimary,
                                           ),
                                         );
                                       },
@@ -1817,14 +2002,13 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                           ),
                         )
                       else if (_isUrlSearch && _urlVideoResult != null)
-                        Expanded(
-                          child: _buildUrlVideoResult(),
-                        )
+                        Expanded(child: _buildUrlVideoResult())
                       else if (_isUrlPlaylistSearch && _loadingUrlPlaylist)
                         const Expanded(
                           child: Center(child: CircularProgressIndicator()),
                         )
-                      else if (_isUrlPlaylistSearch && _urlPlaylistError != null)
+                      else if (_isUrlPlaylistSearch &&
+                          _urlPlaylistError != null)
                         Expanded(
                           child: Center(
                             child: Column(
@@ -1848,10 +2032,9 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                             ),
                           ),
                         )
-                      else if (_isUrlPlaylistSearch && _urlPlaylistVideos.isNotEmpty)
-                        Expanded(
-                          child: _buildUrlPlaylistResult(),
-                        )
+                      else if (_isUrlPlaylistSearch &&
+                          _urlPlaylistVideos.isNotEmpty)
+                        Expanded(child: _buildUrlPlaylistResult())
                       else if (_loading)
                         const Expanded(
                           child: Center(child: CircularProgressIndicator()),
@@ -1959,12 +2142,22 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                       Row(
                                         children: [
                                           IconButton(
+                                            constraints: const BoxConstraints(
+                                              minWidth: 40,
+                                              minHeight: 40,
+                                              maxWidth: 40,
+                                              maxHeight: 40,
+                                            ),
+                                            padding: EdgeInsets.zero,
                                             icon: Container(
                                               width: 40,
                                               height: 40,
                                               decoration: BoxDecoration(
                                                 shape: BoxShape.circle,
-                                                color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
+                                                color: Theme.of(context)
+                                                    .colorScheme
+                                                    .primary
+                                                    .withValues(alpha: 0.08),
                                               ),
                                               child: const Icon(
                                                 Icons.arrow_back,
@@ -2063,13 +2256,11 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                               const EdgeInsets.all(
                                                                 24,
                                                               ),
-                                                          child:
-                                                              YtPreviewPlayer(
-                                                                results:
-                                                                    _songResults,
-                                                                currentIndex:
-                                                                    idx,
-                                                              ),
+                                                          child: YtPreviewPlayer(
+                                                            results:
+                                                                _songResults,
+                                                            currentIndex: idx,
+                                                          ),
                                                         ),
                                                       );
                                                     },
@@ -2137,10 +2328,26 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                                   width: 56,
                                                                   height: 56,
                                                                   decoration: BoxDecoration(
-                                                                    color: isSystem ? Theme.of(context).colorScheme.secondaryContainer : Theme.of(context).colorScheme.surfaceContainer,
-                                                                    borderRadius: BorderRadius.circular(8),
+                                                                    color:
+                                                                        isSystem
+                                                                        ? Theme.of(
+                                                                            context,
+                                                                          ).colorScheme.secondaryContainer
+                                                                        : Theme.of(
+                                                                            context,
+                                                                          ).colorScheme.surfaceContainer,
+                                                                    borderRadius:
+                                                                        BorderRadius.circular(
+                                                                          8,
+                                                                        ),
                                                                   ),
-                                                                  child: const Icon(Icons.music_note, size: 24, color: Colors.grey),
+                                                                  child: const Icon(
+                                                                    Icons
+                                                                        .music_note,
+                                                                    size: 24,
+                                                                    color: Colors
+                                                                        .grey,
+                                                                  ),
                                                                 ),
                                                               )
                                                             : Container(
@@ -2214,12 +2421,22 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                       Row(
                                         children: [
                                           IconButton(
+                                            constraints: const BoxConstraints(
+                                              minWidth: 40,
+                                              minHeight: 40,
+                                              maxWidth: 40,
+                                              maxHeight: 40,
+                                            ),
+                                            padding: EdgeInsets.zero,
                                             icon: Container(
                                               width: 40,
                                               height: 40,
                                               decoration: BoxDecoration(
                                                 shape: BoxShape.circle,
-                                                color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
+                                                color: Theme.of(context)
+                                                    .colorScheme
+                                                    .primary
+                                                    .withValues(alpha: 0.08),
                                               ),
                                               child: const Icon(
                                                 Icons.arrow_back,
@@ -2390,10 +2607,24 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                                   width: 56,
                                                                   height: 56,
                                                                   decoration: BoxDecoration(
-                                                                    color: isSystem ? Theme.of(context).colorScheme.secondaryContainer : Theme.of(context).colorScheme.surfaceContainer,
-                                                                    borderRadius: BorderRadius.circular(8),
+                                                                    color:
+                                                                        isSystem
+                                                                        ? Theme.of(
+                                                                            context,
+                                                                          ).colorScheme.secondaryContainer
+                                                                        : Theme.of(
+                                                                            context,
+                                                                          ).colorScheme.surfaceContainer,
+                                                                    borderRadius:
+                                                                        BorderRadius.circular(
+                                                                          8,
+                                                                        ),
                                                                   ),
-                                                                  child: const Icon(Icons.music_note, size: 24),
+                                                                  child: const Icon(
+                                                                    Icons
+                                                                        .music_note,
+                                                                    size: 24,
+                                                                  ),
                                                                 ),
                                                               )
                                                             : Container(
@@ -2468,12 +2699,22 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                       Row(
                                         children: [
                                           IconButton(
+                                            constraints: const BoxConstraints(
+                                              minWidth: 40,
+                                              minHeight: 40,
+                                              maxWidth: 40,
+                                              maxHeight: 40,
+                                            ),
+                                            padding: EdgeInsets.zero,
                                             icon: Container(
                                               width: 40,
                                               height: 40,
                                               decoration: BoxDecoration(
                                                 shape: BoxShape.circle,
-                                                color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
+                                                color: Theme.of(context)
+                                                    .colorScheme
+                                                    .primary
+                                                    .withValues(alpha: 0.08),
                                               ),
                                               child: const Icon(
                                                 Icons.arrow_back,
@@ -2511,10 +2752,22 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                       width: 40,
                                                       height: 40,
                                                       decoration: BoxDecoration(
-                                                        color: isSystem ? Theme.of(context).colorScheme.secondaryContainer : Theme.of(context).colorScheme.surfaceContainer,
-                                                        borderRadius: BorderRadius.circular(8),
+                                                        color: isSystem
+                                                            ? Theme.of(context)
+                                                                  .colorScheme
+                                                                  .secondaryContainer
+                                                            : Theme.of(context)
+                                                                  .colorScheme
+                                                                  .surfaceContainer,
+                                                        borderRadius:
+                                                            BorderRadius.circular(
+                                                              8,
+                                                            ),
                                                       ),
-                                                      child: const Icon(Icons.music_note, size: 20),
+                                                      child: const Icon(
+                                                        Icons.music_note,
+                                                        size: 20,
+                                                      ),
                                                     ),
                                                   ),
                                                 ),
@@ -2525,12 +2778,14 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                     CrossAxisAlignment.start,
                                                 children: [
                                                   Text(
-                                                    _currentAlbum!['title'] ?? '',
+                                                    _currentAlbum!['title'] ??
+                                                        '',
                                                     style: Theme.of(
                                                       context,
                                                     ).textTheme.titleMedium,
                                                     maxLines: 1,
-                                                    overflow: TextOverflow.ellipsis,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
                                                   ),
                                                   Text(
                                                     _currentAlbum!['artist'] ??
@@ -2539,16 +2794,56 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                       context,
                                                     ).textTheme.bodySmall,
                                                     maxLines: 1,
-                                                    overflow: TextOverflow.ellipsis,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
                                                   ),
                                                 ],
                                               ),
                                             ),
-                                            const SizedBox(width: 2),
-                                            const Icon(
-                                              Icons.arrow_forward_ios,
-                                              size: 16,
-                                              color: Colors.transparent,
+                                            const SizedBox(width: 8),
+                                            IconButton.filled(
+                                              icon: Icon(
+                                                Icons.download,
+                                                size: 24,
+                                                color: isAmoled && isDark
+                                                    ? Colors.black
+                                                    : null,
+                                              ),
+                                              tooltip: LocaleProvider.tr(
+                                                'download_entire_album',
+                                              ),
+                                              onPressed: () async {
+                                                if (_albumSongs.isNotEmpty) {
+                                                  final downloadQueue =
+                                                      DownloadQueue();
+                                                  for (final song
+                                                      in _albumSongs) {
+                                                    await downloadQueue.addToQueue(
+                                                      context: context,
+                                                      videoId:
+                                                          song.videoId ?? '',
+                                                      title:
+                                                          song.title ??
+                                                          'Sin título',
+                                                      artist:
+                                                          song.artist
+                                                              ?.replaceFirst(
+                                                                RegExp(
+                                                                  r' - Topic$',
+                                                                ),
+                                                                '',
+                                                              ) ??
+                                                          'Artista desconocido',
+                                                    );
+                                                  }
+                                                  _showMessage(
+                                                    LocaleProvider.tr(
+                                                      'success',
+                                                    ),
+                                                    '${_albumSongs.length} ${LocaleProvider.tr('songs_added_to_queue')}',
+                                                  );
+                                                }
+                                              },
                                             ),
                                           ],
                                         ],
@@ -2557,8 +2852,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                       if (_loadingAlbumSongs)
                                         const Expanded(
                                           child: Center(
-                                            child: CircularProgressIndicator(
-                                            ),
+                                            child: CircularProgressIndicator(),
                                           ),
                                         )
                                       else if (_albumSongs.isEmpty)
@@ -2722,10 +3016,24 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                                   width: 56,
                                                                   height: 56,
                                                                   decoration: BoxDecoration(
-                                                                    color: isSystem ? Theme.of(context).colorScheme.secondaryContainer : Theme.of(context).colorScheme.surfaceContainer,
-                                                                    borderRadius: BorderRadius.circular(8),
+                                                                    color:
+                                                                        isSystem
+                                                                        ? Theme.of(
+                                                                            context,
+                                                                          ).colorScheme.secondaryContainer
+                                                                        : Theme.of(
+                                                                            context,
+                                                                          ).colorScheme.surfaceContainer,
+                                                                    borderRadius:
+                                                                        BorderRadius.circular(
+                                                                          8,
+                                                                        ),
                                                                   ),
-                                                                  child: const Icon(Icons.music_note, size: 24),
+                                                                  child: const Icon(
+                                                                    Icons
+                                                                        .music_note,
+                                                                    size: 24,
+                                                                  ),
                                                                 ),
                                                               )
                                                             : (_currentAlbum !=
@@ -2745,10 +3053,19 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                                   width: 56,
                                                                   height: 56,
                                                                   decoration: BoxDecoration(
-                                                                    color: Theme.of(context).colorScheme.surfaceContainer,
-                                                                    borderRadius: BorderRadius.circular(8),
+                                                                    color: Theme.of(
+                                                                      context,
+                                                                    ).colorScheme.surfaceContainer,
+                                                                    borderRadius:
+                                                                        BorderRadius.circular(
+                                                                          8,
+                                                                        ),
                                                                   ),
-                                                                  child: const Icon(Icons.music_note, size: 24),
+                                                                  child: const Icon(
+                                                                    Icons
+                                                                        .music_note,
+                                                                    size: 24,
+                                                                  ),
                                                                 ),
                                                               )
                                                             : Container(
@@ -2826,12 +3143,22 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                       Row(
                                         children: [
                                           IconButton(
+                                            constraints: const BoxConstraints(
+                                              minWidth: 40,
+                                              minHeight: 40,
+                                              maxWidth: 40,
+                                              maxHeight: 40,
+                                            ),
+                                            padding: EdgeInsets.zero,
                                             icon: Container(
                                               width: 40,
                                               height: 40,
                                               decoration: BoxDecoration(
                                                 shape: BoxShape.circle,
-                                                color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
+                                                color: Theme.of(context)
+                                                    .colorScheme
+                                                    .primary
+                                                    .withValues(alpha: 0.08),
                                               ),
                                               child: const Icon(
                                                 Icons.arrow_back,
@@ -2869,10 +3196,22 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                       width: 40,
                                                       height: 40,
                                                       decoration: BoxDecoration(
-                                                        color: isSystem ? Theme.of(context).colorScheme.secondaryContainer : Theme.of(context).colorScheme.surfaceContainer,
-                                                        borderRadius: BorderRadius.circular(8),
+                                                        color: isSystem
+                                                            ? Theme.of(context)
+                                                                  .colorScheme
+                                                                  .secondaryContainer
+                                                            : Theme.of(context)
+                                                                  .colorScheme
+                                                                  .surfaceContainer,
+                                                        borderRadius:
+                                                            BorderRadius.circular(
+                                                              8,
+                                                            ),
                                                       ),
-                                                      child: const Icon(Icons.music_note, size: 20),
+                                                      child: const Icon(
+                                                        Icons.music_note,
+                                                        size: 20,
+                                                      ),
                                                     ),
                                                   ),
                                                 ),
@@ -2883,22 +3222,62 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                     CrossAxisAlignment.start,
                                                 children: [
                                                   Text(
-                                                    _currentPlaylist!['title'] ?? '',
+                                                    _currentPlaylist!['title'] ??
+                                                        '',
                                                     style: Theme.of(
                                                       context,
                                                     ).textTheme.titleMedium,
                                                     maxLines: 2,
-                                                    overflow: TextOverflow.ellipsis,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
                                                   ),
-
                                                 ],
                                               ),
                                             ),
-                                            const SizedBox(width: 2),
-                                            const Icon(
-                                              Icons.arrow_forward_ios,
-                                              size: 16,
-                                              color: Colors.transparent,
+                                            const SizedBox(width: 8),
+                                            IconButton.filled(
+                                              icon: Icon(
+                                                Icons.download,
+                                                size: 24,
+                                                color: isAmoled && isDark
+                                                    ? Colors.black
+                                                    : null,
+                                              ),
+                                              tooltip: LocaleProvider.tr(
+                                                'download_entire_playlist',
+                                              ),
+                                              onPressed: () async {
+                                                if (_playlistSongs.isNotEmpty) {
+                                                  final downloadQueue =
+                                                      DownloadQueue();
+                                                  for (final song
+                                                      in _playlistSongs) {
+                                                    await downloadQueue.addToQueue(
+                                                      context: context,
+                                                      videoId:
+                                                          song.videoId ?? '',
+                                                      title:
+                                                          song.title ??
+                                                          'Sin título',
+                                                      artist:
+                                                          song.artist
+                                                              ?.replaceFirst(
+                                                                RegExp(
+                                                                  r' - Topic$',
+                                                                ),
+                                                                '',
+                                                              ) ??
+                                                          'Artista desconocido',
+                                                    );
+                                                  }
+                                                  _showMessage(
+                                                    LocaleProvider.tr(
+                                                      'success',
+                                                    ),
+                                                    '${_playlistSongs.length} ${LocaleProvider.tr('songs_added_to_queue')}',
+                                                  );
+                                                }
+                                              },
                                             ),
                                           ],
                                         ],
@@ -2945,7 +3324,8 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                       );
                                                       if (_selectedIndexes
                                                           .isEmpty) {
-                                                        _isSelectionMode = false;
+                                                        _isSelectionMode =
+                                                            false;
                                                       }
                                                     } else {
                                                       _selectedIndexes.add(key);
@@ -2982,18 +3362,19 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                       shape: const RoundedRectangleBorder(
                                                         borderRadius:
                                                             BorderRadius.vertical(
-                                                          top: Radius.circular(
-                                                            16,
-                                                          ),
-                                                        ),
+                                                              top:
+                                                                  Radius.circular(
+                                                                    16,
+                                                                  ),
+                                                            ),
                                                       ),
                                                       builder: (context) {
                                                         return SafeArea(
                                                           child: Padding(
                                                             padding:
                                                                 const EdgeInsets.all(
-                                                              24,
-                                                            ),
+                                                                  24,
+                                                                ),
                                                             child: YtPreviewPlayer(
                                                               results:
                                                                   _playlistSongs,
@@ -3001,7 +3382,9 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                               fallbackThumbUrl:
                                                                   _currentPlaylist?['thumbUrl'],
                                                               fallbackArtist:
-                                                                  LocaleProvider.tr('artist_unknown'),
+                                                                  LocaleProvider.tr(
+                                                                    'artist_unknown',
+                                                                  ),
                                                             ),
                                                           ),
                                                         );
@@ -3016,9 +3399,9 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                   child: ListTile(
                                                     contentPadding:
                                                         const EdgeInsets.symmetric(
-                                                      horizontal: 0,
-                                                      vertical: 4,
-                                                    ),
+                                                          horizontal: 0,
+                                                          vertical: 4,
+                                                        ),
                                                     leading: Row(
                                                       mainAxisSize:
                                                           MainAxisSize.min,
@@ -3041,8 +3424,8 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                                 } else {
                                                                   _selectedIndexes
                                                                       .remove(
-                                                                    key,
-                                                                  );
+                                                                        key,
+                                                                      );
                                                                   if (_selectedIndexes
                                                                       .isEmpty) {
                                                                     _isSelectionMode =
@@ -3055,9 +3438,10 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                         ClipRRect(
                                                           borderRadius:
                                                               BorderRadius.circular(
-                                                            8,
-                                                          ),
-                                                          child: item.thumbUrl !=
+                                                                8,
+                                                              ),
+                                                          child:
+                                                              item.thumbUrl !=
                                                                   null
                                                               ? _buildSafeNetworkImage(
                                                                   item.thumbUrl!,
@@ -3067,45 +3451,59 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                                       .cover,
                                                                 )
                                                               : (_currentPlaylist !=
-                                                                      null &&
-                                                                  _currentPlaylist!['thumbUrl'] !=
-                                                                      null &&
-                                                                  (_currentPlaylist!['thumbUrl']
-                                                                          as String)
-                                                                      .isNotEmpty)
-                                                            ? _buildSafeNetworkImage(
-                                                                _currentPlaylist!['thumbUrl'],
-                                                                width: 56,
-                                                                height: 56,
-                                                                fit: BoxFit
-                                                                    .cover,
-                                                                fallback: Container(
+                                                                        null &&
+                                                                    _currentPlaylist!['thumbUrl'] !=
+                                                                        null &&
+                                                                    (_currentPlaylist!['thumbUrl']
+                                                                            as String)
+                                                                        .isNotEmpty)
+                                                              ? _buildSafeNetworkImage(
+                                                                  _currentPlaylist!['thumbUrl'],
+                                                                  width: 56,
+                                                                  height: 56,
+                                                                  fit: BoxFit
+                                                                      .cover,
+                                                                  fallback: Container(
+                                                                    width: 56,
+                                                                    height: 56,
+                                                                    decoration: BoxDecoration(
+                                                                      color:
+                                                                          isSystem
+                                                                          ? Theme.of(
+                                                                              context,
+                                                                            ).colorScheme.secondaryContainer
+                                                                          : Theme.of(
+                                                                              context,
+                                                                            ).colorScheme.surfaceContainer,
+                                                                      borderRadius:
+                                                                          BorderRadius.circular(
+                                                                            8,
+                                                                          ),
+                                                                    ),
+                                                                    child: const Icon(
+                                                                      Icons
+                                                                          .music_note,
+                                                                      size: 24,
+                                                                    ),
+                                                                  ),
+                                                                )
+                                                              : Container(
                                                                   width: 56,
                                                                   height: 56,
                                                                   decoration: BoxDecoration(
-                                                                    color: isSystem ? Theme.of(context).colorScheme.secondaryContainer : Theme.of(context).colorScheme.surfaceContainer,
-                                                                    borderRadius: BorderRadius.circular(8),
+                                                                    color: Colors
+                                                                        .grey[300],
+                                                                    borderRadius:
+                                                                        BorderRadius.circular(
+                                                                          12,
+                                                                        ),
                                                                   ),
-                                                                  child: const Icon(Icons.music_note, size: 24),
-                                                                ),
-                                                              )
-                                                            : Container(
-                                                                width: 56,
-                                                                height: 56,
-                                                                decoration: BoxDecoration(
-                                                                  color: Colors
-                                                                      .grey[300],
-                                                                  borderRadius:
-                                                                      BorderRadius.circular(
-                                                                    12,
+                                                                  child: const Icon(
+                                                                    Icons
+                                                                        .music_note,
+                                                                    size: 32,
                                                                   ),
                                                                 ),
-                                                                child: const Icon(
-                                                                  Icons
-                                                                      .music_note,
-                                                                  size: 32,
-                                                                ),
-                                                              ),
                                                         ),
                                                       ],
                                                     ),
@@ -3135,9 +3533,10 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                       icon: const Icon(
                                                         Icons.link,
                                                       ),
-                                                      tooltip: LocaleProvider.tr(
-                                                        'copy_link',
-                                                      ),
+                                                      tooltip:
+                                                          LocaleProvider.tr(
+                                                            'copy_link',
+                                                          ),
                                                       onPressed: () {
                                                         Clipboard.setData(
                                                           ClipboardData(
@@ -3164,12 +3563,22 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                       Row(
                                         children: [
                                           IconButton(
+                                            constraints: const BoxConstraints(
+                                              minWidth: 40,
+                                              minHeight: 40,
+                                              maxWidth: 40,
+                                              maxHeight: 40,
+                                            ),
+                                            padding: EdgeInsets.zero,
                                             icon: Container(
                                               width: 40,
                                               height: 40,
                                               decoration: BoxDecoration(
                                                 shape: BoxShape.circle,
-                                                color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
+                                                color: Theme.of(context)
+                                                    .colorScheme
+                                                    .primary
+                                                    .withValues(alpha: 0.08),
                                               ),
                                               child: const Icon(
                                                 Icons.arrow_back,
@@ -3200,7 +3609,8 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                               (_loadingMorePlaylists ? 1 : 0),
                                           itemBuilder: (context, idx) {
                                             if (_loadingMorePlaylists &&
-                                                idx == _playlistResults.length) {
+                                                idx ==
+                                                    _playlistResults.length) {
                                               return Container(
                                                 padding: const EdgeInsets.all(
                                                   16,
@@ -3228,19 +3638,19 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                 ),
                                               );
                                             }
-                                            final playlist = _playlistResults[idx];
+                                            final playlist =
+                                                _playlistResults[idx];
                                             return ListTile(
                                               contentPadding:
                                                   const EdgeInsets.symmetric(
-                                                horizontal: 0,
-                                                vertical: 10
-                                              ),
+                                                    horizontal: 0,
+                                                    vertical: 10,
+                                                  ),
                                               leading: ClipRRect(
                                                 borderRadius:
-                                                    BorderRadius.circular(
-                                                  8,
-                                                ),
-                                                child: playlist['thumbUrl'] != null
+                                                    BorderRadius.circular(8),
+                                                child:
+                                                    playlist['thumbUrl'] != null
                                                     ? _buildSafeNetworkImage(
                                                         playlist['thumbUrl']!,
                                                         width: 56,
@@ -3251,11 +3661,12 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                         width: 56,
                                                         height: 56,
                                                         decoration: BoxDecoration(
-                                                          color: Colors.grey[300],
+                                                          color:
+                                                              Colors.grey[300],
                                                           borderRadius:
                                                               BorderRadius.circular(
-                                                            12,
-                                                          ),
+                                                                12,
+                                                              ),
                                                         ),
                                                         child: const Icon(
                                                           Icons.playlist_play,
@@ -3265,43 +3676,48 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                       ),
                                               ),
                                               title: Text(
-                                                playlist['title'] ?? 
-                                                    LocaleProvider.tr('title_unknown'),
+                                                playlist['title'] ??
+                                                    LocaleProvider.tr(
+                                                      'title_unknown',
+                                                    ),
                                                 maxLines: 2,
                                                 overflow: TextOverflow.ellipsis,
                                               ),
 
                                               trailing: IconButton(
-                                                icon: const Icon(
-                                                  Icons.link,
-                                                ),
+                                                icon: const Icon(Icons.link),
                                                 tooltip: LocaleProvider.tr(
                                                   'copy_link',
                                                 ),
                                                 onPressed: () {
                                                   Clipboard.setData(
                                                     ClipboardData(
-                                                      text: 'https://music.youtube.com/playlist?list=${playlist['browseId']}',
+                                                      text:
+                                                          'https://music.youtube.com/playlist?list=${playlist['browseId']}',
                                                     ),
                                                   );
                                                 },
                                               ),
                                               onTap: () async {
-                                                if (playlist['browseId'] == null) {
+                                                if (playlist['browseId'] ==
+                                                    null) {
                                                   return;
                                                 }
                                                 setState(() {
-                                                  _expandedCategory = 'playlist';
+                                                  _expandedCategory =
+                                                      'playlist';
                                                   _loadingPlaylistSongs = true;
                                                   _playlistSongs = [];
                                                   _currentPlaylist = {
                                                     'title': playlist['title'],
-                                                    'thumbUrl': playlist['thumbUrl'],
+                                                    'thumbUrl':
+                                                        playlist['thumbUrl'],
                                                   };
                                                 });
-                                                final songs = await getPlaylistSongs(
-                                                  playlist['browseId']!,
-                                                );
+                                                final songs =
+                                                    await getPlaylistSongs(
+                                                      playlist['browseId']!,
+                                                    );
                                                 if (!mounted) return;
                                                 setState(() {
                                                   _playlistSongs = songs;
@@ -3327,116 +3743,247 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                             Padding(
                                               padding:
                                                   const EdgeInsets.symmetric(
-                                                vertical: 4,
-                                              ),
+                                                    vertical: 4,
+                                                  ),
                                               child: Text(
                                                 LocaleProvider.tr('artists'),
                                                 style: Theme.of(context)
                                                     .textTheme
                                                     .titleMedium
-                                                    ?.copyWith(
-                                                      fontSize: 20,
-                                                    ),
+                                                    ?.copyWith(fontSize: 20),
                                               ),
                                             ),
                                             const SizedBox(height: 8),
                                             Column(
-                                              children: _artistResults.take(3).map((artist) {
-                                                final artistName = artist['name'] ?? 'Artista desconocido';
-                                                final thumbUrl = artist['thumbUrl'];
-                                                final browseId = artist['browseId'];
+                                              children: _artistResults.take(3).map((
+                                                artist,
+                                              ) {
+                                                final artistName =
+                                                    artist['name'] ??
+                                                    'Artista desconocido';
+                                                final thumbUrl =
+                                                    artist['thumbUrl'];
+                                                final browseId =
+                                                    artist['browseId'];
                                                 return GestureDetector(
                                                   onTap: () {
                                                     // print('🚀 Navegando a artista: $artistName con browseId: $browseId');
                                                     Navigator.of(context).push(
                                                       PageRouteBuilder(
-                                                        settings: const RouteSettings(name: '/artist'),
-                                                        pageBuilder: (context, animation, secondaryAnimation) =>
-                                                            ArtistScreen(artistName: artistName, browseId: browseId),
-                                                        transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                                                          const begin = Offset(1.0, 0.0);
-                                                          const end = Offset.zero;
-                                                          const curve = Curves.easeInOutCubic;
-                                                          var tween = Tween(begin: begin, end: end).chain(
-                                                            CurveTween(curve: curve),
-                                                          );
-                                                          return SlideTransition(
-                                                            position: animation.drive(tween),
-                                                            child: child,
-                                                          );
-                                                        },
-                                                        transitionDuration: const Duration(milliseconds: 300),
+                                                        settings:
+                                                            const RouteSettings(
+                                                              name: '/artist',
+                                                            ),
+                                                        pageBuilder:
+                                                            (
+                                                              context,
+                                                              animation,
+                                                              secondaryAnimation,
+                                                            ) => ArtistScreen(
+                                                              artistName:
+                                                                  artistName,
+                                                              browseId:
+                                                                  browseId,
+                                                            ),
+                                                        transitionsBuilder:
+                                                            (
+                                                              context,
+                                                              animation,
+                                                              secondaryAnimation,
+                                                              child,
+                                                            ) {
+                                                              const begin =
+                                                                  Offset(
+                                                                    1.0,
+                                                                    0.0,
+                                                                  );
+                                                              const end =
+                                                                  Offset.zero;
+                                                              const curve = Curves
+                                                                  .easeInOutCubic;
+                                                              var tween =
+                                                                  Tween(
+                                                                    begin:
+                                                                        begin,
+                                                                    end: end,
+                                                                  ).chain(
+                                                                    CurveTween(
+                                                                      curve:
+                                                                          curve,
+                                                                    ),
+                                                                  );
+                                                              return SlideTransition(
+                                                                position:
+                                                                    animation
+                                                                        .drive(
+                                                                          tween,
+                                                                        ),
+                                                                child: child,
+                                                              );
+                                                            },
+                                                        transitionDuration:
+                                                            const Duration(
+                                                              milliseconds: 300,
+                                                            ),
                                                       ),
                                                     );
                                                   },
                                                   child: Container(
                                                     width: double.infinity,
-                                                    margin: const EdgeInsets.symmetric(),
+                                                    margin:
+                                                        const EdgeInsets.symmetric(),
                                                     child: ListTile(
-                                                      contentPadding: const EdgeInsets.symmetric(
-                                                        horizontal: 0,
-                                                        vertical: 8,
-                                                      ),
+                                                      contentPadding:
+                                                          const EdgeInsets.symmetric(
+                                                            horizontal: 0,
+                                                            vertical: 8,
+                                                          ),
                                                       leading: ClipRRect(
-                                                        borderRadius: BorderRadius.circular(28),
-                                                        child: thumbUrl != null && thumbUrl.isNotEmpty
+                                                        borderRadius:
+                                                            BorderRadius.circular(
+                                                              28,
+                                                            ),
+                                                        child:
+                                                            thumbUrl != null &&
+                                                                thumbUrl
+                                                                    .isNotEmpty
                                                             ? _buildSafeNetworkImage(
                                                                 thumbUrl,
                                                                 width: 56,
                                                                 height: 56,
-                                                                fit: BoxFit.cover,
+                                                                fit: BoxFit
+                                                                    .cover,
                                                                 fallback: Container(
                                                                   width: 56,
                                                                   height: 56,
                                                                   decoration: BoxDecoration(
-                                                                    color: colorSchemeNotifier.value == AppColorScheme.amoled
-                                                                        ? Colors.white.withValues(alpha: 0.1)
-                                                                        : (isSystem ? Theme.of(context).colorScheme.secondaryContainer : Theme.of(context).colorScheme.surfaceContainer),
-                                                                    shape: BoxShape.circle,
+                                                                    color:
+                                                                        colorSchemeNotifier.value ==
+                                                                            AppColorScheme.amoled
+                                                                        ? Colors.white.withValues(
+                                                                            alpha:
+                                                                                0.1,
+                                                                          )
+                                                                        : (isSystem
+                                                                              ? Theme.of(
+                                                                                  context,
+                                                                                ).colorScheme.secondaryContainer
+                                                                              : Theme.of(context).colorScheme.surfaceContainer),
+                                                                    shape: BoxShape
+                                                                        .circle,
                                                                   ),
-                                                                  child: const Icon(Icons.person, size: 28),
+                                                                  child: const Icon(
+                                                                    Icons
+                                                                        .person,
+                                                                    size: 28,
+                                                                  ),
                                                                 ),
                                                               )
                                                             : Container(
                                                                 width: 56,
                                                                 height: 56,
                                                                 decoration: BoxDecoration(
-                                                                  color: colorSchemeNotifier.value == AppColorScheme.amoled
-                                                                      ? Colors.white.withValues(alpha: 0.1)
-                                                                      : Theme.of(context).colorScheme.surfaceContainer,
-                                                                  shape: BoxShape.circle,
+                                                                  color:
+                                                                      colorSchemeNotifier
+                                                                              .value ==
+                                                                          AppColorScheme
+                                                                              .amoled
+                                                                      ? Colors.white.withValues(
+                                                                          alpha:
+                                                                              0.1,
+                                                                        )
+                                                                      : Theme.of(
+                                                                          context,
+                                                                        ).colorScheme.surfaceContainer,
+                                                                  shape: BoxShape
+                                                                      .circle,
                                                                 ),
-                                                                child: const Icon(Icons.person, size: 28),
+                                                                child: const Icon(
+                                                                  Icons.person,
+                                                                  size: 28,
+                                                                ),
                                                               ),
                                                       ),
                                                       title: Text(
                                                         artistName,
                                                         maxLines: 1,
-                                                        overflow: TextOverflow.ellipsis,
+                                                        overflow: TextOverflow
+                                                            .ellipsis,
                                                       ),
                                                       trailing: IconButton(
-                                                        icon: const Icon(Icons.chevron_right),
-                                                        tooltip: LocaleProvider.tr('view_artist'),
+                                                        icon: const Icon(
+                                                          Icons.chevron_right,
+                                                        ),
+                                                        tooltip:
+                                                            LocaleProvider.tr(
+                                                              'view_artist',
+                                                            ),
                                                         onPressed: () {
                                                           // print('🚀 Navegando a artista (botón): $artistName con browseId: $browseId');
-                                                          Navigator.of(context).push(
+                                                          Navigator.of(
+                                                            context,
+                                                          ).push(
                                                             PageRouteBuilder(
-                                                              settings: const RouteSettings(name: '/artist'),
-                                                              pageBuilder: (context, animation, secondaryAnimation) =>
-                                                                  ArtistScreen(artistName: artistName, browseId: browseId),
-                                                              transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                                                                const begin = Offset(1.0, 0.0);
-                                                                const end = Offset.zero;
-                                                                const curve = Curves.easeInOutCubic;
-                                                                var tween = Tween(begin: begin, end: end).chain(
-                                                                  CurveTween(curve: curve),
-                                                                );
-                                                                return SlideTransition(
-                                                                  position: animation.drive(tween),
-                                                                  child: child,
-                                                                );
-                                                              },
-                                                              transitionDuration: const Duration(milliseconds: 300),
+                                                              settings:
+                                                                  const RouteSettings(
+                                                                    name:
+                                                                        '/artist',
+                                                                  ),
+                                                              pageBuilder:
+                                                                  (
+                                                                    context,
+                                                                    animation,
+                                                                    secondaryAnimation,
+                                                                  ) => ArtistScreen(
+                                                                    artistName:
+                                                                        artistName,
+                                                                    browseId:
+                                                                        browseId,
+                                                                  ),
+                                                              transitionsBuilder:
+                                                                  (
+                                                                    context,
+                                                                    animation,
+                                                                    secondaryAnimation,
+                                                                    child,
+                                                                  ) {
+                                                                    const begin =
+                                                                        Offset(
+                                                                          1.0,
+                                                                          0.0,
+                                                                        );
+                                                                    const end =
+                                                                        Offset
+                                                                            .zero;
+                                                                    const curve =
+                                                                        Curves
+                                                                            .easeInOutCubic;
+                                                                    var tween =
+                                                                        Tween(
+                                                                          begin:
+                                                                              begin,
+                                                                          end:
+                                                                              end,
+                                                                        ).chain(
+                                                                          CurveTween(
+                                                                            curve:
+                                                                                curve,
+                                                                          ),
+                                                                        );
+                                                                    return SlideTransition(
+                                                                      position: animation
+                                                                          .drive(
+                                                                            tween,
+                                                                          ),
+                                                                      child:
+                                                                          child,
+                                                                    );
+                                                                  },
+                                                              transitionDuration:
+                                                                  const Duration(
+                                                                    milliseconds:
+                                                                        300,
+                                                                  ),
                                                             ),
                                                           );
                                                         },
@@ -3924,15 +4471,17 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                             child: Padding(
                                               padding:
                                                   const EdgeInsets.symmetric(
-                                                vertical: 4,
-                                              ),
+                                                    vertical: 4,
+                                                  ),
                                               child: Row(
                                                 mainAxisAlignment:
                                                     MainAxisAlignment
                                                         .spaceBetween,
                                                 children: [
                                                   Text(
-                                                    LocaleProvider.tr('playlists'),
+                                                    LocaleProvider.tr(
+                                                      'playlists',
+                                                    ),
                                                     style: Theme.of(context)
                                                         .textTheme
                                                         .titleMedium
@@ -3957,15 +4506,17 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                 return ListTile(
                                                   contentPadding:
                                                       const EdgeInsets.symmetric(
-                                                    horizontal: 0,
-                                                    vertical: 10
-                                                  ),
+                                                        horizontal: 0,
+                                                        vertical: 10,
+                                                      ),
                                                   leading: ClipRRect(
                                                     borderRadius:
                                                         BorderRadius.circular(
-                                                      8,
-                                                    ),
-                                                    child: playlist['thumbUrl'] != null
+                                                          8,
+                                                        ),
+                                                    child:
+                                                        playlist['thumbUrl'] !=
+                                                            null
                                                         ? _buildSafeNetworkImage(
                                                             playlist['thumbUrl']!,
                                                             width: 56,
@@ -3975,25 +4526,32 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                         : Container(
                                                             width: 56,
                                                             height: 56,
-                                                            decoration: BoxDecoration(
-                                                              color: Colors.grey[300],
-                                                              borderRadius:
-                                                                  BorderRadius.circular(
-                                                                12,
-                                                              ),
-                                                            ),
+                                                            decoration:
+                                                                BoxDecoration(
+                                                                  color: Colors
+                                                                      .grey[300],
+                                                                  borderRadius:
+                                                                      BorderRadius.circular(
+                                                                        12,
+                                                                      ),
+                                                                ),
                                                             child: const Icon(
-                                                              Icons.playlist_play,
+                                                              Icons
+                                                                  .playlist_play,
                                                               size: 32,
-                                                              color: Colors.grey,
+                                                              color:
+                                                                  Colors.grey,
                                                             ),
                                                           ),
                                                   ),
                                                   title: Text(
-                                                    playlist['title'] ?? 
-                                                        LocaleProvider.tr('title_unknown'),
+                                                    playlist['title'] ??
+                                                        LocaleProvider.tr(
+                                                          'title_unknown',
+                                                        ),
                                                     maxLines: 2,
-                                                    overflow: TextOverflow.ellipsis,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
                                                   ),
 
                                                   trailing: IconButton(
@@ -4006,31 +4564,39 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                     onPressed: () {
                                                       Clipboard.setData(
                                                         ClipboardData(
-                                                          text: 'https://music.youtube.com/playlist?list=${playlist['browseId']}',
+                                                          text:
+                                                              'https://music.youtube.com/playlist?list=${playlist['browseId']}',
                                                         ),
                                                       );
                                                     },
                                                   ),
                                                   onTap: () async {
-                                                    if (playlist['browseId'] == null) {
+                                                    if (playlist['browseId'] ==
+                                                        null) {
                                                       return;
                                                     }
                                                     setState(() {
-                                                      _expandedCategory = 'playlist';
-                                                      _loadingPlaylistSongs = true;
+                                                      _expandedCategory =
+                                                          'playlist';
+                                                      _loadingPlaylistSongs =
+                                                          true;
                                                       _playlistSongs = [];
                                                       _currentPlaylist = {
-                                                        'title': playlist['title'],
-                                                        'thumbUrl': playlist['thumbUrl'],
+                                                        'title':
+                                                            playlist['title'],
+                                                        'thumbUrl':
+                                                            playlist['thumbUrl'],
                                                       };
                                                     });
-                                                    final songs = await getPlaylistSongs(
-                                                      playlist['browseId']!,
-                                                    );
+                                                    final songs =
+                                                        await getPlaylistSongs(
+                                                          playlist['browseId']!,
+                                                        );
                                                     if (!mounted) return;
                                                     setState(() {
                                                       _playlistSongs = songs;
-                                                      _loadingPlaylistSongs = false;
+                                                      _loadingPlaylistSongs =
+                                                          false;
                                                     });
                                                   },
                                                 );
@@ -4089,12 +4655,13 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                           BorderRadius.circular(
                                                             8,
                                                           ),
-                                                      child: _buildSafeNetworkImage(
-                                                        album.thumbUrl!,
-                                                        width: 56,
-                                                        height: 56,
-                                                        fit: BoxFit.cover,
-                                                      ),
+                                                      child:
+                                                          _buildSafeNetworkImage(
+                                                            album.thumbUrl!,
+                                                            width: 56,
+                                                            height: 56,
+                                                            fit: BoxFit.cover,
+                                                          ),
                                                     )
                                                   : Container(
                                                       width: 56,
@@ -4185,7 +4752,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
         ],
       ),
       floatingActionButton: null,
-      );
+    );
   }
 
   // Función para mostrar mensajes con diseño elegante
@@ -4197,7 +4764,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
         builder: (context, colorScheme, child) {
           final isAmoled = colorScheme == AppColorScheme.amoled;
           final isDark = Theme.of(context).brightness == Brightness.dark;
-          
+
           return AlertDialog(
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
@@ -4208,10 +4775,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
             title: Center(
               child: Text(
                 title,
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w600,
-                ),
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
               ),
             ),
             content: SizedBox(
@@ -4246,13 +4810,19 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                       padding: EdgeInsets.all(16),
                       decoration: BoxDecoration(
                         color: isAmoled && isDark
-                            ? Colors.white.withValues(alpha: 0.2) // Color personalizado para amoled
+                            ? Colors.white.withValues(
+                                alpha: 0.2,
+                              ) // Color personalizado para amoled
                             : Theme.of(context).colorScheme.primaryContainer,
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(
                           color: isAmoled && isDark
-                              ? Colors.white.withValues(alpha: 0.4) // Borde personalizado para amoled
-                              : Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
+                              ? Colors.white.withValues(
+                                  alpha: 0.4,
+                                ) // Borde personalizado para amoled
+                              : Theme.of(
+                                  context,
+                                ).colorScheme.primary.withValues(alpha: 0.3),
                           width: 2,
                         ),
                       ),
@@ -4263,14 +4833,18 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(12),
                               color: isAmoled && isDark
-                                  ? Colors.white.withValues(alpha: 0.2) // Fondo del ícono para amoled
-                                  : Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                                  ? Colors.white.withValues(
+                                      alpha: 0.2,
+                                    ) // Fondo del ícono para amoled
+                                  : Theme.of(context).colorScheme.primary
+                                        .withValues(alpha: 0.1),
                             ),
                             child: Icon(
                               Icons.check_circle,
                               size: 30,
                               color: isAmoled && isDark
-                                  ? Colors.white // Ícono blanco para amoled
+                                  ? Colors
+                                        .white // Ícono blanco para amoled
                                   : Theme.of(context).colorScheme.primary,
                             ),
                           ),
@@ -4285,7 +4859,8 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                     fontSize: 16,
                                     fontWeight: FontWeight.w600,
                                     color: isAmoled && isDark
-                                        ? Colors.white // Texto blanco para amoled
+                                        ? Colors
+                                              .white // Texto blanco para amoled
                                         : Theme.of(context).colorScheme.primary,
                                   ),
                                 ),
@@ -4335,15 +4910,13 @@ class YtPreviewPlayerState extends State<YtPreviewPlayer>
   late YtMusicResult _currentItem;
   int _loadToken = 0; // Token para cancelar cargas previas
   StreamSubscription<PlayerState>? _playerStateSubscription;
-  
 
   @override
   void initState() {
     super.initState();
     _currentIndex = widget.currentIndex;
     _currentItem = widget.results[_currentIndex];
-    
-    
+
     _playerStateSubscription = _player.playerStateStream.listen((state) {
       if (!mounted) return;
       setState(() {
@@ -4352,7 +4925,6 @@ class YtPreviewPlayerState extends State<YtPreviewPlayer>
         // _loading solo debe ser true si está cargando y reproduciendo
         // pero aquí no lo cambiamos salvo que quieras lógica especial
       });
-      
     });
   }
 
@@ -4404,11 +4976,17 @@ class YtPreviewPlayerState extends State<YtPreviewPlayer>
   */
 
   // Función helper para manejar imágenes de red con recorte de carátula (para YtPreviewModal)
-  Widget _buildSafeNetworkImageWithCrop(String? imageUrl, {double? width, double? height, BoxFit? fit, Widget? fallback}) {
+  Widget _buildSafeNetworkImageWithCrop(
+    String? imageUrl, {
+    double? width,
+    double? height,
+    BoxFit? fit,
+    Widget? fallback,
+  }) {
     if (imageUrl == null || imageUrl.isEmpty) {
       return fallback ?? const Icon(Icons.music_note, size: 32);
     }
-    
+
     // Verificar si la imagen ya está en caché
     if (_imageCache.containsKey(imageUrl)) {
       return ClipRRect(
@@ -4424,7 +5002,7 @@ class YtPreviewPlayerState extends State<YtPreviewPlayer>
         ),
       );
     }
-    
+
     return FutureBuilder<Uint8List?>(
       future: _downloadAndCropImage(imageUrl),
       builder: (context, snapshot) {
@@ -4437,20 +5015,18 @@ class YtPreviewPlayerState extends State<YtPreviewPlayer>
               borderRadius: BorderRadius.circular(8),
             ),
             child: const Center(
-              child: CircularProgressIndicator(
-                strokeWidth: 3,
-              ),
+              child: CircularProgressIndicator(strokeWidth: 3),
             ),
           );
         }
-        
+
         if (snapshot.hasError || snapshot.data == null) {
           return fallback ?? const Icon(Icons.music_note, size: 32);
         }
-        
+
         // Guardar en caché antes de mostrar
         _imageCache[imageUrl] = snapshot.data!;
-        
+
         return ClipRRect(
           borderRadius: BorderRadius.circular(8),
           child: Image.memory(
@@ -4473,12 +5049,12 @@ class YtPreviewPlayerState extends State<YtPreviewPlayer>
     if (_imageCache.containsKey(imageUrl)) {
       return _imageCache[imageUrl];
     }
-    
+
     try {
       final response = await http.get(Uri.parse(imageUrl));
       if (response.statusCode == 200) {
         final bytes = response.bodyBytes;
-        
+
         Uint8List? processedBytes;
         // Determinar si es una imagen hqdefault (480x360) o maxresdefault
         if (imageUrl.contains('hqdefault')) {
@@ -4488,12 +5064,12 @@ class YtPreviewPlayerState extends State<YtPreviewPlayer>
           // Para maxresdefault, usar recorte normal centrado
           processedBytes = await compute(decodeAndCropImage, bytes);
         }
-        
+
         // Guardar en caché si el procesamiento fue exitoso
         if (processedBytes != null) {
           _imageCache[imageUrl] = processedBytes;
         }
-        
+
         return processedBytes;
       }
     } catch (e) {
@@ -4501,7 +5077,7 @@ class YtPreviewPlayerState extends State<YtPreviewPlayer>
     }
     return null;
   }
-  
+
   // Función para limpiar el caché de imágenes (opcional, para liberar memoria)
   void _clearImageCache() {
     _imageCache.clear();
@@ -4583,9 +5159,11 @@ class YtPreviewPlayerState extends State<YtPreviewPlayer>
       if (audioHandler?.playbackState.value.playing ?? false) {
         await audioHandler?.pause();
       }
-      
+
       // Usar StreamService con cache
-      final audioUrl = await StreamService.getBestAudioUrl(_currentItem.videoId!);
+      final audioUrl = await StreamService.getBestAudioUrl(
+        _currentItem.videoId!,
+      );
       if (thisLoad != _loadToken) {
         await _player.stop();
         _audioUrl = null;
@@ -4597,7 +5175,7 @@ class YtPreviewPlayerState extends State<YtPreviewPlayer>
         });
         return; // Cancelado
       }
-      
+
       if (audioUrl == null) {
         throw Exception('No se encontró stream de audio válido.');
       }
@@ -4679,17 +5257,19 @@ class YtPreviewPlayerState extends State<YtPreviewPlayer>
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-
                     GestureDetector(
                       onTap: () {
-                        final imageUrl = _currentItem.thumbUrl ?? widget.fallbackThumbUrl;
+                        final imageUrl =
+                            _currentItem.thumbUrl ?? widget.fallbackThumbUrl;
                         if (imageUrl != null && imageUrl.isNotEmpty) {
                           Navigator.of(context).push(
                             MaterialPageRoute(
                               builder: (context) => ImageViewer(
                                 imageUrl: imageUrl,
                                 title: _currentItem.title,
-                                subtitle: _currentItem.artist ?? widget.fallbackArtist,
+                                subtitle:
+                                    _currentItem.artist ??
+                                    widget.fallbackArtist,
                                 videoId: _currentItem.videoId,
                               ),
                             ),
@@ -4710,7 +5290,13 @@ class YtPreviewPlayerState extends State<YtPreviewPlayer>
                                   width: 64,
                                   height: 64,
                                   decoration: BoxDecoration(
-                                    color: isSystem ? Theme.of(context).colorScheme.secondaryContainer : Theme.of(context).colorScheme.surfaceContainer,
+                                    color: isSystem
+                                        ? Theme.of(
+                                            context,
+                                          ).colorScheme.secondaryContainer
+                                        : Theme.of(
+                                            context,
+                                          ).colorScheme.surfaceContainer,
                                     borderRadius: BorderRadius.circular(8),
                                   ),
                                   child: const Icon(Icons.music_note, size: 32),
@@ -4727,7 +5313,9 @@ class YtPreviewPlayerState extends State<YtPreviewPlayer>
                                   width: 64,
                                   height: 64,
                                   decoration: BoxDecoration(
-                                    color: Theme.of(context).colorScheme.surfaceContainer,
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.surfaceContainer,
                                     borderRadius: BorderRadius.circular(8),
                                   ),
                                   child: const Icon(Icons.music_note, size: 32),
@@ -4737,10 +5325,7 @@ class YtPreviewPlayerState extends State<YtPreviewPlayer>
                                 width: 64,
                                 height: 64,
                                 color: Colors.grey[300],
-                                child: const Icon(
-                                  Icons.music_note,
-                                  size: 32,
-                                ),
+                                child: const Icon(Icons.music_note, size: 32),
                               ),
                       ),
                     ),
@@ -4760,139 +5345,221 @@ class YtPreviewPlayerState extends State<YtPreviewPlayer>
                               child: ClipRRect(
                                 borderRadius: BorderRadius.circular(8),
                                 child: Material(
-                                  color: Theme.of(context).colorScheme.secondaryContainer,
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.secondaryContainer,
                                   child: InkWell(
                                     borderRadius: BorderRadius.circular(8),
-                                    onTap: _loadingArtist ? null : () async {
-                                    final artistName = _currentItem.artist ?? widget.fallbackArtist;
-                                    if (artistName == null || artistName.trim().isEmpty) {
-                                      _showMessage('Error', LocaleProvider.tr('artist_unknown'));
-                                      return;
-                                    }
-                                    
-                                    setState(() {
-                                      _loadingArtist = true;
-                                    });
-                                    
-                                    try {
-                                      // Buscar el artista
-                                      final results = await searchArtists(artistName, limit: 1);
-                                      if (!mounted) return;
-                                      
-                                      setState(() {
-                                        _loadingArtist = false;
-                                      });
-                                      
-                                      if (results.isEmpty) {
-                                        _showMessage(LocaleProvider.tr('error'), LocaleProvider.tr('artist_not_found').replaceAll('{artistName}', artistName));
-                                        return;
-                                      }
-                                      
-                                      final artist = results.first;
-                                      final browseId = artist['browseId'];
-                                      if (browseId == null) {
-                                        _showMessage(LocaleProvider.tr('error'), LocaleProvider.tr('could_not_get_artist_info'));
-                                        return;
-                                      }
-                                      
-                                      if (!mounted) return;
-                                      
-                                      // Navegar a la pantalla del artista
-                                      if (!context.mounted) return;
-                                      
-                                      // Cerrar el modal primero y obtener el contexto raíz
-                                      Navigator.of(context).pop();
-                                      
-                                      // Esperar un frame para que el modal se cierre completamente
-                                      await Future.delayed(const Duration(milliseconds: 50));
-                                      if (!mounted || !context.mounted) return;
-                                      
-                                      // Usar el navigator raíz, no el del modal
-                                      final navigator = Navigator.of(context, rootNavigator: false);
-                                      
-                                      // Eliminar todas las ArtistScreen del stack usando popUntil
-                                      // Buscamos si hay alguna ArtistScreen en el stack
-                                      navigator.popUntil((route) {
-                                        // Si es la primera ruta (puede ser el home), detenemos
-                                        if (route.isFirst) {
-                                          return true;
-                                        }
-                                        
-                                        // Verificar las rutas por su nombre
-                                        final settings = route.settings;
-                                        
-                                        // Si encontramos una ruta que no es ArtistScreen, nos detenemos
-                                        if (settings.name != null && settings.name != '/artist') {
-                                          return true;
-                                        }
-                                        
-                                        // Si la ruta es ArtistScreen (sin nombre o con '/artist'),
-                                        // la eliminamos retornando false para continuar haciendo pop
-                                        if (settings.name == null || settings.name == '/artist') {
-                                          return false; // Continuar haciendo pop
-                                        }
-                                        
-                                        return true; // Detenernos por seguridad
-                                      });
-                                      
-                                      // Ahora hacer push de la nueva pantalla
-                                      navigator.push(
-                                        PageRouteBuilder(
-                                          settings: const RouteSettings(name: '/artist'),
-                                          pageBuilder: (context, animation, secondaryAnimation) =>
-                                              ArtistScreen(artistName: artistName, browseId: browseId),
-                                          transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                                            const begin = Offset(1.0, 0.0);
-                                            const end = Offset.zero;
-                                            const curve = Curves.easeInOutCubic;
-                                            var tween = Tween(begin: begin, end: end).chain(
-                                              CurveTween(curve: curve),
-                                            );
-                                            var offsetAnimation = animation.drive(tween);
-                                            return SlideTransition(
-                                              position: offsetAnimation,
-                                              child: child,
-                                            );
+                                    onTap: _loadingArtist
+                                        ? null
+                                        : () async {
+                                            final artistName =
+                                                _currentItem.artist ??
+                                                widget.fallbackArtist;
+                                            if (artistName == null ||
+                                                artistName.trim().isEmpty) {
+                                              _showMessage(
+                                                'Error',
+                                                LocaleProvider.tr(
+                                                  'artist_unknown',
+                                                ),
+                                              );
+                                              return;
+                                            }
+
+                                            setState(() {
+                                              _loadingArtist = true;
+                                            });
+
+                                            try {
+                                              // Buscar el artista
+                                              final results =
+                                                  await searchArtists(
+                                                    artistName,
+                                                    limit: 1,
+                                                  );
+                                              if (!mounted) return;
+
+                                              setState(() {
+                                                _loadingArtist = false;
+                                              });
+
+                                              if (results.isEmpty) {
+                                                _showMessage(
+                                                  LocaleProvider.tr('error'),
+                                                  LocaleProvider.tr(
+                                                    'artist_not_found',
+                                                  ).replaceAll(
+                                                    '{artistName}',
+                                                    artistName,
+                                                  ),
+                                                );
+                                                return;
+                                              }
+
+                                              final artist = results.first;
+                                              final browseId =
+                                                  artist['browseId'];
+                                              if (browseId == null) {
+                                                _showMessage(
+                                                  LocaleProvider.tr('error'),
+                                                  LocaleProvider.tr(
+                                                    'could_not_get_artist_info',
+                                                  ),
+                                                );
+                                                return;
+                                              }
+
+                                              if (!mounted) return;
+
+                                              // Navegar a la pantalla del artista
+                                              if (!context.mounted) return;
+
+                                              // Cerrar el modal primero y obtener el contexto raíz
+                                              Navigator.of(context).pop();
+
+                                              // Esperar un frame para que el modal se cierre completamente
+                                              await Future.delayed(
+                                                const Duration(
+                                                  milliseconds: 50,
+                                                ),
+                                              );
+                                              if (!mounted ||
+                                                  !context.mounted) {
+                                                return;
+                                              }
+
+                                              // Usar el navigator raíz, no el del modal
+                                              final navigator = Navigator.of(
+                                                context,
+                                                rootNavigator: false,
+                                              );
+
+                                              // Eliminar todas las ArtistScreen del stack usando popUntil
+                                              // Buscamos si hay alguna ArtistScreen en el stack
+                                              navigator.popUntil((route) {
+                                                // Si es la primera ruta (puede ser el home), detenemos
+                                                if (route.isFirst) {
+                                                  return true;
+                                                }
+
+                                                // Verificar las rutas por su nombre
+                                                final settings = route.settings;
+
+                                                // Si encontramos una ruta que no es ArtistScreen, nos detenemos
+                                                if (settings.name != null &&
+                                                    settings.name !=
+                                                        '/artist') {
+                                                  return true;
+                                                }
+
+                                                // Si la ruta es ArtistScreen (sin nombre o con '/artist'),
+                                                // la eliminamos retornando false para continuar haciendo pop
+                                                if (settings.name == null ||
+                                                    settings.name ==
+                                                        '/artist') {
+                                                  return false; // Continuar haciendo pop
+                                                }
+
+                                                return true; // Detenernos por seguridad
+                                              });
+
+                                              // Ahora hacer push de la nueva pantalla
+                                              navigator.push(
+                                                PageRouteBuilder(
+                                                  settings: const RouteSettings(
+                                                    name: '/artist',
+                                                  ),
+                                                  pageBuilder:
+                                                      (
+                                                        context,
+                                                        animation,
+                                                        secondaryAnimation,
+                                                      ) => ArtistScreen(
+                                                        artistName: artistName,
+                                                        browseId: browseId,
+                                                      ),
+                                                  transitionsBuilder:
+                                                      (
+                                                        context,
+                                                        animation,
+                                                        secondaryAnimation,
+                                                        child,
+                                                      ) {
+                                                        const begin = Offset(
+                                                          1.0,
+                                                          0.0,
+                                                        );
+                                                        const end = Offset.zero;
+                                                        const curve = Curves
+                                                            .easeInOutCubic;
+                                                        var tween =
+                                                            Tween(
+                                                              begin: begin,
+                                                              end: end,
+                                                            ).chain(
+                                                              CurveTween(
+                                                                curve: curve,
+                                                              ),
+                                                            );
+                                                        var offsetAnimation =
+                                                            animation.drive(
+                                                              tween,
+                                                            );
+                                                        return SlideTransition(
+                                                          position:
+                                                              offsetAnimation,
+                                                          child: child,
+                                                        );
+                                                      },
+                                                ),
+                                              );
+                                            } catch (e) {
+                                              if (!mounted) return;
+                                              setState(() {
+                                                _loadingArtist = false;
+                                              });
+                                              _showMessage(
+                                                'Error',
+                                                'Error al buscar el artista: ${e.toString()}',
+                                              );
+                                            }
                                           },
-                                        ),
-                                      );
-                                    } catch (e) {
-                                      if (!mounted) return;
-                                      setState(() {
-                                        _loadingArtist = false;
-                                      });
-                                      _showMessage('Error', 'Error al buscar el artista: ${e.toString()}');
-                                    }
-                                  },
-                                  child: Center(
-                                    child: _loadingArtist
-                                        ? SizedBox(
-                                            width: 20,
-                                            height: 20,
-                                            child: CircularProgressIndicator(
-                                              strokeWidth: 2.5,
-                                              color: Theme.of(context).colorScheme.onSecondaryContainer,
+                                    child: Center(
+                                      child: _loadingArtist
+                                          ? SizedBox(
+                                              width: 20,
+                                              height: 20,
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2.5,
+                                                color: Theme.of(context)
+                                                    .colorScheme
+                                                    .onSecondaryContainer,
+                                              ),
+                                            )
+                                          : Tooltip(
+                                              message: LocaleProvider.tr(
+                                                'go_to_artist',
+                                              ),
+                                              child: Icon(
+                                                Icons.person,
+                                                size: 24,
+                                                color: Theme.of(context)
+                                                    .colorScheme
+                                                    .onSecondaryContainer,
+                                              ),
                                             ),
-                                          )
-                                        : Tooltip(
-                                            message: LocaleProvider.tr('go_to_artist'),
-                                            child: Icon(
-                                              Icons.person,
-                                              size: 24,
-                                              color: Theme.of(context).colorScheme.onSecondaryContainer,
-                                            ),
-                                          ),
+                                    ),
                                   ),
                                 ),
                               ),
-                            ),
                             ),
                           ],
                         ),
                       ),
                     ),
                     const SizedBox(width: 8),
-                                         // Botón para abrir en YouTube Music
+                    // Botón para abrir en YouTube Music
                     SizedBox(
                       height: 50,
                       width: 50,
@@ -4903,10 +5570,14 @@ class YtPreviewPlayerState extends State<YtPreviewPlayer>
                           onTap: _currentItem.videoId != null
                               ? () async {
                                   try {
-                                    final ytMusicUrl = 'https://music.youtube.com/watch?v=${_currentItem.videoId}';
+                                    final ytMusicUrl =
+                                        'https://music.youtube.com/watch?v=${_currentItem.videoId}';
                                     final url = Uri.parse(ytMusicUrl);
                                     if (await canLaunchUrl(url)) {
-                                      await launchUrl(url, mode: LaunchMode.externalApplication);
+                                      await launchUrl(
+                                        url,
+                                        mode: LaunchMode.externalApplication,
+                                      );
                                     }
                                   } catch (e) {
                                     // Manejar error silenciosamente
@@ -4915,7 +5586,9 @@ class YtPreviewPlayerState extends State<YtPreviewPlayer>
                               : null,
                           child: Center(
                             child: Tooltip(
-                              message: LocaleProvider.tr('open_in_youtube_music'),
+                              message: LocaleProvider.tr(
+                                'open_in_youtube_music',
+                              ),
                               child: Image.asset(
                                 'assets/icon/Youtube_Music_icon.png',
                                 width: 44,
@@ -4973,7 +5646,9 @@ class YtPreviewPlayerState extends State<YtPreviewPlayer>
                   child: InkWell(
                     customBorder: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(
-                        _playing ? 13.33 : 20, // mainIconSize / 3 : mainIconSize / 2
+                        _playing
+                            ? 13.33
+                            : 20, // mainIconSize / 3 : mainIconSize / 2
                       ),
                     ),
                     splashColor: Colors.transparent,
@@ -5003,13 +5678,17 @@ class YtPreviewPlayerState extends State<YtPreviewPlayer>
                       width: 40,
                       height: 40,
                       decoration: BoxDecoration(
-                        color: colorSchemeNotifier.value == AppColorScheme.amoled
-                                ? Colors.white
-                                : Theme.of(context).brightness == Brightness.dark
-                                    ? Theme.of(context).colorScheme.primaryContainer
-                                    : Theme.of(context).colorScheme.onPrimaryContainer.withValues(alpha: 0.7),
+                        color:
+                            colorSchemeNotifier.value == AppColorScheme.amoled
+                            ? Colors.white
+                            : Theme.of(context).brightness == Brightness.dark
+                            ? Theme.of(context).colorScheme.primary
+                            : Theme.of(context).colorScheme.onPrimaryContainer
+                                  .withValues(alpha: 0.7),
                         borderRadius: BorderRadius.circular(
-                          _playing ? 13.33 : 20, // mainIconSize / 3 : mainIconSize / 2
+                          _playing
+                              ? 13.33
+                              : 20, // mainIconSize / 3 : mainIconSize / 2
                         ),
                       ),
                       child: Center(
@@ -5020,23 +5699,35 @@ class YtPreviewPlayerState extends State<YtPreviewPlayer>
                                 child: CircularProgressIndicator(
                                   strokeWidth: 2,
                                   strokeCap: StrokeCap.round,
-                                  color: colorSchemeNotifier.value == AppColorScheme.amoled
-                                          ? Colors.black
-                                          : Theme.of(context).brightness == Brightness.dark
-                                            ? Theme.of(context).colorScheme.onPrimaryContainer
-                                            : Theme.of(context).colorScheme.surfaceContainer,
+                                  color:
+                                      colorSchemeNotifier.value ==
+                                          AppColorScheme.amoled
+                                      ? Colors.black
+                                      : Theme.of(context).brightness ==
+                                            Brightness.dark
+                                      ? Theme.of(context).colorScheme.onPrimary
+                                      : Theme.of(
+                                          context,
+                                        ).colorScheme.surfaceContainer,
                                 ),
                               )
                             : Icon(
-                                _playing ? Symbols.pause_rounded : Symbols.play_arrow_rounded,
+                                _playing
+                                    ? Symbols.pause_rounded
+                                    : Symbols.play_arrow_rounded,
                                 grade: 200,
                                 size: 24,
                                 fill: 1,
-                                color: colorSchemeNotifier.value == AppColorScheme.amoled
-                                        ? Colors.black
-                                        : Theme.of(context).brightness == Brightness.dark
-                                          ? Theme.of(context).colorScheme.onPrimaryContainer
-                                          : Theme.of(context).colorScheme.surfaceContainer,
+                                color:
+                                    colorSchemeNotifier.value ==
+                                        AppColorScheme.amoled
+                                    ? Colors.black
+                                    : Theme.of(context).brightness ==
+                                          Brightness.dark
+                                    ? Theme.of(context).colorScheme.onPrimary
+                                    : Theme.of(
+                                        context,
+                                      ).colorScheme.surfaceContainer,
                               ),
                       ),
                     ),
@@ -5059,14 +5750,22 @@ class YtPreviewPlayerState extends State<YtPreviewPlayer>
                 ),
                 // Botón anterior
                 IconButton(
-                  icon: const Icon(Symbols.skip_previous_rounded, grade: 200, fill: 1),
+                  icon: const Icon(
+                    Symbols.skip_previous_rounded,
+                    grade: 200,
+                    fill: 1,
+                  ),
                   onPressed: (!_loading && _currentIndex > 0)
                       ? _playPrevious
                       : null,
                 ),
                 // Botón siguiente
                 IconButton(
-                  icon: const Icon(Symbols.skip_next_rounded, grade: 200, fill: 1),
+                  icon: const Icon(
+                    Symbols.skip_next_rounded,
+                    grade: 200,
+                    fill: 1,
+                  ),
                   onPressed:
                       (!_loading && _currentIndex < widget.results.length - 1)
                       ? _playNext
@@ -5095,27 +5794,32 @@ class YtPreviewPlayerState extends State<YtPreviewPlayer>
                         ),
                       );
                     }
-                    
+
                     final pos = positionSnapshot.data ?? Duration.zero;
                     final buffered = bufferedSnapshot.data ?? Duration.zero;
                     final total = _duration!.inMilliseconds;
-                    
+
                     final progress = total > 0
                         ? pos.inMilliseconds / total
                         : 0.0;
                     final bufferedProgress = total > 0
                         ? buffered.inMilliseconds / total
                         : 0.0;
-                    
+
                     return LayoutBuilder(
                       builder: (context, constraints) {
                         return GestureDetector(
                           onTapDown: (details) {
-                            if (_duration != null && _duration!.inMilliseconds > 0) {
+                            if (_duration != null &&
+                                _duration!.inMilliseconds > 0) {
                               final tapPosition = details.localPosition.dx;
-                              final tapProgress = tapPosition / constraints.maxWidth;
+                              final tapProgress =
+                                  tapPosition / constraints.maxWidth;
                               final newPosition = Duration(
-                                milliseconds: (_duration!.inMilliseconds * tapProgress.clamp(0.0, 1.0)).round(),
+                                milliseconds:
+                                    (_duration!.inMilliseconds *
+                                            tapProgress.clamp(0.0, 1.0))
+                                        .round(),
                               );
                               _player.seek(newPosition);
                             }
@@ -5124,7 +5828,9 @@ class YtPreviewPlayerState extends State<YtPreviewPlayer>
                             height: 8,
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(8),
-                              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.primary.withValues(alpha: 0.2),
                             ),
                             child: Stack(
                               children: [
@@ -5134,11 +5840,16 @@ class YtPreviewPlayerState extends State<YtPreviewPlayer>
                                     left: 0,
                                     top: 0,
                                     bottom: 0,
-                                    width: constraints.maxWidth * bufferedProgress.clamp(0.0, 1.0),
+                                    width:
+                                        constraints.maxWidth *
+                                        bufferedProgress.clamp(0.0, 1.0),
                                     child: Container(
                                       decoration: BoxDecoration(
                                         borderRadius: BorderRadius.circular(8),
-                                        color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5),
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .primary
+                                            .withValues(alpha: 0.5),
                                       ),
                                     ),
                                   ),
@@ -5148,11 +5859,15 @@ class YtPreviewPlayerState extends State<YtPreviewPlayer>
                                     left: 0,
                                     top: 0,
                                     bottom: 0,
-                                    width: constraints.maxWidth * progress.clamp(0.0, 1.0),
+                                    width:
+                                        constraints.maxWidth *
+                                        progress.clamp(0.0, 1.0),
                                     child: Container(
                                       decoration: BoxDecoration(
                                         borderRadius: BorderRadius.circular(8),
-                                        color: Theme.of(context).colorScheme.primary,
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.primary,
                                       ),
                                     ),
                                   ),
@@ -5194,7 +5909,7 @@ class YtPreviewPlayerState extends State<YtPreviewPlayer>
         builder: (context, colorScheme, child) {
           final isAmoled = colorScheme == AppColorScheme.amoled;
           final isDark = Theme.of(context).brightness == Brightness.dark;
-          
+
           return AlertDialog(
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
@@ -5205,10 +5920,7 @@ class YtPreviewPlayerState extends State<YtPreviewPlayer>
             title: Center(
               child: Text(
                 title,
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w600,
-                ),
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
               ),
             ),
             content: SizedBox(
@@ -5243,13 +5955,19 @@ class YtPreviewPlayerState extends State<YtPreviewPlayer>
                       padding: EdgeInsets.all(16),
                       decoration: BoxDecoration(
                         color: isAmoled && isDark
-                            ? Colors.white.withValues(alpha: 0.2) // Color personalizado para amoled
+                            ? Colors.white.withValues(
+                                alpha: 0.2,
+                              ) // Color personalizado para amoled
                             : Theme.of(context).colorScheme.primaryContainer,
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(
                           color: isAmoled && isDark
-                              ? Colors.white.withValues(alpha: 0.4) // Borde personalizado para amoled
-                              : Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
+                              ? Colors.white.withValues(
+                                  alpha: 0.4,
+                                ) // Borde personalizado para amoled
+                              : Theme.of(
+                                  context,
+                                ).colorScheme.primary.withValues(alpha: 0.3),
                           width: 2,
                         ),
                       ),
@@ -5260,14 +5978,18 @@ class YtPreviewPlayerState extends State<YtPreviewPlayer>
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(12),
                               color: isAmoled && isDark
-                                  ? Colors.white.withValues(alpha: 0.2) // Fondo del ícono para amoled
-                                  : Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                                  ? Colors.white.withValues(
+                                      alpha: 0.2,
+                                    ) // Fondo del ícono para amoled
+                                  : Theme.of(context).colorScheme.primary
+                                        .withValues(alpha: 0.1),
                             ),
                             child: Icon(
                               Icons.check_circle,
                               size: 30,
                               color: isAmoled && isDark
-                                  ? Colors.white // Ícono blanco para amoled
+                                  ? Colors
+                                        .white // Ícono blanco para amoled
                                   : Theme.of(context).colorScheme.primary,
                             ),
                           ),
@@ -5282,7 +6004,8 @@ class YtPreviewPlayerState extends State<YtPreviewPlayer>
                                     fontSize: 16,
                                     fontWeight: FontWeight.w600,
                                     color: isAmoled && isDark
-                                        ? Colors.white // Texto blanco para amoled
+                                        ? Colors
+                                              .white // Texto blanco para amoled
                                         : Theme.of(context).colorScheme.primary,
                                   ),
                                 ),
@@ -5302,4 +6025,3 @@ class YtPreviewPlayerState extends State<YtPreviewPlayer>
     );
   }
 }
-

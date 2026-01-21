@@ -22,13 +22,13 @@ class _EqualizerScreenState extends State<EqualizerScreen> {
   bool _isEnabled = false;
   List<double> _bandGains = [];
   StreamSubscription<bool>? _enabledStreamSubscription;
-  
+
   // Volume Boost
   double _volumeBoost = 1.0;
   StreamSubscription<double>? _volumeBoostSubscription;
   ValueNotifier<double>? _volumeBoostNotifier;
   VoidCallback? _volumeBoostListener;
-  
+
   @override
   void initState() {
     super.initState();
@@ -72,15 +72,19 @@ class _EqualizerScreenState extends State<EqualizerScreen> {
           // Agregar timeout para evitar bloqueos indefinidos
           _parameters = await _equalizer!.parameters.timeout(
             const Duration(seconds: 2),
-            onTimeout: () => throw TimeoutException('Timeout obteniendo parámetros del equalizer'),
+            onTimeout: () => throw TimeoutException(
+              'Timeout obteniendo parámetros del equalizer',
+            ),
           );
           _isEnabled = _equalizer!.enabled;
-          
+
           // Cargar los valores guardados o inicializar con ceros
           await _loadEqualizerSettings();
-          
+
           // Escuchar cambios en el estado enabled
-          _enabledStreamSubscription = _equalizer!.enabledStream.listen((enabled) {
+          _enabledStreamSubscription = _equalizer!.enabledStream.listen((
+            enabled,
+          ) {
             if (mounted) {
               setState(() {
                 _isEnabled = enabled;
@@ -93,19 +97,20 @@ class _EqualizerScreenState extends State<EqualizerScreen> {
           _parameters = null;
         }
       }
-      
+
       // Cargar volume boost desde el handler (que ya lo cargó de SharedPreferences)
       try {
         // Obtener el valor actual del notifier del handler
-        _volumeBoostNotifier = (handler as dynamic).volumeBoostNotifier as ValueNotifier<double>;
-        
+        _volumeBoostNotifier =
+            (handler as dynamic).volumeBoostNotifier as ValueNotifier<double>;
+
         // Establecer el valor inicial
         if (mounted) {
           setState(() {
             _volumeBoost = _volumeBoostNotifier!.value;
           });
         }
-        
+
         // Crear y agregar listener para cambios futuros
         _volumeBoostListener = () {
           if (mounted) {
@@ -148,14 +153,14 @@ class _EqualizerScreenState extends State<EqualizerScreen> {
 
   Future<void> _loadEqualizerSettings() async {
     if (_parameters == null) return;
-    
+
     final prefs = await SharedPreferences.getInstance();
     _bandGains = [];
-    
+
     for (int i = 0; i < _parameters!.bands.length; i++) {
       final savedGain = prefs.getDouble('equalizer_band_$i') ?? 0.0;
       _bandGains.add(savedGain);
-      
+
       // Aplicar el valor guardado a la banda
       try {
         await _parameters!.bands[i].setGain(savedGain);
@@ -163,7 +168,7 @@ class _EqualizerScreenState extends State<EqualizerScreen> {
         // Ignorar errores al cargar
       }
     }
-    
+
     // Cargar el estado enabled
     final enabled = prefs.getBool('equalizer_enabled') ?? false;
     _isEnabled = enabled;
@@ -174,52 +179,52 @@ class _EqualizerScreenState extends State<EqualizerScreen> {
 
   Future<void> _saveEqualizerSettings() async {
     final prefs = await SharedPreferences.getInstance();
-    
+
     for (int i = 0; i < _bandGains.length; i++) {
       await prefs.setDouble('equalizer_band_$i', _bandGains[i]);
     }
-    
+
     await prefs.setBool('equalizer_enabled', _isEnabled);
   }
 
   Future<void> _toggleEqualizer(bool value) async {
     if (_equalizer == null) return;
-    
+
     setState(() {
       _isEnabled = value;
     });
-    
+
     await _equalizer!.setEnabled(value);
     await _saveEqualizerSettings();
   }
 
   Future<void> _updateBandGain(int index, double value) async {
     if (_parameters == null) return;
-    
+
     setState(() {
       _bandGains[index] = value;
     });
-    
+
     await _parameters!.bands[index].setGain(value);
     await _saveEqualizerSettings();
   }
-  
+
   Future<void> _updateVolumeBoost(double value) async {
     final handler = audioHandler;
     if (handler == null) return;
-    
+
     setState(() {
       _volumeBoost = value;
     });
-    
+
     await (handler as dynamic).setVolumeBoost(value);
   }
-  
+
   Future<void> _resetEqualizer() async {
     // Mostrar diálogo de confirmación
     final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -231,10 +236,7 @@ class _EqualizerScreenState extends State<EqualizerScreen> {
         ),
         title: Row(
           children: [
-            Icon(
-              Icons.refresh,
-              color: Theme.of(context).colorScheme.primary,
-            ),
+            Icon(Icons.refresh, color: Theme.of(context).colorScheme.primary),
             const SizedBox(width: 8),
             Expanded(
               child: Text(
@@ -260,9 +262,9 @@ class _EqualizerScreenState extends State<EqualizerScreen> {
         ],
       ),
     );
-    
+
     if (confirmed != true) return;
-    
+
     // Restablecer todas las bandas a 0.0
     if (_parameters != null && _bandGains.isNotEmpty) {
       for (int i = 0; i < _parameters!.bands.length; i++) {
@@ -273,7 +275,7 @@ class _EqualizerScreenState extends State<EqualizerScreen> {
       }
       await _saveEqualizerSettings();
     }
-    
+
     // Restablecer volumen boost a 1.0
     await _updateVolumeBoost(1.0);
   }
@@ -292,7 +294,7 @@ class _EqualizerScreenState extends State<EqualizerScreen> {
   void _showEqualizerInfo() {
     final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -310,8 +312,12 @@ class _EqualizerScreenState extends State<EqualizerScreen> {
             ),
             const SizedBox(width: 8),
             Expanded(
-              child: Text(LocaleProvider.tr('important_information'),
-              style: TextStyle(fontSize: 18, color: Theme.of(context).colorScheme.primary),
+              child: Text(
+                LocaleProvider.tr('important_information'),
+                style: TextStyle(
+                  fontSize: 18,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
               ),
             ),
           ],
@@ -322,16 +328,22 @@ class _EqualizerScreenState extends State<EqualizerScreen> {
             child: Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surfaceContainer.withValues(alpha: 0.5),
+                color: Theme.of(
+                  context,
+                ).colorScheme.surfaceContainer.withValues(alpha: 0.5),
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(
-                  color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.outline.withValues(alpha: 0.3),
                 ),
               ),
               child: Text(
                 LocaleProvider.tr('volume_boost_info'),
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withValues(alpha: 0.7),
                   height: 1.3,
                 ),
               ),
@@ -339,9 +351,68 @@ class _EqualizerScreenState extends State<EqualizerScreen> {
           ),
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: Text(LocaleProvider.tr('ok')),
+          SizedBox(height: 16),
+          InkWell(
+            onTap: () => Navigator.of(context).pop(),
+            borderRadius: BorderRadius.circular(16),
+            child: Container(
+              width: double.infinity,
+              padding: EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: isAmoled && isDark
+                    ? Colors.white.withValues(alpha: 0.2)
+                    : Theme.of(context).colorScheme.primaryContainer,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: isAmoled && isDark
+                      ? Colors.white.withValues(alpha: 0.4)
+                      : Theme.of(
+                          context,
+                        ).colorScheme.primary.withValues(alpha: 0.3),
+                  width: 2,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      color: isAmoled && isDark
+                          ? Colors.white.withValues(alpha: 0.2)
+                          : Theme.of(
+                              context,
+                            ).colorScheme.primary.withValues(alpha: 0.1),
+                    ),
+                    child: Icon(
+                      Icons.check_circle,
+                      size: 30,
+                      color: isAmoled && isDark
+                          ? Colors.white
+                          : Theme.of(context).colorScheme.primary,
+                    ),
+                  ),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          LocaleProvider.tr('ok'),
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: isAmoled && isDark
+                                ? Colors.white
+                                : Theme.of(context).colorScheme.primary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         ],
       ),
@@ -351,7 +422,7 @@ class _EqualizerScreenState extends State<EqualizerScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     return Scaffold(
       appBar: AppBar(
         backgroundColor: theme.scaffoldBackgroundColor,
@@ -360,6 +431,13 @@ class _EqualizerScreenState extends State<EqualizerScreen> {
         scrolledUnderElevation: 0,
         title: Text(LocaleProvider.tr('equalizer')),
         leading: IconButton(
+          constraints: const BoxConstraints(
+            minWidth: 40,
+            minHeight: 40,
+            maxWidth: 40,
+            maxHeight: 40,
+          ),
+          padding: EdgeInsets.zero,
           icon: Container(
             decoration: BoxDecoration(
               shape: BoxShape.circle,
@@ -392,9 +470,7 @@ class _EqualizerScreenState extends State<EqualizerScreen> {
     final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     if (_isLoading) {
-      return const Center(
-        child: CircularProgressIndicator(),
-      );
+      return const Center(child: CircularProgressIndicator());
     }
 
     if (!Platform.isAndroid) {
@@ -473,7 +549,9 @@ class _EqualizerScreenState extends State<EqualizerScreen> {
         children: [
           // Switch para habilitar/deshabilitar
           Card(
-            color: (isSystem || isAmoled) && isDark ? Theme.of(context).colorScheme.onSecondaryFixed : Theme.of(context).colorScheme.secondaryContainer, 
+            color: (isSystem || isAmoled) && isDark
+                ? Theme.of(context).colorScheme.onSecondaryFixed
+                : Theme.of(context).colorScheme.secondaryContainer,
             margin: EdgeInsets.zero,
             elevation: 0,
             shape: RoundedRectangleBorder(
@@ -483,10 +561,15 @@ class _EqualizerScreenState extends State<EqualizerScreen> {
                   : BorderSide.none,
             ),
             child: SwitchListTile(
-              title: Text(LocaleProvider.tr('equalizer'), style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+              title: Text(
+                LocaleProvider.tr('equalizer'),
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              ),
               value: _isEnabled,
               onChanged: _toggleEqualizer,
-              thumbIcon: WidgetStateProperty.resolveWith<Icon?>((Set<WidgetState> states) {
+              thumbIcon: WidgetStateProperty.resolveWith<Icon?>((
+                Set<WidgetState> states,
+              ) {
                 final iconColor = isAmoled && isDark ? Colors.white : null;
                 if (states.contains(WidgetState.selected)) {
                   return Icon(Icons.check, size: 20, color: iconColor);
@@ -496,13 +579,17 @@ class _EqualizerScreenState extends State<EqualizerScreen> {
               }),
             ),
           ),
-          
+
           // Bandas del ecualizador
           if (_parameters!.bands.isNotEmpty) ...[
             const SizedBox(height: 24),
-            
+
             Card(
-              color: (isSystem || isAmoled) && isDark ? Theme.of(context).colorScheme.onSecondary.withValues(alpha: 0.5) : theme.colorScheme.secondaryContainer.withValues(alpha: 0.5), 
+              color: (isSystem || isAmoled) && isDark
+                  ? Theme.of(
+                      context,
+                    ).colorScheme.onSecondary.withValues(alpha: 0.5)
+                  : theme.colorScheme.secondaryContainer.withValues(alpha: 0.5),
               margin: EdgeInsets.zero,
               elevation: 0,
               shape: RoundedRectangleBorder(
@@ -517,88 +604,109 @@ class _EqualizerScreenState extends State<EqualizerScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const SizedBox(height: 16),
-                    Text(LocaleProvider.tr('equalizer_bands'), style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                    Text(
+                      LocaleProvider.tr('equalizer_bands'),
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                     const SizedBox(height: 24),
-                    
+
                     // Sliders verticales en horizontal
                     SizedBox(
                       height: 280,
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                         crossAxisAlignment: CrossAxisAlignment.end,
-                        children: _parameters!.bands.asMap().entries.map((entry) {
-                  final index = entry.key;
-                  final band = entry.value;
-                  final currentGain = _bandGains.length > index ? _bandGains[index] : 0.0;
-                  
-                  return Expanded(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        // Valor actual en dB
-                        Text(
-                          currentGain.toStringAsFixed(1),
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.primary,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        
-                        // Slider vertical
-                        Expanded(
-                          child: RotatedBox(
-                            quarterTurns: -1,
-                            child: SliderTheme(
-                              data: SliderTheme.of(context).copyWith(
-                                trackHeight: 3,
-                                thumbShape: const RoundSliderThumbShape(
-                                  enabledThumbRadius: 8,
+                        children: _parameters!.bands.asMap().entries.map((
+                          entry,
+                        ) {
+                          final index = entry.key;
+                          final band = entry.value;
+                          final currentGain = _bandGains.length > index
+                              ? _bandGains[index]
+                              : 0.0;
+
+                          return Expanded(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              children: [
+                                // Valor actual en dB
+                                Text(
+                                  currentGain.toStringAsFixed(1),
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: theme.colorScheme.primary,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14,
+                                  ),
                                 ),
-                              ),
-                              child: Slider(
-                                activeColor: theme.colorScheme.primary,
-                                inactiveColor: theme.colorScheme.surface,
-                                value: currentGain,
-                                min: _parameters!.minDecibels,
-                                max: _parameters!.maxDecibels,
-                                divisions: ((_parameters!.maxDecibels - _parameters!.minDecibels) * 10).toInt(),
-                                onChanged: _isEnabled 
-                                  ? (value) => _updateBandGain(index, value)
-                                  : null,
-                              ),
+                                const SizedBox(height: 8),
+
+                                // Slider vertical
+                                Expanded(
+                                  child: RotatedBox(
+                                    quarterTurns: -1,
+                                    child: SliderTheme(
+                                      data: SliderTheme.of(context).copyWith(
+                                        trackHeight: 3,
+                                        thumbShape: const RoundSliderThumbShape(
+                                          enabledThumbRadius: 8,
+                                        ),
+                                      ),
+                                      child: Slider(
+                                        activeColor: theme.colorScheme.primary,
+                                        inactiveColor:
+                                            theme.colorScheme.surface,
+                                        value: currentGain,
+                                        min: _parameters!.minDecibels,
+                                        max: _parameters!.maxDecibels,
+                                        divisions:
+                                            ((_parameters!.maxDecibels -
+                                                        _parameters!
+                                                            .minDecibels) *
+                                                    10)
+                                                .toInt(),
+                                        onChanged: _isEnabled
+                                            ? (value) =>
+                                                  _updateBandGain(index, value)
+                                            : null,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+
+                                const SizedBox(height: 8),
+
+                                // Frecuencia
+                                Text(
+                                  _formatFrequency(band.centerFrequency),
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    fontWeight: FontWeight.w500,
+                                    fontSize: 12,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                  maxLines: 2,
+                                ),
+                              ],
                             ),
-                          ),
-                        ),
-                        
-                        const SizedBox(height: 8),
-                        
-                        // Frecuencia
-                        Text(
-                          _formatFrequency(band.centerFrequency),
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            fontWeight: FontWeight.w500,
-                            fontSize: 12,
-                          ),
-                          textAlign: TextAlign.center,
-                          maxLines: 2,
-                        ),
-                      ],
-                    ),
-                  );
-                }).toList(),
+                          );
+                        }).toList(),
                       ),
                     ),
                   ],
                 ),
               ),
             ),
-            
+
             // Volume Boost
             const SizedBox(height: 16),
             Card(
-              color: (isSystem || isAmoled) && isDark ? Theme.of(context).colorScheme.onSecondary.withValues(alpha: 0.5) : theme.colorScheme.secondaryContainer.withValues(alpha: 0.5), 
+              color: (isSystem || isAmoled) && isDark
+                  ? Theme.of(
+                      context,
+                    ).colorScheme.onSecondary.withValues(alpha: 0.5)
+                  : theme.colorScheme.secondaryContainer.withValues(alpha: 0.5),
               margin: EdgeInsets.zero,
               elevation: 0,
               shape: RoundedRectangleBorder(
@@ -623,11 +731,13 @@ class _EqualizerScreenState extends State<EqualizerScreen> {
                     Text(
                       LocaleProvider.tr('volume_boost_desc'),
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: 0.7,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 24),
-                    
+
                     // Indicador de valor actual
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -648,7 +758,7 @@ class _EqualizerScreenState extends State<EqualizerScreen> {
                       ],
                     ),
                     const SizedBox(height: 16),
-                    
+
                     // Slider
                     SliderTheme(
                       data: SliderTheme.of(context).copyWith(
@@ -666,7 +776,7 @@ class _EqualizerScreenState extends State<EqualizerScreen> {
                         onChanged: (value) => _updateVolumeBoost(value),
                       ),
                     ),
-                    
+
                     // Indicadores de rango
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -676,20 +786,26 @@ class _EqualizerScreenState extends State<EqualizerScreen> {
                           Text(
                             '1.0x',
                             style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                              color: theme.colorScheme.onSurface.withValues(
+                                alpha: 0.6,
+                              ),
                             ),
                           ),
                           Text(
                             '2.0x',
                             style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                              color: theme.colorScheme.onSurface.withValues(
+                                alpha: 0.6,
+                              ),
                               fontWeight: FontWeight.bold,
                             ),
                           ),
                           Text(
                             '3.0x',
                             style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                              color: theme.colorScheme.onSurface.withValues(
+                                alpha: 0.6,
+                              ),
                             ),
                           ),
                         ],
@@ -705,4 +821,3 @@ class _EqualizerScreenState extends State<EqualizerScreen> {
     );
   }
 }
-

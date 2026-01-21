@@ -26,10 +26,7 @@ class LyricsSearchResult {
 class LyricsSearchScreen extends StatefulWidget {
   final MediaItem currentSong;
 
-  const LyricsSearchScreen({
-    super.key,
-    required this.currentSong,
-  });
+  const LyricsSearchScreen({super.key, required this.currentSong});
 
   @override
   State<LyricsSearchScreen> createState() => _LyricsSearchScreenState();
@@ -50,8 +47,9 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     // Establecer texto inicial basado en la canción actual
-    _searchController.text = '${widget.currentSong.artist ?? ''} ${widget.currentSong.title}'.trim();
-    
+    _searchController.text =
+        '${widget.currentSong.artist ?? ''} ${widget.currentSong.title}'.trim();
+
     // Realizar búsqueda inicial automáticamente
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _performSearch();
@@ -116,14 +114,18 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
             final plainLyrics = item['plainLyrics']?.toString();
             final duration = item['duration'] is int ? item['duration'] : 0;
 
-            if (title.isNotEmpty && artist.isNotEmpty && syncedLyrics.isNotEmpty) {
-              results.add(LyricsSearchResult(
-                title: title,
-                artist: artist,
-                syncedLyrics: syncedLyrics,
-                plainLyrics: plainLyrics,
-                duration: duration,
-              ));
+            if (title.isNotEmpty &&
+                artist.isNotEmpty &&
+                syncedLyrics.isNotEmpty) {
+              results.add(
+                LyricsSearchResult(
+                  title: title,
+                  artist: artist,
+                  syncedLyrics: syncedLyrics,
+                  plainLyrics: plainLyrics,
+                  duration: duration,
+                ),
+              );
             }
           }
         }
@@ -173,7 +175,7 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
             ),
             title: Center(
               child: Text(
-                LocaleProvider.tr('select_lyrics'), 
+                LocaleProvider.tr('select_lyrics'),
                 style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
               ),
             ),
@@ -184,7 +186,9 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
                   fontSize: 18,
                 ),
                 children: [
-                  TextSpan(text: '${LocaleProvider.tr('confirm_apply_lyrics')} "'),
+                  TextSpan(
+                    text: '${LocaleProvider.tr('confirm_apply_lyrics')} "',
+                  ),
                   TextSpan(
                     text: widget.currentSong.title,
                     style: const TextStyle(fontWeight: FontWeight.bold),
@@ -220,7 +224,9 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
                           border: Border.all(
                             color: isAmoled && isDark
                                 ? Colors.white.withValues(alpha: 0.4)
-                                : Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
+                                : Theme.of(
+                                    context,
+                                  ).colorScheme.primary.withValues(alpha: 0.3),
                             width: 2,
                           ),
                         ),
@@ -232,7 +238,8 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
                                 borderRadius: BorderRadius.circular(12),
                                 color: isAmoled && isDark
                                     ? Colors.white.withValues(alpha: 0.2)
-                                    : Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                                    : Theme.of(context).colorScheme.primary
+                                          .withValues(alpha: 0.1),
                               ),
                               child: Icon(
                                 Symbols.check_rounded,
@@ -254,7 +261,9 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
                                       fontWeight: FontWeight.w600,
                                       color: isAmoled && isDark
                                           ? Colors.white
-                                          : Theme.of(context).colorScheme.primary,
+                                          : Theme.of(
+                                              context,
+                                            ).colorScheme.primary,
                                     ),
                                   ),
                                 ],
@@ -275,7 +284,9 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
                         decoration: BoxDecoration(
                           color: isAmoled && isDark
                               ? Colors.white.withValues(alpha: 0.1)
-                              : Theme.of(context).colorScheme.secondaryContainer,
+                              : Theme.of(
+                                  context,
+                                ).colorScheme.secondaryContainer,
                           borderRadius: BorderRadius.only(
                             bottomLeft: Radius.circular(16),
                             bottomRight: Radius.circular(16),
@@ -285,7 +296,9 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
                           border: Border.all(
                             color: isAmoled && isDark
                                 ? Colors.white.withValues(alpha: 0.2)
-                                : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
+                                : Theme.of(
+                                    context,
+                                  ).colorScheme.outline.withValues(alpha: 0.1),
                             width: 1,
                           ),
                         ),
@@ -317,7 +330,9 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
                                       fontWeight: FontWeight.w600,
                                       color: isAmoled && isDark
                                           ? Colors.white
-                                          : Theme.of(context).colorScheme.onSurface,
+                                          : Theme.of(
+                                              context,
+                                            ).colorScheme.onSurface,
                                     ),
                                   ),
                                 ],
@@ -336,16 +351,16 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
       ),
     );
 
-        if (confirmed == true) {
-          // Aplicar la letra después de la confirmación
-          await _applyLyrics(result);
-        }
+    if (confirmed == true) {
+      // Aplicar la letra después de la confirmación
+      await _applyLyrics(result);
+    }
   }
 
   Future<void> _applyLyrics(LyricsSearchResult result) async {
     try {
       final lyricsBox = await SyncedLyricsService.box;
-      
+
       final lyricsData = LyricsData(
         id: widget.currentSong.id,
         synced: result.syncedLyrics,
@@ -357,13 +372,13 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
       if (mounted) {
         // Notificar que se actualizó la letra usando el ValueNotifier global
         lyricsUpdatedNotifier.value = widget.currentSong.id;
-        
+
         // Mostrar mensaje de éxito y esperar a que el usuario presione "Aceptar"
         await _showMessage(
           title: LocaleProvider.tr('success'),
           description: LocaleProvider.tr('lyrics_selected_desc'),
         );
-        
+
         // Cerrar la pantalla
         if (mounted) {
           Navigator.of(context).pop(false);
@@ -379,7 +394,10 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
     }
   }
 
-  Future<void> _showMessage({required String title, required String description}) async {
+  Future<void> _showMessage({
+    required String title,
+    required String description,
+  }) async {
     await showDialog(
       context: context,
       builder: (context) => ValueListenableBuilder<AppColorScheme>(
@@ -396,14 +414,11 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
             ),
             title: Center(
               child: Text(
-                title, 
+                title,
                 style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
               ),
             ),
-            content: Text(
-              description,
-              style: TextStyle(fontSize: 16),
-            ),
+            content: Text(description, style: TextStyle(fontSize: 16)),
             actions: [
               SizedBox(
                 width: 400,
@@ -421,7 +436,9 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
                       border: Border.all(
                         color: isAmoled && isDark
                             ? Colors.white.withValues(alpha: 0.4)
-                            : Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
+                            : Theme.of(
+                                context,
+                              ).colorScheme.primary.withValues(alpha: 0.3),
                         width: 2,
                       ),
                     ),
@@ -433,7 +450,9 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
                             borderRadius: BorderRadius.circular(12),
                             color: isAmoled && isDark
                                 ? Colors.white.withValues(alpha: 0.2)
-                                : Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                                : Theme.of(
+                                    context,
+                                  ).colorScheme.primary.withValues(alpha: 0.1),
                           ),
                           child: Icon(
                             Symbols.check_rounded,
@@ -488,13 +507,77 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
                   ? const BorderSide(color: Colors.white, width: 1)
                   : BorderSide.none,
             ),
-            title: Text(LocaleProvider.tr('info')),
+            title: Center(
+              child: Text(
+                LocaleProvider.tr('info'),
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
             content: Text(LocaleProvider.tr('lyrics_search_info')),
             actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: Text(LocaleProvider.tr('ok')),
-              )
+              SizedBox(height: 16),
+              InkWell(
+                onTap: () => Navigator.of(context).pop(),
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  width: double.infinity,
+                  padding: EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: isAmoled && isDark
+                        ? Colors.white.withValues(alpha: 0.2)
+                        : Theme.of(context).colorScheme.primaryContainer,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: isAmoled && isDark
+                          ? Colors.white.withValues(alpha: 0.4)
+                          : Theme.of(
+                              context,
+                            ).colorScheme.primary.withValues(alpha: 0.3),
+                      width: 2,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          color: isAmoled && isDark
+                              ? Colors.white.withValues(alpha: 0.2)
+                              : Theme.of(
+                                  context,
+                                ).colorScheme.primary.withValues(alpha: 0.1),
+                        ),
+                        child: Icon(
+                          Icons.check_circle,
+                          size: 30,
+                          color: isAmoled && isDark
+                              ? Colors.white
+                              : Theme.of(context).colorScheme.primary,
+                        ),
+                      ),
+                      SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              LocaleProvider.tr('ok'),
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: isAmoled && isDark
+                                    ? Colors.white
+                                    : Theme.of(context).colorScheme.primary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ],
           );
         },
@@ -511,12 +594,33 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
         elevation: 0,
         scrolledUnderElevation: 0,
         title: Text(LocaleProvider.tr('search_lyrics_title')),
+        leading: IconButton(
+          constraints: const BoxConstraints(
+            minWidth: 40,
+            minHeight: 40,
+            maxWidth: 40,
+            maxHeight: 40,
+          ),
+          padding: EdgeInsets.zero,
+          icon: Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: Theme.of(
+                context,
+              ).colorScheme.primary.withValues(alpha: 0.08),
+            ),
+            child: const Icon(Icons.arrow_back, size: 24),
+          ),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
         actions: [
           IconButton(
             icon: Icon(Icons.info_outline, size: 28),
             onPressed: () => _showInfoDialog(),
-          )
-        ]
+          ),
+        ],
       ),
       body: ValueListenableBuilder<AppColorScheme>(
         valueListenable: colorSchemeNotifier,
@@ -525,90 +629,91 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
           final isDark = Theme.of(context).brightness == Brightness.dark;
 
           return Column(
-              children: [
-                // Barra de búsqueda con botón
-                Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Row(
-                    children: [
-                      // TextField
-                      Expanded(
-                        child: TextField(
-                          controller: _searchController,
-                          focusNode: _searchFocusNode,
-                          decoration: InputDecoration(
-                            hintText: LocaleProvider.tr('search_lyrics_hint'),
-                            suffixIcon: _searchController.text.isNotEmpty
-                                ? IconButton(
-                                    icon: const Icon(Symbols.clear_rounded),
-                                    onPressed: () {
-                                      _searchController.clear();
-                                      if (mounted) {
-                                        setState(() {
-                                          _searchResults = [];
-                                          _hasSearched = false;
-                                        });
-                                      }
-                                    },
-                                  )
-                                : null,
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                          ),
-                          onSubmitted: (_) => _performSearch(),
-                          onChanged: (value) {
-                            if (mounted) {
-                              setState(() {});
-                            }
-                          },
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      // Botón de búsqueda
-                      SizedBox(
-                        height: 56,
-                        width: 56,
-                        child: Material(
-                          borderRadius: BorderRadius.circular(8),
-                          color: colorScheme == AppColorScheme.amoled
-                                  ? Colors.white
-                                  : Theme.of(context).brightness == Brightness.light
-                                      ? Theme.of(context).colorScheme.primary
-                                      : colorScheme == AppColorScheme.system
-                                        ? Theme.of(context).colorScheme.primary
-                                        : Theme.of(context).colorScheme.primaryContainer,
-                          child: InkWell(
+            children: [
+              // Barra de búsqueda con botón
+              Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Row(
+                  children: [
+                    // TextField
+                    Expanded(
+                      child: TextField(
+                        controller: _searchController,
+                        focusNode: _searchFocusNode,
+                        decoration: InputDecoration(
+                          hintText: LocaleProvider.tr('search_lyrics_hint'),
+                          suffixIcon: _searchController.text.isNotEmpty
+                              ? IconButton(
+                                  icon: const Icon(Symbols.clear_rounded),
+                                  onPressed: () {
+                                    _searchController.clear();
+                                    if (mounted) {
+                                      setState(() {
+                                        _searchResults = [];
+                                        _hasSearched = false;
+                                      });
+                                    }
+                                  },
+                                )
+                              : null,
+                          border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(8),
-                            onTap: _isSearching ? null : _performSearch,
-                            child: Tooltip(
-                              message: LocaleProvider.tr('search_lyrics'),
-                              child: Icon(
-                                Icons.search,
-                                color: colorScheme == AppColorScheme.amoled
-                                        ? Colors.black
-                                        : Theme.of(context).brightness == Brightness.light
-                                          ? Theme.of(context).colorScheme.onPrimary
-                                          : colorScheme == AppColorScheme.system
-                                            ? Theme.of(context).colorScheme.onPrimary
-                                            : Theme.of(context).colorScheme.onPrimaryContainer,
-                              ),
+                          ),
+                        ),
+                        onSubmitted: (_) => _performSearch(),
+                        onChanged: (value) {
+                          if (mounted) {
+                            setState(() {});
+                          }
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    // Botón de búsqueda
+                    SizedBox(
+                      height: 56,
+                      width: 56,
+                      child: Material(
+                        borderRadius: BorderRadius.circular(8),
+                        color: colorScheme == AppColorScheme.amoled
+                            ? Colors.white
+                            : Theme.of(context).brightness == Brightness.light
+                            ? Theme.of(context).colorScheme.primary
+                            : colorScheme == AppColorScheme.system
+                            ? Theme.of(context).colorScheme.primary
+                            : Theme.of(context).colorScheme.primaryContainer,
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(8),
+                          onTap: _isSearching ? null : _performSearch,
+                          child: Tooltip(
+                            message: LocaleProvider.tr('search_lyrics'),
+                            child: Icon(
+                              Icons.search,
+                              color: colorScheme == AppColorScheme.amoled
+                                  ? Colors.black
+                                  : Theme.of(context).brightness ==
+                                        Brightness.light
+                                  ? Theme.of(context).colorScheme.onPrimary
+                                  : colorScheme == AppColorScheme.system
+                                  ? Theme.of(context).colorScheme.onPrimary
+                                  : Theme.of(
+                                      context,
+                                    ).colorScheme.onPrimaryContainer,
                             ),
                           ),
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
+              ),
 
-                const SizedBox(height: 16),
+              const SizedBox(height: 16),
 
-                // Resultados
-                Expanded(
-                  child: _buildResults(isAmoled, isDark),
-                ),
-              ],
-            );
+              // Resultados
+              Expanded(child: _buildResults(isAmoled, isDark)),
+            ],
+          );
         },
       ),
     );
@@ -623,16 +728,20 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
             Icon(
               Symbols.search_rounded,
               size: 64,
-              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+              color: Theme.of(
+                context,
+              ).colorScheme.onSurface.withValues(alpha: 0.7),
             ),
             const SizedBox(height: 16),
-              Text(
-                LocaleProvider.tr('enter_search_term'),
-                style: TextStyle(
-                  fontSize: 16,
-                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
-                ),
+            Text(
+              LocaleProvider.tr('enter_search_term'),
+              style: TextStyle(
+                fontSize: 16,
+                color: Theme.of(
+                  context,
+                ).colorScheme.onSurface.withValues(alpha: 0.7),
               ),
+            ),
           ],
         ),
       );
@@ -642,9 +751,7 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
       return const Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            CircularProgressIndicator(),
-          ],
+          children: [CircularProgressIndicator()],
         ),
       );
     }
@@ -657,14 +764,18 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
             Icon(
               Icons.lyrics_outlined,
               size: 64,
-              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+              color: Theme.of(
+                context,
+              ).colorScheme.onSurface.withValues(alpha: 0.5),
             ),
             const SizedBox(height: 16),
             Text(
               LocaleProvider.tr('no_lyrics_found'),
               style: TextStyle(
                 fontSize: 16,
-                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+                color: Theme.of(
+                  context,
+                ).colorScheme.onSurface.withValues(alpha: 0.7),
               ),
             ),
           ],
@@ -690,7 +801,9 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
                 '(${_searchResults.length})',
                 style: TextStyle(
                   fontSize: 14,
-                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withValues(alpha: 0.7),
                 ),
               ),
             ],
@@ -723,12 +836,18 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
     final isExpanded = _expandedCards.contains(index);
     final fullLyrics = _getFullLyrics(result.syncedLyrics);
     final previewLyrics = _getLyricsPreview(result.syncedLyrics);
-    
+
     return Card(
       shadowColor: Colors.transparent,
-      color: isSystem && isDark ? Theme.of(context).colorScheme.secondaryContainer.withValues(alpha: 0.3) 
-              : isSystem && isLight ? Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.3)
-                : null,
+      color: isSystem && isDark
+          ? Theme.of(
+              context,
+            ).colorScheme.secondaryContainer.withValues(alpha: 0.3)
+          : isSystem && isLight
+          ? Theme.of(
+              context,
+            ).colorScheme.primaryContainer.withValues(alpha: 0.3)
+          : null,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
         side: isAmoled && isDark
@@ -759,9 +878,7 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
                       const SizedBox(height: 4),
                       Text(
                         result.artist,
-                        style: TextStyle(
-                          fontSize: 14,
-                        ),
+                        style: TextStyle(fontSize: 14),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -787,113 +904,124 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
                         borderRadius: BorderRadius.circular(16),
                       ),
                     ),
-                    child: const Icon(
-                      Symbols.check_rounded,
-                      size: 28,
-                    ),
+                    child: const Icon(Symbols.check_rounded, size: 28),
                   ),
                 ),
               ],
             ),
-              const SizedBox(height: 12),
-              // Mostrar preview de la letra con botón de expandir
-              if (fullLyrics.length > previewLyrics.length)
-                InkWell(
-                  onTap: () {
-                    if (mounted) {
-                      setState(() {
-                        if (isExpanded) {
-                          _expandedCards.remove(index);
-                        } else {
-                          _expandedCards.add(index);
-                        }
-                      });
-                    }
-                  },
-                  borderRadius: BorderRadius.circular(8),
-                  child: Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: isSystem ? Theme.of(context).colorScheme.secondaryContainer.withValues(alpha: 0.5) : Theme.of(context).colorScheme.surfaceContainer,
-                      borderRadius: BorderRadius.circular(8),
-                      border: isAmoled && isDark
-                          ? Border.all(color: Colors.white, width: 1)
-                          : null,
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Text(
-                              LocaleProvider.tr('preview'),
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
-                              ),
-                            ),
-                            const Spacer(),
-                            Container(
-                              width: 32,
-                              height: 32,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
-                              ),
-                              child: Icon(
-                                isExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
-                                size: 20,
-                                color: Theme.of(context).colorScheme.onSurface,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        isExpanded 
-                          ? _buildFullLyricsDisplay(fullLyrics)
-                          : _buildPreviewLyricsDisplay(previewLyrics),
-                      ],
-                    ),
-                  ),
-                )
-              else
-                Container(
+            const SizedBox(height: 12),
+            // Mostrar preview de la letra con botón de expandir
+            if (fullLyrics.length > previewLyrics.length)
+              InkWell(
+                onTap: () {
+                  if (mounted) {
+                    setState(() {
+                      if (isExpanded) {
+                        _expandedCards.remove(index);
+                      } else {
+                        _expandedCards.add(index);
+                      }
+                    });
+                  }
+                },
+                borderRadius: BorderRadius.circular(8),
+                child: Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.surfaceContainer.withValues(alpha: 0.5),
+                    color: isSystem
+                        ? Theme.of(context).colorScheme.secondaryContainer
+                              .withValues(alpha: 0.5)
+                        : Theme.of(context).colorScheme.surfaceContainer,
                     borderRadius: BorderRadius.circular(8),
                     border: isAmoled && isDark
-                        ? Border.all(color: Colors.white, width: 1.5)
+                        ? Border.all(color: Colors.white, width: 1)
                         : null,
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        LocaleProvider.tr('preview'),
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
-                        ),
+                      Row(
+                        children: [
+                          Text(
+                            LocaleProvider.tr('preview'),
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSurface.withValues(alpha: 0.7),
+                            ),
+                          ),
+                          const Spacer(),
+                          Container(
+                            width: 32,
+                            height: 32,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .surfaceContainerHighest
+                                  .withValues(alpha: 0.5),
+                            ),
+                            child: Icon(
+                              isExpanded
+                                  ? Icons.keyboard_arrow_up
+                                  : Icons.keyboard_arrow_down,
+                              size: 20,
+                              color: Theme.of(context).colorScheme.onSurface,
+                            ),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 4),
-                      _buildPreviewLyricsDisplay(previewLyrics),
+                      isExpanded
+                          ? _buildFullLyricsDisplay(fullLyrics)
+                          : _buildPreviewLyricsDisplay(previewLyrics),
                     ],
                   ),
                 ),
-            ],
-          ),
+              )
+            else
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.surfaceContainer.withValues(alpha: 0.5),
+                  borderRadius: BorderRadius.circular(8),
+                  border: isAmoled && isDark
+                      ? Border.all(color: Colors.white, width: 1.5)
+                      : null,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      LocaleProvider.tr('preview'),
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withValues(alpha: 0.7),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    _buildPreviewLyricsDisplay(previewLyrics),
+                  ],
+                ),
+              ),
+          ],
         ),
-      );
+      ),
+    );
   }
 
   String _getLyricsPreview(String syncedLyrics) {
     // Extraer el texto de la letra sin los timestamps
     final lines = syncedLyrics.split('\n');
     final textLines = <String>[];
-    
+
     for (final line in lines) {
       final regExp = RegExp(r'\[(\d{2}):(\d{2})(?:\.(\d{2,3}))?\](.*)');
       final match = regExp.firstMatch(line);
@@ -904,7 +1032,7 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
         }
       }
     }
-    
+
     return textLines.take(3).join('\n');
   }
 
@@ -912,7 +1040,7 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
     // Extraer el texto completo de la letra sin los timestamps
     final lines = syncedLyrics.split('\n');
     final textLines = <String>[];
-    
+
     for (final line in lines) {
       final regExp = RegExp(r'\[(\d{2}):(\d{2})(?:\.(\d{2,3}))?\](.*)');
       final match = regExp.firstMatch(line);
@@ -923,25 +1051,30 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
         }
       }
     }
-    
+
     return textLines.join('\n');
   }
-
 
   Widget _buildPreviewLyricsDisplay(String previewLyrics) {
     final lines = previewLyrics.split('\n');
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: lines.map((line) => Padding(
-        padding: const EdgeInsets.only(bottom: 2),
-        child: Text(
-          line,
-          style: TextStyle(
-            fontSize: 12,
-            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.8),
-          ),
-        ),
-      )).toList(),
+      children: lines
+          .map(
+            (line) => Padding(
+              padding: const EdgeInsets.only(bottom: 2),
+              child: Text(
+                line,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withValues(alpha: 0.8),
+                ),
+              ),
+            ),
+          )
+          .toList(),
     );
   }
 
@@ -949,16 +1082,22 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
     final lines = fullLyrics.split('\n');
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: lines.map((line) => Padding(
-        padding: const EdgeInsets.only(bottom: 2),
-        child: Text(
-          line,
-          style: TextStyle(
-            fontSize: 12,
-            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.8),
-          ),
-        ),
-      )).toList(),
+      children: lines
+          .map(
+            (line) => Padding(
+              padding: const EdgeInsets.only(bottom: 2),
+              child: Text(
+                line,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withValues(alpha: 0.8),
+                ),
+              ),
+            ),
+          )
+          .toList(),
     );
   }
 }

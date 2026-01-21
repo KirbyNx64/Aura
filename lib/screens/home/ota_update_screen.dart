@@ -83,10 +83,7 @@ class _UpdateScreenState extends State<UpdateScreen> {
               title: Center(
                 child: Text(
                   LocaleProvider.tr('download_method'),
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
                 ),
               ),
               content: SizedBox(
@@ -125,7 +122,9 @@ class _UpdateScreenState extends State<UpdateScreen> {
                         decoration: BoxDecoration(
                           color: isAmoled && isDark
                               ? Colors.white.withValues(alpha: 0.1)
-                              : Theme.of(context).colorScheme.secondaryContainer,
+                              : Theme.of(
+                                  context,
+                                ).colorScheme.secondaryContainer,
                           borderRadius: BorderRadius.only(
                             topLeft: Radius.circular(16),
                             topRight: Radius.circular(16),
@@ -135,7 +134,9 @@ class _UpdateScreenState extends State<UpdateScreen> {
                           border: Border.all(
                             color: isAmoled && isDark
                                 ? Colors.white.withValues(alpha: 0.2)
-                                : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
+                                : Theme.of(
+                                    context,
+                                  ).colorScheme.outline.withValues(alpha: 0.1),
                             width: 1,
                           ),
                         ),
@@ -167,7 +168,9 @@ class _UpdateScreenState extends State<UpdateScreen> {
                                       fontWeight: FontWeight.w600,
                                       color: isAmoled && isDark
                                           ? Colors.white
-                                          : Theme.of(context).colorScheme.onSurface,
+                                          : Theme.of(
+                                              context,
+                                            ).colorScheme.onSurface,
                                     ),
                                   ),
                                   SizedBox(height: 4),
@@ -177,7 +180,10 @@ class _UpdateScreenState extends State<UpdateScreen> {
                                       fontSize: 12,
                                       color: isAmoled && isDark
                                           ? Colors.white.withValues(alpha: 0.7)
-                                          : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+                                          : Theme.of(context)
+                                                .colorScheme
+                                                .onSurface
+                                                .withValues(alpha: 0.7),
                                     ),
                                   ),
                                 ],
@@ -201,7 +207,9 @@ class _UpdateScreenState extends State<UpdateScreen> {
                         decoration: BoxDecoration(
                           color: isAmoled && isDark
                               ? Colors.white.withValues(alpha: 0.1)
-                              : Theme.of(context).colorScheme.secondaryContainer,
+                              : Theme.of(
+                                  context,
+                                ).colorScheme.secondaryContainer,
                           borderRadius: BorderRadius.only(
                             bottomLeft: Radius.circular(16),
                             bottomRight: Radius.circular(16),
@@ -211,7 +219,9 @@ class _UpdateScreenState extends State<UpdateScreen> {
                           border: Border.all(
                             color: isAmoled && isDark
                                 ? Colors.white.withValues(alpha: 0.2)
-                                : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
+                                : Theme.of(
+                                    context,
+                                  ).colorScheme.outline.withValues(alpha: 0.1),
                             width: 1,
                           ),
                         ),
@@ -244,17 +254,24 @@ class _UpdateScreenState extends State<UpdateScreen> {
                                       fontWeight: FontWeight.w600,
                                       color: isAmoled && isDark
                                           ? Colors.white
-                                          : Theme.of(context).colorScheme.onSurface,
+                                          : Theme.of(
+                                              context,
+                                            ).colorScheme.onSurface,
                                     ),
                                   ),
                                   SizedBox(height: 4),
                                   Text(
-                                    LocaleProvider.tr('download_in_browser_desc'),
+                                    LocaleProvider.tr(
+                                      'download_in_browser_desc',
+                                    ),
                                     style: TextStyle(
                                       fontSize: 12,
                                       color: isAmoled && isDark
                                           ? Colors.white.withValues(alpha: 0.7)
-                                          : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+                                          : Theme.of(context)
+                                                .colorScheme
+                                                .onSurface
+                                                .withValues(alpha: 0.7),
                                     ),
                                   ),
                                 ],
@@ -284,7 +301,9 @@ class _UpdateScreenState extends State<UpdateScreen> {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('${LocaleProvider.tr('could_not_open')}: $_apkUrl'),
+                content: Text(
+                  '${LocaleProvider.tr('could_not_open')}: $_apkUrl',
+                ),
                 backgroundColor: Colors.red,
               ),
             );
@@ -360,7 +379,7 @@ class _UpdateScreenState extends State<UpdateScreen> {
     // final isSystem = colorSchemeNotifier.value == AppColorScheme.system;
     // final isDark = Theme.of(context).brightness == Brightness.dark;
     final isLight = Theme.of(context).brightness == Brightness.light;
-    
+
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -368,16 +387,25 @@ class _UpdateScreenState extends State<UpdateScreen> {
         elevation: 0,
         scrolledUnderElevation: 0,
         title: Text(LocaleProvider.tr('update')),
-        leading: _isDownloading 
-            ? Container() 
+        leading: _isDownloading
+            ? Container()
             : IconButton(
+                constraints: const BoxConstraints(
+                  minWidth: 40,
+                  minHeight: 40,
+                  maxWidth: 40,
+                  maxHeight: 40,
+                ),
+                padding: EdgeInsets.zero,
                 icon: Container(
                   width: 40,
                   height: 40,
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.primary.withValues(alpha: 0.08),
                   ),
                   child: const Icon(Icons.arrow_back, size: 24),
                 ),
@@ -385,7 +413,12 @@ class _UpdateScreenState extends State<UpdateScreen> {
               ),
       ),
       body: Padding(
-        padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + MediaQuery.of(context).padding.bottom),
+        padding: EdgeInsets.fromLTRB(
+          16,
+          16,
+          16,
+          16 + MediaQuery.of(context).padding.bottom,
+        ),
         child: _isDownloading
             ? Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -418,8 +451,9 @@ class _UpdateScreenState extends State<UpdateScreen> {
                       padding: const EdgeInsets.all(12),
                       margin: const EdgeInsets.only(bottom: 16),
                       decoration: BoxDecoration(
-                        color: isLight ? Theme.of(context).colorScheme.secondaryContainer
-                              : Theme.of(context).colorScheme.onSecondaryFixed,
+                        color: isLight
+                            ? Theme.of(context).colorScheme.secondaryContainer
+                            : Theme.of(context).colorScheme.onSecondaryFixed,
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: SingleChildScrollView(
@@ -437,7 +471,9 @@ class _UpdateScreenState extends State<UpdateScreen> {
                     value: _progress,
                     borderRadius: BorderRadius.circular(8),
                     minHeight: 8,
-                    backgroundColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
+                    backgroundColor: Theme.of(
+                      context,
+                    ).colorScheme.primary.withValues(alpha: 0.3),
                   ),
                 ],
               )
@@ -454,7 +490,9 @@ class _UpdateScreenState extends State<UpdateScreen> {
                           alignment: Alignment.center,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.primary.withValues(alpha: 0.08),
                           ),
                           child: Icon(
                             Symbols.update_rounded,
@@ -492,14 +530,25 @@ class _UpdateScreenState extends State<UpdateScreen> {
                             shape: BoxShape.circle,
                             color: Colors.white.withValues(alpha: 0.2),
                           ),
-                          child: Icon(Icons.search, size: 16, color: Theme.of(context).colorScheme.onPrimary),
+                          child: Icon(
+                            Icons.search,
+                            size: 16,
+                            color: Theme.of(context).colorScheme.onPrimary,
+                          ),
                         ),
                         label: Text(LocaleProvider.tr('check_for_update')),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Theme.of(context).colorScheme.primary,
-                          foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                          backgroundColor: Theme.of(
+                            context,
+                          ).colorScheme.primary,
+                          foregroundColor: Theme.of(
+                            context,
+                          ).colorScheme.onPrimary,
                           shadowColor: Colors.transparent,
-                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 24,
+                            vertical: 12,
+                          ),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(24),
                           ),
@@ -521,7 +570,9 @@ class _UpdateScreenState extends State<UpdateScreen> {
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.primary.withValues(alpha: 0.08),
                       ),
                       child: CircularProgressIndicator(
                         strokeWidth: 4,
@@ -554,17 +605,19 @@ class _UpdateScreenState extends State<UpdateScreen> {
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.primary.withValues(alpha: 0.08),
                       ),
                       child: Icon(
                         Symbols.check_circle_outline_rounded,
                         grade: 300,
                         size: 80,
                         color: Theme.of(context).brightness == Brightness.light
-                                ? Theme.of(
-                                    context,
-                                  ).colorScheme.onSurface.withValues(alpha: 0.7)
-                                : Theme.of(context).colorScheme.onSurface,
+                            ? Theme.of(
+                                context,
+                              ).colorScheme.onSurface.withValues(alpha: 0.7)
+                            : Theme.of(context).colorScheme.onSurface,
                       ),
                     ),
                     const SizedBox(height: 24),
@@ -588,14 +641,23 @@ class _UpdateScreenState extends State<UpdateScreen> {
                           shape: BoxShape.circle,
                           color: Colors.white.withValues(alpha: 0.2),
                         ),
-                        child: Icon(Icons.refresh, size: 16, color: Theme.of(context).colorScheme.onPrimary),
+                        child: Icon(
+                          Icons.refresh,
+                          size: 16,
+                          color: Theme.of(context).colorScheme.onPrimary,
+                        ),
                       ),
                       label: Text(LocaleProvider.tr('check_again')),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Theme.of(context).colorScheme.primary,
-                        foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                        foregroundColor: Theme.of(
+                          context,
+                        ).colorScheme.onPrimary,
                         shadowColor: Colors.transparent,
-                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 24,
+                          vertical: 12,
+                        ),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(24),
                         ),
@@ -636,8 +698,9 @@ class _UpdateScreenState extends State<UpdateScreen> {
                       padding: const EdgeInsets.all(12),
                       margin: const EdgeInsets.only(bottom: 16),
                       decoration: BoxDecoration(
-                        color: isLight ? Theme.of(context).colorScheme.secondaryContainer
-                              : Theme.of(context).colorScheme.onSecondaryFixed,
+                        color: isLight
+                            ? Theme.of(context).colorScheme.secondaryContainer
+                            : Theme.of(context).colorScheme.onSecondaryFixed,
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: SingleChildScrollView(
@@ -654,7 +717,9 @@ class _UpdateScreenState extends State<UpdateScreen> {
                     value: _progress,
                     borderRadius: BorderRadius.circular(8),
                     minHeight: 8,
-                    backgroundColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
+                    backgroundColor: Theme.of(
+                      context,
+                    ).colorScheme.primary.withValues(alpha: 0.3),
                   ),
                   const SizedBox(height: 16),
                   Row(
@@ -670,14 +735,25 @@ class _UpdateScreenState extends State<UpdateScreen> {
                             shape: BoxShape.circle,
                             color: Colors.white.withValues(alpha: 0.2),
                           ),
-                          child: Icon(Icons.download, size: 16, color: Theme.of(context).colorScheme.onPrimary),
+                          child: Icon(
+                            Icons.download,
+                            size: 16,
+                            color: Theme.of(context).colorScheme.onPrimary,
+                          ),
                         ),
                         label: Text(LocaleProvider.tr('update')),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Theme.of(context).colorScheme.primary,
-                          foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                          backgroundColor: Theme.of(
+                            context,
+                          ).colorScheme.primary,
+                          foregroundColor: Theme.of(
+                            context,
+                          ).colorScheme.onPrimary,
                           shadowColor: Colors.transparent,
-                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 24,
+                            vertical: 12,
+                          ),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(24),
                           ),

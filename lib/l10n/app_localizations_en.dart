@@ -34,13 +34,13 @@ const Map<String, String> appLocalizationsEn = {
   'gesture_settings_title': 'Player gestures',
   'gesture_settings_desc_dialog': 'Enable or disable player gestures',
 
-      // Downloads
-      'downloads': 'Downloads',
-      'download_history': 'Download History',
-      'no_downloads': 'No recent downloads',
-      'delete_download': 'Delete download',
-      'delete_download_confirm': 'Are you sure you want to delete',
-      'available_storage': 'Available storage',
+  // Downloads
+  'downloads': 'Downloads',
+  'download_history': 'Download History',
+  'no_downloads': 'No recent downloads',
+  'delete_download': 'Delete download',
+  'delete_download_confirm': 'Are you sure you want to delete',
+  'available_storage': 'Available storage',
   'used_storage': 'Used storage',
   'total_storage': 'Total storage',
   'free_of': 'free of',
@@ -57,7 +57,8 @@ const Map<String, String> appLocalizationsEn = {
   'volume_boost': 'Volume Boost',
   'volume_boost_desc': 'Increase volume beyond system maximum',
   'important_information': 'Important Information',
-  'volume_boost_info': '• Effect may vary by device\n• Some devices limit maximum volume\n• If you don\'t notice a difference, it\'s hardware or software limitation\n• High values may cause distortion',
+  'volume_boost_info':
+      '• Effect may vary by device\n• Some devices limit maximum volume\n• If you don\'t notice a difference, it\'s hardware or software limitation\n• High values may cause distortion',
   'multiplier': 'Multiplier',
   'effective_volume': 'Effective Volume',
   'volume_restored_normal': 'Volume restored to normal',
@@ -67,11 +68,14 @@ const Map<String, String> appLocalizationsEn = {
   'equalizer': 'Equalizer',
   'equalizer_desc': 'Adjust sound with the audio equalizer',
   'equalizer_not_prossessing': 'No current playback',
-  'equalizer_not_prossessing_desc': 'There is no current playback to adjust the equalizer',
+  'equalizer_not_prossessing_desc':
+      'There is no current playback to adjust the equalizer',
   'equalizer_not_available': 'Equalizer not available',
-  'equalizer_not_available_desc': 'Equalizer is only available on Android devices',
+  'equalizer_not_available_desc':
+      'Equalizer is only available on Android devices',
   'reset_equalizer': 'Reset',
-  'reset_equalizer_confirm': 'Are you sure you want to reset the equalizer and volume boost to their default values?',
+  'reset_equalizer_confirm':
+      'Are you sure you want to reset the equalizer and volume boost to their default values?',
   'reset': 'Reset',
   'equalizer_reset': 'Equalizer reset',
   'equalizer_enabled': 'Equalizer enabled',
@@ -101,7 +105,8 @@ const Map<String, String> appLocalizationsEn = {
   'permission_denied': 'Permission denied',
   'permission_granted_desc': 'You now have access to all files.',
   'permission_denied_desc': 'Could not grant permission.',
-  'permission_required_for_download': 'This permission is required to download songs.',
+  'permission_required_for_download':
+      'This permission is required to download songs.',
   'grant_permission': 'Grant permission',
   'default_path_set':
       'Default path set to Music folder due to Android 9 compatibility.',
@@ -112,7 +117,8 @@ const Map<String, String> appLocalizationsEn = {
   'index_songs_on_startup_desc':
       'Automatically sync the database with device files',
   'show_lyrics_on_cover': 'Show lyrics on cover',
-  'show_lyrics_on_cover_desc': 'Display song lyrics directly on the player cover',
+  'show_lyrics_on_cover_desc':
+      'Display song lyrics directly on the player cover',
   'api_unavailable': 'API unavailable',
   'no_connection': 'No connection',
   'no_lyrics_found': 'No lyrics found',
@@ -123,9 +129,11 @@ const Map<String, String> appLocalizationsEn = {
   'translating': 'Translating...',
   'hide_translation': 'Hide translation',
   'translation_error': 'Translation error',
-  'check_internet_connection': 'Please check your internet connection and try again',
+  'check_internet_connection':
+      'Please check your internet connection and try again',
   'translation_language': 'Translation language',
-  'translation_language_desc': 'Select the language lyrics will be translated to',
+  'translation_language_desc':
+      'Select the language lyrics will be translated to',
   'auto_detect': 'Auto detect',
   'language_spanish': 'Spanish',
   'language_english': 'English',
@@ -145,7 +153,8 @@ const Map<String, String> appLocalizationsEn = {
   'apply': 'Apply',
   'lyrics_selected': 'Lyrics selected',
   'lyrics_search_info': 'Search for song lyrics and apply the best found.',
-  'lyrics_selected_desc': 'The lyrics have been successfully assigned to the song.',
+  'lyrics_selected_desc':
+      'The lyrics have been successfully assigned to the song.',
   'delete_lyrics': 'Delete song lyrics',
   'delete_lyrics_desc': 'Delete all cached synced lyrics',
   'delete_lyrics_confirm':
@@ -177,7 +186,8 @@ const Map<String, String> appLocalizationsEn = {
   'hero_animation': 'Hero animation',
   'hero_animation_desc': 'Enable Hero animation between overlay and player.',
   'overlay_next_button': 'Next button in overlay',
-  'overlay_next_button_desc': 'Shows the next song button in the playback overlay.',
+  'overlay_next_button_desc':
+      'Shows the next song button in the playback overlay.',
   '100_percent_maximum': '100% (Maximum)',
   '80_percent_recommended': '80% (Recommended)',
   '60_percent_performance': '60% (Performance)',
@@ -186,7 +196,8 @@ const Map<String, String> appLocalizationsEn = {
   'reset_app': 'Reset app',
   'reset_app_desc': 'Clear all app data',
   'reset_app_confirm': 'Are you sure you want to reset the app?',
-  'reset_app_warning': 'This action will delete all saved data, including favorites, playlists, history, song lyrics and settings. This action cannot be undone.',
+  'reset_app_warning':
+      'This action will delete all saved data, including favorites, playlists, history, song lyrics and settings. This action cannot be undone.',
   'reset_app_success': 'App reset successfully',
   'app_updates': 'App updates',
   'check_for_updates': 'Check for app updates',
@@ -241,7 +252,7 @@ const Map<String, String> appLocalizationsEn = {
   'artist_unknown': 'Unknown artist',
   'go_to_artist': 'Go to artist',
   'artist_info': 'Artist information',
-  
+
   // Favorites screen
   'favorites': 'Favorites',
   'select_all': 'Select all',
@@ -303,7 +314,8 @@ const Map<String, String> appLocalizationsEn = {
   'rename_folder': 'Rename folder',
   'ignore_folder': 'Ignore folder',
   'unignore_folder': 'Unignore folder',
-  'ignore_folder_confirm': 'Ignore folder "{folder}"? Its songs will not be shown or indexed.',
+  'ignore_folder_confirm':
+      'Ignore folder "{folder}"? Its songs will not be shown or indexed.',
   'folder_ignored_success': 'Folder ignored. Its songs will not be shown.',
   'folder_unignored_success': 'Folder restored. Re-indexing songs...',
   'folder_name': 'Folder name',
@@ -504,7 +516,8 @@ const Map<String, String> appLocalizationsEn = {
   'no_song_playing': 'No song playing',
   'lyrics_not_found': 'Lyrics not found.',
   'lyrics_api_unavailable': 'Lyrics service unavailable, try again later.',
-  'lyrics_no_connection': 'No internet connection. Check your connection and try again.',
+  'lyrics_no_connection':
+      'No internet connection. Check your connection and try again.',
   'playlist': 'Playlist',
   'one_minute': '1 minute',
   'five_minutes': '5 minutes',
@@ -559,7 +572,8 @@ const Map<String, String> appLocalizationsEn = {
   'copy_error': 'Error copying songs',
   'move_error': 'Error moving songs',
   'delete_songs': 'Delete songs',
-  'delete_songs_confirm': 'Are you sure you want to delete {count} songs? This action cannot be undone.',
+  'delete_songs_confirm':
+      'Are you sure you want to delete {count} songs? This action cannot be undone.',
   'songs_deleted': 'Songs deleted',
   'delete_completed': 'Successfully deleted {success} songs. {error} errors.',
   'options': 'Options',
@@ -577,21 +591,25 @@ const Map<String, String> appLocalizationsEn = {
   'error_copying_song': 'Error copying song',
   'error_moving_song_desc': 'Could not move the song. Check permissions.',
   'error_copying_song_desc': 'Could not copy the song. Check permissions.',
-  'file_already_exists': 'A file with the same name already exists in the destination folder.',
+  'file_already_exists':
+      'A file with the same name already exists in the destination folder.',
   'edit_metadata': 'Edit metadata',
   'edit_song_info': 'Edit metadata',
-  'edit_song_info_desc': 'Modify the title, artist, album and cover of the song. Changes will be saved to the audio file.',
+  'edit_song_info_desc':
+      'Modify the title, artist, album and cover of the song. Changes will be saved to the audio file.',
   'song_title': 'Title',
   'song_artist': 'Artist',
   'song_album': 'Album',
   'song_cover': 'Cover',
   'save_changes': 'Save changes',
   'changes_saved': 'Changes saved',
-  'changes_saved_desc': 'The metadata has been updated successfully, but it is likely that the player will not update them immediately.',
+  'changes_saved_desc':
+      'The metadata has been updated successfully, but it is likely that the player will not update them immediately.',
   'error_saving_changes': 'Error saving',
   'error_saving_changes_desc': 'Could not save the changes. Check permissions.',
   'incompatible_audio_format': 'Incompatible audio format',
-  'incompatible_audio_format_desc': 'The .opus format is not compatible with metadata editing.\n\nSupported formats: MP3, M4A, AAC, FLAC, WAV\n\nTo edit this file, convert it first to one of the supported formats.',
+  'incompatible_audio_format_desc':
+      'The .opus format is not compatible with metadata editing.\n\nSupported formats: MP3, M4A, AAC, FLAC, WAV\n\nTo edit this file, convert it first to one of the supported formats.',
   'audio_format': 'Format',
   'select_cover_image': 'Select cover image',
   'remove_cover': 'Remove cover',
@@ -611,7 +629,8 @@ const Map<String, String> appLocalizationsEn = {
   'conversion_complete': 'Conversion complete',
   'conversion_complete_desc': 'The file has been converted successfully.',
   'conversion_error': 'Conversion error',
-  'conversion_error_desc': 'Could not convert the file. Check format and permissions.',
+  'conversion_error_desc':
+      'Could not convert the file. Check format and permissions.',
   'output_format': 'Output format',
   'input_format': 'Input format',
   'file_size': 'File size',
@@ -650,23 +669,29 @@ const Map<String, String> appLocalizationsEn = {
   'time_format': 'mm:ss',
   'hide_trim_settings': 'Hide settings',
   'file_path': 'Path',
-  'playlist_processing_time_info': 'Processing time may vary depending on the list size',
+  'playlist_processing_time_info':
+      'Processing time may vary depending on the list size',
   'view_on_github': 'View on GitHub',
   'view_artist': 'View artist',
   'filters': 'Filters',
-  
+
   // Download messages
   'download_started_for_elements': 'Download started for @count elements',
-  
+  'songs_added_to_queue': 'songs added to download queue',
+  'download_entire_album': 'Download entire album',
+  'download_entire_playlist': 'Download entire playlist',
+
   // Exit confirmation
   'press_again_to_exit': 'Press again to exit',
-  
+
   // Loading messages
   'loading_music_library': 'Loading music library',
-  'loading_music_library_description': 'We are preparing your music. This may take a few moments...',
-  
+  'loading_music_library_description':
+      'We are preparing your music. This may take a few moments...',
+
   // YouTube sharing errors
-  'youtube_link_invalid': 'Could not process YouTube link. Please verify it is a valid link.',
+  'youtube_link_invalid':
+      'Could not process YouTube link. Please verify it is a valid link.',
   'youtube_no_results': 'No results to show.',
   'youtube_no_valid_videos': 'No valid videos found to play.',
   'youtube_processing_error': 'Error processing shared link: @error',
@@ -683,7 +708,7 @@ const Map<String, String> appLocalizationsEn = {
   'opening_in_browser': 'Opening in browser',
   'could_not_open': 'Could not open',
   'select_download_method': 'Select how you want to download the update',
-  
+
   // YouTube search errors
   'artist_not_found': 'Artist "{artistName}" not found',
   'could_not_get_artist_info': 'Could not get artist information',

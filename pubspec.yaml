@@ -1,7 +1,7 @@
 name: music
 description: "A new Flutter project."
 publish_to: 'none'
-version: 1.6.2+4002
+version: 1.6.3+4003
 
 environment:
   sdk: ^3.8.1
@@ -19,40 +19,39 @@ dependencies:
   audio_session: ^0.2.2
   audio_service: ^0.18.18
   path: ^1.9.1
-  shared_preferences: ^2.5.3
+  shared_preferences: ^2.5.4
   path_provider: ^2.1.5
   permission_handler: ^12.0.1
 # audio_info: ^0.0.3  # Temporalmente comentado por incompatibilidad con Java 17
   share_plus: ^11.1.0
   cross_file: ^0.3.4+2
   connectivity_plus: ^7.0.0
-  http: ^1.5.0
+  http: ^1.6.0
   youtube_explode_dart:
     git:
       url: https://github.com/anandnet/youtube_explode_dart.git
       ref: 1d9ec9baa806705b1d859260eeb389ec28c6b024
   file_selector: ^1.0.3
-  audiotags:
-    path: ./audiotags
-  url_launcher: ^6.3.1
+  audiotags: ^1.4.5
+  url_launcher: ^6.3.2
   media_scanner: ^2.2.0
-  device_info_plus: ^12.1.0
+  device_info_plus: ^12.3.0
   dio: ^5.9.0
   open_file: ^3.5.10
-  smooth_page_indicator: ^1.2.1
+  smooth_page_indicator: ^2.0.1
   image: ^4.5.4
   android_intent_plus: ^5.3.0
   package_info_plus: ^9.0.0
   ota_update: ^7.0.2
   scroll_to_index: ^3.0.1
   mini_music_visualizer: ^1.1.4
-  flutter_local_notifications: ^19.4.2
-  flutter_svg: ^2.2.0
+  flutter_local_notifications: ^19.5.0
+  flutter_svg: ^2.2.3
   flutter_audio_toolkit: ^1.0.0
   fading_edge_scrollview: ^4.1.1
   sqflite: ^2.4.2
   icons_plus: ^5.0.0
-  material_symbols_icons: ^4.2874.0
+  material_symbols_icons: ^4.2892.0
   audio_visualizer: ^1.1.0
   dynamic_color: ^1.8.1
   flutter_sharing_intent: ^1.1.1

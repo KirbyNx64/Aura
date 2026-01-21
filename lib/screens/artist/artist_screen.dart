@@ -28,12 +28,12 @@ class _ArtistScreenState extends State<ArtistScreen> {
   List<YtMusicResult> _songs = [];
   List<YtMusicResult> _videos = [];
   List<Map<String, String>> _albums = [];
-  
+
   // Estado para álbum seleccionado
   List<YtMusicResult> _albumSongs = [];
   Map<String, dynamic>? _currentAlbum;
   bool _loadingAlbumSongs = false;
-  
+
   // Estado para selección múltiple
   final Set<String> _selectedIndexes = {};
   bool _isSelectionMode = false;
@@ -42,12 +42,12 @@ class _ArtistScreenState extends State<ArtistScreen> {
   String? _songsContinuationToken;
   bool _loadingMoreSongs = false;
   bool _hasMoreSongs = true;
-  
+
   // Estado para paginación de videos
   String? _videosContinuationToken;
   bool _loadingMoreVideos = false;
   bool _hasMoreVideos = true;
-  
+
   // ScrollController para detectar el final del scroll
   late ScrollController _scrollController;
 
@@ -67,11 +67,18 @@ class _ArtistScreenState extends State<ArtistScreen> {
   }
 
   // Función helper para manejar imágenes de red de forma segura
-  Widget _buildSafeNetworkImage(String? imageUrl, {double? width, double? height, BoxFit? fit, Widget? fallback}) {
+  Widget _buildSafeNetworkImage(
+    String? imageUrl, {
+    double? width,
+    double? height,
+    BoxFit? fit,
+    Widget? fallback,
+  }) {
     if (imageUrl == null || imageUrl.isEmpty) {
-      return fallback ?? const Icon(Icons.music_note, size: 32, color: Colors.grey);
+      return fallback ??
+          const Icon(Icons.music_note, size: 32, color: Colors.grey);
     }
-    
+
     return Image.network(
       imageUrl,
       width: width,
@@ -79,7 +86,8 @@ class _ArtistScreenState extends State<ArtistScreen> {
       fit: fit ?? BoxFit.cover,
       errorBuilder: (context, error, stackTrace) {
         // Manejar errores de imagen de forma silenciosa
-        return fallback ?? const Icon(Icons.music_note, size: 32, color: Colors.grey);
+        return fallback ??
+            const Icon(Icons.music_note, size: 32, color: Colors.grey);
       },
       loadingBuilder: (context, child, loadingProgress) {
         if (loadingProgress == null) return child;
@@ -87,7 +95,10 @@ class _ArtistScreenState extends State<ArtistScreen> {
           width: width,
           height: height,
           child: const Center(
-            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.transparent),
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: Colors.transparent,
+            ),
           ),
         );
       },
@@ -100,27 +111,32 @@ class _ArtistScreenState extends State<ArtistScreen> {
     if (!mounted || !_scrollController.hasClients) {
       return;
     }
-    
+
     try {
-      if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200) {
+      if (_scrollController.position.pixels >=
+          _scrollController.position.maxScrollExtent - 200) {
         // Si estamos cerca del final (200px antes del final) y hay más contenido disponible
-        if (_expandedCategory == 'songs' && _hasMoreSongs && !_loadingMoreSongs) {
+        if (_expandedCategory == 'songs' &&
+            _hasMoreSongs &&
+            !_loadingMoreSongs) {
           _loadMoreSongs();
-        } else if (_expandedCategory == 'videos' && _hasMoreVideos && !_loadingMoreVideos) {
+        } else if (_expandedCategory == 'videos' &&
+            _hasMoreVideos &&
+            !_loadingMoreVideos) {
           _loadMoreVideos();
         }
       }
-     } catch (e) {
-       // Capturar cualquier excepción relacionada con el scroll
-       // No hacer print para evitar que la app se detenga
-     }
+    } catch (e) {
+      // Capturar cualquier excepción relacionada con el scroll
+      // No hacer print para evitar que la app se detenga
+    }
   }
 
   Future<void> _load() async {
     try {
       // ignore: avoid_print
       // print('ArtistScreen._load start for: ${widget.artistName}');
-      
+
       // Si tenemos browseId específico, usarlo directamente
       if (widget.browseId != null) {
         // print('🎯 ArtistScreen usando browseId específico: ${widget.browseId} para artista: ${widget.artistName}');
@@ -131,7 +147,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
             _artist = detailed;
             _loading = false;
           });
-          
+
           // Cargar contenido del artista
           _loadArtistContent(detailed);
           return;
@@ -139,9 +155,11 @@ class _ArtistScreenState extends State<ArtistScreen> {
           // print('❌ No se pudo cargar artista con browseId: ${widget.browseId}');
         }
       }
-      
+
       // 1) Intentar cache local como en home_screen
-      final cached = await ArtistImagesCacheDB.getCachedArtistImage(widget.artistName);
+      final cached = await ArtistImagesCacheDB.getCachedArtistImage(
+        widget.artistName,
+      );
       Map<String, dynamic>? info;
       if (cached != null) {
         info = {
@@ -162,8 +180,11 @@ class _ArtistScreenState extends State<ArtistScreen> {
               'subscribers': info['subscribers'] ?? detailed['subscribers'],
             };
             // Fallback Wikipedia si no hay descripción
-            if ((info['description'] == null || info['description'].toString().trim().isEmpty)) {
-              final wiki = await getArtistWikipediaDescription(widget.artistName);
+            if ((info['description'] == null ||
+                info['description'].toString().trim().isEmpty)) {
+              final wiki = await getArtistWikipediaDescription(
+                widget.artistName,
+              );
               if (wiki != null) info['description'] = wiki;
             }
           }
@@ -184,8 +205,11 @@ class _ArtistScreenState extends State<ArtistScreen> {
                 'name': info['name'] ?? detailed['name'],
                 'subscribers': info['subscribers'] ?? detailed['subscribers'],
               };
-              if ((info['description'] == null || info['description'].toString().trim().isEmpty)) {
-                final wiki = await getArtistWikipediaDescription(widget.artistName);
+              if ((info['description'] == null ||
+                  info['description'].toString().trim().isEmpty)) {
+                final wiki = await getArtistWikipediaDescription(
+                  widget.artistName,
+                );
                 if (wiki != null) info['description'] = wiki;
               }
             }
@@ -216,8 +240,11 @@ class _ArtistScreenState extends State<ArtistScreen> {
                 'description': detailed['description'],
                 'thumbUrl': info['thumbUrl'] ?? detailed['thumbUrl'],
               };
-              if ((info['description'] == null || info['description'].toString().trim().isEmpty)) {
-                final wiki = await getArtistWikipediaDescription(widget.artistName);
+              if ((info['description'] == null ||
+                  info['description'].toString().trim().isEmpty)) {
+                final wiki = await getArtistWikipediaDescription(
+                  widget.artistName,
+                );
                 if (wiki != null) info['description'] = wiki;
               }
             }
@@ -225,7 +252,9 @@ class _ArtistScreenState extends State<ArtistScreen> {
         } else {
           // 4) Fallback directo al helper por nombre
           info = await getArtistInfoByName(widget.artistName);
-          if (info != null && (info['description'] == null || info['description'].toString().trim().isEmpty)) {
+          if (info != null &&
+              (info['description'] == null ||
+                  info['description'].toString().trim().isEmpty)) {
             final wiki = await getArtistWikipediaDescription(widget.artistName);
             if (wiki != null) info['description'] = wiki;
           }
@@ -265,25 +294,35 @@ class _ArtistScreenState extends State<ArtistScreen> {
           final songFuture = _loadSongsWithPagination(widget.artistName);
           final videoFuture = _loadVideosWithPagination(widget.artistName);
           final albumFuture = searchAlbumsOnly(widget.artistName);
-          
-          final searchResults = await Future.wait([songFuture, videoFuture, albumFuture]);
-          
+
+          final searchResults = await Future.wait([
+            songFuture,
+            videoFuture,
+            albumFuture,
+          ]);
+
           if (mounted) {
             final songsData = searchResults[0] as Map<String, dynamic>;
             final videosData = searchResults[1] as Map<String, dynamic>;
-            final allAlbums = (searchResults[2] as List).cast<Map<String, String>>();
-            
+            final allAlbums = (searchResults[2] as List)
+                .cast<Map<String, String>>();
+
             setState(() {
               // Filtrar canciones por artista
-              _songs = _filterSongsByArtist(songsData['songs'] as List<YtMusicResult>, widget.artistName);
-              _songsContinuationToken = songsData['continuationToken'] as String?;
+              _songs = _filterSongsByArtist(
+                songsData['songs'] as List<YtMusicResult>,
+                widget.artistName,
+              );
+              _songsContinuationToken =
+                  songsData['continuationToken'] as String?;
               _hasMoreSongs = _songsContinuationToken != null;
-              
+
               // Videos
               _videos = videosData['videos'] as List<YtMusicResult>;
-              _videosContinuationToken = videosData['continuationToken'] as String?;
+              _videosContinuationToken =
+                  videosData['continuationToken'] as String?;
               _hasMoreVideos = _videosContinuationToken != null;
-              
+
               _albums = allAlbums;
             });
           }
@@ -306,25 +345,33 @@ class _ArtistScreenState extends State<ArtistScreen> {
       final songFuture = _loadSongsWithPagination(widget.artistName);
       final videoFuture = _loadVideosWithPagination(widget.artistName);
       final albumFuture = searchAlbumsOnly(widget.artistName);
-      
-      final searchResults = await Future.wait([songFuture, videoFuture, albumFuture]);
-      
+
+      final searchResults = await Future.wait([
+        songFuture,
+        videoFuture,
+        albumFuture,
+      ]);
+
       if (mounted) {
         final songsData = searchResults[0] as Map<String, dynamic>;
         final videosData = searchResults[1] as Map<String, dynamic>;
-        final allAlbums = (searchResults[2] as List).cast<Map<String, String>>();
-        
+        final allAlbums = (searchResults[2] as List)
+            .cast<Map<String, String>>();
+
         setState(() {
           // Filtrar canciones por artista
-          _songs = _filterSongsByArtist(songsData['songs'] as List<YtMusicResult>, widget.artistName);
+          _songs = _filterSongsByArtist(
+            songsData['songs'] as List<YtMusicResult>,
+            widget.artistName,
+          );
           _songsContinuationToken = songsData['continuationToken'] as String?;
           _hasMoreSongs = _songsContinuationToken != null;
-          
+
           // Videos
           _videos = videosData['videos'] as List<YtMusicResult>;
           _videosContinuationToken = videosData['continuationToken'] as String?;
           _hasMoreVideos = _videosContinuationToken != null;
-          
+
           _albums = allAlbums;
         });
       }
@@ -334,14 +381,18 @@ class _ArtistScreenState extends State<ArtistScreen> {
   }
 
   // Función para alternar selección múltiple
-  void _toggleSelection(int index, {required bool isVideo, bool isAlbum = false}) {
+  void _toggleSelection(
+    int index, {
+    required bool isVideo,
+    bool isAlbum = false,
+  }) {
     setState(() {
-      final key = isAlbum 
-          ? 'album-$index' 
-          : isVideo 
-              ? 'video-${_videos[index].videoId}' 
-              : 'song-${_songs[index].videoId}';
-      
+      final key = isAlbum
+          ? 'album-$index'
+          : isVideo
+          ? 'video-${_videos[index].videoId}'
+          : 'song-${_songs[index].videoId}';
+
       if (_selectedIndexes.contains(key)) {
         _selectedIndexes.remove(key);
         if (_selectedIndexes.isEmpty) {
@@ -370,24 +421,30 @@ class _ArtistScreenState extends State<ArtistScreen> {
   }
 
   // Función para filtrar canciones por artista
-  List<YtMusicResult> _filterSongsByArtist(List<YtMusicResult> songs, String artistName) {
+  List<YtMusicResult> _filterSongsByArtist(
+    List<YtMusicResult> songs,
+    String artistName,
+  ) {
     if (artistName.trim().isEmpty) return songs;
-    
+
     final normalizedArtistName = artistName.toLowerCase().trim();
-    
+
     return songs.where((song) {
       if (song.artist == null || song.artist!.isEmpty) return false;
-      
+
       final normalizedSongArtist = song.artist!.toLowerCase().trim();
-      
+
       // Verificar coincidencia exacta o si el artista de la canción contiene el nombre buscado
-      return normalizedSongArtist == normalizedArtistName || 
-             normalizedSongArtist.contains(normalizedArtistName);
+      return normalizedSongArtist == normalizedArtistName ||
+          normalizedSongArtist.contains(normalizedArtistName);
     }).toList();
   }
 
   // Función para cargar canciones con paginación
-  Future<Map<String, dynamic>> _loadSongsWithPagination(String query, {String? continuationToken}) async {
+  Future<Map<String, dynamic>> _loadSongsWithPagination(
+    String query, {
+    String? continuationToken,
+  }) async {
     final data = {
       ...ytServiceContext,
       'query': query,
@@ -416,7 +473,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
           'contents',
           0,
           'musicShelfRenderer',
-          'contents'
+          'contents',
         ]);
 
         if (contents is List) {
@@ -434,11 +491,12 @@ class _ArtistScreenState extends State<ArtistScreen> {
           'sectionListRenderer',
           'contents',
           0,
-          'musicShelfRenderer'
+          'musicShelfRenderer',
         ]);
 
         if (shelfRenderer != null && shelfRenderer['continuations'] != null) {
-          nextToken = shelfRenderer['continuations'][0]['nextContinuationData']['continuation'];
+          nextToken =
+              shelfRenderer['continuations'][0]['nextContinuationData']['continuation'];
         }
       } else {
         // Si es una continuación, la estructura es diferente
@@ -446,19 +504,19 @@ class _ArtistScreenState extends State<ArtistScreen> {
           'onResponseReceivedActions',
           0,
           'appendContinuationItemsAction',
-          'continuationItems'
+          'continuationItems',
         ]);
 
         contents ??= nav(response, [
           'continuationContents',
           'musicShelfContinuation',
-          'contents'
+          'contents',
         ]);
 
         if (contents is List) {
-          final songItems = contents.where((item) => 
-            item['musicResponsiveListItemRenderer'] != null
-          ).toList();
+          final songItems = contents
+              .where((item) => item['musicResponsiveListItemRenderer'] != null)
+              .toList();
           if (songItems.isNotEmpty) {
             parseSongs(songItems, results);
           }
@@ -475,7 +533,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
             'continuationItemRenderer',
             'continuationEndpoint',
             'continuationCommand',
-            'token'
+            'token',
           ]);
           nextToken ??= nav(response, [
             'continuationContents',
@@ -483,27 +541,24 @@ class _ArtistScreenState extends State<ArtistScreen> {
             'continuations',
             0,
             'nextContinuationData',
-            'continuation'
+            'continuation',
           ]);
         } catch (e) {
           nextToken = null;
         }
       }
 
-      return {
-        'songs': results,
-        'continuationToken': nextToken,
-      };
+      return {'songs': results, 'continuationToken': nextToken};
     } catch (e) {
-      return {
-        'songs': <YtMusicResult>[],
-        'continuationToken': null,
-      };
+      return {'songs': <YtMusicResult>[], 'continuationToken': null};
     }
   }
 
   // Función para cargar videos con paginación
-  Future<Map<String, dynamic>> _loadVideosWithPagination(String query, {String? continuationToken}) async {
+  Future<Map<String, dynamic>> _loadVideosWithPagination(
+    String query, {
+    String? continuationToken,
+  }) async {
     final data = {
       ...ytServiceContext,
       'query': query,
@@ -515,82 +570,87 @@ class _ArtistScreenState extends State<ArtistScreen> {
     }
 
     try {
-    final response = (await sendRequest("search", data)).data;
-    final results = <YtMusicResult>[];
+      final response = (await sendRequest("search", data)).data;
+      final results = <YtMusicResult>[];
       String? nextToken;
 
       // Si es una búsqueda inicial
       if (continuationToken == null) {
-    final contents = nav(response, [
-      'contents',
-      'tabbedSearchResultsRenderer',
-      'tabs',
-      0,
-      'tabRenderer',
-      'content',
-      'sectionListRenderer',
-      'contents',
+        final contents = nav(response, [
+          'contents',
+          'tabbedSearchResultsRenderer',
+          'tabs',
+          0,
+          'tabRenderer',
+          'content',
+          'sectionListRenderer',
+          'contents',
           0,
           'musicShelfRenderer',
-          'contents'
-    ]);
+          'contents',
+        ]);
 
-    if (contents is List) {
+        if (contents is List) {
           for (var item in contents) {
-        final renderer = item['musicResponsiveListItemRenderer'];
-        if (renderer != null) {
-          final videoType = nav(renderer, [
-            'overlay',
-            'musicItemThumbnailOverlayRenderer',
-            'content',
-            'musicPlayButtonRenderer',
-            'playNavigationEndpoint',
-            'watchEndpoint',
-                  'watchEndpointMusicSupportedConfigs',
-            'watchEndpointMusicConfig',
-                'musicVideoType'
-          ]);
-          if (videoType == 'MUSIC_VIDEO_TYPE_MV' ||
-              videoType == 'MUSIC_VIDEO_TYPE_OMV' ||
-              videoType == 'MUSIC_VIDEO_TYPE_UGC') {
-                final title = renderer['flexColumns']?[0]
-                    ?['musicResponsiveListItemFlexColumnRenderer']?['text']?['runs']?[0]?['text'];
-                final subtitleRuns = renderer['flexColumns']?[1]
-                    ?['musicResponsiveListItemFlexColumnRenderer']?['text']?['runs'];
-            String? artist;
-            if (subtitleRuns is List) {
-              for (var run in subtitleRuns) {
-                    if (run['navigationEndpoint']?['browseEndpoint']?['browseEndpointContextSupportedConfigs'] != null ||
-                        run['navigationEndpoint']?['browseEndpoint']?['browseId']?.startsWith('UC') == true) {
-                  artist = run['text'];
-                  break;
-                }
-              }
-              artist ??= subtitleRuns.firstWhere(
-                (run) => run['text'] != ' • ',
-                orElse: () => {'text': null},
-              )['text'];
-            }
-            String? thumbUrl;
-                final thumbnails = renderer['thumbnail']?['musicThumbnailRenderer']?['thumbnail']?['thumbnails'];
-            if (thumbnails is List && thumbnails.isNotEmpty) {
-              thumbUrl = thumbnails.last['url'];
-            }
-                final videoId = renderer['overlay']?['musicItemThumbnailOverlayRenderer']?['content']?['musicPlayButtonRenderer']?['playNavigationEndpoint']?['watchEndpoint']?['videoId'];
-            if (videoId != null && title != null) {
-              results.add(
-                YtMusicResult(
-                  title: title,
-                  artist: artist,
-                  thumbUrl: thumbUrl,
-                  videoId: videoId,
-                ),
-              );
+            final renderer = item['musicResponsiveListItemRenderer'];
+            if (renderer != null) {
+              final videoType = nav(renderer, [
+                'overlay',
+                'musicItemThumbnailOverlayRenderer',
+                'content',
+                'musicPlayButtonRenderer',
+                'playNavigationEndpoint',
+                'watchEndpoint',
+                'watchEndpointMusicSupportedConfigs',
+                'watchEndpointMusicConfig',
+                'musicVideoType',
+              ]);
+              if (videoType == 'MUSIC_VIDEO_TYPE_MV' ||
+                  videoType == 'MUSIC_VIDEO_TYPE_OMV' ||
+                  videoType == 'MUSIC_VIDEO_TYPE_UGC') {
+                final title =
+                    renderer['flexColumns']?[0]?['musicResponsiveListItemFlexColumnRenderer']?['text']?['runs']?[0]?['text'];
+                final subtitleRuns =
+                    renderer['flexColumns']?[1]?['musicResponsiveListItemFlexColumnRenderer']?['text']?['runs'];
+                String? artist;
+                if (subtitleRuns is List) {
+                  for (var run in subtitleRuns) {
+                    if (run['navigationEndpoint']?['browseEndpoint']?['browseEndpointContextSupportedConfigs'] !=
+                            null ||
+                        run['navigationEndpoint']?['browseEndpoint']?['browseId']
+                                ?.startsWith('UC') ==
+                            true) {
+                      artist = run['text'];
+                      break;
+                    }
                   }
+                  artist ??= subtitleRuns.firstWhere(
+                    (run) => run['text'] != ' • ',
+                    orElse: () => {'text': null},
+                  )['text'];
+                }
+                String? thumbUrl;
+                final thumbnails =
+                    renderer['thumbnail']?['musicThumbnailRenderer']?['thumbnail']?['thumbnails'];
+                if (thumbnails is List && thumbnails.isNotEmpty) {
+                  thumbUrl = thumbnails.last['url'];
+                }
+                final videoId =
+                    renderer['overlay']?['musicItemThumbnailOverlayRenderer']?['content']?['musicPlayButtonRenderer']?['playNavigationEndpoint']?['watchEndpoint']?['videoId'];
+                if (videoId != null && title != null) {
+                  results.add(
+                    YtMusicResult(
+                      title: title,
+                      artist: artist,
+                      thumbUrl: thumbUrl,
+                      videoId: videoId,
+                    ),
+                  );
                 }
               }
             }
           }
+        }
 
         // Obtener token de continuación
         final shelfRenderer = nav(response, [
@@ -603,11 +663,12 @@ class _ArtistScreenState extends State<ArtistScreen> {
           'sectionListRenderer',
           'contents',
           0,
-          'musicShelfRenderer'
+          'musicShelfRenderer',
         ]);
 
         if (shelfRenderer != null && shelfRenderer['continuations'] != null) {
-          nextToken = shelfRenderer['continuations'][0]['nextContinuationData']['continuation'];
+          nextToken =
+              shelfRenderer['continuations'][0]['nextContinuationData']['continuation'];
         }
       } else {
         // Si es una continuación, la estructura es diferente
@@ -615,19 +676,19 @@ class _ArtistScreenState extends State<ArtistScreen> {
           'onResponseReceivedActions',
           0,
           'appendContinuationItemsAction',
-          'continuationItems'
+          'continuationItems',
         ]);
 
         contents ??= nav(response, [
           'continuationContents',
           'musicShelfContinuation',
-          'contents'
+          'contents',
         ]);
 
         if (contents is List) {
-          final videoItems = contents.where((item) => 
-            item['musicResponsiveListItemRenderer'] != null
-          ).toList();
+          final videoItems = contents
+              .where((item) => item['musicResponsiveListItemRenderer'] != null)
+              .toList();
           if (videoItems.isNotEmpty) {
             for (var item in videoItems) {
               final renderer = item['musicResponsiveListItemRenderer'];
@@ -641,20 +702,23 @@ class _ArtistScreenState extends State<ArtistScreen> {
                   'watchEndpoint',
                   'watchEndpointMusicSupportedConfigs',
                   'watchEndpointMusicConfig',
-                  'musicVideoType'
+                  'musicVideoType',
                 ]);
                 if (videoType == 'MUSIC_VIDEO_TYPE_MV' ||
                     videoType == 'MUSIC_VIDEO_TYPE_OMV' ||
                     videoType == 'MUSIC_VIDEO_TYPE_UGC') {
-                  final title = renderer['flexColumns']?[0]
-                      ?['musicResponsiveListItemFlexColumnRenderer']?['text']?['runs']?[0]?['text'];
-                  final subtitleRuns = renderer['flexColumns']?[1]
-                      ?['musicResponsiveListItemFlexColumnRenderer']?['text']?['runs'];
+                  final title =
+                      renderer['flexColumns']?[0]?['musicResponsiveListItemFlexColumnRenderer']?['text']?['runs']?[0]?['text'];
+                  final subtitleRuns =
+                      renderer['flexColumns']?[1]?['musicResponsiveListItemFlexColumnRenderer']?['text']?['runs'];
                   String? artist;
                   if (subtitleRuns is List) {
                     for (var run in subtitleRuns) {
-                      if (run['navigationEndpoint']?['browseEndpoint']?['browseEndpointContextSupportedConfigs'] != null ||
-                          run['navigationEndpoint']?['browseEndpoint']?['browseId']?.startsWith('UC') == true) {
+                      if (run['navigationEndpoint']?['browseEndpoint']?['browseEndpointContextSupportedConfigs'] !=
+                              null ||
+                          run['navigationEndpoint']?['browseEndpoint']?['browseId']
+                                  ?.startsWith('UC') ==
+                              true) {
                         artist = run['text'];
                         break;
                       }
@@ -665,11 +729,13 @@ class _ArtistScreenState extends State<ArtistScreen> {
                     )['text'];
                   }
                   String? thumbUrl;
-                  final thumbnails = renderer['thumbnail']?['musicThumbnailRenderer']?['thumbnail']?['thumbnails'];
+                  final thumbnails =
+                      renderer['thumbnail']?['musicThumbnailRenderer']?['thumbnail']?['thumbnails'];
                   if (thumbnails is List && thumbnails.isNotEmpty) {
                     thumbUrl = thumbnails.last['url'];
                   }
-                  final videoId = renderer['overlay']?['musicItemThumbnailOverlayRenderer']?['content']?['musicPlayButtonRenderer']?['playNavigationEndpoint']?['watchEndpoint']?['videoId'];
+                  final videoId =
+                      renderer['overlay']?['musicItemThumbnailOverlayRenderer']?['content']?['musicPlayButtonRenderer']?['playNavigationEndpoint']?['watchEndpoint']?['videoId'];
                   if (videoId != null && title != null) {
                     results.add(
                       YtMusicResult(
@@ -697,7 +763,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
             'continuationItemRenderer',
             'continuationEndpoint',
             'continuationCommand',
-            'token'
+            'token',
           ]);
           nextToken ??= nav(response, [
             'continuationContents',
@@ -705,40 +771,44 @@ class _ArtistScreenState extends State<ArtistScreen> {
             'continuations',
             0,
             'nextContinuationData',
-            'continuation'
+            'continuation',
           ]);
         } catch (e) {
           nextToken = null;
         }
       }
 
-      return {
-        'videos': results,
-        'continuationToken': nextToken,
-      };
+      return {'videos': results, 'continuationToken': nextToken};
     } catch (e) {
-      return {
-        'videos': <YtMusicResult>[],
-        'continuationToken': null,
-      };
+      return {'videos': <YtMusicResult>[], 'continuationToken': null};
     }
   }
 
   // Función para cargar más canciones
   Future<void> _loadMoreSongs() async {
-    if (_loadingMoreSongs || !_hasMoreSongs || _songsContinuationToken == null) return;
+    if (_loadingMoreSongs ||
+        !_hasMoreSongs ||
+        _songsContinuationToken == null) {
+      return;
+    }
 
     setState(() {
       _loadingMoreSongs = true;
     });
 
     try {
-      final songsData = await _loadSongsWithPagination(widget.artistName, continuationToken: _songsContinuationToken);
-      
+      final songsData = await _loadSongsWithPagination(
+        widget.artistName,
+        continuationToken: _songsContinuationToken,
+      );
+
       if (mounted) {
         final newSongs = songsData['songs'] as List<YtMusicResult>;
-        final filteredNewSongs = _filterSongsByArtist(newSongs, widget.artistName);
-        
+        final filteredNewSongs = _filterSongsByArtist(
+          newSongs,
+          widget.artistName,
+        );
+
         setState(() {
           _songs.addAll(filteredNewSongs);
           _songsContinuationToken = songsData['continuationToken'] as String?;
@@ -757,18 +827,25 @@ class _ArtistScreenState extends State<ArtistScreen> {
 
   // Función para cargar más videos
   Future<void> _loadMoreVideos() async {
-    if (_loadingMoreVideos || !_hasMoreVideos || _videosContinuationToken == null) return;
+    if (_loadingMoreVideos ||
+        !_hasMoreVideos ||
+        _videosContinuationToken == null) {
+      return;
+    }
 
     setState(() {
       _loadingMoreVideos = true;
     });
 
     try {
-      final videosData = await _loadVideosWithPagination(widget.artistName, continuationToken: _videosContinuationToken);
-      
+      final videosData = await _loadVideosWithPagination(
+        widget.artistName,
+        continuationToken: _videosContinuationToken,
+      );
+
       if (mounted) {
         final newVideos = videosData['videos'] as List<YtMusicResult>;
-        
+
         setState(() {
           _videos.addAll(newVideos);
           _videosContinuationToken = videosData['continuationToken'] as String?;
@@ -785,14 +862,13 @@ class _ArtistScreenState extends State<ArtistScreen> {
     }
   }
 
-
   @override
   Widget build(BuildContext context) {
     final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final isSystem = colorSchemeNotifier.value == AppColorScheme.system;
     final isLight = Theme.of(context).brightness == Brightness.light;
-    
+
     return PopScope(
       canPop: !canPopInternally(),
       onPopInvokedWithResult: (didPop, result) {
@@ -801,289 +877,698 @@ class _ArtistScreenState extends State<ArtistScreen> {
         }
       },
       child: Scaffold(
-      appBar: AppBar(
-        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        leading: IconButton(
-          constraints: const BoxConstraints(
-            minWidth: 40,
-            minHeight: 40,
-            maxWidth: 40,
-            maxHeight: 40,
+        appBar: AppBar(
+          backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+          surfaceTintColor: Colors.transparent,
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          leading: IconButton(
+            constraints: const BoxConstraints(
+              minWidth: 40,
+              minHeight: 40,
+              maxWidth: 40,
+              maxHeight: 40,
+            ),
+            padding: EdgeInsets.zero,
+            icon: Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Theme.of(
+                  context,
+                ).colorScheme.primary.withValues(alpha: 0.08),
+              ),
+              child: const Icon(Icons.arrow_back, size: 24),
+            ),
+            onPressed: () => Navigator.of(context).pop(),
           ),
-          padding: EdgeInsets.zero,
-          icon: Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
-            ),
-            child: const Icon(
-              Icons.arrow_back,
-              size: 24,
-            ),
-          ),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: const TranslatedText('artist'),
-        actions: [
-          if (_isSelectionMode && _selectedIndexes.isNotEmpty)
-            IconButton(
-              onPressed: _downloadSelectedItems,
-              icon: const Icon(Icons.download),
-              tooltip: 'Descargar (${_selectedIndexes.length})',
-            ),
-          if (_isSelectionMode && _selectedIndexes.isNotEmpty)
-            IconButton(
-              onPressed: () {
-                setState(() {
-                  _selectedIndexes.clear();
-                  _isSelectionMode = false;
-                });
-              },
-              icon: const Icon(Icons.close),
-              tooltip: 'Cancelar selección',
-            ),
-          if (!_isSelectionMode) ...[
-            IconButton(
-              onPressed: () async {
-                final artistName = _artist?['name']?.toString() ?? widget.artistName;
-                await _showArtistSearchOptions(artistName);
-              },
-              icon: const Icon(Icons.arrow_outward, size: 28),
-              tooltip: LocaleProvider.tr('search_artist'),
-            ),
-            // Dialogo de informacion de la pantalla
-            IconButton(icon: const Icon(Icons.info_outline, size: 28),
-              tooltip: LocaleProvider.tr('info'), 
-              onPressed: () {
-              showDialog(context: context, builder: (context) {
-                return AlertDialog(
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    side: isAmoled && isDark
-                        ? const BorderSide(color: Colors.white, width: 1)
-                        : BorderSide.none,
-                  ),
-                  title: Text(LocaleProvider.tr('info')),
-                  content: Text(LocaleProvider.tr('artist_info')),
-                  actions: [
-                    TextButton(onPressed: () => Navigator.of(context).pop(), child: Text(LocaleProvider.tr('ok'))),
-                  ],
-                );
-              }
-              );
-            },
-            ),
-          ],
-        ],
-      ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _artist == null
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Icon(Icons.person, size: 70, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6)),
-                      const SizedBox(height: 12),         
-                      TranslatedText('no_results',
-                      style: TextStyle(fontSize: 14,color: Theme.of(context,).colorScheme.onSurface.withValues(alpha: 0.6),
-                        ),),
-                    ],
-                  ),
-                )
-              : SingleChildScrollView(
-                  controller: _scrollController,
-                  padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + MediaQuery.of(context).padding.bottom),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Center(
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(100),
-                          child: _buildSafeNetworkImage(
-                            _artist!['thumbUrl'],
-                            width: 160,
-                            height: 160,
-                            fit: BoxFit.cover,
-                            fallback: Container(
-                              width: 160,
-                              height: 160,
-                              decoration: BoxDecoration(
-                                color: colorSchemeNotifier.value == AppColorScheme.amoled
-                                    ? Colors.white.withValues(alpha: 0.1)
-                                    : Theme.of(context).colorScheme.secondaryContainer.withValues(alpha: 0.8),
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(
-                                Icons.person,
-                                size: 120,
-                              ),
-                            ),
+          title: const TranslatedText('artist'),
+          actions: [
+            if (_isSelectionMode && _selectedIndexes.isNotEmpty)
+              IconButton(
+                onPressed: _downloadSelectedItems,
+                icon: const Icon(Icons.download),
+                tooltip: 'Descargar (${_selectedIndexes.length})',
+              ),
+            if (_isSelectionMode && _selectedIndexes.isNotEmpty)
+              IconButton(
+                onPressed: () {
+                  setState(() {
+                    _selectedIndexes.clear();
+                    _isSelectionMode = false;
+                  });
+                },
+                icon: const Icon(Icons.close),
+                tooltip: 'Cancelar selección',
+              ),
+            if (!_isSelectionMode) ...[
+              IconButton(
+                constraints: const BoxConstraints(
+                  minWidth: 40,
+                  minHeight: 40,
+                  maxWidth: 40,
+                  maxHeight: 40,
+                ),
+                padding: EdgeInsets.zero,
+                onPressed: () async {
+                  final artistName =
+                      _artist?['name']?.toString() ?? widget.artistName;
+                  await _showArtistSearchOptions(artistName);
+                },
+                icon: const Icon(Icons.arrow_outward, size: 28),
+                tooltip: LocaleProvider.tr('search_artist'),
+              ),
+              // Dialogo de informacion de la pantalla
+              IconButton(
+                icon: const Icon(Icons.info_outline, size: 28),
+                tooltip: LocaleProvider.tr('info'),
+                onPressed: () {
+                  showDialog(
+                    context: context,
+                    builder: (context) {
+                      return AlertDialog(
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          side: isAmoled && isDark
+                              ? const BorderSide(color: Colors.white, width: 1)
+                              : BorderSide.none,
+                        ),
+                        title: Center(
+                          child: Text(
+                            LocaleProvider.tr('info'),
+                            style: TextStyle(fontWeight: FontWeight.bold),
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 24),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Flexible(
-                            child: Text(
-                              _artist!['name']?.toString() ?? widget.artistName,
-                              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                                    fontWeight: FontWeight.bold,
+                        content: Text(LocaleProvider.tr('artist_info')),
+                        actions: [
+                          SizedBox(height: 16),
+                          InkWell(
+                            onTap: () => Navigator.of(context).pop(),
+                            borderRadius: BorderRadius.circular(16),
+                            child: Container(
+                              width: double.infinity,
+                              padding: EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: isAmoled && isDark
+                                    ? Colors.white.withValues(alpha: 0.2)
+                                    : Theme.of(
+                                        context,
+                                      ).colorScheme.primaryContainer,
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: isAmoled && isDark
+                                      ? Colors.white.withValues(alpha: 0.4)
+                                      : Theme.of(context).colorScheme.primary
+                                            .withValues(alpha: 0.3),
+                                  width: 2,
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    padding: EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(12),
+                                      color: isAmoled && isDark
+                                          ? Colors.white.withValues(alpha: 0.2)
+                                          : Theme.of(context)
+                                                .colorScheme
+                                                .primary
+                                                .withValues(alpha: 0.1),
+                                    ),
+                                    child: Icon(
+                                      Icons.check_circle,
+                                      size: 30,
+                                      color: isAmoled && isDark
+                                          ? Colors.white
+                                          : Theme.of(
+                                              context,
+                                            ).colorScheme.primary,
+                                    ),
                                   ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              textAlign: TextAlign.center,
+                                  SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          LocaleProvider.tr('ok'),
+                                          style: TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w600,
+                                            color: isAmoled && isDark
+                                                ? Colors.white
+                                                : Theme.of(
+                                                    context,
+                                                  ).colorScheme.primary,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         ],
+                      );
+                    },
+                  );
+                },
+              ),
+            ],
+          ],
+        ),
+        body: _loading
+            ? const Center(child: CircularProgressIndicator())
+            : _artist == null
+            ? Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.person,
+                      size: 70,
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurface.withValues(alpha: 0.6),
+                    ),
+                    const SizedBox(height: 12),
+                    TranslatedText(
+                      'no_results',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withValues(alpha: 0.6),
                       ),
-                      const SizedBox(height: 16),
-                      GestureDetector(
-                        onTap: () {
-                          if (_artist!['description'] != null &&
-                              _artist!['description'].toString().trim().isNotEmpty) {
-                            setState(() {
-                              _descExpanded = !_descExpanded;
-                            });
-                          }
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: isLight ? Theme.of(context).colorScheme.secondaryContainer
-                                  : Theme.of(context).colorScheme.onSecondaryFixed,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  (_artist!['description'] != null &&
-                                          _artist!['description'].toString().trim().isNotEmpty)
-                                      ? _artist!['description'].toString()
-                                      : LocaleProvider.tr('no_description'),
-                                  style: Theme.of(context).textTheme.bodyLarge,
-                                  maxLines: _descExpanded ? null : 3,
-                                  overflow: _descExpanded
-                                      ? TextOverflow.visible
-                                      : TextOverflow.ellipsis,
-                                ),
-                              ),
-                              if (_artist!['description'] != null &&
-                                  _artist!['description'].toString().trim().isNotEmpty)
-                                Container(
-                                  width: 32,
-                                  height: 32,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: isSystem ? Theme.of(context).colorScheme.surfaceContainer : Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
-                                  ),
-                                  child: Icon(
-                                    _descExpanded
-                                        ? Icons.expand_less
-                                        : Icons.expand_more,
-                                    size: 20,
-                                    color: Theme.of(context).colorScheme.onSurface,
-                                  ),
-                                ),
-                            ],
+                    ),
+                  ],
+                ),
+              )
+            : SingleChildScrollView(
+                controller: _scrollController,
+                padding: EdgeInsets.fromLTRB(
+                  16,
+                  16,
+                  16,
+                  16 + MediaQuery.of(context).padding.bottom,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(100),
+                        child: _buildSafeNetworkImage(
+                          _artist!['thumbUrl'],
+                          width: 160,
+                          height: 160,
+                          fit: BoxFit.cover,
+                          fallback: Container(
+                            width: 160,
+                            height: 160,
+                            decoration: BoxDecoration(
+                              color:
+                                  colorSchemeNotifier.value ==
+                                      AppColorScheme.amoled
+                                  ? Colors.white.withValues(alpha: 0.1)
+                                  : Theme.of(context)
+                                        .colorScheme
+                                        .secondaryContainer
+                                        .withValues(alpha: 0.8),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.person, size: 120),
                           ),
                         ),
                       ),
-                      
-                      // Mostrar contenido del artista con diseño de YouTube
-                      if (_expandedCategory == 'songs') ...[
-                        // Vista de solo canciones con botón de volver
-                        const SizedBox(height: 24),
-                        Column(
+                    ),
+                    const SizedBox(height: 24),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            _artist!['name']?.toString() ?? widget.artistName,
+                            style: Theme.of(context).textTheme.headlineSmall
+                                ?.copyWith(fontWeight: FontWeight.bold),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    GestureDetector(
+                      onTap: () {
+                        if (_artist!['description'] != null &&
+                            _artist!['description']
+                                .toString()
+                                .trim()
+                                .isNotEmpty) {
+                          setState(() {
+                            _descExpanded = !_descExpanded;
+                          });
+                        }
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: isLight
+                              ? Theme.of(context).colorScheme.secondaryContainer
+                              : Theme.of(context).colorScheme.onSecondaryFixed,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Row(
-                              children: [
-                                IconButton(
-                                  icon: Container(
-                                    width: 40,
-                                    height: 40,
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
+                            Expanded(
+                              child: Text(
+                                (_artist!['description'] != null &&
+                                        _artist!['description']
+                                            .toString()
+                                            .trim()
+                                            .isNotEmpty)
+                                    ? _artist!['description'].toString()
+                                    : LocaleProvider.tr('no_description'),
+                                style: Theme.of(context).textTheme.bodyLarge,
+                                maxLines: _descExpanded ? null : 3,
+                                overflow: _descExpanded
+                                    ? TextOverflow.visible
+                                    : TextOverflow.ellipsis,
+                              ),
+                            ),
+                            if (_artist!['description'] != null &&
+                                _artist!['description']
+                                    .toString()
+                                    .trim()
+                                    .isNotEmpty)
+                              Container(
+                                width: 32,
+                                height: 32,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: isSystem
+                                      ? Theme.of(
+                                          context,
+                                        ).colorScheme.surfaceContainer
+                                      : Theme.of(context)
+                                            .colorScheme
+                                            .surfaceContainerHighest
+                                            .withValues(alpha: 0.5),
+                                ),
+                                child: Icon(
+                                  _descExpanded
+                                      ? Icons.expand_less
+                                      : Icons.expand_more,
+                                  size: 20,
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onSurface,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                    // Mostrar contenido del artista con diseño de YouTube
+                    if (_expandedCategory == 'songs') ...[
+                      // Vista de solo canciones con botón de volver
+                      const SizedBox(height: 24),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              IconButton(
+                                constraints: const BoxConstraints(
+                                  minWidth: 40,
+                                  minHeight: 40,
+                                  maxWidth: 40,
+                                  maxHeight: 40,
+                                ),
+                                padding: EdgeInsets.zero,
+                                icon: Container(
+                                  width: 40,
+                                  height: 40,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: Theme.of(context).colorScheme.primary
+                                        .withValues(alpha: 0.08),
+                                  ),
+                                  child: const Icon(Icons.arrow_back, size: 24),
+                                ),
+                                tooltip: 'Volver',
+                                onPressed: () {
+                                  setState(() {
+                                    _expandedCategory = null;
+                                  });
+                                },
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                LocaleProvider.tr('songs_search'),
+                                style: Theme.of(
+                                  context,
+                                ).textTheme.titleMedium?.copyWith(fontSize: 20),
+                              ),
+                            ],
+                          ),
+                          ListView.builder(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            addAutomaticKeepAlives: false,
+                            addRepaintBoundaries: true,
+                            itemCount:
+                                _songs.length + (_loadingMoreSongs ? 1 : 0),
+                            itemBuilder: (context, index) {
+                              // Mostrar indicador de carga al final
+                              if (_loadingMoreSongs && index == _songs.length) {
+                                return Container(
+                                  padding: const EdgeInsets.all(16),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      const SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      TranslatedText(
+                                        'loading_more',
+                                        style: const TextStyle(fontSize: 14),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              }
+
+                              final item = _songs[index];
+                              final videoId = item.videoId;
+                              final isSelected =
+                                  videoId != null &&
+                                  _selectedIndexes.contains('song-$videoId');
+
+                              return GestureDetector(
+                                onLongPress: () {
+                                  _toggleSelection(index, isVideo: false);
+                                },
+                                onTap: () {
+                                  if (_isSelectionMode) {
+                                    _toggleSelection(index, isVideo: false);
+                                  } else {
+                                    // Mostrar preview de la canción
+                                    showModalBottomSheet(
+                                      context: context,
+                                      shape: const RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.vertical(
+                                          top: Radius.circular(16),
+                                        ),
+                                      ),
+                                      builder: (context) {
+                                        return SafeArea(
+                                          child: Padding(
+                                            padding: const EdgeInsets.all(24),
+                                            child: YtPreviewPlayer(
+                                              results: _songs,
+                                              currentIndex: index,
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                    );
+                                  }
+                                },
+                                child: Container(
+                                  width: double.infinity,
+                                  margin: const EdgeInsets.symmetric(),
+                                  child: ListTile(
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 0,
+                                      vertical: 4,
                                     ),
-                                    child: const Icon(
-                                      Icons.arrow_back,
-                                      size: 24,
+                                    leading: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        if (_isSelectionMode)
+                                          Checkbox(
+                                            value: isSelected,
+                                            onChanged: (checked) {
+                                              setState(() {
+                                                if (videoId == null) return;
+                                                final key = 'song-$videoId';
+                                                if (checked == true) {
+                                                  _selectedIndexes.add(key);
+                                                } else {
+                                                  _selectedIndexes.remove(key);
+                                                  if (_selectedIndexes
+                                                      .isEmpty) {
+                                                    _isSelectionMode = false;
+                                                  }
+                                                }
+                                              });
+                                            },
+                                          ),
+                                        ClipRRect(
+                                          borderRadius: BorderRadius.circular(
+                                            8,
+                                          ),
+                                          child: _buildSafeNetworkImage(
+                                            item.thumbUrl,
+                                            width: 56,
+                                            height: 56,
+                                            fit: BoxFit.cover,
+                                            fallback: Container(
+                                              width: 56,
+                                              height: 56,
+                                              decoration: BoxDecoration(
+                                                color: isSystem
+                                                    ? Theme.of(context)
+                                                          .colorScheme
+                                                          .secondaryContainer
+                                                    : Theme.of(context)
+                                                          .colorScheme
+                                                          .surfaceContainer,
+                                                borderRadius:
+                                                    BorderRadius.circular(12),
+                                              ),
+                                              child: Icon(
+                                                Icons.music_note,
+                                                size: 32,
+                                                color: Theme.of(
+                                                  context,
+                                                ).colorScheme.onSurface,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    title: Text(
+                                      item.title ?? 'Título desconocido',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    subtitle: Text(
+                                      item.artist ?? 'Artista desconocido',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    trailing: IconButton(
+                                      icon: const Icon(Icons.link),
+                                      tooltip: 'Copiar enlace',
+                                      onPressed: () {
+                                        if (videoId != null) {
+                                          Clipboard.setData(
+                                            ClipboardData(
+                                              text:
+                                                  'https://music.youtube.com/watch?v=$videoId',
+                                            ),
+                                          );
+                                          ScaffoldMessenger.of(
+                                            context,
+                                          ).showSnackBar(
+                                            const SnackBar(
+                                              content: Text('Enlace copiado'),
+                                            ),
+                                          );
+                                        }
+                                      },
                                     ),
                                   ),
-                                  tooltip: 'Volver',
-                                  onPressed: () {
-                                    setState(() {
-                                      _expandedCategory = null;
-                                    });
-                                  },
+                                ),
+                              );
+                            },
+                          ),
+                        ],
+                      ),
+                    ] else if (_expandedCategory == 'album') ...[
+                      // Vista de canciones del álbum seleccionado
+                      const SizedBox(height: 24),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              IconButton(
+                                constraints: const BoxConstraints(
+                                  minWidth: 40,
+                                  minHeight: 40,
+                                  maxWidth: 40,
+                                  maxHeight: 40,
+                                ),
+                                padding: EdgeInsets.zero,
+                                icon: Container(
+                                  width: 40,
+                                  height: 40,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: Theme.of(context).colorScheme.primary
+                                        .withValues(alpha: 0.08),
+                                  ),
+                                  child: const Icon(Icons.arrow_back, size: 24),
+                                ),
+                                tooltip: 'Volver',
+                                onPressed: () {
+                                  setState(() {
+                                    _expandedCategory = null;
+                                    _albumSongs = [];
+                                    _currentAlbum = null;
+                                  });
+                                },
+                              ),
+                              const SizedBox(width: 8),
+                              if (_currentAlbum != null) ...[
+                                if (_currentAlbum!['thumbUrl'] != null)
+                                  Padding(
+                                    padding: const EdgeInsets.only(right: 12),
+                                    child: ClipRRect(
+                                      borderRadius: BorderRadius.circular(8),
+                                      child: Image.network(
+                                        _currentAlbum!['thumbUrl'],
+                                        width: 40,
+                                        height: 40,
+                                        fit: BoxFit.cover,
+                                      ),
+                                    ),
+                                  ),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        _currentAlbum!['title'] ?? '',
+                                        style: Theme.of(
+                                          context,
+                                        ).textTheme.titleMedium,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      Text(
+                                        _currentAlbum!['artist'] ?? '',
+                                        style: Theme.of(
+                                          context,
+                                        ).textTheme.bodySmall,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ],
+                                  ),
                                 ),
                                 const SizedBox(width: 8),
-                                Text(
-                                  LocaleProvider.tr('songs_search'),
-                                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                    fontSize: 20,
+                                IconButton.filled(
+                                  icon: Icon(
+                                    Icons.download,
+                                    size: 24,
+                                    color: isAmoled && isDark
+                                        ? Colors.black
+                                        : null,
                                   ),
+                                  tooltip: LocaleProvider.tr(
+                                    'download_entire_album',
+                                  ),
+                                  onPressed: () async {
+                                    if (_albumSongs.isNotEmpty) {
+                                      final scaffoldMessenger =
+                                          ScaffoldMessenger.of(context);
+                                      final downloadQueue = DownloadQueue();
+                                      for (final song in _albumSongs) {
+                                        await downloadQueue.addToQueue(
+                                          context: context,
+                                          videoId: song.videoId ?? '',
+                                          title: song.title ?? 'Sin título',
+                                          artist:
+                                              song.artist?.replaceFirst(
+                                                RegExp(r' - Topic$'),
+                                                '',
+                                              ) ??
+                                              'Artista desconocido',
+                                        );
+                                      }
+                                      if (!mounted) return;
+                                      scaffoldMessenger.showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                            '${_albumSongs.length} ${LocaleProvider.tr('songs_added_to_queue')}',
+                                          ),
+                                        ),
+                                      );
+                                    }
+                                  },
                                 ),
                               ],
-                            ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          if (_loadingAlbumSongs)
+                            const Center(child: CircularProgressIndicator())
+                          else if (_albumSongs.isEmpty)
+                            const Center(
+                              child: Text('No se encontraron canciones'),
+                            )
+                          else
                             ListView.builder(
                               shrinkWrap: true,
                               physics: const NeverScrollableScrollPhysics(),
                               addAutomaticKeepAlives: false,
                               addRepaintBoundaries: true,
-                              itemCount: _songs.length + (_loadingMoreSongs ? 1 : 0),
+                              itemCount: _albumSongs.length,
                               itemBuilder: (context, index) {
-                                // Mostrar indicador de carga al final
-                                if (_loadingMoreSongs && index == _songs.length) {
-                                  return Container(
-                                    padding: const EdgeInsets.all(16),
-                                    child: Row(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: [
-                                        const SizedBox(
-                                          width: 20,
-                                          height: 20,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                          ),
-                                        ),
-                                        const SizedBox(width: 12),
-                                        TranslatedText(
-                                          'loading_more',
-                                          style: const TextStyle(
-                                            fontSize: 14,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  );
-                                }
-                                
-                                final item = _songs[index];
+                                final item = _albumSongs[index];
                                 final videoId = item.videoId;
-                                final isSelected = videoId != null && _selectedIndexes.contains('song-$videoId');
-                                
+                                final isSelected =
+                                    videoId != null &&
+                                    _selectedIndexes.contains('album-$videoId');
+
                                 return GestureDetector(
                                   onLongPress: () {
-                                    _toggleSelection(index, isVideo: false);
+                                    if (videoId == null) return;
+                                    _toggleSelection(
+                                      index,
+                                      isVideo: false,
+                                      isAlbum: true,
+                                    );
                                   },
                                   onTap: () {
                                     if (_isSelectionMode) {
-                                      _toggleSelection(index, isVideo: false);
+                                      if (videoId == null) return;
+                                      _toggleSelection(
+                                        index,
+                                        isVideo: false,
+                                        isAlbum: true,
+                                      );
                                     } else {
-                                      // Mostrar preview de la canción
+                                      // Mostrar preview de la canción del álbum
                                       showModalBottomSheet(
                                         context: context,
                                         shape: const RoundedRectangleBorder(
@@ -1096,8 +1581,12 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                             child: Padding(
                                               padding: const EdgeInsets.all(24),
                                               child: YtPreviewPlayer(
-                                                results: _songs,
+                                                results: _albumSongs,
                                                 currentIndex: index,
+                                                fallbackThumbUrl:
+                                                    _currentAlbum?['thumbUrl'],
+                                                fallbackArtist:
+                                                    _currentAlbum?['artist'],
                                               ),
                                             ),
                                           );
@@ -1109,10 +1598,11 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                     width: double.infinity,
                                     margin: const EdgeInsets.symmetric(),
                                     child: ListTile(
-                                      contentPadding: const EdgeInsets.symmetric(
-                                        horizontal: 0,
-                                        vertical: 4,
-                                      ),
+                                      contentPadding:
+                                          const EdgeInsets.symmetric(
+                                            horizontal: 0,
+                                            vertical: 4,
+                                          ),
                                       leading: Row(
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
@@ -1122,12 +1612,15 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                               onChanged: (checked) {
                                                 setState(() {
                                                   if (videoId == null) return;
-                                                  final key = 'song-$videoId';
+                                                  final key = 'album-$videoId';
                                                   if (checked == true) {
                                                     _selectedIndexes.add(key);
                                                   } else {
-                                                    _selectedIndexes.remove(key);
-                                                    if (_selectedIndexes.isEmpty) {
+                                                    _selectedIndexes.remove(
+                                                      key,
+                                                    );
+                                                    if (_selectedIndexes
+                                                        .isEmpty) {
                                                       _isSelectionMode = false;
                                                     }
                                                   }
@@ -1135,26 +1628,42 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                               },
                                             ),
                                           ClipRRect(
-                                            borderRadius: BorderRadius.circular(8),
-                                            child: _buildSafeNetworkImage(
-                                              item.thumbUrl,
-                                              width: 56,
-                                              height: 56,
-                                              fit: BoxFit.cover,
-                                              fallback: Container(
-                                                width: 56,
-                                                height: 56,
-                                                decoration: BoxDecoration(
-                                                  color: isSystem ? Theme.of(context).colorScheme.secondaryContainer : Theme.of(context).colorScheme.surfaceContainer,
-                                                  borderRadius: BorderRadius.circular(12),
-                                                ),
-                                                child: Icon(
-                                                  Icons.music_note,
-                                                  size: 32,
-                                                  color: Theme.of(context).colorScheme.onSurface,
-                                                ),
-                                              ),
+                                            borderRadius: BorderRadius.circular(
+                                              8,
                                             ),
+                                            child:
+                                                (item.thumbUrl != null &&
+                                                    item.thumbUrl!.isNotEmpty)
+                                                ? Image.network(
+                                                    item.thumbUrl!,
+                                                    width: 56,
+                                                    height: 56,
+                                                    fit: BoxFit.cover,
+                                                  )
+                                                : (_currentAlbum?['thumbUrl'] !=
+                                                      null)
+                                                ? Image.network(
+                                                    _currentAlbum!['thumbUrl'],
+                                                    width: 56,
+                                                    height: 56,
+                                                    fit: BoxFit.cover,
+                                                  )
+                                                : Container(
+                                                    width: 56,
+                                                    height: 56,
+                                                    decoration: BoxDecoration(
+                                                      color: Colors.grey[300],
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            12,
+                                                          ),
+                                                    ),
+                                                    child: const Icon(
+                                                      Icons.music_note,
+                                                      size: 32,
+                                                      color: Colors.grey,
+                                                    ),
+                                                  ),
                                           ),
                                         ],
                                       ),
@@ -1164,7 +1673,12 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                         overflow: TextOverflow.ellipsis,
                                       ),
                                       subtitle: Text(
-                                        item.artist ?? 'Artista desconocido',
+                                        (item.artist != null &&
+                                                item.artist!.isNotEmpty)
+                                            ? item.artist!
+                                            : (_currentAlbum?['artist'] != null)
+                                            ? _currentAlbum!['artist']
+                                            : 'Artista desconocido',
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                       ),
@@ -1175,11 +1689,16 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                           if (videoId != null) {
                                             Clipboard.setData(
                                               ClipboardData(
-                                                text: 'https://music.youtube.com/watch?v=$videoId',
+                                                text:
+                                                    'https://music.youtube.com/watch?v=$videoId',
                                               ),
                                             );
-                                            ScaffoldMessenger.of(context).showSnackBar(
-                                              const SnackBar(content: Text('Enlace copiado')),
+                                            ScaffoldMessenger.of(
+                                              context,
+                                            ).showSnackBar(
+                                              const SnackBar(
+                                                content: Text('Enlace copiado'),
+                                              ),
                                             );
                                           }
                                         },
@@ -1189,107 +1708,470 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                 );
                               },
                             ),
-                          ],
-                        ),
-                      ] else if (_expandedCategory == 'album') ...[
-                        // Vista de canciones del álbum seleccionado
-                        const SizedBox(height: 24),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                        ],
+                      ),
+                    ] else if (_expandedCategory == 'videos') ...[
+                      // Vista de solo videos con botón de volver
+                      const SizedBox(height: 24),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
                             children: [
-                            Row(
-                              children: [
-                                IconButton(
-                                  icon: Container(
-                                    width: 40,
-                                    height: 40,
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
-                                    ),
-                                    child: const Icon(
-                                      Icons.arrow_back,
-                                      size: 24,
-                                    ),
+                              IconButton(
+                                constraints: const BoxConstraints(
+                                  minWidth: 40,
+                                  minHeight: 40,
+                                  maxWidth: 40,
+                                  maxHeight: 40,
+                                ),
+                                padding: EdgeInsets.zero,
+                                icon: Container(
+                                  width: 40,
+                                  height: 40,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: Theme.of(context).colorScheme.primary
+                                        .withValues(alpha: 0.08),
                                   ),
-                                  tooltip: 'Volver',
-                                  onPressed: () {
+                                  child: const Icon(Icons.arrow_back, size: 24),
+                                ),
+                                tooltip: 'Volver',
+                                onPressed: () {
                                   setState(() {
-                                      _expandedCategory = null;
-                                      _albumSongs = [];
-                                      _currentAlbum = null;
+                                    _expandedCategory = null;
                                   });
                                 },
-                                ),
-                                const SizedBox(width: 8),
-                                if (_currentAlbum != null) ...[
-                                  if (_currentAlbum!['thumbUrl'] != null)
-                                    Padding(
-                                      padding: const EdgeInsets.only(right: 12),
-                                      child: ClipRRect(
-                                        borderRadius: BorderRadius.circular(8),
-                                        child: Image.network(
-                                          _currentAlbum!['thumbUrl'],
-                                          width: 40,
-                                          height: 40,
-                                          fit: BoxFit.cover,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                LocaleProvider.tr('videos'),
+                                style: Theme.of(
+                                  context,
+                                ).textTheme.titleMedium?.copyWith(fontSize: 20),
+                              ),
+                            ],
+                          ),
+                          ListView.builder(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            addAutomaticKeepAlives: false,
+                            addRepaintBoundaries: true,
+                            itemCount:
+                                _videos.length + (_loadingMoreVideos ? 1 : 0),
+                            itemBuilder: (context, index) {
+                              // Mostrar indicador de carga al final
+                              if (_loadingMoreVideos &&
+                                  index == _videos.length) {
+                                return Container(
+                                  padding: const EdgeInsets.all(16),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      const SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
                                         ),
                                       ),
-                                    ),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                          _currentAlbum!['title'] ?? '',
-                                          style: Theme.of(context).textTheme.titleMedium,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                        Text(
-                                          _currentAlbum!['artist'] ?? '',
-                                          style: Theme.of(context).textTheme.bodySmall,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
+                                      const SizedBox(width: 12),
+                                      TranslatedText(
+                                        'loading_more',
+                                        style: const TextStyle(fontSize: 14),
+                                      ),
                                     ],
                                   ),
-                                ),
-                                ],
-                              ],
-                            ),
-                            const SizedBox(height: 16),
-                            if (_loadingAlbumSongs)
-                              const Center(
-                                child: CircularProgressIndicator(),
-                              )
-                            else if (_albumSongs.isEmpty)
-                              const Center(
-                                child: Text('No se encontraron canciones'),
-                              )
-                            else
-                              ListView.builder(
-                                shrinkWrap: true,
-                                physics: const NeverScrollableScrollPhysics(),
-                                addAutomaticKeepAlives: false,
-                                addRepaintBoundaries: true,
-                                itemCount: _albumSongs.length,
-                                itemBuilder: (context, index) {
-                                  final item = _albumSongs[index];
-                                  final videoId = item.videoId;
-                                  final isSelected = videoId != null && _selectedIndexes.contains('album-$videoId');
-                                    
-                                    return GestureDetector(
-                                      onLongPress: () {
-                                      if (videoId == null) return;
-                                      _toggleSelection(index, isVideo: false, isAlbum: true);
+                                );
+                              }
+
+                              final item = _videos[index];
+                              final videoId = item.videoId;
+                              final isSelected =
+                                  videoId != null &&
+                                  _selectedIndexes.contains('video-$videoId');
+
+                              return GestureDetector(
+                                onLongPress: () {
+                                  _toggleSelection(index, isVideo: true);
+                                },
+                                onTap: () {
+                                  if (_isSelectionMode) {
+                                    _toggleSelection(index, isVideo: true);
+                                  } else {
+                                    // Mostrar preview del video
+                                    showModalBottomSheet(
+                                      context: context,
+                                      shape: const RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.vertical(
+                                          top: Radius.circular(16),
+                                        ),
+                                      ),
+                                      builder: (context) {
+                                        return SafeArea(
+                                          child: Padding(
+                                            padding: const EdgeInsets.all(24),
+                                            child: YtPreviewPlayer(
+                                              results: _videos,
+                                              currentIndex: index,
+                                            ),
+                                          ),
+                                        );
                                       },
-                                      onTap: () {
-                                        if (_isSelectionMode) {
-                                        if (videoId == null) return;
-                                        _toggleSelection(index, isVideo: false, isAlbum: true);
-                                        } else {
-                                        // Mostrar preview de la canción del álbum
+                                    );
+                                  }
+                                },
+                                child: Container(
+                                  width: double.infinity,
+                                  margin: const EdgeInsets.symmetric(),
+                                  child: ListTile(
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 0,
+                                      vertical: 4,
+                                    ),
+                                    leading: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        if (_isSelectionMode)
+                                          Checkbox(
+                                            value: isSelected,
+                                            onChanged: (checked) {
+                                              setState(() {
+                                                if (videoId == null) return;
+                                                final key = 'video-$videoId';
+                                                if (checked == true) {
+                                                  _selectedIndexes.add(key);
+                                                } else {
+                                                  _selectedIndexes.remove(key);
+                                                  if (_selectedIndexes
+                                                      .isEmpty) {
+                                                    _isSelectionMode = false;
+                                                  }
+                                                }
+                                              });
+                                            },
+                                          ),
+                                        ClipRRect(
+                                          borderRadius: BorderRadius.circular(
+                                            8,
+                                          ),
+                                          child: _buildSafeNetworkImage(
+                                            item.thumbUrl,
+                                            width: 56,
+                                            height: 56,
+                                            fit: BoxFit.cover,
+                                            fallback: Container(
+                                              width: 56,
+                                              height: 56,
+                                              decoration: BoxDecoration(
+                                                color: isSystem
+                                                    ? Theme.of(context)
+                                                          .colorScheme
+                                                          .secondaryContainer
+                                                    : Theme.of(context)
+                                                          .colorScheme
+                                                          .surfaceContainer,
+                                                borderRadius:
+                                                    BorderRadius.circular(12),
+                                              ),
+                                              child: Icon(
+                                                Icons.music_note,
+                                                size: 32,
+                                                color: Theme.of(
+                                                  context,
+                                                ).colorScheme.onSurface,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    title: Text(
+                                      item.title ?? 'Título desconocido',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    subtitle: Text(
+                                      item.artist ?? 'Artista desconocido',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    trailing: IconButton(
+                                      icon: const Icon(Icons.link),
+                                      tooltip: 'Copiar enlace',
+                                      onPressed: () {
+                                        if (videoId != null) {
+                                          Clipboard.setData(
+                                            ClipboardData(
+                                              text:
+                                                  'https://music.youtube.com/watch?v=$videoId',
+                                            ),
+                                          );
+                                          ScaffoldMessenger.of(
+                                            context,
+                                          ).showSnackBar(
+                                            const SnackBar(
+                                              content: Text('Enlace copiado'),
+                                            ),
+                                          );
+                                        }
+                                      },
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ],
+                      ),
+                    ] else if (_expandedCategory == 'albums') ...[
+                      // Vista de solo álbumes con botón de volver
+                      const SizedBox(height: 24),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              IconButton(
+                                constraints: const BoxConstraints(
+                                  minWidth: 40,
+                                  minHeight: 40,
+                                  maxWidth: 40,
+                                  maxHeight: 40,
+                                ),
+                                padding: EdgeInsets.zero,
+                                icon: Container(
+                                  width: 40,
+                                  height: 40,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: Theme.of(context).colorScheme.primary
+                                        .withValues(alpha: 0.08),
+                                  ),
+                                  child: const Icon(Icons.arrow_back, size: 24),
+                                ),
+                                tooltip: 'Volver',
+                                onPressed: () {
+                                  setState(() {
+                                    _expandedCategory = null;
+                                  });
+                                },
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                LocaleProvider.tr('albums'),
+                                style: Theme.of(
+                                  context,
+                                ).textTheme.titleMedium?.copyWith(fontSize: 20),
+                              ),
+                            ],
+                          ),
+                          ListView.builder(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            addAutomaticKeepAlives: false,
+                            addRepaintBoundaries: true,
+                            itemCount: _albums.length,
+                            itemBuilder: (context, index) {
+                              final album = _albums[index];
+                              final isSelected = _selectedIndexes.contains(
+                                'album-$index',
+                              );
+
+                              return GestureDetector(
+                                onLongPress: () {
+                                  _toggleSelection(
+                                    index,
+                                    isVideo: false,
+                                    isAlbum: true,
+                                  );
+                                },
+                                onTap: () async {
+                                  if (_isSelectionMode) {
+                                    _toggleSelection(
+                                      index,
+                                      isVideo: false,
+                                      isAlbum: true,
+                                    );
+                                  } else {
+                                    // Cargar canciones del álbum
+                                    if (album['browseId'] == null) {
+                                      return;
+                                    }
+                                    setState(() {
+                                      _expandedCategory = 'album';
+                                      _loadingAlbumSongs = true;
+                                      _albumSongs = [];
+                                      _currentAlbum = {
+                                        'title': album['title'],
+                                        'artist': album['artist'],
+                                        'thumbUrl': album['thumbUrl'],
+                                      };
+                                    });
+                                    final songs = await getAlbumSongs(
+                                      album['browseId']!,
+                                    );
+                                    if (!mounted) return;
+                                    setState(() {
+                                      _albumSongs = songs;
+                                      _loadingAlbumSongs = false;
+                                    });
+                                  }
+                                },
+                                child: Container(
+                                  width: double.infinity,
+                                  margin: const EdgeInsets.symmetric(),
+                                  child: ListTile(
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 0,
+                                      vertical: 4,
+                                    ),
+                                    leading: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        if (_isSelectionMode)
+                                          Checkbox(
+                                            value: isSelected,
+                                            onChanged: (checked) {
+                                              setState(() {
+                                                final key = 'album-$index';
+                                                if (checked == true) {
+                                                  _selectedIndexes.add(key);
+                                                } else {
+                                                  _selectedIndexes.remove(key);
+                                                  if (_selectedIndexes
+                                                      .isEmpty) {
+                                                    _isSelectionMode = false;
+                                                  }
+                                                }
+                                              });
+                                            },
+                                          ),
+                                        ClipRRect(
+                                          borderRadius: BorderRadius.circular(
+                                            8,
+                                          ),
+                                          child: album['thumbUrl'] != null
+                                              ? Image.network(
+                                                  album['thumbUrl']!,
+                                                  width: 56,
+                                                  height: 56,
+                                                  fit: BoxFit.cover,
+                                                )
+                                              : Container(
+                                                  width: 56,
+                                                  height: 56,
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.grey[300],
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          12,
+                                                        ),
+                                                  ),
+                                                  child: const Icon(
+                                                    Icons.album,
+                                                    size: 32,
+                                                    color: Colors.grey,
+                                                  ),
+                                                ),
+                                        ),
+                                      ],
+                                    ),
+                                    title: Text(
+                                      album['title'] ?? 'Álbum desconocido',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    subtitle: Text(
+                                      'Álbum',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    trailing: IconButton(
+                                      icon: const Icon(Icons.link),
+                                      tooltip: 'Copiar enlace',
+                                      onPressed: () {
+                                        if (album['browseId'] != null) {
+                                          Clipboard.setData(
+                                            ClipboardData(
+                                              text:
+                                                  'https://music.youtube.com/browse/${album['browseId']}',
+                                            ),
+                                          );
+                                          ScaffoldMessenger.of(
+                                            context,
+                                          ).showSnackBar(
+                                            const SnackBar(
+                                              content: Text('Enlace copiado'),
+                                            ),
+                                          );
+                                        }
+                                      },
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ],
+                      ),
+                    ] else if (_songs.isNotEmpty ||
+                        _videos.isNotEmpty ||
+                        _albums.isNotEmpty) ...[
+                      const SizedBox(height: 24),
+
+                      // Sección Canciones
+                      if (_songs.isNotEmpty)
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            InkWell(
+                              borderRadius: BorderRadius.circular(8),
+                              onTap: () {
+                                setState(() {
+                                  _expandedCategory = 'songs';
+                                });
+                              },
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 4,
+                                ),
+                                child: Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(
+                                      LocaleProvider.tr('songs_search'),
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleMedium
+                                          ?.copyWith(fontSize: 20),
+                                    ),
+                                    Icon(Icons.chevron_right),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            Column(
+                              children: [
+                                ..._songs.take(3).map((item) {
+                                  final index = _songs.indexOf(item);
+                                  final videoId = item.videoId;
+                                  final isSelected =
+                                      videoId != null &&
+                                      _selectedIndexes.contains(
+                                        'song-$videoId',
+                                      );
+
+                                  return GestureDetector(
+                                    onLongPress: () {
+                                      _toggleSelection(index, isVideo: false);
+                                    },
+                                    onTap: () {
+                                      if (_isSelectionMode) {
+                                        _toggleSelection(index, isVideo: false);
+                                      } else {
+                                        // Mostrar preview de la canción
                                         showModalBottomSheet(
                                           context: context,
                                           shape: const RoundedRectangleBorder(
@@ -1300,167 +2182,134 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                           builder: (context) {
                                             return SafeArea(
                                               child: Padding(
-                                                padding: const EdgeInsets.all(24),
+                                                padding: const EdgeInsets.all(
+                                                  24,
+                                                ),
                                                 child: YtPreviewPlayer(
-                                                  results: _albumSongs,
+                                                  results: _songs,
                                                   currentIndex: index,
-                                                  fallbackThumbUrl: _currentAlbum?['thumbUrl'],
-                                                  fallbackArtist: _currentAlbum?['artist'],
                                                 ),
                                               ),
                                             );
                                           },
                                         );
-                                        }
-                                      },
-                                      child: Container(
-                                        width: double.infinity,
-                                        margin: const EdgeInsets.symmetric(),
-                                        child: ListTile(
-                                          contentPadding: const EdgeInsets.symmetric(
-                                            horizontal: 0,
-                                            vertical: 4,
-                                          ),
-                                          leading: Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              if (_isSelectionMode)
-                                                Checkbox(
-                                                  value: isSelected,
-                                                  onChanged: (checked) {
-                                    setState(() {
-                                                      if (videoId == null) return;
-                                                    final key = 'album-$videoId';
-                                                      if (checked == true) {
-                                                        _selectedIndexes.add(key);
-                                                      } else {
-                                                        _selectedIndexes.remove(key);
-                                                        if (_selectedIndexes.isEmpty) {
-                                                          _isSelectionMode = false;
-                                                        }
+                                      }
+                                    },
+                                    child: Container(
+                                      width: double.infinity,
+                                      margin: const EdgeInsets.symmetric(),
+                                      child: ListTile(
+                                        contentPadding:
+                                            const EdgeInsets.symmetric(
+                                              horizontal: 0,
+                                              vertical: 4,
+                                            ),
+                                        leading: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            if (_isSelectionMode)
+                                              Checkbox(
+                                                value: isSelected,
+                                                onChanged: (checked) {
+                                                  setState(() {
+                                                    if (videoId == null) return;
+                                                    final key = 'song-$videoId';
+                                                    if (checked == true) {
+                                                      _selectedIndexes.add(key);
+                                                    } else {
+                                                      _selectedIndexes.remove(
+                                                        key,
+                                                      );
+                                                      if (_selectedIndexes
+                                                          .isEmpty) {
+                                                        _isSelectionMode =
+                                                            false;
                                                       }
-                                    });
-                                  },
-                                                ),
-                                              ClipRRect(
-                                                borderRadius: BorderRadius.circular(8),
-                                              child: (item.thumbUrl != null && item.thumbUrl!.isNotEmpty)
-                                                    ? Image.network(
-                                                        item.thumbUrl!,
-                                                      width: 56,
-                                                      height: 56,
-                                                      fit: BoxFit.cover,
-                                                    )
-                                                  : (_currentAlbum?['thumbUrl'] != null)
-                                                      ? Image.network(
-                                                          _currentAlbum!['thumbUrl'],
-                                                        width: 56,
-                                                        height: 56,
-                                                        fit: BoxFit.cover,
-                                                      )
-                                                    : Container(
-                                                        width: 56,
-                                                        height: 56,
-                                                        decoration: BoxDecoration(
-                                                          color: Colors.grey[300],
-                                                          borderRadius: BorderRadius.circular(12),
+                                                    }
+                                                  });
+                                                },
+                                              ),
+                                            ClipRRect(
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                              child: _buildSafeNetworkImage(
+                                                item.thumbUrl,
+                                                width: 56,
+                                                height: 56,
+                                                fit: BoxFit.cover,
+                                                fallback: Container(
+                                                  width: 56,
+                                                  height: 56,
+                                                  decoration: BoxDecoration(
+                                                    color: isSystem
+                                                        ? Theme.of(context)
+                                                              .colorScheme
+                                                              .secondaryContainer
+                                                        : Theme.of(context)
+                                                              .colorScheme
+                                                              .surfaceContainer,
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          12,
                                                         ),
-                                                        child: const Icon(
-                                                          Icons.music_note,
-                                                          size: 32,
-                                                          color: Colors.grey,
-                                                        ),
-                                  ),
-                                ),
-                            ],
-                          ),
-                                title: Text(
-                                            item.title ?? 'Título desconocido',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                subtitle: Text(
-                                            (item.artist != null && item.artist!.isNotEmpty)
-                                                ? item.artist!
-                                                : (_currentAlbum?['artist'] != null)
-                                                    ? _currentAlbum!['artist']
-                                                    : 'Artista desconocido',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                          trailing: IconButton(
-                                            icon: const Icon(Icons.link),
-                                            tooltip: 'Copiar enlace',
-                                            onPressed: () {
-                                              if (videoId != null) {
-                                                Clipboard.setData(
-                                                  ClipboardData(
-                                                    text: 'https://music.youtube.com/watch?v=$videoId',
                                                   ),
-                                                );
-                                                ScaffoldMessenger.of(context).showSnackBar(
-                                                  const SnackBar(content: Text('Enlace copiado')),
-                                                );
-                                              }
-                                            },
-                                          ),
+                                                  child: Icon(
+                                                    Icons.music_note,
+                                                    size: 32,
+                                                    color: Theme.of(
+                                                      context,
+                                                    ).colorScheme.onSurface,
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        title: Text(
+                                          item.title ?? 'Título desconocido',
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        subtitle: Text(
+                                          item.artist ?? 'Artista desconocido',
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        trailing: IconButton(
+                                          icon: const Icon(Icons.link),
+                                          tooltip: 'Copiar enlace',
+                                          onPressed: () {
+                                            if (videoId != null) {
+                                              Clipboard.setData(
+                                                ClipboardData(
+                                                  text:
+                                                      'https://music.youtube.com/watch?v=$videoId',
+                                                ),
+                                              );
+                                              ScaffoldMessenger.of(
+                                                context,
+                                              ).showSnackBar(
+                                                const SnackBar(
+                                                  content: Text(
+                                                    'Enlace copiado',
+                                                  ),
+                                                ),
+                                              );
+                                            }
+                                          },
                                         ),
                                       ),
-                                    );
-                                },
-                              ),
-                            ],
-                          ),
-                      ] else if (_expandedCategory == 'videos') ...[
-                        // Vista de solo videos con botón de volver
-                        const SizedBox(height: 24),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                IconButton(
-                                  icon: Container(
-                                    width: 40,
-                                    height: 40,
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
                                     ),
-                                    child: const Icon(
-                                      Icons.arrow_back,
-                                      size: 24,
-                                    ),
-                                  ),
-                                  tooltip: 'Volver',
-                                  onPressed: () {
-                                    setState(() {
-                                      _expandedCategory = null;
-                                    });
-                                  },
-                                ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  LocaleProvider.tr('videos'),
-                                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                    fontSize: 20,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            ListView.builder(
-                              shrinkWrap: true,
-                              physics: const NeverScrollableScrollPhysics(),
-                              addAutomaticKeepAlives: false,
-                              addRepaintBoundaries: true,
-                              itemCount: _videos.length + (_loadingMoreVideos ? 1 : 0),
-                              itemBuilder: (context, index) {
-                                // Mostrar indicador de carga al final
-                                if (_loadingMoreVideos && index == _videos.length) {
-                                  return Container(
+                                  );
+                                }),
+
+                                // Indicador de carga automática en vista principal (estilo yt_screen)
+                                if (_loadingMoreSongs) ...[
+                                  Container(
                                     padding: const EdgeInsets.all(16),
                                     child: Row(
-                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
                                       children: [
                                         const SizedBox(
                                           width: 20,
@@ -1472,190 +2321,63 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                         const SizedBox(width: 12),
                                         TranslatedText(
                                           'loading_more',
-                                          style: const TextStyle(
-                                            fontSize: 14,
-                                          ),
+                                          style: const TextStyle(fontSize: 14),
                                         ),
                                       ],
                                     ),
-                                  );
-                                }
-                                
-                                final item = _videos[index];
-                                final videoId = item.videoId;
-                                final isSelected = videoId != null && _selectedIndexes.contains('video-$videoId');
-                                
-                                return GestureDetector(
-                                  onLongPress: () {
-                                    _toggleSelection(index, isVideo: true);
-                                  },
-                                  onTap: () {
-                                    if (_isSelectionMode) {
-                                      _toggleSelection(index, isVideo: true);
-                                    } else {
-                                      // Mostrar preview del video
-                                      showModalBottomSheet(
-                                        context: context,
-                                        shape: const RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.vertical(
-                                            top: Radius.circular(16),
-                                          ),
-                                        ),
-                                        builder: (context) {
-                                          return SafeArea(
-                                            child: Padding(
-                                              padding: const EdgeInsets.all(24),
-                                              child: YtPreviewPlayer(
-                                                results: _videos,
-                                                currentIndex: index,
-                                              ),
-                                            ),
-                                          );
-                                        },
-                                      );
-                                    }
-                                  },
-                                  child: Container(
-                                    width: double.infinity,
-                                    margin: const EdgeInsets.symmetric(),
-                                    child: ListTile(
-                                      contentPadding: const EdgeInsets.symmetric(
-                                        horizontal: 0,
-                                        vertical: 4,
-                                      ),
-                                      leading: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          if (_isSelectionMode)
-                                            Checkbox(
-                                              value: isSelected,
-                                              onChanged: (checked) {
-                                                setState(() {
-                                                  if (videoId == null) return;
-                                                  final key = 'video-$videoId';
-                                                  if (checked == true) {
-                                                    _selectedIndexes.add(key);
-                                                  } else {
-                                                    _selectedIndexes.remove(key);
-                                                    if (_selectedIndexes.isEmpty) {
-                                                      _isSelectionMode = false;
-                                                    }
-                                                  }
-                                                });
-                                              },
-                                            ),
-                                          ClipRRect(
-                                            borderRadius: BorderRadius.circular(8),
-                                            child: _buildSafeNetworkImage(
-                                              item.thumbUrl,
-                                              width: 56,
-                                              height: 56,
-                                              fit: BoxFit.cover,
-                                              fallback: Container(
-                                                width: 56,
-                                                height: 56,
-                                                decoration: BoxDecoration(
-                                                  color: isSystem ? Theme.of(context).colorScheme.secondaryContainer : Theme.of(context).colorScheme.surfaceContainer,
-                                                  borderRadius: BorderRadius.circular(12),
-                                                ),
-                                                child: Icon(
-                                                  Icons.music_note,
-                                                  size: 32,
-                                                  color: Theme.of(context).colorScheme.onSurface,
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      title: Text(
-                                        item.title ?? 'Título desconocido',
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      subtitle: Text(
-                                        item.artist ?? 'Artista desconocido',
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      trailing: IconButton(
-                                        icon: const Icon(Icons.link),
-                                        tooltip: 'Copiar enlace',
-                                        onPressed: () {
-                                          if (videoId != null) {
-                                            Clipboard.setData(
-                                              ClipboardData(
-                                                text: 'https://music.youtube.com/watch?v=$videoId',
-                                              ),
-                                            );
-                                            ScaffoldMessenger.of(context).showSnackBar(
-                                              const SnackBar(content: Text('Enlace copiado')),
-                                            );
-                                          }
-                                        },
-                                      ),
-                                    ),
                                   ),
-                                );
-                              },
+                                ],
+                              ],
                             ),
                           ],
                         ),
-                      ] else if (_expandedCategory == 'albums') ...[
-                        // Vista de solo álbumes con botón de volver
-                        const SizedBox(height: 24),
+
+                      // Sección Álbumes
+                      if (_albums.isNotEmpty) ...[
+                        const SizedBox(height: 16),
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Row(
-                              children: [
-                                IconButton(
-                                  icon: Container(
-                                    width: 40,
-                                    height: 40,
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
-                                    ),
-                                    child: const Icon(
-                                      Icons.arrow_back,
-                                      size: 24,
-                                    ),
-                                  ),
-                                  tooltip: 'Volver',
-                                  onPressed: () {
-                                    setState(() {
-                                      _expandedCategory = null;
-                                    });
-                                  },
+                            InkWell(
+                              borderRadius: BorderRadius.circular(8),
+                              onTap: () {
+                                setState(() {
+                                  _expandedCategory = 'albums';
+                                });
+                              },
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 4,
                                 ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  LocaleProvider.tr('albums'),
-                                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                    fontSize: 20,
-                                  ),
+                                child: Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(
+                                      LocaleProvider.tr('albums'),
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleMedium
+                                          ?.copyWith(fontSize: 20),
+                                    ),
+                                    Icon(Icons.chevron_right),
+                                  ],
                                 ),
-                              ],
+                              ),
                             ),
-                            ListView.builder(
-                              shrinkWrap: true,
-                              physics: const NeverScrollableScrollPhysics(),
-                              addAutomaticKeepAlives: false,
-                              addRepaintBoundaries: true,
-                              itemCount: _albums.length,
-                              itemBuilder: (context, index) {
-                                final album = _albums[index];
-                                final isSelected = _selectedIndexes.contains('album-$index');
-                                
-                                return GestureDetector(
-                                  onLongPress: () {
-                                    _toggleSelection(index, isVideo: false, isAlbum: true);
-                                  },
-                                  onTap: () async {
-                                    if (_isSelectionMode) {
-                                      _toggleSelection(index, isVideo: false, isAlbum: true);
-                                    } else {
+                            const SizedBox(height: 8),
+                            SizedBox(
+                              height:
+                                  180, // Aumentar altura para evitar overflow
+                              child: ListView.separated(
+                                scrollDirection: Axis.horizontal,
+                                itemCount: _albums.length,
+                                separatorBuilder: (_, _) =>
+                                    const SizedBox(width: 12),
+                                itemBuilder: (context, index) {
+                                  final album = _albums[index];
+                                  return GestureDetector(
+                                    onTap: () async {
                                       // Cargar canciones del álbum
                                       if (album['browseId'] == null) {
                                         return;
@@ -1670,569 +2392,287 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                           'thumbUrl': album['thumbUrl'],
                                         };
                                       });
-                                      final songs = await getAlbumSongs(album['browseId']!);
+                                      final songs = await getAlbumSongs(
+                                        album['browseId']!,
+                                      );
                                       if (!mounted) return;
                                       setState(() {
                                         _albumSongs = songs;
                                         _loadingAlbumSongs = false;
                                       });
-                                    }
-                                  },
-                                  child: Container(
-                                    width: double.infinity,
-                                    margin: const EdgeInsets.symmetric(),
-                                    child: ListTile(
-                                      contentPadding: const EdgeInsets.symmetric(
-                                        horizontal: 0,
-                                        vertical: 4,
-                                      ),
-                                      leading: Row(
+                                    },
+                                    child: SizedBox(
+                                      width: 120,
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
-                                          if (_isSelectionMode)
-                                            Checkbox(
-                                              value: isSelected,
-                                              onChanged: (checked) {
-                                                setState(() {
-                                                  final key = 'album-$index';
-                                                  if (checked == true) {
-                                                    _selectedIndexes.add(key);
-                                                  } else {
-                                                    _selectedIndexes.remove(key);
-                                                    if (_selectedIndexes.isEmpty) {
-                                                      _isSelectionMode = false;
-                                                    }
-                                                  }
-                                                });
-                                              },
+                                          AspectRatio(
+                                            aspectRatio: 1,
+                                            child: ClipRRect(
+                                              borderRadius:
+                                                  BorderRadius.circular(12),
+                                              child: album['thumbUrl'] != null
+                                                  ? Image.network(
+                                                      album['thumbUrl']!,
+                                                      fit: BoxFit.cover,
+                                                    )
+                                                  : Container(
+                                                      color: isSystem
+                                                          ? Theme.of(context)
+                                                                .colorScheme
+                                                                .secondaryContainer
+                                                          : Theme.of(context)
+                                                                .colorScheme
+                                                                .surfaceContainer,
+                                                      child: const Icon(
+                                                        Icons.album,
+                                                        size: 40,
+                                                      ),
+                                                    ),
                                             ),
-                                          ClipRRect(
-                                            borderRadius: BorderRadius.circular(8),
-                                            child: album['thumbUrl'] != null
-                                                ? Image.network(
-                                                    album['thumbUrl']!,
-                                                    width: 56,
-                                                    height: 56,
-                                                    fit: BoxFit.cover,
-                                                  )
-                                                : Container(
-                                                    width: 56,
-                                                    height: 56,
-                                                    decoration: BoxDecoration(
-                                                      color: Colors.grey[300],
-                                                      borderRadius: BorderRadius.circular(12),
-                                                    ),
-                                                    child: const Icon(
-                                                      Icons.album,
-                                                      size: 32,
-                                                      color: Colors.grey,
-                                                    ),
-                                                  ),
+                                          ),
+                                          const SizedBox(height: 8),
+                                          Flexible(
+                                            child: Text(
+                                              album['title'] ?? '',
+                                              maxLines: 2,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: Theme.of(
+                                                context,
+                                              ).textTheme.bodyMedium,
+                                            ),
                                           ),
                                         ],
                                       ),
-                                      title: Text(
-                                        album['title'] ?? 'Álbum desconocido',
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      subtitle: Text(
-                                        'Álbum',
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      trailing: IconButton(
-                                        icon: const Icon(Icons.link),
-                                        tooltip: 'Copiar enlace',
-                                        onPressed: () {
-                                          if (album['browseId'] != null) {
-                                            Clipboard.setData(
-                                              ClipboardData(
-                                                text: 'https://music.youtube.com/browse/${album['browseId']}',
-                                              ),
-                                            );
-                                            ScaffoldMessenger.of(context).showSnackBar(
-                                              const SnackBar(content: Text('Enlace copiado')),
-                                            );
-                                          }
-                                        },
-                                      ),
                                     ),
-                                  ),
-                                );
-                              },
+                                  );
+                                },
+                              ),
                             ),
                           ],
                         ),
-                      ] else if (_songs.isNotEmpty || _videos.isNotEmpty || _albums.isNotEmpty) ...[
-                        const SizedBox(height: 24),
-                        
-                        // Sección Canciones
-                        if (_songs.isNotEmpty)
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              InkWell(
-                                borderRadius: BorderRadius.circular(8),
-                                onTap: () {
-                                  setState(() {
-                                    _expandedCategory = 'songs';
-                                  });
-                                },
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(vertical: 4),
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                          Text(
-                                LocaleProvider.tr('songs_search'),
-                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                          fontSize: 20,
-                                        ),
-                                      ),
-                                      Icon(Icons.chevron_right),
-                                    ],
-                                  ),
+                      ],
+
+                      // Sección Videos
+                      if (_videos.isNotEmpty) ...[
+                        const SizedBox(height: 16),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            InkWell(
+                              borderRadius: BorderRadius.circular(8),
+                              onTap: () {
+                                setState(() {
+                                  _expandedCategory = 'videos';
+                                });
+                              },
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 4,
                                 ),
-                              ),
-                              Column(
-                                children: [
-                                  ..._songs.take(3).map((item) {
-                                    final index = _songs.indexOf(item);
-                                    final videoId = item.videoId;
-                                    final isSelected = videoId != null && _selectedIndexes.contains('song-$videoId');
-                                    
-                                    return GestureDetector(
-                                      onLongPress: () {
-                                        _toggleSelection(index, isVideo: false);
-                                      },
-                                      onTap: () {
-                                        if (_isSelectionMode) {
-                                          _toggleSelection(index, isVideo: false);
-                                        } else {
-                                          // Mostrar preview de la canción
-                                          showModalBottomSheet(
-                                            context: context,
-                                            shape: const RoundedRectangleBorder(
-                                              borderRadius: BorderRadius.vertical(
-                                                top: Radius.circular(16),
-                                              ),
-                                            ),
-                                            builder: (context) {
-                                              return SafeArea(
-                                                child: Padding(
-                                                  padding: const EdgeInsets.all(24),
-                                                  child: YtPreviewPlayer(
-                                                    results: _songs,
-                                                    currentIndex: index,
-                                                  ),
-                                                ),
-                                              );
-                                            },
-                                          );
-                                        }
-                                      },
-                                      child: Container(
-                                        width: double.infinity,
-                                        margin: const EdgeInsets.symmetric(),
-                                        child: ListTile(
-                                          contentPadding: const EdgeInsets.symmetric(
-                                            horizontal: 0,
-                                            vertical: 4,
-                                          ),
-                                          leading: Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              if (_isSelectionMode)
-                                                Checkbox(
-                                                  value: isSelected,
-                                                  onChanged: (checked) {
-                                                    setState(() {
-                                                      if (videoId == null) return;
-                                                      final key = 'song-$videoId';
-                                                      if (checked == true) {
-                                                        _selectedIndexes.add(key);
-                                                      } else {
-                                                        _selectedIndexes.remove(key);
-                                                        if (_selectedIndexes.isEmpty) {
-                                                          _isSelectionMode = false;
-                                                        }
-                                                      }
-                                                    });
-                                                  },
-                                                ),
-                                              ClipRRect(
-                                        borderRadius: BorderRadius.circular(8),
-                                                child: _buildSafeNetworkImage(
-                                                  item.thumbUrl,
-                                                  width: 56,
-                                                  height: 56,
-                                                  fit: BoxFit.cover,
-                                                  fallback: Container(
-                                                    width: 56,
-                                                    height: 56,
-                                                    decoration: BoxDecoration(
-                                                      color: isSystem ? Theme.of(context).colorScheme.secondaryContainer : Theme.of(context).colorScheme.surfaceContainer,
-                                                      borderRadius: BorderRadius.circular(12),
-                                                    ),
-                                                    child: Icon(
-                                                      Icons.music_note,
-                                                      size: 32,
-                                                      color: Theme.of(context).colorScheme.onSurface,
-                                                    ),
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                title: Text(
-                                            item.title ?? 'Título desconocido',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                subtitle: Text(
-                                            item.artist ?? 'Artista desconocido',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                          trailing: IconButton(
-                                            icon: const Icon(Icons.link),
-                                            tooltip: 'Copiar enlace',
-                                            onPressed: () {
-                                              if (videoId != null) {
-                                                Clipboard.setData(
-                                                  ClipboardData(
-                                                    text: 'https://music.youtube.com/watch?v=$videoId',
-                                                  ),
-                                                );
-                                                ScaffoldMessenger.of(context).showSnackBar(
-                                                  const SnackBar(content: Text('Enlace copiado')),
-                                                );
-                                              }
-                                            },
-                                          ),
-                                        ),
-                                      ),
-                                    );
-                                  }),
-                                  
-                                  // Indicador de carga automática en vista principal (estilo yt_screen)
-                                  if (_loadingMoreSongs) ...[
-                                    Container(
-                                      padding: const EdgeInsets.all(16),
-                                      child: Row(
-                                        mainAxisAlignment: MainAxisAlignment.center,
-                                        children: [
-                                          const SizedBox(
-                                            width: 20,
-                                            height: 20,
-                                            child: CircularProgressIndicator(
-                                              strokeWidth: 2,
-                                            ),
-                                          ),
-                                          const SizedBox(width: 12),
-                                          TranslatedText(
-                                            'loading_more',
-                                            style: const TextStyle(
-                                              fontSize: 14,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
+                                child: Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(
+                                      LocaleProvider.tr('videos'),
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleMedium
+                                          ?.copyWith(fontSize: 20),
                                     ),
+                                    Icon(Icons.chevron_right),
                                   ],
-                                ],
-                              ),
-                            ],
-                          ),
-                        
-                        
-                        // Sección Álbumes
-                        if (_albums.isNotEmpty) ...[
-                          const SizedBox(height: 16),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              InkWell(
-                                borderRadius: BorderRadius.circular(8),
-                                onTap: () {
-                                  setState(() {
-                                    _expandedCategory = 'albums';
-                                  });
-                                },
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(vertical: 4),
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                          Text(
-                            LocaleProvider.tr('albums'),
-                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                          fontSize: 20,
-                                        ),
-                                      ),
-                                      Icon(Icons.chevron_right),
-                                    ],
-                                  ),
                                 ),
                               ),
-                              const SizedBox(height: 8),
-                              SizedBox(
-                                height: 180, // Aumentar altura para evitar overflow
-                                child: ListView.separated(
-                                  scrollDirection: Axis.horizontal,
-                                  itemCount: _albums.length,
-                                  separatorBuilder: (_, _) => const SizedBox(width: 12),
-                                  itemBuilder: (context, index) {
-                                    final album = _albums[index];
-                                    return GestureDetector(
-                                      onTap: () async {
-                                        // Cargar canciones del álbum
-                                        if (album['browseId'] == null) {
-                                          return;
-                                        }
-                                        setState(() {
-                                          _expandedCategory = 'album';
-                                          _loadingAlbumSongs = true;
-                                          _albumSongs = [];
-                                          _currentAlbum = {
-                                            'title': album['title'],
-                                            'artist': album['artist'],
-                                            'thumbUrl': album['thumbUrl'],
-                                          };
-                                        });
-                                        final songs = await getAlbumSongs(album['browseId']!);
-                                        if (!mounted) return;
-                                        setState(() {
-                                          _albumSongs = songs;
-                                          _loadingAlbumSongs = false;
-                                        });
-                                      },
-                                      child: SizedBox(
-                                        width: 120,
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
+                            ),
+                            Column(
+                              children: [
+                                ..._videos.take(3).map((item) {
+                                  final index = _videos.indexOf(item);
+                                  final videoId = item.videoId;
+                                  final isSelected =
+                                      videoId != null &&
+                                      _selectedIndexes.contains(
+                                        'video-$videoId',
+                                      );
+
+                                  return GestureDetector(
+                                    onLongPress: () {
+                                      _toggleSelection(index, isVideo: true);
+                                    },
+                                    onTap: () {
+                                      if (_isSelectionMode) {
+                                        _toggleSelection(index, isVideo: true);
+                                      } else {
+                                        // Mostrar preview del video
+                                        showModalBottomSheet(
+                                          context: context,
+                                          shape: const RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.vertical(
+                                              top: Radius.circular(16),
+                                            ),
+                                          ),
+                                          builder: (context) {
+                                            return SafeArea(
+                                              child: Padding(
+                                                padding: const EdgeInsets.all(
+                                                  24,
+                                                ),
+                                                child: YtPreviewPlayer(
+                                                  results: _videos,
+                                                  currentIndex: index,
+                                                ),
+                                              ),
+                                            );
+                                          },
+                                        );
+                                      }
+                                    },
+                                    child: Container(
+                                      width: double.infinity,
+                                      margin: const EdgeInsets.symmetric(),
+                                      child: ListTile(
+                                        contentPadding:
+                                            const EdgeInsets.symmetric(
+                                              horizontal: 0,
+                                              vertical: 4,
+                                            ),
+                                        leading: Row(
                                           mainAxisSize: MainAxisSize.min,
                                           children: [
-                                            AspectRatio(
-                                              aspectRatio: 1,
-                                              child: ClipRRect(
-                                                borderRadius: BorderRadius.circular(12),
-                                                child: album['thumbUrl'] != null
-                                                    ? Image.network(
-                                                        album['thumbUrl']!,
-                                                        fit: BoxFit.cover,
-                                                      )
-                                                    : Container(
-                                                        color: isSystem ? Theme.of(context).colorScheme.secondaryContainer : Theme.of(context).colorScheme.surfaceContainer,
-                                                        child: const Icon(Icons.album, size: 40),
-                                                      ),
+                                            if (_isSelectionMode)
+                                              Checkbox(
+                                                value: isSelected,
+                                                onChanged: (checked) {
+                                                  setState(() {
+                                                    if (videoId == null) return;
+                                                    final key =
+                                                        'video-$videoId';
+                                                    if (checked == true) {
+                                                      _selectedIndexes.add(key);
+                                                    } else {
+                                                      _selectedIndexes.remove(
+                                                        key,
+                                                      );
+                                                      if (_selectedIndexes
+                                                          .isEmpty) {
+                                                        _isSelectionMode =
+                                                            false;
+                                                      }
+                                                    }
+                                                  });
+                                                },
                                               ),
-                                            ),
-                                            const SizedBox(height: 8),
-                                            Flexible(
-                                              child: Text(
-                                                album['title'] ?? '',
-                                                maxLines: 2,
-                                                overflow: TextOverflow.ellipsis,
-                                                style: Theme.of(context).textTheme.bodyMedium,
+                                            ClipRRect(
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                              child: _buildSafeNetworkImage(
+                                                item.thumbUrl,
+                                                width: 56,
+                                                height: 56,
+                                                fit: BoxFit.cover,
+                                                fallback: Container(
+                                                  width: 56,
+                                                  height: 56,
+                                                  decoration: BoxDecoration(
+                                                    color: isSystem
+                                                        ? Theme.of(context)
+                                                              .colorScheme
+                                                              .secondaryContainer
+                                                        : Theme.of(context)
+                                                              .colorScheme
+                                                              .surfaceContainer,
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          12,
+                                                        ),
+                                                  ),
+                                                  child: Icon(
+                                                    Icons.music_note,
+                                                    size: 32,
+                                                    color: Theme.of(
+                                                      context,
+                                                    ).colorScheme.onSurface,
+                                                  ),
+                                                ),
                                               ),
                                             ),
                                           ],
                                         ),
-                                      ),
-                                    );
-                                  },
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                        
-                        // Sección Videos
-                        if (_videos.isNotEmpty) ...[
-                          const SizedBox(height: 16),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              InkWell(
-                                borderRadius: BorderRadius.circular(8),
-                                onTap: () {
-                                  setState(() {
-                                    _expandedCategory = 'videos';
-                                  });
-                                },
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(vertical: 4),
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                          Text(
-                            LocaleProvider.tr('videos'),
-                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                          fontSize: 20,
+                                        title: Text(
+                                          item.title ?? 'Título desconocido',
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
                                         ),
-                                      ),
-                                      Icon(Icons.chevron_right),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                              Column(
-                                children: [
-                                  ..._videos.take(3).map((item) {
-                                    final index = _videos.indexOf(item);
-                                    final videoId = item.videoId;
-                                    final isSelected = videoId != null && _selectedIndexes.contains('video-$videoId');
-                                    
-                                    return GestureDetector(
-                                      onLongPress: () {
-                                        _toggleSelection(index, isVideo: true);
-                                      },
-                                      onTap: () {
-                                        if (_isSelectionMode) {
-                                          _toggleSelection(index, isVideo: true);
-                                        } else {
-                                          // Mostrar preview del video
-                                          showModalBottomSheet(
-                                            context: context,
-                                            shape: const RoundedRectangleBorder(
-                                              borderRadius: BorderRadius.vertical(
-                                                top: Radius.circular(16),
-                                              ),
-                                            ),
-                                            builder: (context) {
-                                              return SafeArea(
-                                                child: Padding(
-                                                  padding: const EdgeInsets.all(24),
-                                                  child: YtPreviewPlayer(
-                                                    results: _videos,
-                                                    currentIndex: index,
+                                        subtitle: Text(
+                                          item.artist ?? 'Artista desconocido',
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        trailing: IconButton(
+                                          icon: const Icon(Icons.link),
+                                          tooltip: 'Copiar enlace',
+                                          onPressed: () {
+                                            if (videoId != null) {
+                                              Clipboard.setData(
+                                                ClipboardData(
+                                                  text:
+                                                      'https://music.youtube.com/watch?v=$videoId',
+                                                ),
+                                              );
+                                              ScaffoldMessenger.of(
+                                                context,
+                                              ).showSnackBar(
+                                                const SnackBar(
+                                                  content: Text(
+                                                    'Enlace copiado',
                                                   ),
                                                 ),
                                               );
-                                            },
-                                          );
-                                        }
-                                      },
-                                      child: Container(
-                                        width: double.infinity,
-                                        margin: const EdgeInsets.symmetric(),
-                                        child: ListTile(
-                                          contentPadding: const EdgeInsets.symmetric(
-                                            horizontal: 0,
-                                            vertical: 4,
-                                          ),
-                                          leading: Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              if (_isSelectionMode)
-                                                Checkbox(
-                                                  value: isSelected,
-                                                  onChanged: (checked) {
-                                                    setState(() {
-                                                      if (videoId == null) return;
-                                                      final key = 'video-$videoId';
-                                                      if (checked == true) {
-                                                        _selectedIndexes.add(key);
-                                                      } else {
-                                                        _selectedIndexes.remove(key);
-                                                        if (_selectedIndexes.isEmpty) {
-                                                          _isSelectionMode = false;
-                                                        }
-                                                      }
-                                                    });
-                                                  },
-                                                ),
-                                              ClipRRect(
-                                        borderRadius: BorderRadius.circular(8),
-                                                child: _buildSafeNetworkImage(
-                                                  item.thumbUrl,
-                                                  width: 56,
-                                                  height: 56,
-                                                  fit: BoxFit.cover,
-                                                  fallback: Container(
-                                                    width: 56,
-                                                    height: 56,
-                                                    decoration: BoxDecoration(
-                                                      color: isSystem ? Theme.of(context).colorScheme.secondaryContainer : Theme.of(context).colorScheme.surfaceContainer,
-                                                      borderRadius: BorderRadius.circular(12),
-                                                    ),
-                                                    child: Icon(
-                                                      Icons.music_note,
-                                                      size: 32,
-                                                      color: Theme.of(context).colorScheme.onSurface,
-                                                    ),
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                title: Text(
-                                            item.title ?? 'Título desconocido',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                subtitle: Text(
-                                            item.artist ?? 'Artista desconocido',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                          trailing: IconButton(
-                                            icon: const Icon(Icons.link),
-                                            tooltip: 'Copiar enlace',
-                                            onPressed: () {
-                                              if (videoId != null) {
-                                                Clipboard.setData(
-                                                  ClipboardData(
-                                                    text: 'https://music.youtube.com/watch?v=$videoId',
-                                                  ),
-                                                );
-                                                ScaffoldMessenger.of(context).showSnackBar(
-                                                  const SnackBar(content: Text('Enlace copiado')),
-                                                );
-                                              }
-                                            },
-                                          ),
+                                            }
+                                          },
                                         ),
                                       ),
-                                    );
-                                  }),
-                                  
-                                  // Indicador de carga automática para videos en vista principal (estilo yt_screen)
-                                  if (_loadingMoreVideos) ...[
-                                    Container(
-                                      padding: const EdgeInsets.all(16),
-                                      child: Row(
-                                        mainAxisAlignment: MainAxisAlignment.center,
-                                        children: [
-                                          const SizedBox(
-                                            width: 20,
-                                            height: 20,
-                                            child: CircularProgressIndicator(
-                                              strokeWidth: 2,
-                                            ),
+                                    ),
+                                  );
+                                }),
+
+                                // Indicador de carga automática para videos en vista principal (estilo yt_screen)
+                                if (_loadingMoreVideos) ...[
+                                  Container(
+                                    padding: const EdgeInsets.all(16),
+                                    child: Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        const SizedBox(
+                                          width: 20,
+                                          height: 20,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
                                           ),
-                                          const SizedBox(width: 12),
-                                          TranslatedText(
-                                            'loading_more',
-                                            style: const TextStyle(
-                                              fontSize: 14,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                          ),
-                        ],
-                      ],
-                              ),
-                            ],
-                          ),
-                        ],
+                                        ),
+                                        const SizedBox(width: 12),
+                                        TranslatedText(
+                                          'loading_more',
+                                          style: const TextStyle(fontSize: 14),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ],
+                        ),
                       ],
                     ],
-                  ),
+                  ],
                 ),
+              ),
       ),
     );
   }
@@ -2247,7 +2687,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
           builder: (context, colorScheme, child) {
             final isAmoled = colorScheme == AppColorScheme.amoled;
             final isDark = Theme.of(context).brightness == Brightness.dark;
-            
+
             return AlertDialog(
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
@@ -2258,10 +2698,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
               title: Center(
                 child: TranslatedText(
                   'search_artist',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
                 ),
               ),
               content: SizedBox(
@@ -2299,7 +2736,9 @@ class _ArtistScreenState extends State<ArtistScreen> {
                         decoration: BoxDecoration(
                           color: isAmoled && isDark
                               ? Colors.white.withValues(alpha: 0.1)
-                              : Theme.of(context).colorScheme.secondaryContainer,
+                              : Theme.of(
+                                  context,
+                                ).colorScheme.secondaryContainer,
                           borderRadius: BorderRadius.only(
                             topLeft: Radius.circular(16),
                             topRight: Radius.circular(16),
@@ -2309,7 +2748,9 @@ class _ArtistScreenState extends State<ArtistScreen> {
                           border: Border.all(
                             color: isAmoled && isDark
                                 ? Colors.white.withValues(alpha: 0.2)
-                                : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
+                                : Theme.of(
+                                    context,
+                                  ).colorScheme.outline.withValues(alpha: 0.1),
                             width: 1,
                           ),
                         ),
@@ -2357,7 +2798,9 @@ class _ArtistScreenState extends State<ArtistScreen> {
                         decoration: BoxDecoration(
                           color: isAmoled && isDark
                               ? Colors.white.withValues(alpha: 0.1)
-                              : Theme.of(context).colorScheme.secondaryContainer,
+                              : Theme.of(
+                                  context,
+                                ).colorScheme.secondaryContainer,
                           borderRadius: BorderRadius.only(
                             topLeft: Radius.circular(4),
                             topRight: Radius.circular(4),
@@ -2367,7 +2810,9 @@ class _ArtistScreenState extends State<ArtistScreen> {
                           border: Border.all(
                             color: isAmoled && isDark
                                 ? Colors.white.withValues(alpha: 0.2)
-                                : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
+                                : Theme.of(
+                                    context,
+                                  ).colorScheme.outline.withValues(alpha: 0.1),
                             width: 1,
                           ),
                         ),
@@ -2417,13 +2862,14 @@ class _ArtistScreenState extends State<ArtistScreen> {
 
     // Obtener la carpeta de descarga
     final prefs = await SharedPreferences.getInstance();
-    final downloadPath = prefs.getString('download_directory') ?? '/storage/emulated/0/Music';
-    
+    final downloadPath =
+        prefs.getString('download_directory') ?? '/storage/emulated/0/Music';
+
     // Guardar el directorio por defecto si no existe
     if (!prefs.containsKey('download_directory')) {
       await prefs.setString('download_directory', '/storage/emulated/0/Music');
     }
-    
+
     if (downloadPath.isEmpty) {
       _showMessage('Error', 'No se ha seleccionado una carpeta de descarga');
       return;
@@ -2431,7 +2877,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
 
     // Obtener elementos seleccionados
     final List<YtMusicResult> itemsToDownload = [];
-    
+
     for (final key in _selectedIndexes) {
       if (key.startsWith('song-')) {
         final videoId = key.substring(5);
@@ -2447,7 +2893,10 @@ class _ArtistScreenState extends State<ArtistScreen> {
         if (albumIndex < _albums.length) {
           // Aquí necesitarías cargar las canciones del álbum
           // Por ahora, solo mostramos un mensaje
-          _showMessage('Info', 'La descarga de álbumes completos no está implementada aún');
+          _showMessage(
+            'Info',
+            'La descarga de álbumes completos no está implementada aún',
+          );
           continue;
         }
       }
@@ -2462,11 +2911,13 @@ class _ArtistScreenState extends State<ArtistScreen> {
     for (int i = 0; i < itemsToDownload.length; i++) {
       final item = itemsToDownload[i];
       final notificationId = i + 1;
-      
+
       try {
         // Configurar el throttler de notificaciones
-        DownloadNotificationThrottler().setTitle(item.title ?? 'Canción desconocida');
-        
+        DownloadNotificationThrottler().setTitle(
+          item.title ?? 'Canción desconocida',
+        );
+
         // Descargar usando el servicio global
         if (!mounted) return;
         await SimpleYtDownload.downloadVideoWithArtist(
@@ -2476,7 +2927,10 @@ class _ArtistScreenState extends State<ArtistScreen> {
           item.artist ?? 'Artista desconocido',
         );
       } catch (e) {
-        showDownloadFailedNotification(item.title ?? 'Canción desconocida', notificationId);
+        showDownloadFailedNotification(
+          item.title ?? 'Canción desconocida',
+          notificationId,
+        );
       }
     }
 
@@ -2486,7 +2940,12 @@ class _ArtistScreenState extends State<ArtistScreen> {
       _isSelectionMode = false;
     });
 
-    _showMessage(LocaleProvider.tr('success'), LocaleProvider.tr('download_started_for_elements').replaceAll('@count', itemsToDownload.length.toString()));
+    _showMessage(
+      LocaleProvider.tr('success'),
+      LocaleProvider.tr(
+        'download_started_for_elements',
+      ).replaceAll('@count', itemsToDownload.length.toString()),
+    );
   }
 
   // Función para mostrar mensajes
@@ -2498,7 +2957,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
         builder: (context, colorScheme, child) {
           final isAmoled = colorScheme == AppColorScheme.amoled;
           final isDark = Theme.of(context).brightness == Brightness.dark;
-          
+
           return AlertDialog(
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
@@ -2509,10 +2968,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
             title: Center(
               child: Text(
                 title,
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w600,
-                ),
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
               ),
             ),
             content: SizedBox(
@@ -2547,13 +3003,19 @@ class _ArtistScreenState extends State<ArtistScreen> {
                       padding: EdgeInsets.all(16),
                       decoration: BoxDecoration(
                         color: isAmoled && isDark
-                            ? Colors.white.withValues(alpha: 0.2) // Color personalizado para amoled
+                            ? Colors.white.withValues(
+                                alpha: 0.2,
+                              ) // Color personalizado para amoled
                             : Theme.of(context).colorScheme.primaryContainer,
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(
                           color: isAmoled && isDark
-                              ? Colors.white.withValues(alpha: 0.4) // Borde personalizado para amoled
-                              : Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
+                              ? Colors.white.withValues(
+                                  alpha: 0.4,
+                                ) // Borde personalizado para amoled
+                              : Theme.of(
+                                  context,
+                                ).colorScheme.primary.withValues(alpha: 0.3),
                           width: 2,
                         ),
                       ),
@@ -2564,14 +3026,18 @@ class _ArtistScreenState extends State<ArtistScreen> {
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(12),
                               color: isAmoled && isDark
-                                  ? Colors.white.withValues(alpha: 0.2) // Fondo del ícono para amoled
-                                  : Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                                  ? Colors.white.withValues(
+                                      alpha: 0.2,
+                                    ) // Fondo del ícono para amoled
+                                  : Theme.of(context).colorScheme.primary
+                                        .withValues(alpha: 0.1),
                             ),
                             child: Icon(
                               Icons.check_circle,
                               size: 30,
                               color: isAmoled && isDark
-                                  ? Colors.white // Ícono blanco para amoled
+                                  ? Colors
+                                        .white // Ícono blanco para amoled
                                   : Theme.of(context).colorScheme.primary,
                             ),
                           ),
@@ -2586,7 +3052,8 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                     fontSize: 16,
                                     fontWeight: FontWeight.w600,
                                     color: isAmoled && isDark
-                                        ? Colors.white // Texto blanco para amoled
+                                        ? Colors
+                                              .white // Texto blanco para amoled
                                         : Theme.of(context).colorScheme.primary,
                                   ),
                                 ),
@@ -2631,9 +3098,10 @@ class _ArtistScreenState extends State<ArtistScreen> {
     try {
       // Codificar la consulta para la URL
       final encodedQuery = Uri.encodeComponent(artistName);
-      
+
       // URL correcta para búsqueda en YouTube Music
-      final ytMusicSearchUrl = 'https://music.youtube.com/search?q=$encodedQuery';
+      final ytMusicSearchUrl =
+          'https://music.youtube.com/search?q=$encodedQuery';
 
       // Intentar abrir YouTube Music en el navegador o en la app
       final url = Uri.parse(ytMusicSearchUrl);
@@ -2647,5 +3115,3 @@ class _ArtistScreenState extends State<ArtistScreen> {
     }
   }
 }
-
-

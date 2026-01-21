@@ -32,15 +32,16 @@ const Map<String, String> appLocalizationsEs = {
   'gesture_change_song': 'Cambiar canción',
   'gesture_open_player': 'Abrir reproductor',
   'gesture_settings_title': 'Gestos en el reproductor',
-  'gesture_settings_desc_dialog': 'Activa o desactiva los gestos del reproductor',
+  'gesture_settings_desc_dialog':
+      'Activa o desactiva los gestos del reproductor',
 
-      // Downloads
-      'downloads': 'Descargas',
-      'download_history': 'Historial de descargas',
-      'no_downloads': 'No hay descargas recientes',
-      'delete_download': 'Eliminar descarga',
-      'delete_download_confirm': '¿Estás seguro de que quieres eliminar',
-      'available_storage': 'Almacenamiento disponible',
+  // Downloads
+  'downloads': 'Descargas',
+  'download_history': 'Historial de descargas',
+  'no_downloads': 'No hay descargas recientes',
+  'delete_download': 'Eliminar descarga',
+  'delete_download_confirm': '¿Estás seguro de que quieres eliminar',
+  'available_storage': 'Almacenamiento disponible',
   'used_storage': 'Almacenamiento en uso',
   'total_storage': 'Almacenamiento total',
   'free_of': 'libres de',
@@ -57,7 +58,8 @@ const Map<String, String> appLocalizationsEs = {
   'volume_boost': 'Aumentar volumen',
   'volume_boost_desc': 'Aumenta el volumen más allá del máximo del sistema',
   'important_information': 'Información importante',
-  'volume_boost_info': '• El efecto puede variar según el dispositivo\n• Algunos dispositivos limitan el volumen máximo\n• Si no notas diferencia, es limitación del hardware o software\n• Valores altos pueden causar distorsión',
+  'volume_boost_info':
+      '• El efecto puede variar según el dispositivo\n• Algunos dispositivos limitan el volumen máximo\n• Si no notas diferencia, es limitación del hardware o software\n• Valores altos pueden causar distorsión',
   'multiplier': 'Multiplicador',
   'effective_volume': 'Volumen efectivo',
   'volume_restored_normal': 'Volumen restaurado a normal',
@@ -67,11 +69,14 @@ const Map<String, String> appLocalizationsEs = {
   'equalizer': 'Ecualizador',
   'equalizer_desc': 'Ajusta el sonido con el ecualizador de audio',
   'equalizer_not_prossessing': 'Sin reproducción actual',
-  'equalizer_not_prossessing_desc': 'No hay reproducción actual para ajustar el ecualizador',
+  'equalizer_not_prossessing_desc':
+      'No hay reproducción actual para ajustar el ecualizador',
   'equalizer_not_available': 'Ecualizador no disponible',
-  'equalizer_not_available_desc': 'El ecualizador solo está disponible en dispositivos Android',
+  'equalizer_not_available_desc':
+      'El ecualizador solo está disponible en dispositivos Android',
   'reset_equalizer': 'Restablecer',
-  'reset_equalizer_confirm': '¿Estás seguro de que quieres restablecer el ecualizador y el volumen boost a sus valores predeterminados?',
+  'reset_equalizer_confirm':
+      '¿Estás seguro de que quieres restablecer el ecualizador y el volumen boost a sus valores predeterminados?',
   'reset': 'Restablecer',
   'equalizer_reset': 'Ecualizador restablecido',
   'equalizer_enabled': 'Ecualizador activado',
@@ -101,7 +106,8 @@ const Map<String, String> appLocalizationsEs = {
   'permission_denied': 'Permiso denegado',
   'permission_granted_desc': 'Ahora tienes acceso a todos los archivos.',
   'permission_denied_desc': 'No se pudo otorgar el permiso.',
-  'permission_required_for_download': 'Este permiso es obligatorio para descargar canciones.',
+  'permission_required_for_download':
+      'Este permiso es obligatorio para descargar canciones.',
   'grant_permission': 'Otorgar permiso',
   'default_path_set':
       'Ruta predeterminada establecida en la carpeta Música debido a la compatibilidad con Android 9.',
@@ -112,7 +118,8 @@ const Map<String, String> appLocalizationsEs = {
   'index_songs_on_startup_desc':
       'Sincroniza automáticamente la base de datos con los archivos del dispositivo',
   'show_lyrics_on_cover': 'Mostrar letra de canciones en carátula',
-  'show_lyrics_on_cover_desc': 'Muestra las letras de las canciones directamente en la carátula del reproductor',
+  'show_lyrics_on_cover_desc':
+      'Muestra las letras de las canciones directamente en la carátula del reproductor',
   'api_unavailable': 'API no disponible',
   'no_connection': 'Sin conexión',
   'no_lyrics_found': 'No se encontraron letras',
@@ -123,9 +130,11 @@ const Map<String, String> appLocalizationsEs = {
   'translating': 'Traduciendo...',
   'hide_translation': 'Ocultar traducción',
   'translation_error': 'Error de traducción',
-  'check_internet_connection': 'Verifica tu conexión a internet e intenta nuevamente',
+  'check_internet_connection':
+      'Verifica tu conexión a internet e intenta nuevamente',
   'translation_language': 'Idioma de traducción',
-  'translation_language_desc': 'Selecciona el idioma al que se traducirán las letras',
+  'translation_language_desc':
+      'Selecciona el idioma al que se traducirán las letras',
   'auto_detect': 'Detectar automáticamente',
   'language_spanish': 'Español',
   'language_english': 'Inglés',
@@ -144,7 +153,8 @@ const Map<String, String> appLocalizationsEs = {
   'confirm_apply_lyrics': '¿Estás seguro de que quieres aplicar esta letra a',
   'apply': 'Aplicar',
   'lyrics_selected': 'Letra seleccionada',
-  'lyrics_search_info': 'Busca letras de canciones y aplica la mejor encontrada.',
+  'lyrics_search_info':
+      'Busca letras de canciones y aplica la mejor encontrada.',
   'lyrics_selected_desc': 'La letra se ha asignado correctamente a la canción.',
   'delete_lyrics': 'Eliminar letra de canciones',
   'delete_lyrics_desc':
@@ -191,8 +201,10 @@ const Map<String, String> appLocalizationsEs = {
   '20_percent_minimum': '20% (Mínimo)',
   'reset_app': 'Restablecer aplicación',
   'reset_app_desc': 'Borrar todos los datos de la aplicación',
-  'reset_app_confirm': '¿Estás seguro de que quieres restablecer la aplicación?',
-  'reset_app_warning': 'Esta acción eliminará todos los datos guardados, incluyendo favoritos, listas de reproducción, historial, letras de canciones y configuraciones. Esta acción no se puede deshacer.',
+  'reset_app_confirm':
+      '¿Estás seguro de que quieres restablecer la aplicación?',
+  'reset_app_warning':
+      'Esta acción eliminará todos los datos guardados, incluyendo favoritos, listas de reproducción, historial, letras de canciones y configuraciones. Esta acción no se puede deshacer.',
   'reset_app_success': 'Aplicación restablecida exitosamente',
   'app_updates': 'Actualizaciones de la app',
   'check_for_updates': 'Buscar actualizaciones de la aplicación',
@@ -300,7 +312,8 @@ const Map<String, String> appLocalizationsEs = {
   'rename_folder': 'Renombrar carpeta',
   'ignore_folder': 'Ignorar carpeta',
   'unignore_folder': 'Dejar de ignorar carpeta',
-  'ignore_folder_confirm': '¿Ignorar la carpeta "{folder}"? Sus canciones no se mostrarán ni se indexarán.',
+  'ignore_folder_confirm':
+      '¿Ignorar la carpeta "{folder}"? Sus canciones no se mostrarán ni se indexarán.',
   'folder_ignored_success': 'Carpeta ignorada. No se mostrarán sus canciones.',
   'folder_unignored_success': 'Carpeta restaurada. Reindexando canciones...',
   'folder_name': 'Nombre de la carpeta',
@@ -315,7 +328,8 @@ const Map<String, String> appLocalizationsEs = {
   'could_not_create_folder': 'No se pudo crear la carpeta',
   'folder_not_found': 'Carpeta no encontrada',
   'rename': 'Renombrar',
-  'permission_denied_rename': 'Permisos insuficientes para renombrar la carpeta',
+  'permission_denied_rename':
+      'Permisos insuficientes para renombrar la carpeta',
   'select_playlist': 'Seleccionar lista de reproducción',
   'create_playlist': 'Crear lista de reproducción',
   'new_playlist_name': 'Nombre de la nueva lista de reproducción',
@@ -520,8 +534,10 @@ const Map<String, String> appLocalizationsEs = {
   'show_lyrics': 'Mostrar letra',
   'no_song_playing': 'No hay canción en reproducción',
   'lyrics_not_found': 'Letra no encontrada.',
-  'lyrics_api_unavailable': 'Servicio de letras no disponible, intenta más tarde.',
-  'lyrics_no_connection': 'Sin conexión a internet. Verifica tu conexión a internet e inténtalo de nuevo.',
+  'lyrics_api_unavailable':
+      'Servicio de letras no disponible, intenta más tarde.',
+  'lyrics_no_connection':
+      'Sin conexión a internet. Verifica tu conexión a internet e inténtalo de nuevo.',
   'playlist': 'Lista de reproducción',
   'one_minute': '1 minuto',
   'five_minutes': '5 minutos',
@@ -574,14 +590,18 @@ const Map<String, String> appLocalizationsEs = {
   'copy_to_folder': 'Copiar a carpeta',
   'select_destination_folder': 'Seleccionar carpeta de destino',
   'no_other_folders_available': 'No hay otras carpetas disponibles',
-  'copy_completed': 'Copiadas {success} canciones exitosamente. {error} errores.',
-  'move_completed': 'Movidas {success} canciones exitosamente. {error} errores.',
+  'copy_completed':
+      'Copiadas {success} canciones exitosamente. {error} errores.',
+  'move_completed':
+      'Movidas {success} canciones exitosamente. {error} errores.',
   'copy_error': 'Error al copiar las canciones',
   'move_error': 'Error al mover las canciones',
   'delete_songs': 'Borrar canciones',
-  'delete_songs_confirm': '¿Estás seguro de que quieres borrar {count} canciones? Esta acción no se puede deshacer.',
+  'delete_songs_confirm':
+      '¿Estás seguro de que quieres borrar {count} canciones? Esta acción no se puede deshacer.',
   'songs_deleted': 'Canciones borradas',
-  'delete_completed': 'Borradas {success} canciones exitosamente. {error} errores.',
+  'delete_completed':
+      'Borradas {success} canciones exitosamente. {error} errores.',
   'options': 'Opciones',
   'move_song': 'Mover canción',
   'copy_song': 'Copiar canción',
@@ -595,23 +615,30 @@ const Map<String, String> appLocalizationsEs = {
   'copying_songs': 'Copiando canciones...',
   'error_moving_song': 'Error al mover canción',
   'error_copying_song': 'Error al copiar canción',
-  'error_moving_song_desc': 'No se pudo mover la canción. Verifica los permisos.',
-  'error_copying_song_desc': 'No se pudo copiar la canción. Verifica los permisos.',
-  'file_already_exists': 'Ya existe un archivo con el mismo nombre en la carpeta de destino.',
+  'error_moving_song_desc':
+      'No se pudo mover la canción. Verifica los permisos.',
+  'error_copying_song_desc':
+      'No se pudo copiar la canción. Verifica los permisos.',
+  'file_already_exists':
+      'Ya existe un archivo con el mismo nombre en la carpeta de destino.',
   'edit_metadata': 'Editar metadatos',
   'edit_song_info': 'Editar metadatos',
-  'edit_song_info_desc': 'Modifica el título, artista, álbum y carátula de la canción. Los cambios se guardarán en el archivo de audio.',
+  'edit_song_info_desc':
+      'Modifica el título, artista, álbum y carátula de la canción. Los cambios se guardarán en el archivo de audio.',
   'song_title': 'Título',
   'song_artist': 'Artista',
   'song_album': 'Álbum',
   'song_cover': 'Carátula',
   'save_changes': 'Guardar cambios',
   'changes_saved': 'Cambios guardados',
-  'changes_saved_desc': 'Los metadatos se han actualizado correctamente, pero es probable que el reproductor no los actualice inmediatamente.',
+  'changes_saved_desc':
+      'Los metadatos se han actualizado correctamente, pero es probable que el reproductor no los actualice inmediatamente.',
   'error_saving_changes': 'Error al guardar',
-  'error_saving_changes_desc': 'No se pudieron guardar los cambios. Verifica los permisos.',
+  'error_saving_changes_desc':
+      'No se pudieron guardar los cambios. Verifica los permisos.',
   'incompatible_audio_format': 'Formato de audio incompatible',
-  'incompatible_audio_format_desc': 'El formato .opus no es compatible con la edición de metadatos.\n\nFormatos soportados: MP3, M4A, AAC, FLAC, WAV\n\nPara editar este archivo, conviértelo primero a uno de los formatos soportados.',
+  'incompatible_audio_format_desc':
+      'El formato .opus no es compatible con la edición de metadatos.\n\nFormatos soportados: MP3, M4A, AAC, FLAC, WAV\n\nPara editar este archivo, conviértelo primero a uno de los formatos soportados.',
   'audio_format': 'Formato',
   'select_cover_image': 'Seleccionar imagen de carátula',
   'remove_cover': 'Quitar carátula',
@@ -631,7 +658,8 @@ const Map<String, String> appLocalizationsEs = {
   'conversion_complete': 'Conversión completada',
   'conversion_complete_desc': 'El archivo se ha convertido exitosamente.',
   'conversion_error': 'Error en conversión',
-  'conversion_error_desc': 'No se pudo convertir el archivo. Verifica el formato y los permisos.',
+  'conversion_error_desc':
+      'No se pudo convertir el archivo. Verifica el formato y los permisos.',
   'output_format': 'Formato de salida',
   'input_format': 'Formato de entrada',
   'file_size': 'Tamaño',
@@ -663,30 +691,38 @@ const Map<String, String> appLocalizationsEs = {
   'trim_complete': 'Recorte completado',
   'trim_complete_desc': 'La canción se ha recortado exitosamente.',
   'trim_error': 'Error en recorte',
-  'trim_error_desc': 'No se pudo recortar la canción. Verifica los tiempos seleccionados.',
+  'trim_error_desc':
+      'No se pudo recortar la canción. Verifica los tiempos seleccionados.',
   'select_trim_range': 'Seleccionar rango de recorte',
   'original_duration': 'Duración original',
   'trimmed_duration': 'Duración recortada',
   'time_format': 'mm:ss',
   'hide_trim_settings': 'Ocultar configuración',
   'loading_music_library': 'Cargando biblioteca musical...',
-  'loading_music_library_description': 'Estamos preparando tu música. Esto puede tomar unos momentos...',
+  'loading_music_library_description':
+      'Estamos preparando tu música. Esto puede tomar unos momentos...',
   'file_path': 'Ruta',
-  'playlist_processing_time_info': 'El tiempo de procesamiento puede variar según el tamaño de la lista',
+  'playlist_processing_time_info':
+      'El tiempo de procesamiento puede variar según el tamaño de la lista',
   'view_on_github': 'Ver en GitHub',
   'view_artist': 'Ver artista',
   'filters': 'Filtros',
-  
+
   // Download messages
   'download_started_for_elements': 'Descarga iniciada para @count elementos',
-  
+  'songs_added_to_queue': 'canciones agregadas a la cola de descarga',
+  'download_entire_album': 'Descargar todo el álbum',
+  'download_entire_playlist': 'Descargar toda la playlist',
+
   // Exit confirmation
   'press_again_to_exit': 'Presiona de nuevo para salir',
-  
+
   // YouTube sharing errors
-  'youtube_link_invalid': 'No se pudo procesar el enlace de YouTube. Verifica que sea un enlace válido.',
+  'youtube_link_invalid':
+      'No se pudo procesar el enlace de YouTube. Verifica que sea un enlace válido.',
   'youtube_no_results': 'No hay resultados para mostrar.',
-  'youtube_no_valid_videos': 'No se encontraron videos válidos para reproducir.',
+  'youtube_no_valid_videos':
+      'No se encontraron videos válidos para reproducir.',
   'youtube_processing_error': 'Error al procesar el enlace compartido: @error',
   'youtube_modal_error': 'Error al abrir el reproductor: @error',
   'youtube_context_error': 'No se pudo obtener el contexto de la aplicación.',
@@ -700,8 +736,9 @@ const Map<String, String> appLocalizationsEs = {
   'download_in_browser_desc': 'Abrir enlace en navegador web',
   'opening_in_browser': 'Abriendo en navegador',
   'could_not_open': 'No se pudo abrir',
-  'select_download_method': 'Selecciona cómo quieres descargar la actualización',
-  
+  'select_download_method':
+      'Selecciona cómo quieres descargar la actualización',
+
   // YouTube search errors
   'artist_not_found': 'No se encontró el artista "{artistName}"',
   'could_not_get_artist_info': 'No se pudo obtener información del artista',

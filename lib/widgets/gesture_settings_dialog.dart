@@ -57,7 +57,7 @@ class _GestureSettingsDialogState extends State<GestureSettingsDialog> {
   Widget build(BuildContext context) {
     final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+
     return AlertDialog(
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
@@ -65,7 +65,12 @@ class _GestureSettingsDialogState extends State<GestureSettingsDialog> {
             ? const BorderSide(color: Colors.white, width: 1)
             : BorderSide.none,
       ),
-      title: Text(LocaleProvider.tr('gesture_settings_title')),
+      title: Center(
+        child: Text(
+          LocaleProvider.tr('gesture_settings_title'),
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+      ),
       content: _isLoading
           ? const SizedBox(
               height: 200,
