@@ -560,10 +560,7 @@ class _FoldersScreenState extends State<FoldersScreen>
                               Text(
                                 song.title,
                                 maxLines: 1,
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                ),
+                                style: Theme.of(context).textTheme.titleMedium,
                                 overflow: TextOverflow.ellipsis,
                               ),
                               const SizedBox(height: 4),
@@ -771,10 +768,7 @@ class _FoldersScreenState extends State<FoldersScreen>
                               Text(
                                 song.title,
                                 maxLines: 1,
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                ),
+                                style: Theme.of(context).textTheme.titleMedium,
                                 overflow: TextOverflow.ellipsis,
                               ),
                               const SizedBox(height: 4),
@@ -2871,6 +2865,7 @@ class _FoldersScreenState extends State<FoldersScreen>
                           nombre,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.titleMedium,
                         ),
                         subtitle: ignored && canciones.isEmpty
                             ? null
@@ -3016,6 +3011,12 @@ class _FoldersScreenState extends State<FoldersScreen>
               : Text(
                   folderDisplayNames[carpetaSeleccionada] ??
                       LocaleProvider.tr('folders'),
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withValues(alpha: 0.9),
+                  ),
                 ),
           actions: [
             if (_isSelecting) ...[
@@ -3456,14 +3457,13 @@ class _FoldersScreenState extends State<FoldersScreen>
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: isCurrent
-                      ? TextStyle(
+                      ? Theme.of(context).textTheme.titleMedium?.copyWith(
                           color: isAmoledTheme
                               ? Colors.white
                               : Theme.of(context).colorScheme.primary,
                           fontWeight: FontWeight.bold,
-                          fontSize: 16,
                         )
-                      : null,
+                      : Theme.of(context).textTheme.titleMedium,
                 ),
               ),
             ],

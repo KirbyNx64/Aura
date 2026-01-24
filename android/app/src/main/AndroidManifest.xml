@@ -97,6 +97,15 @@
             </intent-filter>
         </receiver>
 
+        <!-- Receiver para OTA Update con PackageInstaller -->
+        <receiver 
+            android:name="sk.fourq.otaupdate.InstallResultReceiver" 
+            android:exported="false">
+            <intent-filter>
+                <action android:name="${applicationId}.ACTION_INSTALL_COMPLETE"/>
+            </intent-filter>
+        </receiver>
+
         <!-- Actividad principal con soporte para audio_service -->
         <activity
             android:name="com.kirby.aura.MainActivity"

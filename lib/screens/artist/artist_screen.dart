@@ -132,6 +132,13 @@ class _ArtistScreenState extends State<ArtistScreen> {
     }
   }
 
+  // Función para reiniciar el scroll al principio
+  void _resetScroll() {
+    if (_scrollController.hasClients) {
+      _scrollController.jumpTo(0);
+    }
+  }
+
   Future<void> _load() async {
     try {
       // ignore: avoid_print
@@ -417,6 +424,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
       _expandedCategory = null;
       _albumSongs = [];
       _currentAlbum = null;
+      _resetScroll();
     });
   }
 
@@ -1228,6 +1236,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                 onPressed: () {
                                   setState(() {
                                     _expandedCategory = null;
+                                    _resetScroll();
                                   });
                                 },
                               ),
@@ -1375,6 +1384,9 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                     ),
                                     title: Text(
                                       item.title ?? 'Título desconocido',
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.titleMedium,
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                     ),
@@ -1443,6 +1455,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                     _expandedCategory = null;
                                     _albumSongs = [];
                                     _currentAlbum = null;
+                                    _resetScroll();
                                   });
                                 },
                               ),
@@ -1462,27 +1475,13 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                     ),
                                   ),
                                 Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        _currentAlbum!['title'] ?? '',
-                                        style: Theme.of(
-                                          context,
-                                        ).textTheme.titleMedium,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      Text(
-                                        _currentAlbum!['artist'] ?? '',
-                                        style: Theme.of(
-                                          context,
-                                        ).textTheme.bodySmall,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ],
+                                  child: Text(
+                                    _currentAlbum!['title'] ?? '',
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.titleMedium,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
                                 const SizedBox(width: 8),
@@ -1669,6 +1668,9 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                       ),
                                       title: Text(
                                         item.title ?? 'Título desconocido',
+                                        style: Theme.of(
+                                          context,
+                                        ).textTheme.titleMedium,
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                       ),
@@ -1740,6 +1742,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                 onPressed: () {
                                   setState(() {
                                     _expandedCategory = null;
+                                    _resetScroll();
                                   });
                                 },
                               ),
@@ -1888,6 +1891,9 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                     ),
                                     title: Text(
                                       item.title ?? 'Título desconocido',
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.titleMedium,
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                     ),
@@ -1954,6 +1960,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                 onPressed: () {
                                   setState(() {
                                     _expandedCategory = null;
+                                    _resetScroll();
                                   });
                                 },
                               ),
@@ -2007,6 +2014,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                         'artist': album['artist'],
                                         'thumbUrl': album['thumbUrl'],
                                       };
+                                      _resetScroll();
                                     });
                                     final songs = await getAlbumSongs(
                                       album['browseId']!,
@@ -2079,6 +2087,9 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                     ),
                                     title: Text(
                                       album['title'] ?? 'Álbum desconocido',
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.titleMedium,
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                     ),
@@ -2130,6 +2141,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
                               onTap: () {
                                 setState(() {
                                   _expandedCategory = 'songs';
+                                  _resetScroll();
                                 });
                               },
                               child: Padding(
@@ -2267,6 +2279,9 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                         ),
                                         title: Text(
                                           item.title ?? 'Título desconocido',
+                                          style: Theme.of(
+                                            context,
+                                          ).textTheme.titleMedium,
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
                                         ),
@@ -2343,6 +2358,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
                               onTap: () {
                                 setState(() {
                                   _expandedCategory = 'albums';
+                                  _resetScroll();
                                 });
                               },
                               child: Padding(
@@ -2391,6 +2407,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                           'artist': album['artist'],
                                           'thumbUrl': album['thumbUrl'],
                                         };
+                                        _resetScroll();
                                       });
                                       final songs = await getAlbumSongs(
                                         album['browseId']!,
@@ -2441,7 +2458,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                               overflow: TextOverflow.ellipsis,
                                               style: Theme.of(
                                                 context,
-                                              ).textTheme.bodyMedium,
+                                              ).textTheme.titleMedium,
                                             ),
                                           ),
                                         ],
@@ -2466,6 +2483,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
                               onTap: () {
                                 setState(() {
                                   _expandedCategory = 'videos';
+                                  _resetScroll();
                                 });
                               },
                               child: Padding(
@@ -2604,6 +2622,9 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                         ),
                                         title: Text(
                                           item.title ?? 'Título desconocido',
+                                          style: Theme.of(
+                                            context,
+                                          ).textTheme.titleMedium,
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
                                         ),

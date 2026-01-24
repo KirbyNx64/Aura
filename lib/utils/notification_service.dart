@@ -10,7 +10,7 @@ class DownloadNotificationThrottler {
   double _lastProgress = 0;
   DateTime _lastUpdate = DateTime.fromMillisecondsSinceEpoch(0);
   String _currentTitle = 'Descargando...';
-  
+
   static final DownloadNotificationThrottler _instance =
       DownloadNotificationThrottler._internal();
   factory DownloadNotificationThrottler() => _instance;
@@ -145,10 +145,10 @@ class NotificationService {
   static Future<void> initialize() async {
     const AndroidInitializationSettings initializationSettingsAndroid =
         AndroidInitializationSettings('@mipmap/ic_stat_music_note');
-    
+
     const InitializationSettings initializationSettings =
         InitializationSettings(android: initializationSettingsAndroid);
-    
+
     await flutterLocalNotificationsPlugin.initialize(
       initializationSettings,
       onDidReceiveNotificationResponse: _onNotificationTapped,
@@ -166,13 +166,15 @@ class NotificationService {
 
     await flutterLocalNotificationsPlugin
         .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>()
+          AndroidFlutterLocalNotificationsPlugin
+        >()
         ?.createNotificationChannel(channel);
 
     // Solicitar permisos de notificación en Android 13+
     await flutterLocalNotificationsPlugin
         .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>()
+          AndroidFlutterLocalNotificationsPlugin
+        >()
         ?.requestNotificationsPermission();
   }
 

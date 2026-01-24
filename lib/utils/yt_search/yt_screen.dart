@@ -1001,7 +1001,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                             ),
                             title: Text(
                               song.title ?? 'Sin título',
-                              style: const TextStyle(fontSize: 14),
+                              style: Theme.of(context).textTheme.titleMedium,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -2375,6 +2375,9 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                         LocaleProvider.tr(
                                                           'title_unknown',
                                                         ),
+                                                    style: Theme.of(
+                                                      context,
+                                                    ).textTheme.titleMedium,
                                                     maxLines: 1,
                                                     overflow:
                                                         TextOverflow.ellipsis,
@@ -2654,6 +2657,9 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                         LocaleProvider.tr(
                                                           'title_unknown',
                                                         ),
+                                                    style: Theme.of(
+                                                      context,
+                                                    ).textTheme.titleMedium,
                                                     maxLines: 1,
                                                     overflow:
                                                         TextOverflow.ellipsis,
@@ -2773,31 +2779,13 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                 ),
                                               ),
                                             Expanded(
-                                              child: Column(
-                                                crossAxisAlignment:
-                                                    CrossAxisAlignment.start,
-                                                children: [
-                                                  Text(
-                                                    _currentAlbum!['title'] ??
-                                                        '',
-                                                    style: Theme.of(
-                                                      context,
-                                                    ).textTheme.titleMedium,
-                                                    maxLines: 1,
-                                                    overflow:
-                                                        TextOverflow.ellipsis,
-                                                  ),
-                                                  Text(
-                                                    _currentAlbum!['artist'] ??
-                                                        '',
-                                                    style: Theme.of(
-                                                      context,
-                                                    ).textTheme.bodySmall,
-                                                    maxLines: 1,
-                                                    overflow:
-                                                        TextOverflow.ellipsis,
-                                                  ),
-                                                ],
+                                              child: Text(
+                                                _currentAlbum!['title'] ?? '',
+                                                style: Theme.of(
+                                                  context,
+                                                ).textTheme.titleMedium,
+                                                maxLines: 2,
+                                                overflow: TextOverflow.ellipsis,
                                               ),
                                             ),
                                             const SizedBox(width: 8),
@@ -3093,6 +3081,9 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                         LocaleProvider.tr(
                                                           'title_unknown',
                                                         ),
+                                                    style: Theme.of(
+                                                      context,
+                                                    ).textTheme.titleMedium,
                                                     maxLines: 1,
                                                     overflow:
                                                         TextOverflow.ellipsis,
@@ -3512,6 +3503,9 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                           LocaleProvider.tr(
                                                             'title_unknown',
                                                           ),
+                                                      style: Theme.of(
+                                                        context,
+                                                      ).textTheme.titleMedium,
                                                       maxLines: 1,
                                                       overflow:
                                                           TextOverflow.ellipsis,
@@ -3680,6 +3674,9 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                     LocaleProvider.tr(
                                                       'title_unknown',
                                                     ),
+                                                style: Theme.of(
+                                                  context,
+                                                ).textTheme.titleMedium,
                                                 maxLines: 2,
                                                 overflow: TextOverflow.ellipsis,
                                               ),
@@ -4187,6 +4184,10 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                               LocaleProvider.tr(
                                                                 'title_unknown',
                                                               ),
+                                                          style:
+                                                              Theme.of(context)
+                                                                  .textTheme
+                                                                  .titleMedium,
                                                           maxLines: 1,
                                                           overflow: TextOverflow
                                                               .ellipsis,
@@ -4414,6 +4415,9 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                             LocaleProvider.tr(
                                                               'title_unknown',
                                                             ),
+                                                        style: Theme.of(
+                                                          context,
+                                                        ).textTheme.titleMedium,
                                                         maxLines: 1,
                                                         overflow: TextOverflow
                                                             .ellipsis,
@@ -4549,6 +4553,9 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                         LocaleProvider.tr(
                                                           'title_unknown',
                                                         ),
+                                                    style: Theme.of(
+                                                      context,
+                                                    ).textTheme.titleMedium,
                                                     maxLines: 2,
                                                     overflow:
                                                         TextOverflow.ellipsis,
@@ -4624,103 +4631,159 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                   ?.copyWith(fontSize: 20),
                                             ),
                                           ),
-                                          ..._albumResults.map((item) {
-                                            YtMusicResult album;
-                                            if (item is YtMusicResult) {
-                                              album = item;
-                                            } else if (item is Map) {
-                                              final map =
-                                                  item as Map<String, dynamic>;
-                                              album = YtMusicResult(
-                                                title: map['title'] as String?,
-                                                artist:
-                                                    map['artist'] as String?,
-                                                thumbUrl:
-                                                    map['thumbUrl'] as String?,
-                                                videoId:
-                                                    map['browseId'] as String?,
-                                              );
-                                            } else {
-                                              album = YtMusicResult();
-                                            }
-                                            return ListTile(
-                                              contentPadding:
-                                                  const EdgeInsets.symmetric(
-                                                    horizontal: 0,
-                                                    vertical: 4,
-                                                  ),
-                                              leading: album.thumbUrl != null
-                                                  ? ClipRRect(
-                                                      borderRadius:
-                                                          BorderRadius.circular(
-                                                            8,
-                                                          ),
-                                                      child:
-                                                          _buildSafeNetworkImage(
-                                                            album.thumbUrl!,
-                                                            width: 56,
-                                                            height: 56,
-                                                            fit: BoxFit.cover,
-                                                          ),
-                                                    )
-                                                  : Container(
-                                                      width: 56,
-                                                      height: 56,
-                                                      decoration: BoxDecoration(
-                                                        color: Colors.grey[300],
-                                                        borderRadius:
-                                                            BorderRadius.circular(
-                                                              12,
-                                                            ),
-                                                      ),
-                                                      child: const Icon(
-                                                        Icons.album,
-                                                        size: 32,
-                                                        color: Colors.grey,
-                                                      ),
-                                                    ),
-                                              title: Text(
-                                                album.title ??
-                                                    LocaleProvider.tr(
-                                                      'title_unknown',
-                                                    ),
-                                                maxLines: 1,
-                                                overflow: TextOverflow.ellipsis,
-                                              ),
-                                              subtitle: Text(
-                                                album.artist ??
-                                                    LocaleProvider.tr(
-                                                      'artist_unknown',
-                                                    ),
-                                                maxLines: 1,
-                                                overflow: TextOverflow.ellipsis,
-                                              ),
-                                              onTap: () async {
-                                                if (album.videoId == null) {
-                                                  return;
+                                          const SizedBox(height: 8),
+                                          SizedBox(
+                                            height: 180,
+                                            child: ListView.separated(
+                                              scrollDirection: Axis.horizontal,
+                                              itemCount: _albumResults.length,
+                                              separatorBuilder: (_, _) =>
+                                                  const SizedBox(width: 12),
+                                              itemBuilder: (context, index) {
+                                                final item =
+                                                    _albumResults[index];
+                                                YtMusicResult album;
+                                                if (item is YtMusicResult) {
+                                                  album = item;
+                                                } else if (item is Map) {
+                                                  final map =
+                                                      item
+                                                          as Map<
+                                                            String,
+                                                            dynamic
+                                                          >;
+                                                  album = YtMusicResult(
+                                                    title:
+                                                        map['title'] as String?,
+                                                    artist:
+                                                        map['artist']
+                                                            as String?,
+                                                    thumbUrl:
+                                                        map['thumbUrl']
+                                                            as String?,
+                                                    videoId:
+                                                        map['browseId']
+                                                            as String?,
+                                                  );
+                                                } else {
+                                                  album = YtMusicResult();
                                                 }
-                                                setState(() {
-                                                  _expandedCategory = 'album';
-                                                  _loadingAlbumSongs = true;
-                                                  _albumSongs = [];
-                                                  _currentAlbum = {
-                                                    'title': album.title,
-                                                    'artist': album.artist,
-                                                    'thumbUrl': album.thumbUrl,
-                                                  };
-                                                });
-                                                final songs =
-                                                    await getAlbumSongs(
-                                                      album.videoId!,
-                                                    );
-                                                if (!mounted) return;
-                                                setState(() {
-                                                  _albumSongs = songs;
-                                                  _loadingAlbumSongs = false;
-                                                });
+                                                return GestureDetector(
+                                                  onTap: () async {
+                                                    if (album.videoId == null) {
+                                                      return;
+                                                    }
+                                                    setState(() {
+                                                      _expandedCategory =
+                                                          'album';
+                                                      _loadingAlbumSongs = true;
+                                                      _albumSongs = [];
+                                                      _currentAlbum = {
+                                                        'title': album.title,
+                                                        'artist': album.artist,
+                                                        'thumbUrl':
+                                                            album.thumbUrl,
+                                                      };
+                                                    });
+                                                    final songs =
+                                                        await getAlbumSongs(
+                                                          album.videoId!,
+                                                        );
+                                                    if (!mounted) return;
+                                                    setState(() {
+                                                      _albumSongs = songs;
+                                                      _loadingAlbumSongs =
+                                                          false;
+                                                    });
+                                                  },
+                                                  child: SizedBox(
+                                                    width: 120,
+                                                    child: Column(
+                                                      crossAxisAlignment:
+                                                          CrossAxisAlignment
+                                                              .start,
+                                                      mainAxisSize:
+                                                          MainAxisSize.min,
+                                                      children: [
+                                                        AspectRatio(
+                                                          aspectRatio: 1,
+                                                          child: ClipRRect(
+                                                            borderRadius:
+                                                                BorderRadius.circular(
+                                                                  12,
+                                                                ),
+                                                            child:
+                                                                album.thumbUrl !=
+                                                                    null
+                                                                ? _buildSafeNetworkImage(
+                                                                    album
+                                                                        .thumbUrl!,
+                                                                    width: 120,
+                                                                    height: 120,
+                                                                    fit: BoxFit
+                                                                        .cover,
+                                                                    fallback: Container(
+                                                                      color:
+                                                                          isSystem
+                                                                          ? Theme.of(
+                                                                              context,
+                                                                            ).colorScheme.secondaryContainer
+                                                                          : Theme.of(
+                                                                              context,
+                                                                            ).colorScheme.surfaceContainer,
+                                                                      child: const Icon(
+                                                                        Icons
+                                                                            .album,
+                                                                        size:
+                                                                            40,
+                                                                      ),
+                                                                    ),
+                                                                  )
+                                                                : Container(
+                                                                    color:
+                                                                        isSystem
+                                                                        ? Theme.of(
+                                                                            context,
+                                                                          ).colorScheme.secondaryContainer
+                                                                        : Theme.of(
+                                                                            context,
+                                                                          ).colorScheme.surfaceContainer,
+                                                                    child: const Icon(
+                                                                      Icons
+                                                                          .album,
+                                                                      size: 40,
+                                                                    ),
+                                                                  ),
+                                                          ),
+                                                        ),
+                                                        const SizedBox(
+                                                          height: 8,
+                                                        ),
+                                                        Flexible(
+                                                          child: Text(
+                                                            album.title ??
+                                                                LocaleProvider.tr(
+                                                                  'title_unknown',
+                                                                ),
+                                                            maxLines: 2,
+                                                            overflow:
+                                                                TextOverflow
+                                                                    .ellipsis,
+                                                            style:
+                                                                Theme.of(
+                                                                      context,
+                                                                    )
+                                                                    .textTheme
+                                                                    .titleMedium,
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                );
                                               },
-                                            );
-                                          }),
+                                            ),
+                                          ),
                                         ],
                                       ),
                                     ],

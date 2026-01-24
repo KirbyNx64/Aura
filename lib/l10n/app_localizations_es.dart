@@ -568,6 +568,9 @@ const Map<String, String> appLocalizationsEs = {
   'check_for_update': 'Buscar actualización',
   'new_update_available': '¡Nueva actualización disponible!',
   'status': 'Estado',
+  'installing': 'Instalando actualización...',
+  'installation_failed': 'Falló la instalación',
+  'installation_success': 'Instalación exitosa',
 
   // Search suggestions
   'suggestions': 'Sugerencias',

@@ -939,7 +939,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ? const BorderSide(color: Colors.white, width: 1)
                     : BorderSide.none,
               ),
-              title: Text(LocaleProvider.tr('information')),
+              title: Center(
+                child: Text(
+                  LocaleProvider.tr('information'),
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
               content: Text(LocaleProvider.tr('battery_optimization_info')),
             ),
           );
@@ -4152,6 +4157,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               _totalBytesAtDownloadDir != null
                           ? '${_formatBytes(_availableBytesAtDownloadDir!)} ${LocaleProvider.tr('free_of')} ${_formatBytes(_totalBytesAtDownloadDir!)}'
                           : LocaleProvider.tr('calculating'),
+                      style: TextStyle(
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withValues(alpha: 0.85),
+                      ),
                     ),
                     subtitle:
                         (_availableBytesAtDownloadDir != null &&
@@ -4455,10 +4465,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                     )
                                   : BorderSide.none,
                             ),
-                            title: Text(
-                              status.isGranted
-                                  ? LocaleProvider.tr('permission_granted')
-                                  : LocaleProvider.tr('permission_denied'),
+                            title: Center(
+                              child: Text(
+                                status.isGranted
+                                    ? LocaleProvider.tr('permission_granted')
+                                    : LocaleProvider.tr('permission_denied'),
+                                style: TextStyle(fontWeight: FontWeight.bold),
+                              ),
                             ),
                             content: Text(
                               status.isGranted

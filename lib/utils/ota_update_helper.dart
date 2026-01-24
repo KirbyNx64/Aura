@@ -13,10 +13,11 @@ class OtaUpdateHelper {
   static Future<UpdateInfo?> checkForUpdate() async {
     try {
       // Verificar conectividad antes de hacer la petición
-      final hasConnection = await ConnectivityHelper.hasInternetConnectionWithTimeout(
-        timeout: const Duration(seconds: 5),
-      );
-      
+      final hasConnection =
+          await ConnectivityHelper.hasInternetConnectionWithTimeout(
+            timeout: const Duration(seconds: 5),
+          );
+
       if (!hasConnection) {
         return null;
       }
@@ -38,7 +39,7 @@ class OtaUpdateHelper {
       final String? arch = await _getArch();
       // ('Arquitectura detectada: $arch');
       // print('URLs disponibles: $apkUrls');
-      
+
       if (arch == null || !apkUrls.containsKey(arch)) {
         // print('Error: Arquitectura no soportada o no encontrada en las URLs');
         return null;
@@ -62,18 +63,18 @@ class OtaUpdateHelper {
     if (Platform.isAndroid) {
       final androidInfo = await deviceInfo.androidInfo;
       final List<String> abis = androidInfo.supportedAbis;
-      
+
       // print('ABIs soportadas por el dispositivo: $abis');
-      
+
       if (abis.isEmpty) {
         // print('No se encontraron ABIs soportadas');
         return 'unknown';
       }
-      
+
       // Priorizar la primera ABI (la nativa del dispositivo/emulador)
       final String primaryAbi = abis.first;
       // print('ABI principal (primera en la lista): $primaryAbi');
-      
+
       // Mapear la ABI principal a nuestro formato
       if (primaryAbi == 'arm64-v8a') {
         // print('Seleccionada arquitectura: arm64-v8a');
@@ -88,14 +89,19 @@ class OtaUpdateHelper {
         // print('Seleccionada arquitectura: x86 (fallback a x86_64)');
         return 'x86_64'; // Fallback para x86
       }
-      
+
       // print('ABI no reconocida: $primaryAbi');
     }
     return null; // No compatible ABI detectada
   }
 
   static Stream<OtaEvent> startDownload(String apkUrl) {
-    return OtaUpdate().execute(apkUrl, destinationFilename: 'aura_update.apk');
+    return OtaUpdate().execute(
+      apkUrl,
+      destinationFilename: 'aura_update.apk',
+      usePackageInstaller:
+          true, // Habilitar PackageInstaller para mejor control
+    );
   }
 
   static bool _isNewVersion(String local, String remote) {

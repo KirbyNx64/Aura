@@ -230,7 +230,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     // Limpiar la cola y el MediaItem antes de mostrar la nueva canción
     (audioHandler as MyAudioHandler).queue.add([]);
     (audioHandler as MyAudioHandler).mediaItem.add(null);
-    
+
     // Limpiar el fallback de las carátulas para evitar parpadeo
     ArtworkHeroCached.clearFallback();
 
@@ -499,10 +499,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                           Text(
                             song.title,
                             maxLines: 1,
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
+                            style: Theme.of(context).textTheme.titleMedium,
                             overflow: TextOverflow.ellipsis,
                           ),
                           const SizedBox(height: 4),
@@ -530,8 +527,9 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                         ),
                         decoration: BoxDecoration(
                           color: Theme.of(context).brightness == Brightness.dark
-                            ? Theme.of(context).colorScheme.primary
-                            : Theme.of(context).colorScheme.onPrimaryContainer.withValues(alpha: 0.7),
+                              ? Theme.of(context).colorScheme.primary
+                              : Theme.of(context).colorScheme.onPrimaryContainer
+                                    .withValues(alpha: 0.7),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Row(
@@ -540,9 +538,13 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                             Icon(
                               Icons.search,
                               size: 20,
-                              color: Theme.of(context).brightness == Brightness.dark
-                                ? Theme.of(context).colorScheme.onPrimary
-                                : Theme.of(context).colorScheme.surfaceContainer,
+                              color:
+                                  Theme.of(context).brightness ==
+                                      Brightness.dark
+                                  ? Theme.of(context).colorScheme.onPrimary
+                                  : Theme.of(
+                                      context,
+                                    ).colorScheme.surfaceContainer,
                             ),
                             const SizedBox(width: 8),
                             TranslatedText(
@@ -550,9 +552,13 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                               style: TextStyle(
                                 fontWeight: FontWeight.w600,
                                 fontSize: 14,
-                                color: Theme.of(context).brightness == Brightness.dark
-                                  ? Theme.of(context).colorScheme.onPrimary
-                                  : Theme.of(context).colorScheme.surfaceContainer,
+                                color:
+                                    Theme.of(context).brightness ==
+                                        Brightness.dark
+                                    ? Theme.of(context).colorScheme.onPrimary
+                                    : Theme.of(
+                                        context,
+                                      ).colorScheme.surfaceContainer,
                               ),
                             ),
                           ],
@@ -618,19 +624,20 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                       PageRouteBuilder(
                         pageBuilder: (context, animation, secondaryAnimation) =>
                             ArtistScreen(artistName: name),
-                        transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                          const begin = Offset(1.0, 0.0);
-                          const end = Offset.zero;
-                          const curve = Curves.ease;
-                          final tween = Tween(
-                            begin: begin,
-                            end: end,
-                          ).chain(CurveTween(curve: curve));
-                          return SlideTransition(
-                            position: animation.drive(tween),
-                            child: child,
-                          );
-                        },
+                        transitionsBuilder:
+                            (context, animation, secondaryAnimation, child) {
+                              const begin = Offset(1.0, 0.0);
+                              const end = Offset.zero;
+                              const curve = Curves.ease;
+                              final tween = Tween(
+                                begin: begin,
+                                end: end,
+                              ).chain(CurveTween(curve: curve));
+                              return SlideTransition(
+                                position: animation.drive(tween),
+                                child: child,
+                              );
+                            },
                       ),
                     );
                   },
@@ -651,7 +658,11 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                 title: TranslatedText('song_info'),
                 onTap: () async {
                   Navigator.of(context).pop();
-                  await SongInfoDialog.showFromSong(context, song, colorSchemeNotifier);
+                  await SongInfoDialog.showFromSong(
+                    context,
+                    song,
+                    colorSchemeNotifier,
+                  );
                 },
               ),
             ],
@@ -825,7 +836,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
   Future<void> _removeFromFavoritesMassive() async {
     final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+
     final selectedSongs =
         (_searchController.text.isNotEmpty ? _filteredFavorites : _favorites)
             .where((s) => _selectedSongIds.contains(s.id));
@@ -935,7 +946,14 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                                     artworkWidth: 40,
                                     keepOldArtwork: true,
                                     nullArtworkWidget: Container(
-                                        color: isSystem ? Theme.of(context).colorScheme.secondaryContainer.withValues(alpha: 0.5) : Theme.of(context).colorScheme.surfaceContainer,
+                                      color: isSystem
+                                          ? Theme.of(context)
+                                                .colorScheme
+                                                .secondaryContainer
+                                                .withValues(alpha: 0.5)
+                                          : Theme.of(
+                                              context,
+                                            ).colorScheme.surfaceContainer,
                                       width: 40,
                                       height: 40,
                                       child: Icon(
@@ -953,6 +971,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                               song.title,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.titleMedium,
                             ),
                             subtitle: Text(
                               song.artist ??
@@ -1048,7 +1067,11 @@ class _FavoritesScreenState extends State<FavoritesScreen>
               artworkWidth: 50,
               keepOldArtwork: true,
               nullArtworkWidget: Container(
-                color: isSystem ? Theme.of(context).colorScheme.secondaryContainer.withValues(alpha: 0.5) : Theme.of(context).colorScheme.surfaceContainer,
+                color: isSystem
+                    ? Theme.of(
+                        context,
+                      ).colorScheme.secondaryContainer.withValues(alpha: 0.5)
+                    : Theme.of(context).colorScheme.surfaceContainer,
                 width: 50,
                 height: 50,
                 child: Icon(
@@ -1079,14 +1102,13 @@ class _FavoritesScreenState extends State<FavoritesScreen>
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: isCurrent
-                  ? TextStyle(
+                  ? Theme.of(context).textTheme.titleMedium?.copyWith(
                       color: isAmoledTheme
                           ? Colors.white
                           : Theme.of(context).colorScheme.primary,
                       fontWeight: FontWeight.bold,
-                      fontSize: 16,
                     )
-                  : null,
+                  : Theme.of(context).textTheme.titleMedium,
             ),
           ),
         ],
@@ -1097,7 +1119,13 @@ class _FavoritesScreenState extends State<FavoritesScreen>
         overflow: TextOverflow.ellipsis,
       ),
       trailing: IconButton(
-        icon: Icon(isCurrent && playing ? Symbols.pause_rounded : Symbols.play_arrow_rounded, grade: 200, fill: 1),
+        icon: Icon(
+          isCurrent && playing
+              ? Symbols.pause_rounded
+              : Symbols.play_arrow_rounded,
+          grade: 200,
+          fill: 1,
+        ),
         onPressed: () {
           if (isCurrent) {
             playing
@@ -1111,13 +1139,13 @@ class _FavoritesScreenState extends State<FavoritesScreen>
       selected: isCurrent,
       selectedTileColor: isCurrent
           ? (isAmoledTheme
-              ? Colors.transparent
-              : Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.8))
+                ? Colors.transparent
+                : Theme.of(
+                    context,
+                  ).colorScheme.primaryContainer.withValues(alpha: 0.8))
           : null,
       shape: isCurrent
-          ? RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            )
+          ? RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))
           : null,
       onTap: () => _onSongSelected(song),
     );
@@ -1194,7 +1222,11 @@ class _FavoritesScreenState extends State<FavoritesScreen>
               ]
             : [
                 IconButton(
-                  icon: const Icon(Symbols.shuffle_rounded, size: 28, weight: 600),
+                  icon: const Icon(
+                    Symbols.shuffle_rounded,
+                    size: 28,
+                    weight: 600,
+                  ),
                   tooltip: 'Aleatorio',
                   onPressed: () {
                     final List<SongModel> songsToShow =
@@ -1395,7 +1427,11 @@ class _FavoritesScreenState extends State<FavoritesScreen>
         width: 60,
         height: 60,
         decoration: BoxDecoration(
-          color: isSystem ? Theme.of(context).colorScheme.secondaryContainer.withValues(alpha: 0.5) : Theme.of(context).colorScheme.surfaceContainer,
+          color: isSystem
+              ? Theme.of(
+                  context,
+                ).colorScheme.secondaryContainer.withValues(alpha: 0.5)
+              : Theme.of(context).colorScheme.surfaceContainer,
           borderRadius: BorderRadius.circular(8),
         ),
         child: Icon(Icons.music_note, size: 30),
@@ -1447,9 +1483,10 @@ class _FavoritesScreenState extends State<FavoritesScreen>
 
       // Codificar la consulta para la URL
       final encodedQuery = Uri.encodeComponent(searchQuery);
-      
+
       // URL correcta para búsqueda en YouTube Music
-      final ytMusicSearchUrl = 'https://music.youtube.com/search?q=$encodedQuery';
+      final ytMusicSearchUrl =
+          'https://music.youtube.com/search?q=$encodedQuery';
 
       // Intentar abrir YouTube Music en el navegador o en la app
       final url = Uri.parse(ytMusicSearchUrl);
@@ -1474,7 +1511,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
           builder: (context, colorScheme, child) {
             final isAmoled = colorScheme == AppColorScheme.amoled;
             final isDark = Theme.of(context).brightness == Brightness.dark;
-            
+
             return AlertDialog(
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
@@ -1485,10 +1522,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
               title: Center(
                 child: TranslatedText(
                   'search_song',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
                 ),
               ),
               content: SizedBox(
@@ -1525,8 +1559,12 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                         padding: EdgeInsets.all(16),
                         decoration: BoxDecoration(
                           color: isAmoled && isDark
-                              ? Colors.white.withValues(alpha: 0.1) // Color personalizado para amoled
-                              : Theme.of(context).colorScheme.secondaryContainer,
+                              ? Colors.white.withValues(
+                                  alpha: 0.1,
+                                ) // Color personalizado para amoled
+                              : Theme.of(
+                                  context,
+                                ).colorScheme.secondaryContainer,
                           borderRadius: BorderRadius.only(
                             topLeft: Radius.circular(16),
                             topRight: Radius.circular(16),
@@ -1535,8 +1573,12 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                           ),
                           border: Border.all(
                             color: isAmoled && isDark
-                                ? Colors.white.withValues(alpha: 0.2) // Borde personalizado para amoled
-                                : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
+                                ? Colors.white.withValues(
+                                    alpha: 0.2,
+                                  ) // Borde personalizado para amoled
+                                : Theme.of(
+                                    context,
+                                  ).colorScheme.outline.withValues(alpha: 0.1),
                             width: 1,
                           ),
                         ),
@@ -1561,7 +1603,8 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                                   fontSize: 16,
                                   fontWeight: FontWeight.w600,
                                   color: isAmoled && isDark
-                                      ? Colors.white // Texto blanco para amoled
+                                      ? Colors
+                                            .white // Texto blanco para amoled
                                       : Theme.of(context).colorScheme.onSurface,
                                 ),
                               ),
@@ -1583,8 +1626,12 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                         padding: EdgeInsets.all(16),
                         decoration: BoxDecoration(
                           color: isAmoled && isDark
-                              ? Colors.white.withValues(alpha: 0.1) // Color personalizado para amoled
-                              : Theme.of(context).colorScheme.secondaryContainer,
+                              ? Colors.white.withValues(
+                                  alpha: 0.1,
+                                ) // Color personalizado para amoled
+                              : Theme.of(
+                                  context,
+                                ).colorScheme.secondaryContainer,
                           borderRadius: BorderRadius.only(
                             topLeft: Radius.circular(4),
                             topRight: Radius.circular(4),
@@ -1593,8 +1640,12 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                           ),
                           border: Border.all(
                             color: isAmoled && isDark
-                                ? Colors.white.withValues(alpha: 0.2) // Borde personalizado para amoled
-                                : Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
+                                ? Colors.white.withValues(
+                                    alpha: 0.2,
+                                  ) // Borde personalizado para amoled
+                                : Theme.of(
+                                    context,
+                                  ).colorScheme.outline.withValues(alpha: 0.1),
                             width: 1,
                           ),
                         ),
@@ -1619,7 +1670,8 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                                   fontSize: 16,
                                   fontWeight: FontWeight.w600,
                                   color: isAmoled && isDark
-                                      ? Colors.white // Texto blanco para amoled
+                                      ? Colors
+                                            .white // Texto blanco para amoled
                                       : Theme.of(context).colorScheme.onSurface,
                                 ),
                               ),
@@ -1628,7 +1680,6 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                         ),
                       ),
                     ),
-                    
                   ],
                 ),
               ),

@@ -63,10 +63,7 @@ Future<Map<String, dynamic>?> getArtistDetails(String browseId) async {
     normalizedId = normalizedId.substring(4);
   }
 
-  final data = {
-    ...ytServiceContext,
-    'browseId': normalizedId,
-  };
+  final data = {...ytServiceContext, 'browseId': normalizedId};
   // Configurar idioma según la configuración de la app
   try {
     final ctx = (data['context'] as Map);
@@ -80,10 +77,13 @@ Future<Map<String, dynamic>?> getArtistDetails(String browseId) async {
     final response = (await sendRequest("browse", data)).data;
 
     // Header de artista
-    final header = nav(response, ['header', 'musicImmersiveHeaderRenderer']) ??
+    final header =
+        nav(response, ['header', 'musicImmersiveHeaderRenderer']) ??
         nav(response, ['header', 'musicVisualHeaderRenderer']);
 
-    String? name = header != null ? nav(header, ['title', 'runs', 0, 'text']) : null;
+    String? name = header != null
+        ? nav(header, ['title', 'runs', 0, 'text'])
+        : null;
 
     // results: pestaña single column
     final results = nav(response, [
@@ -99,7 +99,10 @@ Future<Map<String, dynamic>?> getArtistDetails(String browseId) async {
 
     String? description;
     if (results != null) {
-      final descRenderer = _findObjectByKey(results, 'musicDescriptionShelfRenderer');
+      final descRenderer = _findObjectByKey(
+        results,
+        'musicDescriptionShelfRenderer',
+      );
       if (descRenderer is Map) {
         final runs = nav(descRenderer, ['description', 'runs']);
         if (runs is List && runs.isNotEmpty) {
@@ -116,7 +119,7 @@ Future<Map<String, dynamic>?> getArtistDetails(String browseId) async {
             'subscriberCountText',
             'runs',
             0,
-            'text'
+            'text',
           ])
         : null;
 
@@ -128,17 +131,17 @@ Future<Map<String, dynamic>?> getArtistDetails(String browseId) async {
         'thumbnail',
         'musicThumbnailRenderer',
         'thumbnail',
-        'thumbnails'
+        'thumbnails',
       ]);
-      
+
       // Segunda opción: croppedSquareThumbnailRenderer (imagen cuadrada recortada)
       thumbnails ??= nav(header, [
         'thumbnail',
         'croppedSquareThumbnailRenderer',
         'thumbnail',
-        'thumbnails'
+        'thumbnails',
       ]);
-      
+
       // Tercera opción: buscar en cualquier estructura de thumbnail
       if (thumbnails == null) {
         final thumbnail = nav(header, ['thumbnail']);
@@ -152,11 +155,11 @@ Future<Map<String, dynamic>?> getArtistDetails(String browseId) async {
           }
         }
       }
-      
+
       if (thumbnails is List && thumbnails.isNotEmpty) {
         // Usar la imagen de mayor resolución disponible
         thumbUrl = thumbnails.last['url'];
-        
+
         // Si la URL contiene parámetros de recorte, intentar obtener una sin recortar
         if (thumbUrl != null && thumbUrl.contains('w120-h120')) {
           // Intentar obtener una imagen de mayor tamaño
@@ -168,7 +171,7 @@ Future<Map<String, dynamic>?> getArtistDetails(String browseId) async {
             }
           }
         }
-        
+
         // Limpiar parámetros de recorte de la URL si es necesario
         if (thumbUrl != null) {
           thumbUrl = _cleanThumbnailUrl(thumbUrl);
@@ -219,16 +222,16 @@ String _cleanThumbnailUrl(String url) {
   url = url.replaceAll(RegExp(r'[?&]w\d+-h\d+'), '');
   url = url.replaceAll(RegExp(r'[?&]crop=\d+'), '');
   url = url.replaceAll(RegExp(r'[?&]rs=\d+'), '');
-  
+
   // Limpiar parámetros dobles
   url = url.replaceAll(RegExp(r'[?&]{2,}'), '&');
   url = url.replaceAll(RegExp(r'[?&]$'), '');
-  
+
   // Si queda solo ?, removerlo
   if (url.endsWith('?')) {
     url = url.substring(0, url.length - 1);
   }
-  
+
   return url;
 }
 
@@ -273,37 +276,36 @@ Future<String?> _getWikipediaSummary(String title, {String lang = 'es'}) async {
     final res = await dio.get(
       url,
       options: Options(
-        headers: {
-          'accept': 'application/json',
-          'user-agent': userAgent,
-        },
+        headers: {'accept': 'application/json', 'user-agent': userAgent},
         validateStatus: (s) => s != null && s >= 200 && s < 500,
       ),
     );
     if (res.statusCode == 200 && res.data is Map) {
       final map = res.data as Map;
-      
+
       // Verificar si es una página de desambiguación
       final type = map['type']?.toString();
       if (type == 'disambiguation') {
-        
         // Intentar variaciones más específicas para artistas
         final variations = _getArtistNameVariations(title);
-        
+
         // Limitar a las primeras 10 variaciones más probables para evitar demasiadas llamadas
         final limitedVariations = variations.take(10).toList();
-        
+
         for (final variation in limitedVariations) {
-          final variationResult = await _getWikipediaSummary(variation, lang: lang);
+          final variationResult = await _getWikipediaSummary(
+            variation,
+            lang: lang,
+          );
           if (variationResult != null && variationResult.trim().isNotEmpty) {
             return variationResult;
           }
         }
-        
+
         // Si no se encuentra ninguna variación específica, devolver null
         return null;
       }
-      
+
       final extract = map['extract']?.toString();
       if (extract != null && extract.trim().isNotEmpty) {
         return extract;
@@ -317,7 +319,7 @@ Future<String?> getArtistWikipediaDescription(String name) async {
   // Obtener el idioma actual de la app
   final currentLang = languageNotifier.value;
   final wikiLang = currentLang == 'en' ? 'en' : 'es';
-  
+
   String? desc = await _getWikipediaSummary(name, lang: wikiLang);
   /*
   if (desc != null && desc.trim().isNotEmpty) {
@@ -396,10 +398,15 @@ String? getSearchParams(String? filter, String? scope, bool ignoreSpelling) {
 }
 
 // Función para generar parámetros con límite de resultados
-String? getSearchParamsWithLimit(String? filter, String? scope, bool ignoreSpelling, {int limit = 50}) {
+String? getSearchParamsWithLimit(
+  String? filter,
+  String? scope,
+  bool ignoreSpelling, {
+  int limit = 50,
+}) {
   final baseParams = getSearchParams(filter, scope, ignoreSpelling);
   if (baseParams == null) return null;
-  
+
   // Agregar parámetro de límite si es necesario
   // YouTube Music usa diferentes parámetros para controlar el número de resultados
   return baseParams;
@@ -407,11 +414,11 @@ String? getSearchParamsWithLimit(String? filter, String? scope, bool ignoreSpell
 
 String? _getParam2(String filter) {
   final filterParams = {
-    'songs': 'I',      // Parámetro específico para canciones
+    'songs': 'I', // Parámetro específico para canciones
     'videos': 'Q',
     'albums': 'Y',
     'artists': 'g',
-    'playlists': 'o'
+    'playlists': 'o',
   };
   return filterParams[filter];
 }
@@ -439,12 +446,18 @@ dynamic nav(dynamic data, List<dynamic> path) {
 }
 
 // Función para enviar la petición
-Future<Response> sendRequest(String action, Map<dynamic, dynamic> data, {String additionalParams = "", CancelToken? cancelToken}) async {
+Future<Response> sendRequest(
+  String action,
+  Map<dynamic, dynamic> data, {
+  String additionalParams = "",
+  CancelToken? cancelToken,
+}) async {
   // Verificar conectividad antes de hacer la petición
-  final hasConnection = await ConnectivityHelper.hasInternetConnectionWithTimeout(
-    timeout: const Duration(seconds: 5),
-  );
-  
+  final hasConnection =
+      await ConnectivityHelper.hasInternetConnectionWithTimeout(
+        timeout: const Duration(seconds: 5),
+      );
+
   if (!hasConnection) {
     throw DioException(
       requestOptions: RequestOptions(path: ''),
@@ -460,7 +473,8 @@ Future<Response> sendRequest(String action, Map<dynamic, dynamic> data, {String 
     options: Options(
       headers: headers,
       validateStatus: (status) {
-        return (status != null && (status >= 200 && status < 300)) || status == 400;
+        return (status != null && (status >= 200 && status < 300)) ||
+            status == 400;
       },
     ),
     data: jsonEncode(data),
@@ -483,21 +497,24 @@ void parseSongs(List items, List<YtMusicResult> results) {
         'watchEndpoint',
         'watchEndpointMusicSupportedConfigs',
         'watchEndpointMusicConfig',
-        'musicVideoType'
+        'musicVideoType',
       ]);
-      
+
       // Solo procesar si es una canción (MUSIC_VIDEO_TYPE_ATV) o si no hay tipo específico
       if (videoType == null || videoType == 'MUSIC_VIDEO_TYPE_ATV') {
-        final title = renderer['flexColumns']?[0]
-            ?['musicResponsiveListItemFlexColumnRenderer']?['text']?['runs']?[0]?['text'];
+        final title =
+            renderer['flexColumns']?[0]?['musicResponsiveListItemFlexColumnRenderer']?['text']?['runs']?[0]?['text'];
 
-        final subtitleRuns = renderer['flexColumns']?[1]
-            ?['musicResponsiveListItemFlexColumnRenderer']?['text']?['runs'];
+        final subtitleRuns =
+            renderer['flexColumns']?[1]?['musicResponsiveListItemFlexColumnRenderer']?['text']?['runs'];
         String? artist;
         if (subtitleRuns is List) {
           for (var run in subtitleRuns) {
-            if (run['navigationEndpoint']?['browseEndpoint']?['browseEndpointContextSupportedConfigs'] != null ||
-                run['navigationEndpoint']?['browseEndpoint']?['browseId']?.startsWith('UC') == true) {
+            if (run['navigationEndpoint']?['browseEndpoint']?['browseEndpointContextSupportedConfigs'] !=
+                    null ||
+                run['navigationEndpoint']?['browseEndpoint']?['browseId']
+                        ?.startsWith('UC') ==
+                    true) {
               artist = run['text'];
               break;
             }
@@ -509,12 +526,14 @@ void parseSongs(List items, List<YtMusicResult> results) {
         }
 
         String? thumbUrl;
-        final thumbnails = renderer['thumbnail']?['musicThumbnailRenderer']?['thumbnail']?['thumbnails'];
+        final thumbnails =
+            renderer['thumbnail']?['musicThumbnailRenderer']?['thumbnail']?['thumbnails'];
         if (thumbnails is List && thumbnails.isNotEmpty) {
           thumbUrl = thumbnails.last['url'];
         }
 
-        final videoId = renderer['overlay']?['musicItemThumbnailOverlayRenderer']?['content']?['musicPlayButtonRenderer']?['playNavigationEndpoint']?['watchEndpoint']?['videoId'];
+        final videoId =
+            renderer['overlay']?['musicItemThumbnailOverlayRenderer']?['content']?['musicPlayButtonRenderer']?['playNavigationEndpoint']?['watchEndpoint']?['videoId'];
 
         if (videoId != null && title != null) {
           results.add(
@@ -532,7 +551,10 @@ void parseSongs(List items, List<YtMusicResult> results) {
 }
 
 // Función para buscar solo canciones con paginación
-Future<List<YtMusicResult>> searchSongsOnly(String query, {String? continuationToken}) async {
+Future<List<YtMusicResult>> searchSongsOnly(
+  String query, {
+  String? continuationToken,
+}) async {
   // Cancela la búsqueda anterior si existe
   _searchCancelToken?.cancel();
   _searchCancelToken = CancelToken();
@@ -548,7 +570,11 @@ Future<List<YtMusicResult>> searchSongsOnly(String query, {String? continuationT
   }
 
   try {
-    final response = (await sendRequest("search", data, cancelToken: _searchCancelToken)).data;
+    final response = (await sendRequest(
+      "search",
+      data,
+      cancelToken: _searchCancelToken,
+    )).data;
     final results = <YtMusicResult>[];
 
     // Si es una búsqueda inicial
@@ -564,7 +590,7 @@ Future<List<YtMusicResult>> searchSongsOnly(String query, {String? continuationT
         'contents',
         0,
         'musicShelfRenderer',
-        'contents'
+        'contents',
       ]);
 
       if (contents is List) {
@@ -576,19 +602,19 @@ Future<List<YtMusicResult>> searchSongsOnly(String query, {String? continuationT
         'onResponseReceivedActions',
         0,
         'appendContinuationItemsAction',
-        'continuationItems'
+        'continuationItems',
       ]);
 
       contents ??= nav(response, [
         'continuationContents',
         'musicShelfContinuation',
-        'contents'
+        'contents',
       ]);
 
       if (contents is List) {
-        final songItems = contents.where((item) => 
-          item['musicResponsiveListItemRenderer'] != null
-        ).toList();
+        final songItems = contents
+            .where((item) => item['musicResponsiveListItemRenderer'] != null)
+            .toList();
         if (songItems.isNotEmpty) {
           parseSongs(songItems, results);
         }
@@ -610,7 +636,10 @@ Future<List<YtMusicResult>> searchSongsOnly(String query, {String? continuationT
 }
 
 // Función para buscar con múltiples páginas
-Future<List<YtMusicResult>> searchSongsWithPagination(String query, {int maxPages = 3}) async {
+Future<List<YtMusicResult>> searchSongsWithPagination(
+  String query, {
+  int maxPages = 3,
+}) async {
   final allResults = <YtMusicResult>[];
   String? continuationToken;
   int currentPage = 0;
@@ -640,7 +669,7 @@ Future<List<YtMusicResult>> searchSongsWithPagination(String query, {int maxPage
         'contents',
         0,
         'musicShelfRenderer',
-        'contents'
+        'contents',
       ]);
       if (contents is List) {
         parseSongs(contents, results);
@@ -655,27 +684,28 @@ Future<List<YtMusicResult>> searchSongsWithPagination(String query, {int maxPage
         'sectionListRenderer',
         'contents',
         0,
-        'musicShelfRenderer'
+        'musicShelfRenderer',
       ]);
       if (shelfRenderer != null && shelfRenderer['continuations'] != null) {
-        nextToken = shelfRenderer['continuations'][0]['nextContinuationData']['continuation'];
+        nextToken =
+            shelfRenderer['continuations'][0]['nextContinuationData']['continuation'];
       }
     } else {
       var contents = nav(response, [
         'onResponseReceivedActions',
         0,
         'appendContinuationItemsAction',
-        'continuationItems'
+        'continuationItems',
       ]);
       contents ??= nav(response, [
         'continuationContents',
         'musicShelfContinuation',
-        'contents'
+        'contents',
       ]);
       if (contents is List) {
-        final songItems = contents.where((item) => 
-          item['musicResponsiveListItemRenderer'] != null
-        ).toList();
+        final songItems = contents
+            .where((item) => item['musicResponsiveListItemRenderer'] != null)
+            .toList();
         if (songItems.isNotEmpty) {
           parseSongs(songItems, results);
         }
@@ -691,7 +721,7 @@ Future<List<YtMusicResult>> searchSongsWithPagination(String query, {int maxPage
           'continuationItemRenderer',
           'continuationEndpoint',
           'continuationCommand',
-          'token'
+          'token',
         ]);
         nextTokenTry ??= nav(response, [
           'continuationContents',
@@ -699,7 +729,7 @@ Future<List<YtMusicResult>> searchSongsWithPagination(String query, {int maxPage
           'continuations',
           0,
           'nextContinuationData',
-          'continuation'
+          'continuation',
         ]);
         nextToken = nextTokenTry;
       } catch (e) {
@@ -736,7 +766,7 @@ Future<List<YtMusicResult>> searchSongsWithMoreResults(String query) async {
     'tabRenderer',
     'content',
     'sectionListRenderer',
-    'contents'
+    'contents',
   ]);
 
   if (contents is List) {
@@ -768,7 +798,7 @@ String? getContinuationToken(Map<String, dynamic> response) {
       'sectionListRenderer',
       'contents',
       0,
-      'musicShelfRenderer'
+      'musicShelfRenderer',
     ]);
 
     if (shelfRenderer != null && shelfRenderer['continuations'] != null) {
@@ -785,24 +815,26 @@ Future<List<String>> getSearchSuggestion(String queryStr) async {
   try {
     final data = Map<String, dynamic>.from(ytServiceContext);
     data['input'] = queryStr;
-    
+
     final response = await sendRequest("music/get_search_suggestions", data);
     final responseData = response.data;
-    
-    final suggestions = nav(responseData, [
-      'contents', 
-      0, 
-      'searchSuggestionsSectionRenderer', 
-      'contents'
-    ]) ?? [];
-    
+
+    final suggestions =
+        nav(responseData, [
+          'contents',
+          0,
+          'searchSuggestionsSectionRenderer',
+          'contents',
+        ]) ??
+        [];
+
     return suggestions
         .map<String?>((item) {
           return nav(item, [
             'searchSuggestionRenderer',
             'navigationEndpoint',
             'searchEndpoint',
-            'query'
+            'query',
           ])?.toString();
         })
         .whereType<String>()
@@ -812,7 +844,10 @@ Future<List<String>> getSearchSuggestion(String queryStr) async {
   }
 }
 
-Future<List<YtMusicResult>> searchVideosWithPagination(String query, {int maxPages = 3}) async {
+Future<List<YtMusicResult>> searchVideosWithPagination(
+  String query, {
+  int maxPages = 3,
+}) async {
   final allResults = <YtMusicResult>[];
   String? continuationToken;
   int currentPage = 0;
@@ -853,20 +888,23 @@ Future<List<YtMusicResult>> searchVideosWithPagination(String query, {int maxPag
               'watchEndpoint',
               'watchEndpointMusicSupportedConfigs',
               'watchEndpointMusicConfig',
-              'musicVideoType'
+              'musicVideoType',
             ]);
             if (videoType == 'MUSIC_VIDEO_TYPE_MV' ||
                 videoType == 'MUSIC_VIDEO_TYPE_OMV' ||
                 videoType == 'MUSIC_VIDEO_TYPE_UGC') {
-              final title = renderer['flexColumns']?[0]
-                  ?['musicResponsiveListItemFlexColumnRenderer']?['text']?['runs']?[0]?['text'];
-              final subtitleRuns = renderer['flexColumns']?[1]
-                  ?['musicResponsiveListItemFlexColumnRenderer']?['text']?['runs'];
+              final title =
+                  renderer['flexColumns']?[0]?['musicResponsiveListItemFlexColumnRenderer']?['text']?['runs']?[0]?['text'];
+              final subtitleRuns =
+                  renderer['flexColumns']?[1]?['musicResponsiveListItemFlexColumnRenderer']?['text']?['runs'];
               String? artist;
               if (subtitleRuns is List) {
                 for (var run in subtitleRuns) {
-                  if (run['navigationEndpoint']?['browseEndpoint']?['browseEndpointContextSupportedConfigs'] != null ||
-                      run['navigationEndpoint']?['browseEndpoint']?['browseId']?.startsWith('UC') == true) {
+                  if (run['navigationEndpoint']?['browseEndpoint']?['browseEndpointContextSupportedConfigs'] !=
+                          null ||
+                      run['navigationEndpoint']?['browseEndpoint']?['browseId']
+                              ?.startsWith('UC') ==
+                          true) {
                     artist = run['text'];
                     break;
                   }
@@ -877,11 +915,13 @@ Future<List<YtMusicResult>> searchVideosWithPagination(String query, {int maxPag
                 )['text'];
               }
               String? thumbUrl;
-              final thumbnails = renderer['thumbnail']?['musicThumbnailRenderer']?['thumbnail']?['thumbnails'];
+              final thumbnails =
+                  renderer['thumbnail']?['musicThumbnailRenderer']?['thumbnail']?['thumbnails'];
               if (thumbnails is List && thumbnails.isNotEmpty) {
                 thumbUrl = thumbnails.last['url'];
               }
-              final videoId = renderer['overlay']?['musicItemThumbnailOverlayRenderer']?['content']?['musicPlayButtonRenderer']?['playNavigationEndpoint']?['watchEndpoint']?['videoId'];
+              final videoId =
+                  renderer['overlay']?['musicItemThumbnailOverlayRenderer']?['content']?['musicPlayButtonRenderer']?['playNavigationEndpoint']?['watchEndpoint']?['videoId'];
               if (videoId != null && title != null) {
                 results.add(
                   YtMusicResult(
@@ -910,16 +950,14 @@ Future<List<YtMusicResult>> searchVideosWithPagination(String query, {int maxPag
         'musicShelfRenderer',
       ]);
       if (shelfRenderer != null && shelfRenderer['continuations'] != null) {
-        continuationToken = shelfRenderer['continuations'][0]['nextContinuationData']['continuation'];
+        continuationToken =
+            shelfRenderer['continuations'][0]['nextContinuationData']['continuation'];
       } else {
         continuationToken = null;
       }
     } else {
       // Continuaciones
-      final data = {
-        ...ytServiceContext,
-        'continuation': continuationToken,
-      };
+      final data = {...ytServiceContext, 'continuation': continuationToken};
       final response = (await sendRequest("search", data)).data;
       // Intenta ambas rutas, igual que en canciones
       var contents = nav(response, [
@@ -934,7 +972,9 @@ Future<List<YtMusicResult>> searchVideosWithPagination(String query, {int maxPag
         'contents',
       ]);
       if (contents is List) {
-        final videoItems = contents.where((item) => item['musicResponsiveListItemRenderer'] != null).toList();
+        final videoItems = contents
+            .where((item) => item['musicResponsiveListItemRenderer'] != null)
+            .toList();
         for (var item in videoItems) {
           final renderer = item['musicResponsiveListItemRenderer'];
           if (renderer != null) {
@@ -947,20 +987,23 @@ Future<List<YtMusicResult>> searchVideosWithPagination(String query, {int maxPag
               'watchEndpoint',
               'watchEndpointMusicSupportedConfigs',
               'watchEndpointMusicConfig',
-              'musicVideoType'
+              'musicVideoType',
             ]);
             if (videoType == 'MUSIC_VIDEO_TYPE_MV' ||
                 videoType == 'MUSIC_VIDEO_TYPE_OMV' ||
                 videoType == 'MUSIC_VIDEO_TYPE_UGC') {
-              final title = renderer['flexColumns']?[0]
-                  ?['musicResponsiveListItemFlexColumnRenderer']?['text']?['runs']?[0]?['text'];
-              final subtitleRuns = renderer['flexColumns']?[1]
-                  ?['musicResponsiveListItemFlexColumnRenderer']?['text']?['runs'];
+              final title =
+                  renderer['flexColumns']?[0]?['musicResponsiveListItemFlexColumnRenderer']?['text']?['runs']?[0]?['text'];
+              final subtitleRuns =
+                  renderer['flexColumns']?[1]?['musicResponsiveListItemFlexColumnRenderer']?['text']?['runs'];
               String? artist;
               if (subtitleRuns is List) {
                 for (var run in subtitleRuns) {
-                  if (run['navigationEndpoint']?['browseEndpoint']?['browseEndpointContextSupportedConfigs'] != null ||
-                      run['navigationEndpoint']?['browseEndpoint']?['browseId']?.startsWith('UC') == true) {
+                  if (run['navigationEndpoint']?['browseEndpoint']?['browseEndpointContextSupportedConfigs'] !=
+                          null ||
+                      run['navigationEndpoint']?['browseEndpoint']?['browseId']
+                              ?.startsWith('UC') ==
+                          true) {
                     artist = run['text'];
                     break;
                   }
@@ -971,11 +1014,13 @@ Future<List<YtMusicResult>> searchVideosWithPagination(String query, {int maxPag
                 )['text'];
               }
               String? thumbUrl;
-              final thumbnails = renderer['thumbnail']?['musicThumbnailRenderer']?['thumbnail']?['thumbnails'];
+              final thumbnails =
+                  renderer['thumbnail']?['musicThumbnailRenderer']?['thumbnail']?['thumbnails'];
               if (thumbnails is List && thumbnails.isNotEmpty) {
                 thumbUrl = thumbnails.last['url'];
               }
-              final videoId = renderer['overlay']?['musicItemThumbnailOverlayRenderer']?['content']?['musicPlayButtonRenderer']?['playNavigationEndpoint']?['watchEndpoint']?['videoId'];
+              final videoId =
+                  renderer['overlay']?['musicItemThumbnailOverlayRenderer']?['content']?['musicPlayButtonRenderer']?['playNavigationEndpoint']?['watchEndpoint']?['videoId'];
               if (videoId != null && title != null) {
                 results.add(
                   YtMusicResult(
@@ -1011,7 +1056,7 @@ Future<List<YtMusicResult>> searchVideosWithPagination(String query, {int maxPag
           'continuations',
           0,
           'nextContinuationData',
-          'continuation'
+          'continuation',
         ]);
         continuationToken = nextToken;
       } catch (e) {
@@ -1026,85 +1071,393 @@ Future<List<YtMusicResult>> searchVideosWithPagination(String query, {int maxPag
   return allResults;
 }
 
-Future<List<Map<String, String>>> searchAlbumsOnly(String query) async {
-  final data = {
-    ...ytServiceContext,
-    'query': query,
-    // Puedes probar con o sin el filtro 'albums'
-    // 'params': getSearchParams('albums', null, false),
-  };
-  final response = (await sendRequest("search", data)).data;
-  final results = <Map<String, String>>[];
+// Función mejorada para buscar álbumes con paginación
+Future<List<Map<String, String>>> searchAlbumsWithPagination(
+  String query, {
+  int maxPages = 3,
+}) async {
+  final allResults = <Map<String, String>>[];
+  String? continuationToken;
+  int currentPage = 0;
 
-  final sections = nav(response, [
-    'contents',
-    'tabbedSearchResultsRenderer',
-    'tabs',
-    0,
-    'tabRenderer',
-    'content',
-    'sectionListRenderer',
-    'contents'
-  ]);
-  if (sections is List) {
-    for (var section in sections) {
-      // Busca cualquier shelf
-      final shelf = section['musicShelfRenderer'];
-      if (shelf != null && shelf['contents'] is List) {
-        for (var item in shelf['contents']) {
-          final renderer = item['musicResponsiveListItemRenderer'];
-          if (renderer != null) {
-            // Extraer browseId de cualquier menú
-            String? browseId;
-            final menuItems = renderer['menu']?['menuRenderer']?['items'];
-            if (menuItems is List) {
-              for (var menuItem in menuItems) {
-                final endpoint = menuItem['menuNavigationItemRenderer']?['navigationEndpoint']?['browseEndpoint'];
-                if (endpoint != null && endpoint['browseId'] != null && endpoint['browseId'].toString().startsWith('MPRE')) {
-                  browseId = endpoint['browseId'];
-                  break;
+  while (currentPage < maxPages) {
+    final data = {
+      ...ytServiceContext,
+      'query': query,
+      'params': getSearchParams('albums', null, false),
+    };
+
+    if (continuationToken != null) {
+      data['continuation'] = continuationToken;
+    }
+
+    try {
+      final response = (await sendRequest("search", data)).data;
+      final results = <Map<String, String>>[];
+      String? nextToken;
+
+      if (continuationToken == null) {
+        // Primera búsqueda
+        final sections = nav(response, [
+          'contents',
+          'tabbedSearchResultsRenderer',
+          'tabs',
+          0,
+          'tabRenderer',
+          'content',
+          'sectionListRenderer',
+          'contents',
+        ]);
+
+        if (sections is List) {
+          for (var section in sections) {
+            final shelf = section['musicShelfRenderer'];
+            if (shelf != null && shelf['contents'] is List) {
+              for (var item in shelf['contents']) {
+                final renderer = item['musicResponsiveListItemRenderer'];
+                if (renderer != null) {
+                  final albumData = _parseAlbumItem(renderer);
+                  if (albumData != null) {
+                    results.add(albumData);
+                  }
                 }
               }
-            }
-            // Si no hay browseId, ignora el item
-            if (browseId == null) continue;
 
-            final title = renderer['flexColumns']?[0]?['musicResponsiveListItemFlexColumnRenderer']?['text']?['runs']?[0]?['text'];
-            final subtitleRuns = renderer['flexColumns']?[1]?['musicResponsiveListItemFlexColumnRenderer']?['text']?['runs'];
-            String? artist;
-            if (subtitleRuns is List) {
-              artist = subtitleRuns.firstWhere(
-                (run) => run['text'] != ' • ',
-                orElse: () => {'text': null},
-              )['text'];
+              // Obtener token de continuación
+              if (shelf['continuations'] != null) {
+                nextToken =
+                    shelf['continuations'][0]['nextContinuationData']['continuation'];
+              }
             }
-            String? thumbUrl;
-            final thumbnails = renderer['thumbnail']?['musicThumbnailRenderer']?['thumbnail']?['thumbnails'];
-            if (thumbnails is List && thumbnails.isNotEmpty) {
-              thumbUrl = thumbnails.last['url'];
+          }
+        }
+      } else {
+        // Continuaciones
+        var contents = nav(response, [
+          'onResponseReceivedActions',
+          0,
+          'appendContinuationItemsAction',
+          'continuationItems',
+        ]);
+
+        contents ??= nav(response, [
+          'continuationContents',
+          'musicShelfContinuation',
+          'contents',
+        ]);
+
+        if (contents is List) {
+          final albumItems = contents
+              .where((item) => item['musicResponsiveListItemRenderer'] != null)
+              .toList();
+
+          for (var item in albumItems) {
+            final renderer = item['musicResponsiveListItemRenderer'];
+            if (renderer != null) {
+              final albumData = _parseAlbumItem(renderer);
+              if (albumData != null) {
+                results.add(albumData);
+              }
             }
-            results.add({
-              'title': title,
-              'artist': artist ?? '',
-              'thumbUrl': thumbUrl ?? '',
-              'browseId': browseId,
-            });
+          }
+        }
+
+        // Obtener siguiente token
+        try {
+          var nextTokenTry = nav(response, [
+            'onResponseReceivedActions',
+            0,
+            'appendContinuationItemsAction',
+            'continuationItems',
+          ]);
+
+          // Buscar el token en el último elemento si existe
+          if (nextTokenTry is List && nextTokenTry.isNotEmpty) {
+            final lastItem = nextTokenTry.last;
+            if (lastItem is Map &&
+                lastItem.containsKey('continuationItemRenderer')) {
+              nextTokenTry = nav(lastItem, [
+                'continuationItemRenderer',
+                'continuationEndpoint',
+                'continuationCommand',
+                'token',
+              ]);
+            } else {
+              nextTokenTry = null;
+            }
+          }
+
+          nextTokenTry ??= nav(response, [
+            'continuationContents',
+            'musicShelfContinuation',
+            'continuations',
+            0,
+            'nextContinuationData',
+            'continuation',
+          ]);
+          nextToken = nextTokenTry;
+        } catch (e) {
+          nextToken = null;
+        }
+      }
+
+      allResults.addAll(results);
+
+      if (results.isEmpty || nextToken == null) {
+        break;
+      }
+
+      continuationToken = nextToken;
+      currentPage++;
+    } catch (e) {
+      // print('Error en búsqueda de álbumes: $e');
+      break;
+    }
+  }
+
+  return allResults;
+}
+
+// Función auxiliar para parsear un item de álbum - CORREGIDA
+Map<String, String>? _parseAlbumItem(Map<String, dynamic> renderer) {
+  // Extraer browseId del álbum - SOLO buscar IDs que empiecen con MPRE
+  String? browseId;
+
+  // PRIMERO: Buscar en el título (navigationEndpoint) - Esta es la fuente más confiable
+  browseId = nav(renderer, [
+    'flexColumns',
+    0,
+    'musicResponsiveListItemFlexColumnRenderer',
+    'text',
+    'runs',
+    0,
+    'navigationEndpoint',
+    'browseEndpoint',
+    'browseId',
+  ])?.toString();
+
+  // Verificar que sea un ID de álbum válido (MPRE)
+  if (browseId != null && !browseId.startsWith('MPRE')) {
+    browseId = null;
+  }
+
+  // SEGUNDO: Si no encontramos en el título, buscar en el menú
+  if (browseId == null) {
+    final menuItems = nav(renderer, ['menu', 'menuRenderer', 'items']);
+    if (menuItems is List) {
+      for (var menuItem in menuItems) {
+        final endpoint =
+            menuItem['menuNavigationItemRenderer']?['navigationEndpoint']?['browseEndpoint'];
+        if (endpoint != null && endpoint['browseId'] != null) {
+          final id = endpoint['browseId'].toString();
+          if (id.startsWith('MPRE')) {
+            browseId = id;
+            break;
           }
         }
       }
     }
   }
-  return results;
-}
 
-Future<List<YtMusicResult>> getAlbumSongs(String browseId) async {
-  final data = {
-    ...ytServiceContext,
+  // TERCERO: Buscar audioPlaylistId para obtener el MPRE después
+  String? audioPlaylistId;
+  if (browseId == null) {
+    // Buscar en overlay el playlistId
+    audioPlaylistId = nav(renderer, [
+      'overlay',
+      'musicItemThumbnailOverlayRenderer',
+      'content',
+      'musicPlayButtonRenderer',
+      'playNavigationEndpoint',
+      'watchPlaylistEndpoint',
+      'playlistId',
+    ])?.toString();
+
+    // También buscar en el menú
+    if (audioPlaylistId == null) {
+      final menuItems = nav(renderer, ['menu', 'menuRenderer', 'items']);
+      if (menuItems is List) {
+        for (var menuItem in menuItems) {
+          // Buscar en watchPlaylistEndpoint
+          final watchEndpoint =
+              menuItem['menuNavigationItemRenderer']?['navigationEndpoint']?['watchPlaylistEndpoint'];
+          if (watchEndpoint != null && watchEndpoint['playlistId'] != null) {
+            audioPlaylistId = watchEndpoint['playlistId'].toString();
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  // Si solo tenemos audioPlaylistId, usarlo como browseId temporal
+  // getAlbumSongs lo convertirá después
+  if (browseId == null && audioPlaylistId != null) {
+    browseId = audioPlaylistId;
+  }
+
+  if (browseId == null) return null;
+
+  // Extraer título
+  final title = nav(renderer, [
+    'flexColumns',
+    0,
+    'musicResponsiveListItemFlexColumnRenderer',
+    'text',
+    'runs',
+    0,
+    'text',
+  ]);
+
+  if (title == null) return null;
+
+  // Extraer artista y año
+  final subtitleRuns = nav(renderer, [
+    'flexColumns',
+    1,
+    'musicResponsiveListItemFlexColumnRenderer',
+    'text',
+    'runs',
+  ]);
+
+  String? artist;
+  String? year;
+  String? albumType;
+
+  if (subtitleRuns is List) {
+    for (var i = 0; i < subtitleRuns.length; i++) {
+      final text = subtitleRuns[i]['text']?.toString();
+      if (text == null || text == ' • ') continue;
+
+      // El primer elemento suele ser el tipo (Album, Single, EP)
+      if (albumType == null &&
+          (text == 'Album' ||
+              text == 'Single' ||
+              text == 'EP' ||
+              text == 'Álbum' ||
+              text == 'Sencillo')) {
+        albumType = text;
+        continue;
+      }
+
+      // Si parece un año (4 dígitos)
+      if (RegExp(r'^\d{4}$').hasMatch(text)) {
+        year = text;
+        continue;
+      }
+
+      // Lo demás probablemente es el artista
+      if (artist == null && text.isNotEmpty) {
+        artist = text;
+      }
+    }
+  }
+
+  // Extraer thumbnail
+  String? thumbUrl;
+  final thumbnails = nav(renderer, [
+    'thumbnail',
+    'musicThumbnailRenderer',
+    'thumbnail',
+    'thumbnails',
+  ]);
+  if (thumbnails is List && thumbnails.isNotEmpty) {
+    thumbUrl = thumbnails.last['url'];
+  }
+
+  return {
+    'title': title,
+    'artist': artist ?? '',
+    'year': year ?? '',
+    'albumType': albumType ?? 'Album',
+    'thumbUrl': thumbUrl ?? '',
     'browseId': browseId,
   };
+}
+
+// Función simple para compatibilidad (usa la versión con paginación)
+Future<List<Map<String, String>>> searchAlbumsOnly(String query) async {
+  return await searchAlbumsWithPagination(query, maxPages: 3);
+}
+
+// Función getAlbumSongs CORREGIDA para manejar diferentes tipos de IDs
+Future<List<YtMusicResult>> getAlbumSongs(String browseId) async {
+  // Si el browseId es un playlist ID (OLAK5uy...), convertirlo a MPRE
+  String actualBrowseId = browseId;
+  if (browseId.contains('OLAK5uy') ||
+      browseId.startsWith('OLAK') ||
+      browseId.startsWith('PL')) {
+    try {
+      actualBrowseId = await getAlbumBrowseId(browseId);
+    } catch (e) {
+      // Si falla, intentar con el ID original
+      actualBrowseId = browseId;
+    }
+  }
+
+  final data = {...ytServiceContext, 'browseId': actualBrowseId};
   final response = (await sendRequest("browse", data)).data;
 
-  // Intenta ambas rutas posibles
+  // ============================================
+  // PASO 1: Extraer el artista del HEADER del álbum
+  // ============================================
+  String? albumArtist;
+  String? albumThumbUrl;
+
+  // Intentar obtener el header del álbum (múltiples rutas posibles)
+  var header = nav(response, [
+    'contents',
+    'twoColumnBrowseResultsRenderer',
+    'tabs',
+    0,
+    'tabRenderer',
+    'content',
+    'sectionListRenderer',
+    'contents',
+    0,
+    'musicResponsiveHeaderRenderer',
+  ]);
+  header ??= nav(response, ['header', 'musicDetailHeaderRenderer']);
+
+  if (header != null) {
+    // Extraer artista desde straplineTextOne (ubicación principal del artista del álbum)
+    final straplineRuns = nav(header, ['straplineTextOne', 'runs']);
+    if (straplineRuns is List && straplineRuns.isNotEmpty) {
+      albumArtist = straplineRuns[0]['text'];
+    }
+
+    // Si no está en straplineTextOne, buscar en subtitle (runs a partir del índice 2)
+    if (albumArtist == null) {
+      final subtitleRuns = nav(header, ['subtitle', 'runs']);
+      if (subtitleRuns is List && subtitleRuns.length > 2) {
+        // El artista generalmente está en el índice 2 después del tipo de álbum
+        albumArtist = subtitleRuns[2]['text'];
+      }
+    }
+
+    // Obtener thumbnail del álbum para usarlo como fallback
+    final thumbnails =
+        nav(header, [
+          'thumbnail',
+          'croppedSquareThumbnailRenderer',
+          'thumbnail',
+          'thumbnails',
+        ]) ??
+        nav(header, [
+          'thumbnail',
+          'musicThumbnailRenderer',
+          'thumbnail',
+          'thumbnails',
+        ]);
+
+    if (thumbnails is List && thumbnails.isNotEmpty) {
+      albumThumbUrl = thumbnails.last['url'];
+    }
+  }
+
+  // ============================================
+  // PASO 2: Obtener las canciones del álbum
+  // ============================================
   var shelf = nav(response, [
     'contents',
     'twoColumnBrowseResultsRenderer',
@@ -1129,26 +1482,110 @@ Future<List<YtMusicResult>> getAlbumSongs(String browseId) async {
     'contents',
   ]);
 
+  // Ruta adicional para algunos álbumes
+  shelf ??= nav(response, [
+    'contents',
+    'twoColumnBrowseResultsRenderer',
+    'tabs',
+    0,
+    'tabRenderer',
+    'content',
+    'sectionListRenderer',
+    'contents',
+    0,
+    'musicShelfRenderer',
+    'contents',
+  ]);
+
   final results = <YtMusicResult>[];
   if (shelf is List) {
     for (var item in shelf) {
       final renderer = item['musicResponsiveListItemRenderer'];
       if (renderer != null) {
-        final title = renderer['flexColumns']?[0]?['musicResponsiveListItemFlexColumnRenderer']?['text']?['runs']?[0]?['text'];
-        final subtitleRuns = renderer['flexColumns']?[1]?['musicResponsiveListItemFlexColumnRenderer']?['text']?['runs'];
+        final title =
+            renderer['flexColumns']?[0]?['musicResponsiveListItemFlexColumnRenderer']?['text']?['runs']?[0]?['text'];
+
+        // ============================================
+        // PASO 3: Intentar obtener artista de la canción,
+        //         si no existe, usar el del álbum
+        // ============================================
+        final subtitleRuns =
+            renderer['flexColumns']?[1]?['musicResponsiveListItemFlexColumnRenderer']?['text']?['runs'];
+
         String? artist;
-        if (subtitleRuns is List) {
-          artist = subtitleRuns
-              .where((run) => run['text'] != ' • ')
-              .map((run) => run['text'])
-              .join(', ');
+        if (subtitleRuns is List && subtitleRuns.isNotEmpty) {
+          // Buscar artista en los runs de la canción
+          final artistRuns = subtitleRuns
+              .where((run) => run['text'] != ' • ' && run['text'] != null)
+              .toList();
+
+          if (artistRuns.isNotEmpty) {
+            // Si hay runs con navigationEndpoint hacia un artista, usarlos
+            final artistWithNav = artistRuns.firstWhere(
+              (run) =>
+                  run['navigationEndpoint']?['browseEndpoint']?['browseId']
+                      ?.toString()
+                      .startsWith('UC') ==
+                  true,
+              orElse: () => null,
+            );
+
+            if (artistWithNav != null) {
+              artist = artistWithNav['text'];
+            } else if (artistRuns.first['text'] != null) {
+              // Si no, verificar que el primer run no sea solo información de duración
+              final firstText = artistRuns.first['text'].toString();
+              // Solo usar si no parece ser duración (formato X:XX)
+              if (!RegExp(r'^\d+:\d+$').hasMatch(firstText)) {
+                artist = firstText;
+              }
+            }
+          }
         }
+
+        // FALLBACK: Si no encontramos artista en la canción, usar el del álbum
+        artist ??= albumArtist;
+
+        // Thumbnail: usar el de la canción si existe, si no el del álbum
         String? thumbUrl;
-        final thumbnails = renderer['thumbnail']?['musicThumbnailRenderer']?['thumbnail']?['thumbnails'];
+        final thumbnails =
+            renderer['thumbnail']?['musicThumbnailRenderer']?['thumbnail']?['thumbnails'];
         if (thumbnails is List && thumbnails.isNotEmpty) {
           thumbUrl = thumbnails.last['url'];
         }
-        final videoId = renderer['overlay']?['musicItemThumbnailOverlayRenderer']?['content']?['musicPlayButtonRenderer']?['playNavigationEndpoint']?['watchEndpoint']?['videoId'];
+        thumbUrl ??= albumThumbUrl;
+
+        // Obtener videoId - múltiples ubicaciones
+        String? videoId = nav(renderer, ['playlistItemData', 'videoId']);
+
+        videoId ??= nav(renderer, [
+          'overlay',
+          'musicItemThumbnailOverlayRenderer',
+          'content',
+          'musicPlayButtonRenderer',
+          'playNavigationEndpoint',
+          'watchEndpoint',
+          'videoId',
+        ]);
+
+        // Buscar en flexColumns si aún no tenemos videoId
+        if (videoId == null) {
+          final titleNav = nav(renderer, [
+            'flexColumns',
+            0,
+            'musicResponsiveListItemFlexColumnRenderer',
+            'text',
+            'runs',
+            0,
+            'navigationEndpoint',
+            'watchEndpoint',
+            'videoId',
+          ]);
+          if (titleNav != null) {
+            videoId = titleNav.toString();
+          }
+        }
+
         if (videoId != null && title != null) {
           results.add(
             YtMusicResult(
@@ -1166,7 +1603,10 @@ Future<List<YtMusicResult>> getAlbumSongs(String browseId) async {
 }
 
 // Función mejorada para buscar listas de reproducción con paginación
-Future<List<Map<String, String>>> searchPlaylistsWithPagination(String query, {int maxPages = 3}) async {
+Future<List<Map<String, String>>> searchPlaylistsWithPagination(
+  String query, {
+  int maxPages = 3,
+}) async {
   final allResults = <Map<String, String>>[];
   String? continuationToken;
   int currentPage = 0;
@@ -1197,7 +1637,7 @@ Future<List<Map<String, String>>> searchPlaylistsWithPagination(String query, {i
           'tabRenderer',
           'content',
           'sectionListRenderer',
-          'contents'
+          'contents',
         ]);
 
         if (sections is List) {
@@ -1228,11 +1668,12 @@ Future<List<Map<String, String>>> searchPlaylistsWithPagination(String query, {i
           'sectionListRenderer',
           'contents',
           0,
-          'musicShelfRenderer'
+          'musicShelfRenderer',
         ]);
 
         if (shelfRenderer != null && shelfRenderer['continuations'] != null) {
-          nextToken = shelfRenderer['continuations'][0]['nextContinuationData']['continuation'];
+          nextToken =
+              shelfRenderer['continuations'][0]['nextContinuationData']['continuation'];
         }
       } else {
         // Continuaciones
@@ -1240,19 +1681,19 @@ Future<List<Map<String, String>>> searchPlaylistsWithPagination(String query, {i
           'onResponseReceivedActions',
           0,
           'appendContinuationItemsAction',
-          'continuationItems'
+          'continuationItems',
         ]);
 
         contents ??= nav(response, [
           'continuationContents',
           'musicShelfContinuation',
-          'contents'
+          'contents',
         ]);
 
         if (contents is List) {
-          final playlistItems = contents.where((item) => 
-            item['musicResponsiveListItemRenderer'] != null
-          ).toList();
+          final playlistItems = contents
+              .where((item) => item['musicResponsiveListItemRenderer'] != null)
+              .toList();
 
           for (var item in playlistItems) {
             final renderer = item['musicResponsiveListItemRenderer'];
@@ -1276,7 +1717,7 @@ Future<List<Map<String, String>>> searchPlaylistsWithPagination(String query, {i
             'continuationItemRenderer',
             'continuationEndpoint',
             'continuationCommand',
-            'token'
+            'token',
           ]);
 
           nextToken ??= nav(response, [
@@ -1285,7 +1726,7 @@ Future<List<Map<String, String>>> searchPlaylistsWithPagination(String query, {i
             'continuations',
             0,
             'nextContinuationData',
-            'continuation'
+            'continuation',
           ]);
         } catch (e) {
           nextToken = null;
@@ -1293,11 +1734,11 @@ Future<List<Map<String, String>>> searchPlaylistsWithPagination(String query, {i
       }
 
       allResults.addAll(results);
-      
+
       if (results.isEmpty || nextToken == null) {
         break;
       }
-      
+
       continuationToken = nextToken;
       currentPage++;
     } catch (e) {
@@ -1319,15 +1760,20 @@ Map<String, String>? _parsePlaylistItem(Map<String, dynamic> renderer) {
   // Extraer browseId de los menús (más robusto que la implementación anterior)
   String? browseId;
   final menuItems = nav(renderer, ['menu', 'menuRenderer', 'items']);
-  
+
   if (menuItems is List) {
     for (var menuItem in menuItems) {
-      final endpoint = menuItem['menuNavigationItemRenderer']?['navigationEndpoint']?['browseEndpoint'];
+      final endpoint =
+          menuItem['menuNavigationItemRenderer']?['navigationEndpoint']?['browseEndpoint'];
       if (endpoint != null && endpoint['browseId'] != null) {
         final id = endpoint['browseId'].toString();
         // Aceptar diferentes tipos de IDs de playlist, incluyendo playlists de canales
-        if (id.startsWith('VL') || id.startsWith('PL') || id.startsWith('OL') || 
-            id.startsWith('OLAK') || id.startsWith('OLAD') || id.startsWith('OLAT')) {
+        if (id.startsWith('VL') ||
+            id.startsWith('PL') ||
+            id.startsWith('OL') ||
+            id.startsWith('OLAK') ||
+            id.startsWith('OLAD') ||
+            id.startsWith('OLAT')) {
           browseId = id;
           break;
         }
@@ -1345,7 +1791,7 @@ Map<String, String>? _parsePlaylistItem(Map<String, dynamic> renderer) {
       'musicPlayButtonRenderer',
       'playNavigationEndpoint',
       'watchPlaylistEndpoint',
-      'playlistId'
+      'playlistId',
     ])?.toString();
 
     // O desde navigationEndpoint
@@ -1358,20 +1804,22 @@ Map<String, String>? _parsePlaylistItem(Map<String, dynamic> renderer) {
       0,
       'navigationEndpoint',
       'browseEndpoint',
-      'browseId'
+      'browseId',
     ])?.toString();
   }
 
   if (browseId == null) return null;
 
   // Extraer título
-  final title = renderer['flexColumns']?[0]?['musicResponsiveListItemFlexColumnRenderer']?['text']?['runs']?[0]?['text'];
+  final title =
+      renderer['flexColumns']?[0]?['musicResponsiveListItemFlexColumnRenderer']?['text']?['runs']?[0]?['text'];
   if (title == null) return null;
 
   // Extraer número de elementos
-  final subtitleRuns = renderer['flexColumns']?[1]?['musicResponsiveListItemFlexColumnRenderer']?['text']?['runs'];
+  final subtitleRuns =
+      renderer['flexColumns']?[1]?['musicResponsiveListItemFlexColumnRenderer']?['text']?['runs'];
   String? itemCount;
-  
+
   if (subtitleRuns is List) {
     // Buscar el número de elementos (generalmente el último run numérico)
     for (var i = subtitleRuns.length - 1; i >= 0; i--) {
@@ -1385,7 +1833,8 @@ Map<String, String>? _parsePlaylistItem(Map<String, dynamic> renderer) {
 
   // Extraer thumbnail
   String? thumbUrl;
-  final thumbnails = renderer['thumbnail']?['musicThumbnailRenderer']?['thumbnail']?['thumbnails'];
+  final thumbnails =
+      renderer['thumbnail']?['musicThumbnailRenderer']?['thumbnail']?['thumbnails'];
   if (thumbnails is List && thumbnails.isNotEmpty) {
     thumbUrl = thumbnails.last['url'];
   }
@@ -1399,17 +1848,22 @@ Map<String, String>? _parsePlaylistItem(Map<String, dynamic> renderer) {
 }
 
 // Función principal mejorada para obtener canciones de una lista de reproducción
-Future<List<YtMusicResult>> getPlaylistSongs(String playlistId, {int? limit}) async {
+Future<List<YtMusicResult>> getPlaylistSongs(
+  String playlistId, {
+  int? limit,
+}) async {
   String browseId;
-  
+
   // Manejar diferentes tipos de IDs de playlist
   if (playlistId.startsWith("VL")) {
     browseId = playlistId;
-  } else if (playlistId.startsWith("OLAK") || playlistId.startsWith("OLAD") || 
-             playlistId.startsWith("OLAT") || playlistId.startsWith("OL")) {
+  } else if (playlistId.startsWith("OLAK") ||
+      playlistId.startsWith("OLAD") ||
+      playlistId.startsWith("OLAT") ||
+      playlistId.startsWith("OL")) {
     // Para playlists de canales, usar el ID tal como está
     browseId = playlistId;
-    
+
     // Si es un OLAK5uy, intentar obtener el browseId real del álbum
     if (playlistId.contains("OLAK5uy")) {
       try {
@@ -1423,11 +1877,8 @@ Future<List<YtMusicResult>> getPlaylistSongs(String playlistId, {int? limit}) as
     // Para otros tipos de playlist, agregar prefijo VL
     browseId = "VL$playlistId";
   }
-  
-  final data = {
-    ...ytServiceContext,
-    'browseId': browseId,
-  };
+
+  final data = {...ytServiceContext, 'browseId': browseId};
 
   try {
     // print('🎵 Iniciando obtención de canciones para playlist: $playlistId');
@@ -1437,7 +1888,7 @@ Future<List<YtMusicResult>> getPlaylistSongs(String playlistId, {int? limit}) as
     // Buscar las canciones en diferentes ubicaciones posibles
     var contents = _findPlaylistContents(response);
     // print('🎵 Contenido inicial encontrado: ${contents?.length ?? 0} items');
-    
+
     if (contents is List) {
       // Parsear las canciones iniciales
       final initialSongs = _parsePlaylistItems(contents);
@@ -1448,9 +1899,9 @@ Future<List<YtMusicResult>> getPlaylistSongs(String playlistId, {int? limit}) as
       if (limit == null || results.length < limit) {
         // print('🎵 Iniciando continuaciones...');
         final continuationSongs = await _getPlaylistContinuationsImproved(
-          response, 
-          data, 
-          limit ?? 999999 // Límite muy alto si no se especifica
+          response,
+          data,
+          limit ?? 999999, // Límite muy alto si no se especifica
         );
         // print('🎵 Canciones de continuaciones obtenidas: ${continuationSongs.length}');
         results.addAll(continuationSongs);
@@ -1477,7 +1928,7 @@ List<dynamic>? _findPlaylistContents(Map<String, dynamic> response) {
     'contents',
     0,
     'musicPlaylistShelfRenderer',
-    'contents'
+    'contents',
   ]);
 
   contents ??= nav(response, [
@@ -1491,7 +1942,7 @@ List<dynamic>? _findPlaylistContents(Map<String, dynamic> response) {
     'contents',
     0,
     'musicPlaylistShelfRenderer',
-    'contents'
+    'contents',
   ]);
 
   // Agregar más rutas de búsqueda
@@ -1503,7 +1954,7 @@ List<dynamic>? _findPlaylistContents(Map<String, dynamic> response) {
     'contents',
     0,
     'musicShelfRenderer',
-    'contents'
+    'contents',
   ]);
 
   contents ??= nav(response, [
@@ -1517,7 +1968,7 @@ List<dynamic>? _findPlaylistContents(Map<String, dynamic> response) {
     'contents',
     0,
     'musicShelfRenderer',
-    'contents'
+    'contents',
   ]);
 
   // Buscar en la estructura de playlist específica
@@ -1532,7 +1983,7 @@ List<dynamic>? _findPlaylistContents(Map<String, dynamic> response) {
     'contents',
     0,
     'musicPlaylistShelfRenderer',
-    'contents'
+    'contents',
   ]);
 
   // Buscar en estructura de single column con tabs
@@ -1547,7 +1998,7 @@ List<dynamic>? _findPlaylistContents(Map<String, dynamic> response) {
     'contents',
     0,
     'musicShelfRenderer',
-    'contents'
+    'contents',
   ]);
 
   // Buscar en estructura de two column con tabs
@@ -1562,7 +2013,7 @@ List<dynamic>? _findPlaylistContents(Map<String, dynamic> response) {
     'contents',
     0,
     'musicShelfRenderer',
-    'contents'
+    'contents',
   ]);
 
   return contents;
@@ -1589,7 +2040,7 @@ List<YtMusicResult> _parsePlaylistItems(List<dynamic> contents) {
 YtMusicResult? _parsePlaylistSong(Map<String, dynamic> renderer) {
   // Obtener videoId de diferentes ubicaciones
   String? videoId = nav(renderer, ['playlistItemData', 'videoId']);
-  
+
   // Si no está en playlistItemData, buscar en el menú
   if (videoId == null && renderer.containsKey('menu')) {
     final menuItems = nav(renderer, ['menu', 'menuRenderer', 'items']);
@@ -1599,7 +2050,7 @@ YtMusicResult? _parsePlaylistSong(Map<String, dynamic> renderer) {
           final menuService = nav(menuItem, [
             'menuServiceItemRenderer',
             'serviceEndpoint',
-            'playlistEditEndpoint'
+            'playlistEditEndpoint',
           ]);
           if (menuService != null) {
             videoId = nav(menuService, ['actions', 0, 'removedVideoId']);
@@ -1618,7 +2069,7 @@ YtMusicResult? _parsePlaylistSong(Map<String, dynamic> renderer) {
       'content',
       'musicPlayButtonRenderer',
       'playNavigationEndpoint',
-      'watchEndpoint'
+      'watchEndpoint',
     ]);
     if (playButton != null) {
       videoId = playButton['videoId'];
@@ -1635,7 +2086,7 @@ YtMusicResult? _parsePlaylistSong(Map<String, dynamic> renderer) {
     'text',
     'runs',
     0,
-    'text'
+    'text',
   ]);
 
   if (title == null || title == 'Song deleted') return null;
@@ -1647,20 +2098,20 @@ YtMusicResult? _parsePlaylistSong(Map<String, dynamic> renderer) {
     1,
     'musicResponsiveListItemFlexColumnRenderer',
     'text',
-    'runs'
+    'runs',
   ]);
 
   if (subtitleRuns is List) {
     // Buscar el primer run que no sea " • " y que tenga navigationEndpoint
     for (var run in subtitleRuns) {
-      if (run['text'] != ' • ' && 
-          run['text'] != null && 
+      if (run['text'] != ' • ' &&
+          run['text'] != null &&
           run['navigationEndpoint'] != null) {
         artist = run['text'];
         break;
       }
     }
-    
+
     // Si no encontramos artista con navigationEndpoint, tomar el primero que no sea " • "
     artist ??= subtitleRuns.firstWhere(
       (run) => run['text'] != ' • ' && run['text'] != null,
@@ -1683,7 +2134,7 @@ YtMusicResult? _parsePlaylistSong(Map<String, dynamic> renderer) {
     'thumbnail',
     'musicThumbnailRenderer',
     'thumbnail',
-    'thumbnails'
+    'thumbnails',
   ]);
   if (thumbnails is List && thumbnails.isNotEmpty) {
     thumbUrl = thumbnails.last['url'];
@@ -1699,47 +2150,49 @@ YtMusicResult? _parsePlaylistSong(Map<String, dynamic> renderer) {
 
 // Función mejorada para obtener continuaciones (inspirada en Harmony Music)
 Future<List<YtMusicResult>> _getPlaylistContinuationsImproved(
-  Map<String, dynamic> response, 
-  Map<String, dynamic> data, 
-  int limit
+  Map<String, dynamic> response,
+  Map<String, dynamic> data,
+  int limit,
 ) async {
   final results = <YtMusicResult>[];
-  
+
   // Buscar token de continuación en múltiples ubicaciones
   String? continuationToken = _getPlaylistContinuationTokenImproved(response);
   // print('🔄 Token de continuación inicial: ${continuationToken != null ? "Encontrado" : "No encontrado"}');
-  
+
   int maxAttempts = 50; // Límite de intentos para obtener todas las canciones
   int attempts = 0;
-  
-  while (continuationToken != null && results.length < limit && attempts < maxAttempts) {
+
+  while (continuationToken != null &&
+      results.length < limit &&
+      attempts < maxAttempts) {
     try {
       // print('🔄 Intento ${attempts + 1}: Obteniendo continuaciones...');
-      final continuationData = {
-        ...data,
-        'continuation': continuationToken,
-      };
-      
-      final continuationResponse = (await sendRequest("browse", continuationData)).data;
-      
+      final continuationData = {...data, 'continuation': continuationToken};
+
+      final continuationResponse = (await sendRequest(
+        "browse",
+        continuationData,
+      )).data;
+
       // Buscar items de continuación en múltiples ubicaciones
       var continuationItems = nav(continuationResponse, [
         'continuationContents',
         'musicPlaylistShelfContinuation',
-        'contents'
+        'contents',
       ]);
-      
+
       continuationItems ??= nav(continuationResponse, [
         'onResponseReceivedActions',
         0,
         'appendContinuationItemsAction',
-        'continuationItems'
+        'continuationItems',
       ]);
 
       continuationItems ??= nav(continuationResponse, [
         'continuationContents',
         'musicShelfContinuation',
-        'contents'
+        'contents',
       ]);
 
       // Buscar en estructura de tabs
@@ -1754,7 +2207,7 @@ Future<List<YtMusicResult>> _getPlaylistContinuationsImproved(
         'contents',
         0,
         'musicPlaylistShelfRenderer',
-        'contents'
+        'contents',
       ]);
 
       continuationItems ??= nav(continuationResponse, [
@@ -1768,18 +2221,20 @@ Future<List<YtMusicResult>> _getPlaylistContinuationsImproved(
         'contents',
         0,
         'musicPlaylistShelfRenderer',
-        'contents'
+        'contents',
       ]);
 
       if (continuationItems != null && continuationItems is List) {
         final songs = _parsePlaylistItems(continuationItems);
         results.addAll(songs);
         // print('🔄 Canciones obtenidas en intento ${attempts + 1}: ${songs.length} (Total: ${results.length})');
-        
+
         // Obtener siguiente token
-        continuationToken = _getPlaylistContinuationTokenImproved(continuationResponse);
+        continuationToken = _getPlaylistContinuationTokenImproved(
+          continuationResponse,
+        );
         // print('🔄 Siguiente token: ${continuationToken != null ? "Encontrado" : "No encontrado"}');
-        
+
         // Si no hay más token, verificar si hay más contenido
         if (continuationToken == null) {
           // print('🔄 No hay más token, verificando si hay más contenido...');
@@ -1792,7 +2247,7 @@ Future<List<YtMusicResult>> _getPlaylistContinuationsImproved(
             'contents',
             0,
             'musicPlaylistShelfRenderer',
-            'contents'
+            'contents',
           ]);
           if (moreItems is List && moreItems.isNotEmpty) {
             // print('🔄 Encontrados ${moreItems.length} items adicionales en la respuesta actual');
@@ -1805,14 +2260,14 @@ Future<List<YtMusicResult>> _getPlaylistContinuationsImproved(
         // print('🔄 No se encontraron items de continuación en intento ${attempts + 1}');
         break;
       }
-      
+
       attempts++;
     } catch (e) {
       // print('Error en continuación de playlist (intento $attempts): $e');
       break;
     }
   }
-  
+
   // print('🔄 Total de continuaciones completadas: $attempts intentos, ${results.length} canciones obtenidas');
   return results;
 }
@@ -1820,7 +2275,7 @@ Future<List<YtMusicResult>> _getPlaylistContinuationsImproved(
 // Función corregida para obtener el token de continuación
 String? _getPlaylistContinuationTokenImproved(Map<String, dynamic> response) {
   // print('🔍 Buscando token de continuación...');
-  
+
   // PRIMERO: Buscar en el último elemento de contents (como hace Harmony)
   var contents = _findPlaylistContents(response);
   if (contents is List && contents.isNotEmpty) {
@@ -1830,7 +2285,7 @@ String? _getPlaylistContinuationTokenImproved(Map<String, dynamic> response) {
         'continuationItemRenderer',
         'continuationEndpoint',
         'continuationCommand',
-        'token'
+        'token',
       ]);
       if (token != null) {
         // print('🔍 Token encontrado en último elemento de contents: Encontrado');
@@ -1852,7 +2307,7 @@ String? _getPlaylistContinuationTokenImproved(Map<String, dynamic> response) {
     'continuations',
     0,
     'nextContinuationData',
-    'continuation'
+    'continuation',
   ]);
   // print('🔍 Token en twoColumnBrowseResultsRenderer->secondaryContents: ${token != null ? "Encontrado" : "No encontrado"}');
 
@@ -1870,7 +2325,7 @@ String? _getPlaylistContinuationTokenImproved(Map<String, dynamic> response) {
     'continuations',
     0,
     'nextContinuationData',
-    'continuation'
+    'continuation',
   ]);
   // print('🔍 Token en singleColumnBrowseResultsRenderer->tabs: ${token != null ? "Encontrado" : "No encontrado"}');
 
@@ -1880,7 +2335,7 @@ String? _getPlaylistContinuationTokenImproved(Map<String, dynamic> response) {
     'continuations',
     0,
     'nextContinuationData',
-    'continuation'
+    'continuation',
   ]);
   // print('🔍 Token en continuationContents->musicPlaylistShelfContinuation: ${token != null ? "Encontrado" : "No encontrado"}');
 
@@ -1899,7 +2354,7 @@ String? _getPlaylistContinuationTokenImproved(Map<String, dynamic> response) {
     'continuations',
     0,
     'nextContinuationData',
-    'continuation'
+    'continuation',
   ]);
   // print('🔍 Token en twoColumnBrowseResultsRenderer->tabs: ${token != null ? "Encontrado" : "No encontrado"}');
 
@@ -1917,7 +2372,7 @@ String? _getPlaylistContinuationTokenImproved(Map<String, dynamic> response) {
     'continuations',
     0,
     'nextContinuationData',
-    'continuation'
+    'continuation',
   ]);
   // print('🔍 Token en singleColumnBrowseResultsRenderer->tabs->musicShelfRenderer: ${token != null ? "Encontrado" : "No encontrado"}');
 
@@ -1931,7 +2386,7 @@ String? _getPlaylistContinuationTokenImproved(Map<String, dynamic> response) {
     'continuationItemRenderer',
     'continuationEndpoint',
     'continuationCommand',
-    'token'
+    'token',
   ]);
   // print('🔍 Token en onResponseReceivedActions: ${token != null ? "Encontrado" : "No encontrado"}');
 
@@ -1942,7 +2397,7 @@ String? _getPlaylistContinuationTokenImproved(Map<String, dynamic> response) {
     'continuations',
     0,
     'nextContinuationData',
-    'continuation'
+    'continuation',
   ]);
   // print('🔍 Token en continuationContents->musicShelfContinuation: ${token != null ? "Encontrado" : "No encontrado"}');
 
@@ -1953,7 +2408,7 @@ String? _getPlaylistContinuationTokenImproved(Map<String, dynamic> response) {
     'continuations',
     0,
     'nextContinuationData',
-    'continuation'
+    'continuation',
   ]);
   // print('🔍 Token en continuationContents->musicPlaylistShelfContinuation: ${token != null ? "Encontrado" : "No encontrado"}');
 
@@ -1962,7 +2417,7 @@ String? _getPlaylistContinuationTokenImproved(Map<String, dynamic> response) {
     'onResponseReceivedActions',
     0,
     'appendContinuationItemsAction',
-    'continuationItems'
+    'continuationItems',
   ]);
   if (continuationItems is List && continuationItems.isNotEmpty) {
     final lastItem = continuationItems.last;
@@ -1971,7 +2426,7 @@ String? _getPlaylistContinuationTokenImproved(Map<String, dynamic> response) {
         'continuationItemRenderer',
         'continuationEndpoint',
         'continuationCommand',
-        'token'
+        'token',
       ]);
       if (continuationToken != null) {
         token = continuationToken;
@@ -1989,10 +2444,12 @@ String? _getPlaylistContinuationTokenImproved(Map<String, dynamic> response) {
 Future<String> getAlbumBrowseId(String audioPlaylistId) async {
   try {
     final dio = Dio();
-    final response = await dio.get("${domain}playlist",
-        options: Options(headers: headers),
-        queryParameters: {"list": audioPlaylistId});
-    
+    final response = await dio.get(
+      "${domain}playlist",
+      options: Options(headers: headers),
+      queryParameters: {"list": audioPlaylistId},
+    );
+
     final reg = RegExp(r'\"MPRE.+?\"');
     final match = reg.firstMatch(response.data.toString());
     if (match != null) {
@@ -2009,15 +2466,17 @@ Future<String> getAlbumBrowseId(String audioPlaylistId) async {
 // Función para obtener información de la playlist (título, autor, etc.)
 Future<Map<String, dynamic>?> getPlaylistInfo(String playlistId) async {
   String browseId;
-  
+
   // Manejar diferentes tipos de IDs de playlist
   if (playlistId.startsWith("VL")) {
     browseId = playlistId;
-  } else if (playlistId.startsWith("OLAK") || playlistId.startsWith("OLAD") || 
-             playlistId.startsWith("OLAT") || playlistId.startsWith("OL")) {
+  } else if (playlistId.startsWith("OLAK") ||
+      playlistId.startsWith("OLAD") ||
+      playlistId.startsWith("OLAT") ||
+      playlistId.startsWith("OL")) {
     // Para playlists de canales, usar el ID tal como está
     browseId = playlistId;
-    
+
     // Si es un OLAK5uy, intentar obtener el browseId real del álbum
     if (playlistId.contains("OLAK5uy")) {
       try {
@@ -2031,18 +2490,15 @@ Future<Map<String, dynamic>?> getPlaylistInfo(String playlistId) async {
     // Para otros tipos de playlist, agregar prefijo VL
     browseId = "VL$playlistId";
   }
-  
-  final data = {
-    ...ytServiceContext,
-    'browseId': browseId,
-  };
+
+  final data = {...ytServiceContext, 'browseId': browseId};
 
   try {
     final response = (await sendRequest("browse", data)).data;
-    
+
     // Buscar header en diferentes ubicaciones
     var header = nav(response, ['header', 'musicDetailHeaderRenderer']);
-    
+
     header ??= nav(response, [
       'contents',
       'twoColumnBrowseResultsRenderer',
@@ -2053,7 +2509,7 @@ Future<Map<String, dynamic>?> getPlaylistInfo(String playlistId) async {
       'sectionListRenderer',
       'contents',
       0,
-      'musicResponsiveHeaderRenderer'
+      'musicResponsiveHeaderRenderer',
     ]);
 
     if (header == null) return null;
@@ -2066,7 +2522,7 @@ Future<Map<String, dynamic>?> getPlaylistInfo(String playlistId) async {
       'description',
       'runs',
       0,
-      'text'
+      'text',
     ]);
 
     // Extraer número de canciones
@@ -2086,7 +2542,7 @@ Future<Map<String, dynamic>?> getPlaylistInfo(String playlistId) async {
       'thumbnail',
       'musicThumbnailRenderer',
       'thumbnail',
-      'thumbnails'
+      'thumbnails',
     ]);
     if (thumbnails is List && thumbnails.isNotEmpty) {
       thumbUrl = thumbnails.last['url'];
@@ -2105,9 +2561,12 @@ Future<Map<String, dynamic>?> getPlaylistInfo(String playlistId) async {
 }
 
 // Función corregida para buscar artistas específicamente
-Future<List<Map<String, dynamic>>> searchArtists(String query, {int limit = 20}) async {
+Future<List<Map<String, dynamic>>> searchArtists(
+  String query, {
+  int limit = 20,
+}) async {
   // print('🚀 Iniciando búsqueda de artistas para: $query');
-  
+
   final data = {
     ...ytServiceContext,
     'query': query,
@@ -2132,7 +2591,7 @@ Future<List<Map<String, dynamic>>> searchArtists(String query, {int limit = 20})
       'tabRenderer',
       'content',
       'sectionListRenderer',
-      'contents'
+      'contents',
     ]);
 
     // print('🔍 Contenidos encontrados: ${contents?.length ?? 0}');
@@ -2147,10 +2606,12 @@ Future<List<Map<String, dynamic>>> searchArtists(String query, {int limit = 20})
             if (artist != null) {
               // Verificar si ya existe un artista con el mismo nombre y browseId
               final existingArtist = results.firstWhere(
-                (existing) => existing['name'] == artist['name'] && existing['browseId'] == artist['browseId'],
+                (existing) =>
+                    existing['name'] == artist['name'] &&
+                    existing['browseId'] == artist['browseId'],
                 orElse: () => {},
               );
-              
+
               // Solo agregar si no existe ya
               if (existingArtist.isEmpty) {
                 // print('🎵 Artista encontrado: ${artist['name']} - BrowseId: ${artist['browseId']} - Thumb: ${artist['thumbUrl'] != null ? 'Sí' : 'No'}');
@@ -2194,7 +2655,7 @@ Map<String, dynamic>? _parseArtistItem(Map<String, dynamic> item) {
     'text',
     'runs',
     0,
-    'text'
+    'text',
   ]);
 
   if (title == null) {
@@ -2206,10 +2667,10 @@ Map<String, dynamic>? _parseArtistItem(Map<String, dynamic> item) {
 
   // Extraer browseId del artista - buscar en múltiples ubicaciones
   String? browseId;
-  
+
   // Debug: imprimir estructura del renderer
   // print('🔍 Estructura del renderer para $title: ${renderer.keys.toList()}');
-  
+
   // Primero intentar desde el título
   browseId = nav(renderer, [
     'flexColumns',
@@ -2220,7 +2681,7 @@ Map<String, dynamic>? _parseArtistItem(Map<String, dynamic> item) {
     0,
     'navigationEndpoint',
     'browseEndpoint',
-    'browseId'
+    'browseId',
   ])?.toString();
 
   // print('🔍 BrowseId desde título: $browseId');
@@ -2235,23 +2696,22 @@ Map<String, dynamic>? _parseArtistItem(Map<String, dynamic> item) {
           'menuNavigationItemRenderer',
           'navigationEndpoint',
           'browseEndpoint',
-          'browseId'
+          'browseId',
         ]);
         if (endpoint != null) {
           browseId = endpoint.toString();
-            // print('🔍 BrowseId encontrado en menú: $browseId');
+          // print('🔍 BrowseId encontrado en menú: $browseId');
           break;
         }
       }
     }
   }
-  
+
   // Buscar en otras ubicaciones posibles
 
   // Intentar en la estructura completa del renderer si browseId sigue siendo null
   browseId ??= _findObjectByKey(renderer, 'browseId')?.toString();
   // print('🔍 BrowseId desde búsqueda recursiva: $browseId');
-
 
   // Extraer información adicional (suscriptores, etc.)
   String? subscribers;
@@ -2260,13 +2720,14 @@ Map<String, dynamic>? _parseArtistItem(Map<String, dynamic> item) {
     1,
     'musicResponsiveListItemFlexColumnRenderer',
     'text',
-    'runs'
+    'runs',
   ]);
 
   if (subtitleRuns is List && subtitleRuns.isNotEmpty) {
     for (var run in subtitleRuns) {
       final text = run['text'];
-      if (text != null && (text.contains('subscriber') || text.contains('suscriptor'))) {
+      if (text != null &&
+          (text.contains('subscriber') || text.contains('suscriptor'))) {
         subscribers = text.split(' ')[0];
         break;
       }
@@ -2275,13 +2736,13 @@ Map<String, dynamic>? _parseArtistItem(Map<String, dynamic> item) {
 
   // Extraer thumbnail - buscar en múltiples ubicaciones
   String? thumbUrl;
-  
+
   // Primera ubicación: thumbnail directo
   var thumbnails = nav(renderer, [
     'thumbnail',
     'musicThumbnailRenderer',
     'thumbnail',
-    'thumbnails'
+    'thumbnails',
   ]);
 
   // print('🔍 Thumbnails (musicThumbnailRenderer): ${thumbnails != null ? thumbnails.length : 'null'}');
@@ -2291,7 +2752,7 @@ Map<String, dynamic>? _parseArtistItem(Map<String, dynamic> item) {
     'thumbnail',
     'croppedSquareThumbnailRenderer',
     'thumbnail',
-    'thumbnails'
+    'thumbnails',
   ]);
   // print('🔍 Thumbnails (croppedSquareThumbnailRenderer): ${thumbnails != null ? thumbnails.length : 'null'}');
 
@@ -2299,7 +2760,7 @@ Map<String, dynamic>? _parseArtistItem(Map<String, dynamic> item) {
   if (thumbnails == null) {
     final thumbnail = nav(renderer, ['thumbnail']);
     // print('🔍 Estructura de thumbnail completa: ${thumbnail?.keys.toList()}');
-    
+
     // Intentar diferentes estructuras
     if (thumbnail is Map) {
       for (var key in thumbnail.keys) {

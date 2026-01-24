@@ -1059,16 +1059,16 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                             song.title,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontWeight: isCurrent
-                                  ? FontWeight.bold
-                                  : FontWeight.normal,
-                              color: isCurrent
-                                  ? (isAmoledTheme
+                            style: isCurrent
+                                ? Theme.of(
+                                    context,
+                                  ).textTheme.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                    color: isAmoledTheme
                                         ? Colors.white
-                                        : Theme.of(context).colorScheme.primary)
-                                  : null,
-                            ),
+                                        : Theme.of(context).colorScheme.primary,
+                                  )
+                                : Theme.of(context).textTheme.titleMedium,
                           ),
                           subtitle: Text(
                             song.artist ?? LocaleProvider.tr('unknown_artist'),
@@ -1362,7 +1362,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       song.title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         color: Colors.white,
                         fontWeight: FontWeight.w600,
                         fontSize: 13,
@@ -1523,10 +1523,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                               Text(
                                 song.title,
                                 maxLines: 1,
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                ),
+                                style: Theme.of(context).textTheme.titleMedium,
                                 overflow: TextOverflow.ellipsis,
                               ),
                               const SizedBox(height: 4),
@@ -1839,13 +1836,13 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: isCurrent
-                    ? TextStyle(
+                    ? Theme.of(context).textTheme.titleMedium?.copyWith(
                         color: isAmoledTheme
                             ? Colors.white
                             : Theme.of(context).colorScheme.primary,
                         fontWeight: FontWeight.bold,
                       )
-                    : null,
+                    : Theme.of(context).textTheme.titleMedium,
               ),
             ),
           ],
@@ -2334,10 +2331,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           Text(
                             song.title,
                             maxLines: 1,
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
+                            style: Theme.of(context).textTheme.titleMedium,
                             overflow: TextOverflow.ellipsis,
                           ),
                           const SizedBox(height: 4),
@@ -2669,6 +2663,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                               song.title,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.titleMedium,
                             ),
                             subtitle: Text(
                               _formatArtistWithDuration(song),
@@ -3062,6 +3057,13 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                       : (_selectedPlaylist?['name'] ?? ''),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurface
+                                        .withValues(alpha: 0.9),
+                                  ),
                                 )
                               : TranslatedText(
                                   'playlists',
@@ -3417,25 +3419,24 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                               song.title,
                                               maxLines: 1,
                                               overflow: TextOverflow.ellipsis,
-                                              style: Theme.of(context)
-                                                  .textTheme
-                                                  .titleMedium
-                                                  ?.copyWith(
-                                                    fontWeight: isCurrent
-                                                        ? FontWeight.bold
-                                                        : FontWeight.normal,
-                                                    color: isCurrent
-                                                        ? (isAmoledTheme
+                                              style: isCurrent
+                                                  ? Theme.of(context)
+                                                        .textTheme
+                                                        .titleMedium
+                                                        ?.copyWith(
+                                                          fontWeight:
+                                                              FontWeight.bold,
+                                                          color: isAmoledTheme
                                                               ? Colors.white
                                                               : Theme.of(
                                                                       context,
                                                                     )
                                                                     .colorScheme
-                                                                    .primary)
-                                                        : Theme.of(context)
-                                                              .colorScheme
-                                                              .onSurface,
-                                                  ),
+                                                                    .primary,
+                                                        )
+                                                  : Theme.of(
+                                                      context,
+                                                    ).textTheme.titleMedium,
                                             ),
                                           ),
                                         ],
@@ -3553,13 +3554,9 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                                   Text(
                                                                     song.title,
                                                                     maxLines: 1,
-                                                                    style: const TextStyle(
-                                                                      fontSize:
-                                                                          16,
-                                                                      fontWeight:
-                                                                          FontWeight
-                                                                              .bold,
-                                                                    ),
+                                                                    style: Theme.of(
+                                                                      context,
+                                                                    ).textTheme.titleMedium,
                                                                     overflow:
                                                                         TextOverflow
                                                                             .ellipsis,
@@ -3911,23 +3908,22 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                           song.title,
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .titleMedium
-                                              ?.copyWith(
-                                                fontWeight: isCurrent
-                                                    ? FontWeight.bold
-                                                    : FontWeight.normal,
-                                                color: isCurrent
-                                                    ? (isAmoledTheme
+                                          style: isCurrent
+                                              ? Theme.of(context)
+                                                    .textTheme
+                                                    .titleMedium
+                                                    ?.copyWith(
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                      color: isAmoledTheme
                                                           ? Colors.white
                                                           : Theme.of(context)
                                                                 .colorScheme
-                                                                .primary)
-                                                    : Theme.of(
-                                                        context,
-                                                      ).colorScheme.onSurface,
-                                              ),
+                                                                .primary,
+                                                    )
+                                              : Theme.of(
+                                                  context,
+                                                ).textTheme.titleMedium,
                                         ),
                                       ),
                                     ],
@@ -4019,12 +4015,9 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                               Text(
                                                                 song.title,
                                                                 maxLines: 1,
-                                                                style: const TextStyle(
-                                                                  fontSize: 16,
-                                                                  fontWeight:
-                                                                      FontWeight
-                                                                          .bold,
-                                                                ),
+                                                                style: Theme.of(
+                                                                  context,
+                                                                ).textTheme.titleMedium,
                                                                 overflow:
                                                                     TextOverflow
                                                                         .ellipsis,
@@ -4477,13 +4470,9 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                                   Text(
                                                                     song.title,
                                                                     maxLines: 1,
-                                                                    style: const TextStyle(
-                                                                      fontSize:
-                                                                          16,
-                                                                      fontWeight:
-                                                                          FontWeight
-                                                                              .bold,
-                                                                    ),
+                                                                    style: Theme.of(
+                                                                      context,
+                                                                    ).textTheme.titleMedium,
                                                                     overflow:
                                                                         TextOverflow
                                                                             .ellipsis,
@@ -4937,25 +4926,24 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                 song.title,
                                                 maxLines: 1,
                                                 overflow: TextOverflow.ellipsis,
-                                                style: Theme.of(context)
-                                                    .textTheme
-                                                    .titleMedium
-                                                    ?.copyWith(
-                                                      fontWeight: isCurrent
-                                                          ? FontWeight.bold
-                                                          : FontWeight.normal,
-                                                      color: isCurrent
-                                                          ? (isAmoledTheme
+                                                style: isCurrent
+                                                    ? Theme.of(context)
+                                                          .textTheme
+                                                          .titleMedium
+                                                          ?.copyWith(
+                                                            fontWeight:
+                                                                FontWeight.bold,
+                                                            color: isAmoledTheme
                                                                 ? Colors.white
                                                                 : Theme.of(
                                                                         context,
                                                                       )
                                                                       .colorScheme
-                                                                      .primary)
-                                                          : Theme.of(context)
-                                                                .colorScheme
-                                                                .onSurface,
-                                                    ),
+                                                                      .primary,
+                                                          )
+                                                    : Theme.of(
+                                                        context,
+                                                      ).textTheme.titleMedium,
                                               ),
                                             ),
                                           ],
@@ -5104,12 +5092,9 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                               Text(
                                                                 song.title,
                                                                 maxLines: 1,
-                                                                style: const TextStyle(
-                                                                  fontSize: 16,
-                                                                  fontWeight:
-                                                                      FontWeight
-                                                                          .bold,
-                                                                ),
+                                                                style: Theme.of(
+                                                                  context,
+                                                                ).textTheme.titleMedium,
                                                                 overflow:
                                                                     TextOverflow
                                                                         .ellipsis,
@@ -5561,23 +5546,22 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                             song.title,
                                             maxLines: 1,
                                             overflow: TextOverflow.ellipsis,
-                                            style: Theme.of(context)
-                                                .textTheme
-                                                .titleMedium
-                                                ?.copyWith(
-                                                  fontWeight: isCurrent
-                                                      ? FontWeight.bold
-                                                      : FontWeight.normal,
-                                                  color: isCurrent
-                                                      ? (isAmoledTheme
+                                            style: isCurrent
+                                                ? Theme.of(context)
+                                                      .textTheme
+                                                      .titleMedium
+                                                      ?.copyWith(
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                        color: isAmoledTheme
                                                             ? Colors.white
                                                             : Theme.of(context)
                                                                   .colorScheme
-                                                                  .primary)
-                                                      : Theme.of(
-                                                          context,
-                                                        ).colorScheme.onSurface,
-                                                ),
+                                                                  .primary,
+                                                      )
+                                                : Theme.of(
+                                                    context,
+                                                  ).textTheme.titleMedium,
                                           ),
                                         ),
                                       ],
