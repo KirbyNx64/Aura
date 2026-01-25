@@ -3004,7 +3004,16 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         scrolledUnderElevation: 0,
         leading: (_showingRecents || _showingPlaylistSongs)
             ? (_isSelectingPlaylistSongs
-                  ? null
+                  ? IconButton(
+                      icon: const Icon(Icons.close),
+                      tooltip: LocaleProvider.tr('cancel_selection'),
+                      onPressed: () {
+                        setState(() {
+                          _isSelectingPlaylistSongs = false;
+                          _selectedPlaylistSongIds.clear();
+                        });
+                      },
+                    )
                   : IconButton(
                       constraints: const BoxConstraints(
                         minWidth: 40,
@@ -3182,16 +3191,6 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       });
                     },
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    tooltip: LocaleProvider.tr('cancel_selection'),
-                    onPressed: () {
-                      setState(() {
-                        _isSelectingPlaylistSongs = false;
-                        _selectedPlaylistSongIds.clear();
-                      });
-                    },
-                  ),
                 ] else ...[
                   IconButton(
                     icon: const Icon(
@@ -3342,7 +3341,21 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       return ValueListenableBuilder<MediaItem?>(
                         valueListenable: _immediateMediaItemNotifier,
                         builder: (context, immediateMediaItem, child) {
+                          final isDark =
+                              Theme.of(context).brightness == Brightness.dark;
+                          final cardColor = isDark
+                              ? Theme.of(
+                                  context,
+                                ).colorScheme.onSecondary.withValues(alpha: 0.5)
+                              : Theme.of(context).colorScheme.secondaryContainer
+                                    .withValues(alpha: 0.5);
+
                           return ListView.builder(
+                            padding: const EdgeInsets.only(
+                              left: 16.0,
+                              right: 16.0,
+                              top: 8.0,
+                            ),
                             itemCount: songsToShow.length,
                             itemBuilder: (context, index) {
                               final song = songsToShow[index];
@@ -3360,12 +3373,44 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                   colorSchemeNotifier.value ==
                                   AppColorScheme.system;
 
+                              // Determinar el borderRadius según la posición
+                              final bool isFirst = index == 0;
+                              final bool isLast =
+                                  index == songsToShow.length - 1;
+                              final bool isOnly = songsToShow.length == 1;
+
+                              BorderRadius borderRadius;
+                              if (isOnly) {
+                                borderRadius = BorderRadius.circular(16);
+                              } else if (isFirst) {
+                                borderRadius = const BorderRadius.only(
+                                  topLeft: Radius.circular(16),
+                                  topRight: Radius.circular(16),
+                                  bottomLeft: Radius.circular(4),
+                                  bottomRight: Radius.circular(4),
+                                );
+                              } else if (isLast) {
+                                borderRadius = const BorderRadius.only(
+                                  topLeft: Radius.circular(4),
+                                  topRight: Radius.circular(4),
+                                  bottomLeft: Radius.circular(16),
+                                  bottomRight: Radius.circular(16),
+                                );
+                              } else {
+                                borderRadius = BorderRadius.circular(4);
+                              }
+
+                              Widget listTileWidget;
+
                               // Solo usar ValueListenableBuilder para la canción actual
                               if (isCurrent) {
-                                return ValueListenableBuilder<bool>(
+                                listTileWidget = ValueListenableBuilder<bool>(
                                   valueListenable: _isPlayingNotifier,
                                   builder: (context, playing, child) {
                                     return ListTile(
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: borderRadius,
+                                      ),
                                       leading: ClipRRect(
                                         borderRadius: BorderRadius.circular(8),
                                         child: QueryArtworkWidget(
@@ -3483,12 +3528,6 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                       .colorScheme
                                                       .primaryContainer
                                                       .withValues(alpha: 0.8))
-                                          : null,
-                                      shape: isCurrent
-                                          ? RoundedRectangleBorder(
-                                              borderRadius:
-                                                  BorderRadius.circular(16),
-                                            )
                                           : null,
                                       onTap: () async {
                                         // Precargar la carátula antes de reproducir
@@ -3856,7 +3895,10 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                 );
                               } else {
                                 // Para canciones que no están reproduciéndose, no usar StreamBuilder
-                                return ListTile(
+                                listTileWidget = ListTile(
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: borderRadius,
+                                  ),
                                   leading: ClipRRect(
                                     borderRadius: BorderRadius.circular(8),
                                     child: QueryArtworkWidget(
@@ -4318,6 +4360,28 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                   },
                                 );
                               }
+
+                              // Determinar si es el último para el padding
+                              final bool isLastItem =
+                                  index == songsToShow.length - 1;
+
+                              return Padding(
+                                padding: EdgeInsets.only(
+                                  bottom: isLastItem ? 0 : 4,
+                                ),
+                                child: Card(
+                                  color: cardColor,
+                                  margin: EdgeInsets.zero,
+                                  elevation: 0,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: borderRadius,
+                                  ),
+                                  child: ClipRRect(
+                                    borderRadius: borderRadius,
+                                    child: listTileWidget,
+                                  ),
+                                ),
+                              );
                             },
                           );
                         },
@@ -4363,7 +4427,22 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         return ValueListenableBuilder<MediaItem?>(
                           valueListenable: _immediateMediaItemNotifier,
                           builder: (context, immediateMediaItem, child) {
+                            final isDark =
+                                Theme.of(context).brightness == Brightness.dark;
+                            final cardColor = isDark
+                                ? Theme.of(context).colorScheme.onSecondary
+                                      .withValues(alpha: 0.5)
+                                : Theme.of(context)
+                                      .colorScheme
+                                      .secondaryContainer
+                                      .withValues(alpha: 0.5);
+
                             return ListView.builder(
+                              padding: const EdgeInsets.only(
+                                left: 16.0,
+                                right: 16.0,
+                                top: 8.0,
+                              ),
                               itemCount: songsToShow.length,
                               itemBuilder: (context, index) {
                                 final song = songsToShow[index];
@@ -4380,12 +4459,44 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                 final isSystem =
                                     colorSchemeNotifier.value ==
                                     AppColorScheme.system;
+
+                                // Determinar el borderRadius según la posición
+                                final bool isFirst = index == 0;
+                                final bool isLast =
+                                    index == songsToShow.length - 1;
+                                final bool isOnly = songsToShow.length == 1;
+
+                                BorderRadius borderRadius;
+                                if (isOnly) {
+                                  borderRadius = BorderRadius.circular(16);
+                                } else if (isFirst) {
+                                  borderRadius = const BorderRadius.only(
+                                    topLeft: Radius.circular(16),
+                                    topRight: Radius.circular(16),
+                                    bottomLeft: Radius.circular(4),
+                                    bottomRight: Radius.circular(4),
+                                  );
+                                } else if (isLast) {
+                                  borderRadius = const BorderRadius.only(
+                                    topLeft: Radius.circular(4),
+                                    topRight: Radius.circular(4),
+                                    bottomLeft: Radius.circular(16),
+                                    bottomRight: Radius.circular(16),
+                                  );
+                                } else {
+                                  borderRadius = BorderRadius.circular(4);
+                                }
+
+                                Widget listTileWidget;
                                 // Solo usar ValueListenableBuilder para la canción actual
                                 if (isCurrent) {
-                                  return ValueListenableBuilder<bool>(
+                                  listTileWidget = ValueListenableBuilder<bool>(
                                     valueListenable: _isPlayingNotifier,
                                     builder: (context, playing, child) {
                                       return ListTile(
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: borderRadius,
+                                        ),
                                         onTap: () async {
                                           if (_isSelectingPlaylistSongs) {
                                             _onPlaylistSongSelected(song);
@@ -4991,12 +5102,6 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                         .primaryContainer
                                                         .withValues(alpha: 0.8))
                                             : null,
-                                        shape: isCurrent
-                                            ? RoundedRectangleBorder(
-                                                borderRadius:
-                                                    BorderRadius.circular(16),
-                                              )
-                                            : null,
                                       );
                                     },
                                   );
@@ -5008,7 +5113,10 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                           .value
                                           .playing ??
                                       false;
-                                  return ListTile(
+                                  listTileWidget = ListTile(
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: borderRadius,
+                                    ),
                                     onTap: () async {
                                       if (_isSelectingPlaylistSongs) {
                                         _onPlaylistSongSelected(song);
@@ -5609,15 +5717,30 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                     .primaryContainer
                                                     .withValues(alpha: 0.8))
                                         : null,
-                                    shape: isCurrent
-                                        ? RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(
-                                              16,
-                                            ),
-                                          )
-                                        : null,
                                   );
                                 }
+
+                                // Determinar si es el último para el padding
+                                final bool isLastItem =
+                                    index == songsToShow.length - 1;
+
+                                return Padding(
+                                  padding: EdgeInsets.only(
+                                    bottom: isLastItem ? 0 : 4,
+                                  ),
+                                  child: Card(
+                                    color: cardColor,
+                                    margin: EdgeInsets.zero,
+                                    elevation: 0,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: borderRadius,
+                                    ),
+                                    child: ClipRRect(
+                                      borderRadius: borderRadius,
+                                      child: listTileWidget,
+                                    ),
+                                  ),
+                                );
                               },
                             );
                           },

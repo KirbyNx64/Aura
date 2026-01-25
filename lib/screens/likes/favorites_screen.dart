@@ -1018,8 +1018,9 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     SongModel song,
     bool isCurrent,
     bool playing,
-    bool isAmoledTheme,
-  ) {
+    bool isAmoledTheme, {
+    BorderRadius? borderRadius,
+  }) {
     final isSystem = colorSchemeNotifier.value == AppColorScheme.system;
     return ListTile(
       onLongPress: () {
@@ -1144,8 +1145,8 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                     context,
                   ).colorScheme.primaryContainer.withValues(alpha: 0.8))
           : null,
-      shape: isCurrent
-          ? RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))
+      shape: borderRadius != null
+          ? RoundedRectangleBorder(borderRadius: borderRadius)
           : null,
       onTap: () => _onSongSelected(song),
     );
@@ -1160,6 +1161,18 @@ class _FavoritesScreenState extends State<FavoritesScreen>
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         scrolledUnderElevation: 0,
+        leading: _isSelecting
+            ? IconButton(
+                icon: const Icon(Icons.close),
+                tooltip: LocaleProvider.tr('cancel_selection'),
+                onPressed: () {
+                  setState(() {
+                    _isSelecting = false;
+                    _selectedSongIds.clear();
+                  });
+                },
+              )
+            : null,
         title: _isSelecting
             ? Text(
                 '${_selectedSongIds.length} ${LocaleProvider.tr('selected')}',
@@ -1209,16 +1222,6 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                     });
                   },
                 ),
-                IconButton(
-                  icon: const Icon(Icons.close),
-                  tooltip: LocaleProvider.tr('cancel_selection'),
-                  onPressed: () {
-                    setState(() {
-                      _isSelecting = false;
-                      _selectedSongIds.clear();
-                    });
-                  },
-                ),
               ]
             : [
                 IconButton(
@@ -1227,7 +1230,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                     size: 28,
                     weight: 600,
                   ),
-                  tooltip: 'Aleatorio',
+                  tooltip: LocaleProvider.tr('shuffle'),
                   onPressed: () {
                     final List<SongModel> songsToShow =
                         _searchController.text.isNotEmpty
@@ -1357,7 +1360,24 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                           child: ValueListenableBuilder<MediaItem?>(
                             valueListenable: _immediateMediaItemNotifier,
                             builder: (context, immediateMediaItem, child) {
+                              final isDark =
+                                  Theme.of(context).brightness ==
+                                  Brightness.dark;
+
+                              final cardColor = isDark
+                                  ? Theme.of(context).colorScheme.onSecondary
+                                        .withValues(alpha: 0.5)
+                                  : Theme.of(context)
+                                        .colorScheme
+                                        .secondaryContainer
+                                        .withValues(alpha: 0.5);
+
                               return ListView.builder(
+                                padding: const EdgeInsets.only(
+                                  left: 16.0,
+                                  right: 16.0,
+                                  top: 8.0,
+                                ),
                                 itemCount: songsToShow.length,
                                 itemBuilder: (context, index) {
                                   final song = songsToShow[index];
@@ -1372,30 +1392,78 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                                       colorSchemeNotifier.value ==
                                       AppColorScheme.amoled;
 
-                                  // Solo usar ValueListenableBuilder para la canción actual
-                                  if (isCurrent) {
-                                    return ValueListenableBuilder<bool>(
-                                      valueListenable: _isPlayingNotifier,
-                                      builder: (context, playing, child) {
-                                        return _buildOptimizedListTile(
-                                          context,
-                                          song,
-                                          isCurrent,
-                                          playing,
-                                          isAmoledTheme,
-                                        );
-                                      },
+                                  // Determinar el borderRadius según la posición
+                                  final bool isFirst = index == 0;
+                                  final bool isLast =
+                                      index == songsToShow.length - 1;
+                                  final bool isOnly = songsToShow.length == 1;
+
+                                  BorderRadius borderRadius;
+                                  if (isOnly) {
+                                    borderRadius = BorderRadius.circular(16);
+                                  } else if (isFirst) {
+                                    borderRadius = const BorderRadius.only(
+                                      topLeft: Radius.circular(16),
+                                      topRight: Radius.circular(16),
+                                      bottomLeft: Radius.circular(4),
+                                      bottomRight: Radius.circular(4),
+                                    );
+                                  } else if (isLast) {
+                                    borderRadius = const BorderRadius.only(
+                                      topLeft: Radius.circular(4),
+                                      topRight: Radius.circular(4),
+                                      bottomLeft: Radius.circular(16),
+                                      bottomRight: Radius.circular(16),
                                     );
                                   } else {
-                                    // Para canciones que no están reproduciéndose, no usar StreamBuilder
-                                    return _buildOptimizedListTile(
+                                    borderRadius = BorderRadius.circular(4);
+                                  }
+
+                                  // Solo usar ValueListenableBuilder para la canción actual
+                                  Widget listTileWidget;
+                                  if (isCurrent) {
+                                    listTileWidget =
+                                        ValueListenableBuilder<bool>(
+                                          valueListenable: _isPlayingNotifier,
+                                          builder: (context, playing, child) {
+                                            return _buildOptimizedListTile(
+                                              context,
+                                              song,
+                                              isCurrent,
+                                              playing,
+                                              isAmoledTheme,
+                                              borderRadius: borderRadius,
+                                            );
+                                          },
+                                        );
+                                  } else {
+                                    listTileWidget = _buildOptimizedListTile(
                                       context,
                                       song,
                                       isCurrent,
-                                      false, // No playing
+                                      false,
                                       isAmoledTheme,
+                                      borderRadius: borderRadius,
                                     );
                                   }
+
+                                  return Padding(
+                                    padding: EdgeInsets.only(
+                                      bottom: isLast ? 0 : 4,
+                                    ),
+                                    child: Card(
+                                      color: cardColor,
+                                      margin: EdgeInsets.zero,
+                                      elevation: 0,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: borderRadius,
+                                      ),
+                                      child: ClipRRect(
+                                        borderRadius: borderRadius,
+                                        child: listTileWidget,
+                                      ),
+                                    ),
+                                  );
                                 },
                               );
                             },

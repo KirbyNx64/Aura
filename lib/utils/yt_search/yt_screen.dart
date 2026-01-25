@@ -1927,12 +1927,6 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                   borderRadius: BorderRadius.circular(8),
                                   color: colorScheme == AppColorScheme.amoled
                                       ? Colors.white
-                                      : Theme.of(context).brightness ==
-                                            Brightness.light
-                                      ? Theme.of(context)
-                                            .colorScheme
-                                            .onPrimaryContainer
-                                            .withValues(alpha: 0.7)
                                       : Theme.of(context).colorScheme.primary,
                                   child: InkWell(
                                     borderRadius: BorderRadius.circular(8),
@@ -1948,13 +1942,6 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                 colorScheme ==
                                                     AppColorScheme.amoled
                                                 ? Colors.black
-                                                : Theme.of(
-                                                        context,
-                                                      ).brightness ==
-                                                      Brightness.light
-                                                ? Theme.of(
-                                                    context,
-                                                  ).colorScheme.onPrimary
                                                 : Theme.of(
                                                     context,
                                                   ).colorScheme.onPrimary,

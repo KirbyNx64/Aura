@@ -400,6 +400,9 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   static const String _kPrefShuffleEnabled = 'playback_shuffle_enabled';
   static const String _kPrefWasPlaying = 'playback_was_playing';
 
+  // Control para evitar pausar automáticamente cuando el usuario selecciona una canción
+  bool _userInitiatedPlayback = false;
+
   MyAudioHandler() {
     _initializePlayerWithEnhancer();
     _init();
@@ -522,7 +525,8 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
             // Es la última canción y no está en modo repeat all, pausar
             // Agregar un pequeño delay para asegurar que el estado se procese correctamente
             Timer(const Duration(milliseconds: 100), () {
-              if (mounted && _player.playing) {
+              // No pausar si el usuario acaba de seleccionar una canción
+              if (mounted && _player.playing && !_userInitiatedPlayback) {
                 // print('❤️ DEBUG: Pausando automáticamente la última canción');
                 unawaited(pause());
               }
@@ -1737,7 +1741,8 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         _pendingArtworkOperations.clear();
         cancelAllArtworkLoads();
 
-        final wasPlaying = _player.playing;
+        // Marcar que el usuario inició la reproducción para evitar que la pausa automática interfiera
+        _userInitiatedPlayback = true;
 
         // Ejecutar el seek de forma asíncrona
         unawaited(() async {
@@ -1745,14 +1750,23 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
             await _player.seek(Duration.zero, index: index);
             _updateSleepTimer();
 
-            if (wasPlaying && !_player.playing) {
+            // Siempre iniciar reproducción cuando el usuario selecciona una canción
+            // Esto corrige el problema de que después de que la última canción termina,
+            // al seleccionar otra canción no se reproducía automáticamente
+            if (!_player.playing) {
               await _player.play();
             }
+
+            // Resetear el flag después de que la reproducción haya comenzado
+            await Future.delayed(const Duration(milliseconds: 200));
+            _userInitiatedPlayback = false;
           } catch (e) {
+            _userInitiatedPlayback = false;
             // Error silencioso
           }
         }());
       } catch (e) {
+        _userInitiatedPlayback = false;
         // Error silencioso
       }
     }

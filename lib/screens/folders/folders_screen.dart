@@ -2833,12 +2833,17 @@ class _FoldersScreenState extends State<FoldersScreen>
               final space = current != null ? 100.0 : 0.0;
               return Padding(
                 padding: EdgeInsets.only(bottom: space),
-                child: ListView.builder(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  itemCount: _folderSearchController.text.isNotEmpty
-                      ? _filteredFolders.length
-                      : songPathsByFolder.length,
-                  itemBuilder: (context, i) {
+                child: Builder(
+                  builder: (context) {
+                    final isDark =
+                        Theme.of(context).brightness == Brightness.dark;
+                    final cardColor = isDark
+                        ? Theme.of(
+                            context,
+                          ).colorScheme.onSecondary.withValues(alpha: 0.5)
+                        : Theme.of(context).colorScheme.secondaryContainer
+                              .withValues(alpha: 0.5);
+
                     final sortedEntries =
                         _folderSearchController.text.isNotEmpty
                               ? _filteredFolders
@@ -2850,95 +2855,155 @@ class _FoldersScreenState extends State<FoldersScreen>
                                   folderDisplayNames[b.key]!.toLowerCase(),
                                 ),
                           );
-                    final entry = sortedEntries[i];
-                    final nombre = folderDisplayNames[entry.key]!;
-                    final canciones = entry.value;
 
-                    // Usar cache para evitar parpadeos
-                    final ignored = _ignoredFoldersCache.contains(entry.key);
-                    final opacity = ignored ? 0.4 : 1.0;
-                    return Opacity(
-                      opacity: opacity,
-                      child: ListTile(
-                        leading: const Icon(Icons.folder, size: 38),
-                        title: Text(
-                          nombre,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.titleMedium,
-                        ),
-                        subtitle: ignored && canciones.isEmpty
-                            ? null
-                            : Text(
-                                '${canciones.length} ${LocaleProvider.tr('songs')}',
-                              ),
-                        onTap: ignored
-                            ? null
-                            : () async {
-                                await _loadSongsForFolder(entry);
-                              },
-                        trailing: PopupMenuButton<String>(
-                          onSelected: (value) async {
-                            if (value == 'rename') {
-                              await _showRenameFolderDialog(
-                                entry.key,
-                                folderDisplayNames[entry.key] ?? '',
-                              );
-                            } else if (value == 'delete') {
-                              await _showDeleteFolderConfirmation(
-                                entry.key,
-                                folderDisplayNames[entry.key] ?? '',
-                              );
-                            } else if (value == 'toggle_ignore') {
-                              if (ignored) {
-                                await _unignoreFolderFlow(entry.key);
-                              } else {
-                                await _ignoreFolderFlow(entry.key);
-                              }
-                            }
-                          },
-                          itemBuilder: (context) => [
-                            PopupMenuItem(
-                              value: 'rename',
-                              child: Row(
-                                children: [
-                                  Icon(Icons.edit_outlined),
-                                  SizedBox(width: 8),
-                                  TranslatedText('rename_folder'),
-                                ],
-                              ),
-                            ),
-                            PopupMenuItem(
-                              value: 'delete',
-                              child: Row(
-                                children: [
-                                  Icon(Icons.delete_outline),
-                                  SizedBox(width: 8),
-                                  TranslatedText('delete_folder'),
-                                ],
-                              ),
-                            ),
-                            PopupMenuItem(
-                              value: 'toggle_ignore',
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    ignored
-                                        ? Icons.visibility
-                                        : Icons.visibility_off,
-                                  ),
-                                  SizedBox(width: 8),
-                                  TranslatedText(
-                                    ignored
-                                        ? 'unignore_folder'
-                                        : 'ignore_folder',
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
+                    return ListView.builder(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: const EdgeInsets.only(
+                        left: 16.0,
+                        right: 16.0,
+                        top: 8.0,
                       ),
+                      itemCount: sortedEntries.length,
+                      itemBuilder: (context, i) {
+                        final entry = sortedEntries[i];
+                        final nombre = folderDisplayNames[entry.key]!;
+                        final canciones = entry.value;
+
+                        // Usar cache para evitar parpadeos
+                        final ignored = _ignoredFoldersCache.contains(
+                          entry.key,
+                        );
+                        final opacity = ignored ? 0.4 : 1.0;
+
+                        // Determinar el borderRadius según la posición
+                        final bool isFirst = i == 0;
+                        final bool isLast = i == sortedEntries.length - 1;
+                        final bool isOnly = sortedEntries.length == 1;
+
+                        BorderRadius borderRadius;
+                        if (isOnly) {
+                          borderRadius = BorderRadius.circular(16);
+                        } else if (isFirst) {
+                          borderRadius = const BorderRadius.only(
+                            topLeft: Radius.circular(16),
+                            topRight: Radius.circular(16),
+                            bottomLeft: Radius.circular(4),
+                            bottomRight: Radius.circular(4),
+                          );
+                        } else if (isLast) {
+                          borderRadius = const BorderRadius.only(
+                            topLeft: Radius.circular(4),
+                            topRight: Radius.circular(4),
+                            bottomLeft: Radius.circular(16),
+                            bottomRight: Radius.circular(16),
+                          );
+                        } else {
+                          borderRadius = BorderRadius.circular(4);
+                        }
+
+                        return Padding(
+                          padding: EdgeInsets.only(bottom: isLast ? 0 : 4),
+                          child: Card(
+                            color: cardColor,
+                            margin: EdgeInsets.zero,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: borderRadius,
+                            ),
+                            child: ClipRRect(
+                              borderRadius: borderRadius,
+                              child: Opacity(
+                                opacity: opacity,
+                                child: ListTile(
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: borderRadius,
+                                  ),
+                                  leading: const Icon(Icons.folder, size: 38),
+                                  title: Text(
+                                    nombre,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.titleMedium,
+                                  ),
+                                  subtitle: ignored && canciones.isEmpty
+                                      ? null
+                                      : Text(
+                                          '${canciones.length} ${LocaleProvider.tr('songs')}',
+                                        ),
+                                  onTap: ignored
+                                      ? null
+                                      : () async {
+                                          await _loadSongsForFolder(entry);
+                                        },
+                                  trailing: PopupMenuButton<String>(
+                                    onSelected: (value) async {
+                                      if (value == 'rename') {
+                                        await _showRenameFolderDialog(
+                                          entry.key,
+                                          folderDisplayNames[entry.key] ?? '',
+                                        );
+                                      } else if (value == 'delete') {
+                                        await _showDeleteFolderConfirmation(
+                                          entry.key,
+                                          folderDisplayNames[entry.key] ?? '',
+                                        );
+                                      } else if (value == 'toggle_ignore') {
+                                        if (ignored) {
+                                          await _unignoreFolderFlow(entry.key);
+                                        } else {
+                                          await _ignoreFolderFlow(entry.key);
+                                        }
+                                      }
+                                    },
+                                    itemBuilder: (context) => [
+                                      PopupMenuItem(
+                                        value: 'rename',
+                                        child: Row(
+                                          children: [
+                                            Icon(Icons.edit_outlined),
+                                            SizedBox(width: 8),
+                                            TranslatedText('rename_folder'),
+                                          ],
+                                        ),
+                                      ),
+                                      PopupMenuItem(
+                                        value: 'delete',
+                                        child: Row(
+                                          children: [
+                                            Icon(Icons.delete_outline),
+                                            SizedBox(width: 8),
+                                            TranslatedText('delete_folder'),
+                                          ],
+                                        ),
+                                      ),
+                                      PopupMenuItem(
+                                        value: 'toggle_ignore',
+                                        child: Row(
+                                          children: [
+                                            Icon(
+                                              ignored
+                                                  ? Icons.visibility
+                                                  : Icons.visibility_off,
+                                            ),
+                                            SizedBox(width: 8),
+                                            TranslatedText(
+                                              ignored
+                                                  ? 'unignore_folder'
+                                                  : 'ignore_folder',
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      },
                     );
                   },
                 ),
@@ -3292,9 +3357,23 @@ class _FoldersScreenState extends State<FoldersScreen>
                     : ValueListenableBuilder<MediaItem?>(
                         valueListenable: _immediateMediaItemNotifier,
                         builder: (context, immediateMediaItem, child) {
+                          final isDark =
+                              Theme.of(context).brightness == Brightness.dark;
+                          final cardColor = isDark
+                              ? Theme.of(
+                                  context,
+                                ).colorScheme.onSecondary.withValues(alpha: 0.5)
+                              : Theme.of(context).colorScheme.secondaryContainer
+                                    .withValues(alpha: 0.5);
+
                           return ListView.builder(
                             controller: _scrollController,
                             physics: const AlwaysScrollableScrollPhysics(),
+                            padding: const EdgeInsets.only(
+                              left: 16.0,
+                              right: 16.0,
+                              top: 8.0,
+                            ),
                             itemCount: _displaySongs.length,
                             itemBuilder: (context, i) {
                               final song = _displaySongs[i];
@@ -3309,30 +3388,60 @@ class _FoldersScreenState extends State<FoldersScreen>
                                 path,
                               );
                               final isIgnoredFuture = isSongIgnored(path);
+
+                              // Determinar el borderRadius según la posición
+                              final bool isFirst = i == 0;
+                              final bool isLast = i == _displaySongs.length - 1;
+                              final bool isOnly = _displaySongs.length == 1;
+
+                              BorderRadius borderRadius;
+                              if (isOnly) {
+                                borderRadius = BorderRadius.circular(16);
+                              } else if (isFirst) {
+                                borderRadius = const BorderRadius.only(
+                                  topLeft: Radius.circular(16),
+                                  topRight: Radius.circular(16),
+                                  bottomLeft: Radius.circular(4),
+                                  bottomRight: Radius.circular(4),
+                                );
+                              } else if (isLast) {
+                                borderRadius = const BorderRadius.only(
+                                  topLeft: Radius.circular(4),
+                                  topRight: Radius.circular(4),
+                                  bottomLeft: Radius.circular(16),
+                                  bottomRight: Radius.circular(16),
+                                );
+                              } else {
+                                borderRadius = BorderRadius.circular(4);
+                              }
+
                               return FutureBuilder<bool>(
                                 future: isIgnoredFuture,
                                 builder: (context, snapshot) {
                                   final isIgnored = snapshot.data ?? false;
 
+                                  Widget listTileWidget;
                                   // Solo usar ValueListenableBuilder para la canción actual
                                   if (isCurrent) {
-                                    return ValueListenableBuilder<bool>(
-                                      valueListenable: _isPlayingNotifier,
-                                      builder: (context, playing, child) {
-                                        return _buildOptimizedListTile(
-                                          context,
-                                          song,
-                                          isCurrent,
-                                          playing,
-                                          isAmoledTheme,
-                                          isIgnored,
-                                          isSelected,
+                                    listTileWidget =
+                                        ValueListenableBuilder<bool>(
+                                          valueListenable: _isPlayingNotifier,
+                                          builder: (context, playing, child) {
+                                            return _buildOptimizedListTile(
+                                              context,
+                                              song,
+                                              isCurrent,
+                                              playing,
+                                              isAmoledTheme,
+                                              isIgnored,
+                                              isSelected,
+                                              borderRadius: borderRadius,
+                                            );
+                                          },
                                         );
-                                      },
-                                    );
                                   } else {
                                     // Para canciones que no están reproduciéndose, no usar StreamBuilder
-                                    return _buildOptimizedListTile(
+                                    listTileWidget = _buildOptimizedListTile(
                                       context,
                                       song,
                                       isCurrent,
@@ -3340,8 +3449,27 @@ class _FoldersScreenState extends State<FoldersScreen>
                                       isAmoledTheme,
                                       isIgnored,
                                       isSelected,
+                                      borderRadius: borderRadius,
                                     );
                                   }
+
+                                  return Padding(
+                                    padding: EdgeInsets.only(
+                                      bottom: isLast ? 0 : 4,
+                                    ),
+                                    child: Card(
+                                      color: cardColor,
+                                      margin: EdgeInsets.zero,
+                                      elevation: 0,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: borderRadius,
+                                      ),
+                                      child: ClipRRect(
+                                        borderRadius: borderRadius,
+                                        child: listTileWidget,
+                                      ),
+                                    ),
+                                  );
                                 },
                               );
                             },
@@ -3363,8 +3491,9 @@ class _FoldersScreenState extends State<FoldersScreen>
     bool playing,
     bool isAmoledTheme,
     bool isIgnored,
-    bool isSelected,
-  ) {
+    bool isSelected, {
+    BorderRadius? borderRadius,
+  }) {
     final path = song.data;
     final opacity = isIgnored ? 0.4 : 1.0;
     final isSystem = colorSchemeNotifier.value == AppColorScheme.system;
@@ -3512,8 +3641,8 @@ class _FoldersScreenState extends State<FoldersScreen>
                       context,
                     ).colorScheme.primaryContainer.withValues(alpha: 0.8))
             : null,
-        shape: isCurrent
-            ? RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))
+        shape: borderRadius != null
+            ? RoundedRectangleBorder(borderRadius: borderRadius)
             : null,
       ),
     );

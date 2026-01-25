@@ -677,11 +677,7 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
                         borderRadius: BorderRadius.circular(8),
                         color: colorScheme == AppColorScheme.amoled
                             ? Colors.white
-                            : Theme.of(context).brightness == Brightness.light
-                            ? Theme.of(context).colorScheme.primary
-                            : colorScheme == AppColorScheme.system
-                            ? Theme.of(context).colorScheme.primary
-                            : Theme.of(context).colorScheme.primaryContainer,
+                            : Theme.of(context).colorScheme.primary,
                         child: InkWell(
                           borderRadius: BorderRadius.circular(8),
                           onTap: _isSearching ? null : _performSearch,
@@ -691,14 +687,7 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
                               Icons.search,
                               color: colorScheme == AppColorScheme.amoled
                                   ? Colors.black
-                                  : Theme.of(context).brightness ==
-                                        Brightness.light
-                                  ? Theme.of(context).colorScheme.onPrimary
-                                  : colorScheme == AppColorScheme.system
-                                  ? Theme.of(context).colorScheme.onPrimary
-                                  : Theme.of(
-                                      context,
-                                    ).colorScheme.onPrimaryContainer,
+                                  : Theme.of(context).colorScheme.onPrimary,
                             ),
                           ),
                         ),
