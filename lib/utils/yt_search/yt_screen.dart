@@ -2105,10 +2105,23 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                               height: 40,
                                               decoration: BoxDecoration(
                                                 shape: BoxShape.circle,
-                                                color: Theme.of(context)
-                                                    .colorScheme
-                                                    .primary
-                                                    .withValues(alpha: 0.08),
+                                                color:
+                                                    Theme.of(
+                                                          context,
+                                                        ).brightness ==
+                                                        Brightness.dark
+                                                    ? Theme.of(context)
+                                                          .colorScheme
+                                                          .onSecondary
+                                                          .withValues(
+                                                            alpha: 0.5,
+                                                          )
+                                                    : Theme.of(context)
+                                                          .colorScheme
+                                                          .secondaryContainer
+                                                          .withValues(
+                                                            alpha: 0.5,
+                                                          ),
                                               ),
                                               child: const Icon(
                                                 Icons.arrow_back,
@@ -2134,6 +2147,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                       Expanded(
                                         child: ListView.builder(
                                           controller: _songScrollController,
+                                          padding: EdgeInsets.zero,
                                           itemCount:
                                               _songResults.length +
                                               (_loadingMoreSongs ? 1 : 0),
@@ -2174,119 +2188,205 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                 _selectedIndexes.contains(
                                                   'song-$videoId',
                                                 );
-                                            return GestureDetector(
-                                              onLongPress: () {
-                                                HapticFeedback.selectionClick();
-                                                _toggleSelection(
-                                                  idx,
-                                                  isVideo: false,
-                                                );
-                                              },
-                                              onTap: () {
-                                                if (_isSelectionMode) {
-                                                  _toggleSelection(
-                                                    idx,
-                                                    isVideo: false,
-                                                  );
-                                                } else {
-                                                  showModalBottomSheet(
-                                                    context: context,
-                                                    shape: const RoundedRectangleBorder(
-                                                      borderRadius:
-                                                          BorderRadius.vertical(
-                                                            top:
-                                                                Radius.circular(
-                                                                  16,
-                                                                ),
-                                                          ),
+
+                                            final isDark =
+                                                Theme.of(context).brightness ==
+                                                Brightness.dark;
+                                            final cardColor = isDark
+                                                ? Theme.of(context)
+                                                      .colorScheme
+                                                      .onSecondary
+                                                      .withValues(alpha: 0.5)
+                                                : Theme.of(context)
+                                                      .colorScheme
+                                                      .secondaryContainer
+                                                      .withValues(alpha: 0.5);
+
+                                            final bool isFirst = idx == 0;
+                                            final bool isLast =
+                                                idx == _songResults.length - 1;
+                                            final bool isOnly =
+                                                _songResults.length == 1;
+
+                                            BorderRadius borderRadius;
+                                            if (isOnly) {
+                                              borderRadius =
+                                                  BorderRadius.circular(16);
+                                            } else if (isFirst) {
+                                              borderRadius =
+                                                  const BorderRadius.only(
+                                                    topLeft: Radius.circular(
+                                                      16,
                                                     ),
-                                                    builder: (context) {
-                                                      return SafeArea(
-                                                        child: Padding(
-                                                          padding:
-                                                              const EdgeInsets.all(
-                                                                24,
-                                                              ),
-                                                          child: YtPreviewPlayer(
-                                                            results:
-                                                                _songResults,
-                                                            currentIndex: idx,
-                                                          ),
-                                                        ),
-                                                      );
-                                                    },
+                                                    topRight: Radius.circular(
+                                                      16,
+                                                    ),
+                                                    bottomLeft: Radius.circular(
+                                                      4,
+                                                    ),
+                                                    bottomRight:
+                                                        Radius.circular(4),
                                                   );
-                                                }
-                                              },
-                                              child: Container(
-                                                width: double.infinity,
-                                                margin:
-                                                    const EdgeInsets.symmetric(),
-                                                child: ListTile(
-                                                  contentPadding:
-                                                      const EdgeInsets.symmetric(
-                                                        horizontal: 0,
-                                                        vertical: 4,
-                                                      ),
-                                                  leading: Row(
-                                                    mainAxisSize:
-                                                        MainAxisSize.min,
-                                                    children: [
-                                                      if (_isSelectionMode)
-                                                        Checkbox(
-                                                          value: isSelected,
-                                                          onChanged: (checked) {
-                                                            setState(() {
-                                                              if (videoId ==
-                                                                  null) {
-                                                                return;
-                                                              }
-                                                              final key =
-                                                                  'song-$videoId';
-                                                              if (checked ==
-                                                                  true) {
-                                                                _selectedIndexes
-                                                                    .add(key);
-                                                              } else {
-                                                                _selectedIndexes
-                                                                    .remove(
-                                                                      key,
-                                                                    );
-                                                                if (_selectedIndexes
-                                                                    .isEmpty) {
-                                                                  _isSelectionMode =
-                                                                      false;
-                                                                }
-                                                              }
-                                                            });
-                                                          },
+                                            } else if (isLast) {
+                                              borderRadius =
+                                                  const BorderRadius.only(
+                                                    topLeft: Radius.circular(4),
+                                                    topRight: Radius.circular(
+                                                      4,
+                                                    ),
+                                                    bottomLeft: Radius.circular(
+                                                      16,
+                                                    ),
+                                                    bottomRight:
+                                                        Radius.circular(16),
+                                                  );
+                                            } else {
+                                              borderRadius =
+                                                  BorderRadius.circular(4);
+                                            }
+
+                                            return Padding(
+                                              padding: EdgeInsets.only(
+                                                bottom: isLast ? 0 : 4,
+                                              ),
+                                              child: Card(
+                                                color: cardColor,
+                                                margin: EdgeInsets.zero,
+                                                elevation: 0,
+                                                shape: RoundedRectangleBorder(
+                                                  borderRadius: borderRadius,
+                                                ),
+                                                child: InkWell(
+                                                  borderRadius: borderRadius,
+                                                  onLongPress: () {
+                                                    HapticFeedback.selectionClick();
+                                                    _toggleSelection(
+                                                      idx,
+                                                      isVideo: false,
+                                                    );
+                                                  },
+                                                  onTap: () {
+                                                    if (_isSelectionMode) {
+                                                      _toggleSelection(
+                                                        idx,
+                                                        isVideo: false,
+                                                      );
+                                                    } else {
+                                                      showModalBottomSheet(
+                                                        context: context,
+                                                        shape: const RoundedRectangleBorder(
+                                                          borderRadius:
+                                                              BorderRadius.vertical(
+                                                                top:
+                                                                    Radius.circular(
+                                                                      16,
+                                                                    ),
+                                                              ),
                                                         ),
-                                                      ClipRRect(
-                                                        borderRadius:
-                                                            BorderRadius.circular(
-                                                              8,
+                                                        builder: (context) {
+                                                          return SafeArea(
+                                                            child: Padding(
+                                                              padding:
+                                                                  const EdgeInsets.all(
+                                                                    24,
+                                                                  ),
+                                                              child: YtPreviewPlayer(
+                                                                results:
+                                                                    _songResults,
+                                                                currentIndex:
+                                                                    idx,
+                                                              ),
                                                             ),
-                                                        child:
-                                                            item.thumbUrl !=
-                                                                null
-                                                            ? _buildSafeNetworkImage(
-                                                                item.thumbUrl!,
-                                                                width: 56,
-                                                                height: 56,
-                                                                fit: BoxFit
-                                                                    .cover,
-                                                                fallback: Container(
-                                                                  width: 56,
-                                                                  height: 56,
+                                                          );
+                                                        },
+                                                      );
+                                                    }
+                                                  },
+                                                  child: ListTile(
+                                                    contentPadding:
+                                                        const EdgeInsets.symmetric(
+                                                          horizontal: 16,
+                                                          vertical: 4,
+                                                        ),
+                                                    leading: Row(
+                                                      mainAxisSize:
+                                                          MainAxisSize.min,
+                                                      children: [
+                                                        if (_isSelectionMode)
+                                                          Checkbox(
+                                                            value: isSelected,
+                                                            onChanged: (checked) {
+                                                              setState(() {
+                                                                if (videoId ==
+                                                                    null) {
+                                                                  return;
+                                                                }
+                                                                final key =
+                                                                    'song-$videoId';
+                                                                if (checked ==
+                                                                    true) {
+                                                                  _selectedIndexes
+                                                                      .add(key);
+                                                                } else {
+                                                                  _selectedIndexes
+                                                                      .remove(
+                                                                        key,
+                                                                      );
+                                                                  if (_selectedIndexes
+                                                                      .isEmpty) {
+                                                                    _isSelectionMode =
+                                                                        false;
+                                                                  }
+                                                                }
+                                                              });
+                                                            },
+                                                          ),
+                                                        ClipRRect(
+                                                          borderRadius:
+                                                              BorderRadius.circular(
+                                                                8,
+                                                              ),
+                                                          child:
+                                                              item.thumbUrl !=
+                                                                  null
+                                                              ? _buildSafeNetworkImage(
+                                                                  item.thumbUrl!,
+                                                                  width: 50,
+                                                                  height: 50,
+                                                                  fit: BoxFit
+                                                                      .cover,
+                                                                  fallback: Container(
+                                                                    width: 50,
+                                                                    height: 50,
+                                                                    decoration: BoxDecoration(
+                                                                      color:
+                                                                          isSystem
+                                                                          ? Theme.of(
+                                                                              context,
+                                                                            ).colorScheme.secondaryContainer
+                                                                          : Theme.of(
+                                                                              context,
+                                                                            ).colorScheme.surfaceContainer,
+                                                                      borderRadius:
+                                                                          BorderRadius.circular(
+                                                                            8,
+                                                                          ),
+                                                                    ),
+                                                                    child: const Icon(
+                                                                      Icons
+                                                                          .music_note,
+                                                                      size: 24,
+                                                                      color: Colors
+                                                                          .grey,
+                                                                    ),
+                                                                  ),
+                                                                )
+                                                              : Container(
+                                                                  width: 50,
+                                                                  height: 50,
                                                                   decoration: BoxDecoration(
-                                                                    color:
-                                                                        isSystem
-                                                                        ? Theme.of(
-                                                                            context,
-                                                                          ).colorScheme.secondaryContainer
-                                                                        : Theme.of(
-                                                                            context,
-                                                                          ).colorScheme.surfaceContainer,
+                                                                    color: Colors
+                                                                        .grey[300],
                                                                     borderRadius:
                                                                         BorderRadius.circular(
                                                                           8,
@@ -2296,67 +2396,49 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                                     Icons
                                                                         .music_note,
                                                                     size: 24,
-                                                                    color: Colors
-                                                                        .grey,
                                                                   ),
                                                                 ),
-                                                              )
-                                                            : Container(
-                                                                width: 56,
-                                                                height: 56,
-                                                                decoration: BoxDecoration(
-                                                                  color: Colors
-                                                                      .grey[300],
-                                                                  borderRadius:
-                                                                      BorderRadius.circular(
-                                                                        12,
-                                                                      ),
-                                                                ),
-                                                                child: const Icon(
-                                                                  Icons
-                                                                      .music_note,
-                                                                  size: 32,
-                                                                ),
-                                                              ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                    title: Text(
+                                                      item.title ??
+                                                          LocaleProvider.tr(
+                                                            'title_unknown',
+                                                          ),
+                                                      style: Theme.of(
+                                                        context,
+                                                      ).textTheme.titleMedium,
+                                                      maxLines: 1,
+                                                      overflow:
+                                                          TextOverflow.ellipsis,
+                                                    ),
+                                                    subtitle: Text(
+                                                      item.artist ??
+                                                          LocaleProvider.tr(
+                                                            'artist_unknown',
+                                                          ),
+                                                      maxLines: 1,
+                                                      overflow:
+                                                          TextOverflow.ellipsis,
+                                                    ),
+                                                    trailing: IconButton(
+                                                      icon: const Icon(
+                                                        Icons.link,
                                                       ),
-                                                    ],
-                                                  ),
-                                                  title: Text(
-                                                    item.title ??
-                                                        LocaleProvider.tr(
-                                                          'title_unknown',
-                                                        ),
-                                                    style: Theme.of(
-                                                      context,
-                                                    ).textTheme.titleMedium,
-                                                    maxLines: 1,
-                                                    overflow:
-                                                        TextOverflow.ellipsis,
-                                                  ),
-                                                  subtitle: Text(
-                                                    item.artist ??
-                                                        LocaleProvider.tr(
-                                                          'artist_unknown',
-                                                        ),
-                                                    maxLines: 1,
-                                                    overflow:
-                                                        TextOverflow.ellipsis,
-                                                  ),
-                                                  trailing: IconButton(
-                                                    icon: const Icon(
-                                                      Icons.link,
+                                                      tooltip:
+                                                          LocaleProvider.tr(
+                                                            'copy_link',
+                                                          ),
+                                                      onPressed: () {
+                                                        Clipboard.setData(
+                                                          ClipboardData(
+                                                            text:
+                                                                'https://music.youtube.com/watch?v=${item.videoId}',
+                                                          ),
+                                                        );
+                                                      },
                                                     ),
-                                                    tooltip: LocaleProvider.tr(
-                                                      'copy_link',
-                                                    ),
-                                                    onPressed: () {
-                                                      Clipboard.setData(
-                                                        ClipboardData(
-                                                          text:
-                                                              'https://music.youtube.com/watch?v=${item.videoId}',
-                                                        ),
-                                                      );
-                                                    },
                                                   ),
                                                 ),
                                               ),
@@ -2387,10 +2469,23 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                               height: 40,
                                               decoration: BoxDecoration(
                                                 shape: BoxShape.circle,
-                                                color: Theme.of(context)
-                                                    .colorScheme
-                                                    .primary
-                                                    .withValues(alpha: 0.08),
+                                                color:
+                                                    Theme.of(
+                                                          context,
+                                                        ).brightness ==
+                                                        Brightness.dark
+                                                    ? Theme.of(context)
+                                                          .colorScheme
+                                                          .onSecondary
+                                                          .withValues(
+                                                            alpha: 0.5,
+                                                          )
+                                                    : Theme.of(context)
+                                                          .colorScheme
+                                                          .secondaryContainer
+                                                          .withValues(
+                                                            alpha: 0.5,
+                                                          ),
                                               ),
                                               child: const Icon(
                                                 Icons.arrow_back,
@@ -2416,6 +2511,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                       Expanded(
                                         child: ListView.builder(
                                           controller: _videoScrollController,
+                                          padding: EdgeInsets.zero,
                                           itemCount:
                                               _videoResults.length +
                                               (_loadingMoreVideos ? 1 : 0),
@@ -2456,119 +2552,203 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                 _selectedIndexes.contains(
                                                   'video-$videoId',
                                                 );
-                                            return GestureDetector(
-                                              onLongPress: () {
-                                                HapticFeedback.selectionClick();
-                                                _toggleSelection(
-                                                  idx,
-                                                  isVideo: true,
-                                                );
-                                              },
-                                              onTap: () {
-                                                if (_isSelectionMode) {
-                                                  _toggleSelection(
-                                                    idx,
-                                                    isVideo: true,
-                                                  );
-                                                } else {
-                                                  showModalBottomSheet(
-                                                    context: context,
-                                                    shape: const RoundedRectangleBorder(
-                                                      borderRadius:
-                                                          BorderRadius.vertical(
-                                                            top:
-                                                                Radius.circular(
-                                                                  16,
-                                                                ),
-                                                          ),
+
+                                            final isDark =
+                                                Theme.of(context).brightness ==
+                                                Brightness.dark;
+                                            final cardColor = isDark
+                                                ? Theme.of(context)
+                                                      .colorScheme
+                                                      .onSecondary
+                                                      .withValues(alpha: 0.5)
+                                                : Theme.of(context)
+                                                      .colorScheme
+                                                      .secondaryContainer
+                                                      .withValues(alpha: 0.5);
+
+                                            final bool isFirst = idx == 0;
+                                            final bool isLast =
+                                                idx == _videoResults.length - 1;
+                                            final bool isOnly =
+                                                _videoResults.length == 1;
+
+                                            BorderRadius borderRadius;
+                                            if (isOnly) {
+                                              borderRadius =
+                                                  BorderRadius.circular(16);
+                                            } else if (isFirst) {
+                                              borderRadius =
+                                                  const BorderRadius.only(
+                                                    topLeft: Radius.circular(
+                                                      16,
                                                     ),
-                                                    builder: (context) {
-                                                      return SafeArea(
-                                                        child: Padding(
-                                                          padding:
-                                                              const EdgeInsets.all(
-                                                                24,
-                                                              ),
-                                                          child: YtPreviewPlayer(
-                                                            results:
-                                                                _videoResults,
-                                                            currentIndex: idx,
-                                                          ),
-                                                        ),
-                                                      );
-                                                    },
+                                                    topRight: Radius.circular(
+                                                      16,
+                                                    ),
+                                                    bottomLeft: Radius.circular(
+                                                      4,
+                                                    ),
+                                                    bottomRight:
+                                                        Radius.circular(4),
                                                   );
-                                                }
-                                              },
-                                              child: Container(
-                                                width: double.infinity,
-                                                margin:
-                                                    const EdgeInsets.symmetric(),
-                                                child: ListTile(
-                                                  contentPadding:
-                                                      const EdgeInsets.symmetric(
-                                                        horizontal: 0,
-                                                        vertical: 4,
-                                                      ),
-                                                  leading: Row(
-                                                    mainAxisSize:
-                                                        MainAxisSize.min,
-                                                    children: [
-                                                      if (_isSelectionMode)
-                                                        Checkbox(
-                                                          value: isSelected,
-                                                          onChanged: (checked) {
-                                                            setState(() {
-                                                              if (videoId ==
-                                                                  null) {
-                                                                return;
-                                                              }
-                                                              final key =
-                                                                  'video-$videoId';
-                                                              if (checked ==
-                                                                  true) {
-                                                                _selectedIndexes
-                                                                    .add(key);
-                                                              } else {
-                                                                _selectedIndexes
-                                                                    .remove(
-                                                                      key,
-                                                                    );
-                                                                if (_selectedIndexes
-                                                                    .isEmpty) {
-                                                                  _isSelectionMode =
-                                                                      false;
-                                                                }
-                                                              }
-                                                            });
-                                                          },
+                                            } else if (isLast) {
+                                              borderRadius =
+                                                  const BorderRadius.only(
+                                                    topLeft: Radius.circular(4),
+                                                    topRight: Radius.circular(
+                                                      4,
+                                                    ),
+                                                    bottomLeft: Radius.circular(
+                                                      16,
+                                                    ),
+                                                    bottomRight:
+                                                        Radius.circular(16),
+                                                  );
+                                            } else {
+                                              borderRadius =
+                                                  BorderRadius.circular(4);
+                                            }
+
+                                            return Padding(
+                                              padding: EdgeInsets.only(
+                                                bottom: isLast ? 0 : 4,
+                                              ),
+                                              child: Card(
+                                                color: cardColor,
+                                                margin: EdgeInsets.zero,
+                                                elevation: 0,
+                                                shape: RoundedRectangleBorder(
+                                                  borderRadius: borderRadius,
+                                                ),
+                                                child: InkWell(
+                                                  borderRadius: borderRadius,
+                                                  onLongPress: () {
+                                                    HapticFeedback.selectionClick();
+                                                    _toggleSelection(
+                                                      idx,
+                                                      isVideo: true,
+                                                    );
+                                                  },
+                                                  onTap: () {
+                                                    if (_isSelectionMode) {
+                                                      _toggleSelection(
+                                                        idx,
+                                                        isVideo: true,
+                                                      );
+                                                    } else {
+                                                      showModalBottomSheet(
+                                                        context: context,
+                                                        shape: const RoundedRectangleBorder(
+                                                          borderRadius:
+                                                              BorderRadius.vertical(
+                                                                top:
+                                                                    Radius.circular(
+                                                                      16,
+                                                                    ),
+                                                              ),
                                                         ),
-                                                      ClipRRect(
-                                                        borderRadius:
-                                                            BorderRadius.circular(
-                                                              8,
+                                                        builder: (context) {
+                                                          return SafeArea(
+                                                            child: Padding(
+                                                              padding:
+                                                                  const EdgeInsets.all(
+                                                                    24,
+                                                                  ),
+                                                              child: YtPreviewPlayer(
+                                                                results:
+                                                                    _videoResults,
+                                                                currentIndex:
+                                                                    idx,
+                                                              ),
                                                             ),
-                                                        child:
-                                                            item.thumbUrl !=
-                                                                null
-                                                            ? _buildSafeNetworkImage(
-                                                                item.thumbUrl!,
-                                                                width: 56,
-                                                                height: 56,
-                                                                fit: BoxFit
-                                                                    .cover,
-                                                                fallback: Container(
-                                                                  width: 56,
-                                                                  height: 56,
+                                                          );
+                                                        },
+                                                      );
+                                                    }
+                                                  },
+                                                  child: ListTile(
+                                                    contentPadding:
+                                                        const EdgeInsets.symmetric(
+                                                          horizontal: 16,
+                                                          vertical: 4,
+                                                        ),
+                                                    leading: Row(
+                                                      mainAxisSize:
+                                                          MainAxisSize.min,
+                                                      children: [
+                                                        if (_isSelectionMode)
+                                                          Checkbox(
+                                                            value: isSelected,
+                                                            onChanged: (checked) {
+                                                              setState(() {
+                                                                if (videoId ==
+                                                                    null) {
+                                                                  return;
+                                                                }
+                                                                final key =
+                                                                    'video-$videoId';
+                                                                if (checked ==
+                                                                    true) {
+                                                                  _selectedIndexes
+                                                                      .add(key);
+                                                                } else {
+                                                                  _selectedIndexes
+                                                                      .remove(
+                                                                        key,
+                                                                      );
+                                                                  if (_selectedIndexes
+                                                                      .isEmpty) {
+                                                                    _isSelectionMode =
+                                                                        false;
+                                                                  }
+                                                                }
+                                                              });
+                                                            },
+                                                          ),
+                                                        ClipRRect(
+                                                          borderRadius:
+                                                              BorderRadius.circular(
+                                                                8,
+                                                              ),
+                                                          child:
+                                                              item.thumbUrl !=
+                                                                  null
+                                                              ? _buildSafeNetworkImage(
+                                                                  item.thumbUrl!,
+                                                                  width: 50,
+                                                                  height: 50,
+                                                                  fit: BoxFit
+                                                                      .cover,
+                                                                  fallback: Container(
+                                                                    width: 50,
+                                                                    height: 50,
+                                                                    decoration: BoxDecoration(
+                                                                      color:
+                                                                          isSystem
+                                                                          ? Theme.of(
+                                                                              context,
+                                                                            ).colorScheme.secondaryContainer
+                                                                          : Theme.of(
+                                                                              context,
+                                                                            ).colorScheme.surfaceContainer,
+                                                                      borderRadius:
+                                                                          BorderRadius.circular(
+                                                                            8,
+                                                                          ),
+                                                                    ),
+                                                                    child: const Icon(
+                                                                      Icons
+                                                                          .music_note,
+                                                                      size: 24,
+                                                                    ),
+                                                                  ),
+                                                                )
+                                                              : Container(
+                                                                  width: 50,
+                                                                  height: 50,
                                                                   decoration: BoxDecoration(
-                                                                    color:
-                                                                        isSystem
-                                                                        ? Theme.of(
-                                                                            context,
-                                                                          ).colorScheme.secondaryContainer
-                                                                        : Theme.of(
-                                                                            context,
-                                                                          ).colorScheme.surfaceContainer,
+                                                                    color: Colors
+                                                                        .grey[300],
                                                                     borderRadius:
                                                                         BorderRadius.circular(
                                                                           8,
@@ -2576,69 +2756,317 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                                   ),
                                                                   child: const Icon(
                                                                     Icons
-                                                                        .music_note,
+                                                                        .music_video,
                                                                     size: 24,
+                                                                    color: Colors
+                                                                        .grey,
                                                                   ),
                                                                 ),
-                                                              )
-                                                            : Container(
-                                                                width: 56,
-                                                                height: 56,
-                                                                decoration: BoxDecoration(
-                                                                  color: Colors
-                                                                      .grey[300],
-                                                                  borderRadius:
-                                                                      BorderRadius.circular(
-                                                                        12,
-                                                                      ),
-                                                                ),
-                                                                child: const Icon(
-                                                                  Icons
-                                                                      .music_video,
-                                                                  size: 32,
-                                                                  color: Colors
-                                                                      .grey,
-                                                                ),
-                                                              ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                    title: Text(
+                                                      item.title ??
+                                                          LocaleProvider.tr(
+                                                            'title_unknown',
+                                                          ),
+                                                      style: Theme.of(
+                                                        context,
+                                                      ).textTheme.titleMedium,
+                                                      maxLines: 1,
+                                                      overflow:
+                                                          TextOverflow.ellipsis,
+                                                    ),
+                                                    subtitle: Text(
+                                                      item.artist ??
+                                                          LocaleProvider.tr(
+                                                            'artist_unknown',
+                                                          ),
+                                                      maxLines: 1,
+                                                      overflow:
+                                                          TextOverflow.ellipsis,
+                                                    ),
+                                                    trailing: IconButton(
+                                                      icon: const Icon(
+                                                        Icons.link,
                                                       ),
-                                                    ],
-                                                  ),
-                                                  title: Text(
-                                                    item.title ??
-                                                        LocaleProvider.tr(
-                                                          'title_unknown',
-                                                        ),
-                                                    style: Theme.of(
-                                                      context,
-                                                    ).textTheme.titleMedium,
-                                                    maxLines: 1,
-                                                    overflow:
-                                                        TextOverflow.ellipsis,
-                                                  ),
-                                                  subtitle: Text(
-                                                    item.artist ??
-                                                        LocaleProvider.tr(
-                                                          'artist_unknown',
-                                                        ),
-                                                    maxLines: 1,
-                                                    overflow:
-                                                        TextOverflow.ellipsis,
-                                                  ),
-                                                  trailing: IconButton(
-                                                    icon: const Icon(
-                                                      Icons.link,
+                                                      tooltip:
+                                                          LocaleProvider.tr(
+                                                            'copy_link',
+                                                          ),
+                                                      onPressed: () {
+                                                        Clipboard.setData(
+                                                          ClipboardData(
+                                                            text:
+                                                                'https://www.youtube.com/watch?v=${item.videoId}',
+                                                          ),
+                                                        );
+                                                      },
                                                     ),
-                                                    tooltip: LocaleProvider.tr(
-                                                      'copy_link',
+                                                  ),
+                                                ),
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                      ),
+                                    ],
+                                  );
+                                } else if (_expandedCategory == 'albums') {
+                                  // Mostrar solo álbumes con botón de volver
+                                  return Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          IconButton(
+                                            constraints: const BoxConstraints(
+                                              minWidth: 40,
+                                              minHeight: 40,
+                                              maxWidth: 40,
+                                              maxHeight: 40,
+                                            ),
+                                            padding: EdgeInsets.zero,
+                                            icon: Container(
+                                              width: 40,
+                                              height: 40,
+                                              decoration: BoxDecoration(
+                                                shape: BoxShape.circle,
+                                                color:
+                                                    Theme.of(
+                                                          context,
+                                                        ).brightness ==
+                                                        Brightness.dark
+                                                    ? Theme.of(context)
+                                                          .colorScheme
+                                                          .onSecondary
+                                                          .withValues(
+                                                            alpha: 0.5,
+                                                          )
+                                                    : Theme.of(context)
+                                                          .colorScheme
+                                                          .secondaryContainer
+                                                          .withValues(
+                                                            alpha: 0.5,
+                                                          ),
+                                              ),
+                                              child: const Icon(
+                                                Icons.arrow_back,
+                                                size: 24,
+                                              ),
+                                            ),
+                                            tooltip: 'Volver',
+                                            onPressed: () {
+                                              setState(() {
+                                                _expandedCategory = null;
+                                              });
+                                            },
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Text(
+                                            LocaleProvider.tr('albums'),
+                                            style: Theme.of(
+                                              context,
+                                            ).textTheme.titleMedium,
+                                          ),
+                                        ],
+                                      ),
+                                      Expanded(
+                                        child: ListView.builder(
+                                          padding: EdgeInsets.zero,
+                                          itemCount: _albumResults.length,
+                                          itemBuilder: (context, index) {
+                                            final item = _albumResults[index];
+                                            YtMusicResult album;
+                                            if (item is YtMusicResult) {
+                                              album = item;
+                                            } else if (item is Map) {
+                                              final map =
+                                                  item as Map<String, dynamic>;
+                                              album = YtMusicResult(
+                                                title: map['title'] as String?,
+                                                artist:
+                                                    map['artist'] as String?,
+                                                thumbUrl:
+                                                    map['thumbUrl'] as String?,
+                                                videoId:
+                                                    map['browseId'] as String?,
+                                              );
+                                            } else {
+                                              album = YtMusicResult();
+                                            }
+
+                                            // Lógica de diseño de tarjetas
+                                            final isDark =
+                                                Theme.of(context).brightness ==
+                                                Brightness.dark;
+                                            final cardColor = isDark
+                                                ? Theme.of(context)
+                                                      .colorScheme
+                                                      .onSecondary
+                                                      .withValues(alpha: 0.5)
+                                                : Theme.of(context)
+                                                      .colorScheme
+                                                      .secondaryContainer
+                                                      .withValues(alpha: 0.5);
+
+                                            final bool isFirst = index == 0;
+                                            final bool isLast =
+                                                index ==
+                                                _albumResults.length - 1;
+                                            final bool isOnly =
+                                                _albumResults.length == 1;
+
+                                            BorderRadius borderRadius;
+                                            if (isOnly) {
+                                              borderRadius =
+                                                  BorderRadius.circular(16);
+                                            } else if (isFirst) {
+                                              borderRadius =
+                                                  const BorderRadius.only(
+                                                    topLeft: Radius.circular(
+                                                      16,
                                                     ),
-                                                    onPressed: () {
-                                                      Clipboard.setData(
-                                                        ClipboardData(
-                                                          text:
-                                                              'https://music.youtube.com/watch?v=${item.videoId}',
+                                                    topRight: Radius.circular(
+                                                      16,
+                                                    ),
+                                                    bottomLeft: Radius.circular(
+                                                      4,
+                                                    ),
+                                                    bottomRight:
+                                                        Radius.circular(4),
+                                                  );
+                                            } else if (isLast) {
+                                              borderRadius =
+                                                  const BorderRadius.only(
+                                                    topLeft: Radius.circular(4),
+                                                    topRight: Radius.circular(
+                                                      4,
+                                                    ),
+                                                    bottomLeft: Radius.circular(
+                                                      16,
+                                                    ),
+                                                    bottomRight:
+                                                        Radius.circular(16),
+                                                  );
+                                            } else {
+                                              borderRadius =
+                                                  BorderRadius.circular(4);
+                                            }
+
+                                            return Padding(
+                                              padding: EdgeInsets.only(
+                                                bottom: isLast ? 0 : 4,
+                                              ),
+                                              child: Card(
+                                                color: cardColor,
+                                                margin: EdgeInsets.zero,
+                                                elevation: 0,
+                                                shape: RoundedRectangleBorder(
+                                                  borderRadius: borderRadius,
+                                                ),
+                                                child: InkWell(
+                                                  borderRadius: borderRadius,
+                                                  onTap: () async {
+                                                    if (album.videoId == null) {
+                                                      return;
+                                                    }
+                                                    setState(() {
+                                                      _expandedCategory =
+                                                          'album';
+                                                      _loadingAlbumSongs = true;
+                                                      _albumSongs = [];
+                                                      _currentAlbum = {
+                                                        'title': album.title,
+                                                        'artist': album.artist,
+                                                        'thumbUrl':
+                                                            album.thumbUrl,
+                                                      };
+                                                    });
+                                                    final songs =
+                                                        await getAlbumSongs(
+                                                          album.videoId!,
+                                                        );
+                                                    if (!mounted) return;
+                                                    setState(() {
+                                                      _albumSongs = songs;
+                                                      _loadingAlbumSongs =
+                                                          false;
+                                                    });
+                                                  },
+                                                  child: ListTile(
+                                                    contentPadding:
+                                                        const EdgeInsets.symmetric(
+                                                          horizontal: 16,
+                                                          vertical: 4,
                                                         ),
-                                                      );
-                                                    },
+                                                    leading: ClipRRect(
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            8,
+                                                          ),
+                                                      child:
+                                                          album.thumbUrl != null
+                                                          ? Image.network(
+                                                              album.thumbUrl!,
+                                                              width: 56,
+                                                              height: 56,
+                                                              fit: BoxFit.cover,
+                                                            )
+                                                          : Container(
+                                                              width: 56,
+                                                              height: 56,
+                                                              decoration: BoxDecoration(
+                                                                color: Colors
+                                                                    .grey[300],
+                                                                borderRadius:
+                                                                    BorderRadius.circular(
+                                                                      12,
+                                                                    ),
+                                                              ),
+                                                              child: const Icon(
+                                                                Icons.album,
+                                                                size: 32,
+                                                                color:
+                                                                    Colors.grey,
+                                                              ),
+                                                            ),
+                                                    ),
+                                                    title: Text(
+                                                      album.title ??
+                                                          'Álbum desconocido',
+                                                      style: Theme.of(
+                                                        context,
+                                                      ).textTheme.titleMedium,
+                                                      maxLines: 1,
+                                                      overflow:
+                                                          TextOverflow.ellipsis,
+                                                    ),
+                                                    subtitle: Text(
+                                                      album.artist ??
+                                                          'Artista desconocido',
+                                                      maxLines: 1,
+                                                      overflow:
+                                                          TextOverflow.ellipsis,
+                                                    ),
+                                                    trailing: IconButton(
+                                                      icon: const Icon(
+                                                        Icons.link,
+                                                      ),
+                                                      tooltip: 'Copiar enlace',
+                                                      onPressed: () {
+                                                        if (album.videoId !=
+                                                            null) {
+                                                          Clipboard.setData(
+                                                            ClipboardData(
+                                                              text:
+                                                                  'https://music.youtube.com/browse/${album.videoId}',
+                                                            ),
+                                                          );
+                                                        }
+                                                      },
+                                                    ),
                                                   ),
                                                 ),
                                               ),
@@ -2668,10 +3096,23 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                               height: 40,
                                               decoration: BoxDecoration(
                                                 shape: BoxShape.circle,
-                                                color: Theme.of(context)
-                                                    .colorScheme
-                                                    .primary
-                                                    .withValues(alpha: 0.08),
+                                                color:
+                                                    Theme.of(
+                                                          context,
+                                                        ).brightness ==
+                                                        Brightness.dark
+                                                    ? Theme.of(context)
+                                                          .colorScheme
+                                                          .onSecondary
+                                                          .withValues(
+                                                            alpha: 0.5,
+                                                          )
+                                                    : Theme.of(context)
+                                                          .colorScheme
+                                                          .secondaryContainer
+                                                          .withValues(
+                                                            alpha: 0.5,
+                                                          ),
                                               ),
                                               child: const Icon(
                                                 Icons.arrow_back,
@@ -2806,6 +3247,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                       else
                                         Expanded(
                                           child: ListView.builder(
+                                            padding: EdgeInsets.zero,
                                             itemCount: _albumSongs.length,
                                             itemBuilder: (context, idx) {
                                               final item = _albumSongs[idx];
@@ -2815,259 +3257,333 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                   _selectedIndexes.contains(
                                                     'album-$videoId',
                                                   );
-                                              return GestureDetector(
-                                                onLongPress: () {
-                                                  HapticFeedback.selectionClick();
-                                                  if (videoId == null) return;
-                                                  setState(() {
-                                                    final key =
-                                                        'album-$videoId';
-                                                    if (_selectedIndexes
-                                                        .contains(key)) {
-                                                      _selectedIndexes.remove(
-                                                        key,
-                                                      );
-                                                      if (_selectedIndexes
-                                                          .isEmpty) {
-                                                        _isSelectionMode =
-                                                            false;
-                                                      }
-                                                    } else {
-                                                      _selectedIndexes.add(key);
-                                                      _isSelectionMode = true;
-                                                    }
-                                                  });
-                                                },
-                                                onTap: () {
-                                                  if (_isSelectionMode) {
-                                                    if (videoId == null) return;
-                                                    setState(() {
-                                                      final key =
-                                                          'album-$videoId';
-                                                      if (_selectedIndexes
-                                                          .contains(key)) {
-                                                        _selectedIndexes.remove(
-                                                          key,
-                                                        );
-                                                        if (_selectedIndexes
-                                                            .isEmpty) {
-                                                          _isSelectionMode =
-                                                              false;
-                                                        }
-                                                      } else {
-                                                        _selectedIndexes.add(
-                                                          key,
-                                                        );
-                                                        _isSelectionMode = true;
-                                                      }
-                                                    });
-                                                  } else {
-                                                    showModalBottomSheet(
-                                                      context: context,
-                                                      shape: const RoundedRectangleBorder(
-                                                        borderRadius:
-                                                            BorderRadius.vertical(
-                                                              top:
-                                                                  Radius.circular(
-                                                                    16,
-                                                                  ),
-                                                            ),
+
+                                              final isDark =
+                                                  Theme.of(
+                                                    context,
+                                                  ).brightness ==
+                                                  Brightness.dark;
+                                              final cardColor = isDark
+                                                  ? Theme.of(context)
+                                                        .colorScheme
+                                                        .onSecondary
+                                                        .withValues(alpha: 0.5)
+                                                  : Theme.of(context)
+                                                        .colorScheme
+                                                        .secondaryContainer
+                                                        .withValues(alpha: 0.5);
+
+                                              final bool isFirst = idx == 0;
+                                              final bool isLast =
+                                                  idx == _albumSongs.length - 1;
+                                              final bool isOnly =
+                                                  _albumSongs.length == 1;
+
+                                              BorderRadius borderRadius;
+                                              if (isOnly) {
+                                                borderRadius =
+                                                    BorderRadius.circular(16);
+                                              } else if (isFirst) {
+                                                borderRadius =
+                                                    const BorderRadius.only(
+                                                      topLeft: Radius.circular(
+                                                        16,
                                                       ),
-                                                      builder: (context) {
-                                                        return SafeArea(
-                                                          child: Padding(
-                                                            padding:
-                                                                const EdgeInsets.all(
-                                                                  24,
-                                                                ),
-                                                            child: YtPreviewPlayer(
-                                                              results:
-                                                                  _albumSongs,
-                                                              currentIndex: idx,
-                                                              fallbackThumbUrl:
-                                                                  _currentAlbum?['thumbUrl'],
-                                                              fallbackArtist:
-                                                                  _currentAlbum?['artist'],
-                                                            ),
-                                                          ),
-                                                        );
-                                                      },
+                                                      topRight: Radius.circular(
+                                                        16,
+                                                      ),
+                                                      bottomLeft:
+                                                          Radius.circular(4),
+                                                      bottomRight:
+                                                          Radius.circular(4),
                                                     );
-                                                  }
-                                                },
-                                                child: ListTile(
-                                                  contentPadding:
-                                                      const EdgeInsets.symmetric(
-                                                        horizontal: 0,
-                                                        vertical: 4,
+                                              } else if (isLast) {
+                                                borderRadius =
+                                                    const BorderRadius.only(
+                                                      topLeft: Radius.circular(
+                                                        4,
                                                       ),
-                                                  leading: Row(
-                                                    mainAxisSize:
-                                                        MainAxisSize.min,
-                                                    children: [
-                                                      if (_isSelectionMode)
-                                                        Checkbox(
-                                                          value: isSelected,
-                                                          onChanged: (checked) {
-                                                            setState(() {
-                                                              if (videoId ==
-                                                                  null) {
-                                                                return;
-                                                              }
-                                                              final key =
-                                                                  'album-$videoId';
-                                                              if (checked ==
-                                                                  true) {
-                                                                _selectedIndexes
-                                                                    .add(key);
-                                                              } else {
-                                                                _selectedIndexes
-                                                                    .remove(
-                                                                      key,
-                                                                    );
-                                                                if (_selectedIndexes
-                                                                    .isEmpty) {
-                                                                  _isSelectionMode =
-                                                                      false;
-                                                                }
-                                                              }
-                                                            });
-                                                          },
-                                                        ),
-                                                      ClipRRect(
-                                                        borderRadius:
-                                                            BorderRadius.circular(
-                                                              8,
-                                                            ),
-                                                        child:
-                                                            (item.thumbUrl !=
-                                                                    null &&
-                                                                item
-                                                                    .thumbUrl!
-                                                                    .isNotEmpty)
-                                                            ? _buildSafeNetworkImage(
-                                                                item.thumbUrl!,
-                                                                width: 56,
-                                                                height: 56,
-                                                                fit: BoxFit
-                                                                    .cover,
-                                                                fallback: Container(
-                                                                  width: 56,
-                                                                  height: 56,
-                                                                  decoration: BoxDecoration(
-                                                                    color:
-                                                                        isSystem
-                                                                        ? Theme.of(
-                                                                            context,
-                                                                          ).colorScheme.secondaryContainer
-                                                                        : Theme.of(
-                                                                            context,
-                                                                          ).colorScheme.surfaceContainer,
-                                                                    borderRadius:
-                                                                        BorderRadius.circular(
-                                                                          8,
-                                                                        ),
-                                                                  ),
-                                                                  child: const Icon(
-                                                                    Icons
-                                                                        .music_note,
-                                                                    size: 24,
-                                                                  ),
-                                                                ),
-                                                              )
-                                                            : (_currentAlbum !=
-                                                                      null &&
-                                                                  _currentAlbum!['thumbUrl'] !=
-                                                                      null &&
-                                                                  (_currentAlbum!['thumbUrl']
-                                                                          as String)
-                                                                      .isNotEmpty)
-                                                            ? _buildSafeNetworkImage(
-                                                                _currentAlbum!['thumbUrl'],
-                                                                width: 56,
-                                                                height: 56,
-                                                                fit: BoxFit
-                                                                    .cover,
-                                                                fallback: Container(
-                                                                  width: 56,
-                                                                  height: 56,
-                                                                  decoration: BoxDecoration(
-                                                                    color: Theme.of(
-                                                                      context,
-                                                                    ).colorScheme.surfaceContainer,
-                                                                    borderRadius:
-                                                                        BorderRadius.circular(
-                                                                          8,
-                                                                        ),
-                                                                  ),
-                                                                  child: const Icon(
-                                                                    Icons
-                                                                        .music_note,
-                                                                    size: 24,
-                                                                  ),
-                                                                ),
-                                                              )
-                                                            : Container(
-                                                                width: 56,
-                                                                height: 56,
-                                                                decoration: BoxDecoration(
-                                                                  color: Colors
-                                                                      .grey[300],
-                                                                  borderRadius:
-                                                                      BorderRadius.circular(
-                                                                        12,
+                                                      topRight: Radius.circular(
+                                                        4,
+                                                      ),
+                                                      bottomLeft:
+                                                          Radius.circular(16),
+                                                      bottomRight:
+                                                          Radius.circular(16),
+                                                    );
+                                              } else {
+                                                borderRadius =
+                                                    BorderRadius.circular(4);
+                                              }
+
+                                              return Padding(
+                                                padding: EdgeInsets.only(
+                                                  bottom: isLast ? 0 : 4,
+                                                ),
+                                                child: Card(
+                                                  color: cardColor,
+                                                  margin: EdgeInsets.zero,
+                                                  elevation: 0,
+                                                  shape: RoundedRectangleBorder(
+                                                    borderRadius: borderRadius,
+                                                  ),
+                                                  child: InkWell(
+                                                    borderRadius: borderRadius,
+                                                    onLongPress: () {
+                                                      HapticFeedback.selectionClick();
+                                                      if (videoId == null) {
+                                                        return;
+                                                      }
+                                                      setState(() {
+                                                        final key =
+                                                            'album-$videoId';
+                                                        if (_selectedIndexes
+                                                            .contains(key)) {
+                                                          _selectedIndexes
+                                                              .remove(key);
+                                                          if (_selectedIndexes
+                                                              .isEmpty) {
+                                                            _isSelectionMode =
+                                                                false;
+                                                          }
+                                                        } else {
+                                                          _selectedIndexes.add(
+                                                            key,
+                                                          );
+                                                          _isSelectionMode =
+                                                              true;
+                                                        }
+                                                      });
+                                                    },
+                                                    onTap: () {
+                                                      if (_isSelectionMode) {
+                                                        if (videoId == null) {
+                                                          return;
+                                                        }
+                                                        setState(() {
+                                                          final key =
+                                                              'album-$videoId';
+                                                          if (_selectedIndexes
+                                                              .contains(key)) {
+                                                            _selectedIndexes
+                                                                .remove(key);
+                                                            if (_selectedIndexes
+                                                                .isEmpty) {
+                                                              _isSelectionMode =
+                                                                  false;
+                                                            }
+                                                          } else {
+                                                            _selectedIndexes
+                                                                .add(key);
+                                                            _isSelectionMode =
+                                                                true;
+                                                          }
+                                                        });
+                                                      } else {
+                                                        showModalBottomSheet(
+                                                          context: context,
+                                                          shape: const RoundedRectangleBorder(
+                                                            borderRadius:
+                                                                BorderRadius.vertical(
+                                                                  top:
+                                                                      Radius.circular(
+                                                                        16,
                                                                       ),
                                                                 ),
-                                                                child: const Icon(
-                                                                  Icons
-                                                                      .music_note,
-                                                                  size: 32,
+                                                          ),
+                                                          builder: (context) {
+                                                            return SafeArea(
+                                                              child: Padding(
+                                                                padding:
+                                                                    const EdgeInsets.all(
+                                                                      24,
+                                                                    ),
+                                                                child: YtPreviewPlayer(
+                                                                  results:
+                                                                      _albumSongs,
+                                                                  currentIndex:
+                                                                      idx,
+                                                                  fallbackThumbUrl:
+                                                                      _currentAlbum?['thumbUrl'],
+                                                                  fallbackArtist:
+                                                                      _currentAlbum?['artist'] ??
+                                                                      LocaleProvider.tr(
+                                                                        'artist_unknown',
+                                                                      ),
                                                                 ),
                                                               ),
-                                                      ),
-                                                    ],
-                                                  ),
-                                                  title: Text(
-                                                    item.title ??
-                                                        LocaleProvider.tr(
-                                                          'title_unknown',
-                                                        ),
-                                                    style: Theme.of(
-                                                      context,
-                                                    ).textTheme.titleMedium,
-                                                    maxLines: 1,
-                                                    overflow:
-                                                        TextOverflow.ellipsis,
-                                                  ),
-                                                  subtitle: Text(
-                                                    (item.artist != null &&
-                                                            item.artist!
-                                                                .trim()
-                                                                .isNotEmpty)
-                                                        ? item.artist!
-                                                        : (_currentAlbum?['artist'] ??
-                                                              LocaleProvider.tr(
-                                                                'artist_unknown',
-                                                              )),
-                                                    maxLines: 1,
-                                                    overflow:
-                                                        TextOverflow.ellipsis,
-                                                  ),
-                                                  trailing: IconButton(
-                                                    icon: const Icon(
-                                                      Icons.link,
-                                                    ),
-                                                    tooltip: LocaleProvider.tr(
-                                                      'copy_link',
-                                                    ),
-                                                    onPressed: () {
-                                                      Clipboard.setData(
-                                                        ClipboardData(
-                                                          text:
-                                                              'https://music.youtube.com/watch?v=${item.videoId}',
-                                                        ),
-                                                      );
+                                                            );
+                                                          },
+                                                        );
+                                                      }
                                                     },
+                                                    child: ListTile(
+                                                      contentPadding:
+                                                          const EdgeInsets.symmetric(
+                                                            horizontal: 16,
+                                                            vertical: 4,
+                                                          ),
+                                                      leading: Row(
+                                                        mainAxisSize:
+                                                            MainAxisSize.min,
+                                                        children: [
+                                                          if (_isSelectionMode)
+                                                            Checkbox(
+                                                              value: isSelected,
+                                                              onChanged: (checked) {
+                                                                setState(() {
+                                                                  if (videoId ==
+                                                                      null) {
+                                                                    return;
+                                                                  }
+                                                                  final key =
+                                                                      'album-$videoId';
+                                                                  if (checked ==
+                                                                      true) {
+                                                                    _selectedIndexes
+                                                                        .add(
+                                                                          key,
+                                                                        );
+                                                                  } else {
+                                                                    _selectedIndexes
+                                                                        .remove(
+                                                                          key,
+                                                                        );
+                                                                    if (_selectedIndexes
+                                                                        .isEmpty) {
+                                                                      _isSelectionMode =
+                                                                          false;
+                                                                    }
+                                                                  }
+                                                                });
+                                                              },
+                                                            ),
+                                                          ClipRRect(
+                                                            borderRadius:
+                                                                BorderRadius.circular(
+                                                                  8,
+                                                                ),
+                                                            child:
+                                                                (item.thumbUrl !=
+                                                                        null &&
+                                                                    item
+                                                                        .thumbUrl!
+                                                                        .isNotEmpty)
+                                                                ? _buildSafeNetworkImage(
+                                                                    item.thumbUrl!,
+                                                                    width: 50,
+                                                                    height: 50,
+                                                                    fit: BoxFit
+                                                                        .cover,
+                                                                  )
+                                                                : (_currentAlbum !=
+                                                                          null &&
+                                                                      _currentAlbum!['thumbUrl'] !=
+                                                                          null &&
+                                                                      (_currentAlbum!['thumbUrl']
+                                                                              as String)
+                                                                          .isNotEmpty)
+                                                                ? _buildSafeNetworkImage(
+                                                                    _currentAlbum!['thumbUrl'],
+                                                                    width: 50,
+                                                                    height: 50,
+                                                                    fit: BoxFit
+                                                                        .cover,
+                                                                    fallback: Container(
+                                                                      width: 50,
+                                                                      height:
+                                                                          50,
+                                                                      decoration: BoxDecoration(
+                                                                        color:
+                                                                            isSystem
+                                                                            ? Theme.of(
+                                                                                context,
+                                                                              ).colorScheme.secondaryContainer
+                                                                            : Theme.of(
+                                                                                context,
+                                                                              ).colorScheme.surfaceContainer,
+                                                                        borderRadius:
+                                                                            BorderRadius.circular(
+                                                                              8,
+                                                                            ),
+                                                                      ),
+                                                                      child: const Icon(
+                                                                        Icons
+                                                                            .music_note,
+                                                                        size:
+                                                                            20,
+                                                                      ),
+                                                                    ),
+                                                                  )
+                                                                : Container(
+                                                                    width: 50,
+                                                                    height: 50,
+                                                                    decoration: BoxDecoration(
+                                                                      color: Colors
+                                                                          .grey[300],
+                                                                      borderRadius:
+                                                                          BorderRadius.circular(
+                                                                            8,
+                                                                          ),
+                                                                    ),
+                                                                    child: const Icon(
+                                                                      Icons
+                                                                          .music_note,
+                                                                      size: 20,
+                                                                      color: Colors
+                                                                          .grey,
+                                                                    ),
+                                                                  ),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                      title: Text(
+                                                        item.title ??
+                                                            LocaleProvider.tr(
+                                                              'title_unknown',
+                                                            ),
+                                                        style: Theme.of(
+                                                          context,
+                                                        ).textTheme.titleMedium,
+                                                        maxLines: 1,
+                                                        overflow: TextOverflow
+                                                            .ellipsis,
+                                                      ),
+                                                      subtitle: Text(
+                                                        (item.artist != null &&
+                                                                item.artist!
+                                                                    .trim()
+                                                                    .isNotEmpty)
+                                                            ? item.artist!
+                                                            : (_currentAlbum?['artist'] ??
+                                                                  LocaleProvider.tr(
+                                                                    'artist_unknown',
+                                                                  )),
+                                                        style: Theme.of(
+                                                          context,
+                                                        ).textTheme.bodySmall,
+                                                        maxLines: 1,
+                                                        overflow: TextOverflow
+                                                            .ellipsis,
+                                                      ),
+                                                      trailing: IconButton(
+                                                        icon: const Icon(
+                                                          Icons.link,
+                                                        ),
+                                                        tooltip:
+                                                            LocaleProvider.tr(
+                                                              'copy_link',
+                                                            ),
+                                                        onPressed: () {
+                                                          Clipboard.setData(
+                                                            ClipboardData(
+                                                              text:
+                                                                  'https://music.youtube.com/watch?v=${item.videoId}',
+                                                            ),
+                                                          );
+                                                        },
+                                                      ),
+                                                    ),
                                                   ),
                                                 ),
                                               );
@@ -3097,10 +3613,23 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                               height: 40,
                                               decoration: BoxDecoration(
                                                 shape: BoxShape.circle,
-                                                color: Theme.of(context)
-                                                    .colorScheme
-                                                    .primary
-                                                    .withValues(alpha: 0.08),
+                                                color:
+                                                    Theme.of(
+                                                          context,
+                                                        ).brightness ==
+                                                        Brightness.dark
+                                                    ? Theme.of(context)
+                                                          .colorScheme
+                                                          .onSecondary
+                                                          .withValues(
+                                                            alpha: 0.5,
+                                                          )
+                                                    : Theme.of(context)
+                                                          .colorScheme
+                                                          .secondaryContainer
+                                                          .withValues(
+                                                            alpha: 0.5,
+                                                          ),
                                               ),
                                               child: const Icon(
                                                 Icons.arrow_back,
@@ -3243,6 +3772,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                       else
                                         Expanded(
                                           child: ListView.builder(
+                                            padding: EdgeInsets.zero,
                                             itemCount: _playlistSongs.length,
                                             itemBuilder: (context, idx) {
                                               final item = _playlistSongs[idx];
@@ -3252,171 +3782,265 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                   _selectedIndexes.contains(
                                                     'playlist-$videoId',
                                                   );
-                                              return GestureDetector(
-                                                onLongPress: () {
-                                                  HapticFeedback.selectionClick();
-                                                  if (videoId == null) return;
-                                                  setState(() {
-                                                    final key =
-                                                        'playlist-$videoId';
-                                                    if (_selectedIndexes
-                                                        .contains(key)) {
-                                                      _selectedIndexes.remove(
-                                                        key,
-                                                      );
-                                                      if (_selectedIndexes
-                                                          .isEmpty) {
-                                                        _isSelectionMode =
-                                                            false;
-                                                      }
-                                                    } else {
-                                                      _selectedIndexes.add(key);
-                                                      _isSelectionMode = true;
-                                                    }
-                                                  });
-                                                },
-                                                onTap: () {
-                                                  if (_isSelectionMode) {
-                                                    if (videoId == null) return;
-                                                    setState(() {
-                                                      final key =
-                                                          'playlist-$videoId';
-                                                      if (_selectedIndexes
-                                                          .contains(key)) {
-                                                        _selectedIndexes.remove(
-                                                          key,
-                                                        );
-                                                        if (_selectedIndexes
-                                                            .isEmpty) {
-                                                          _isSelectionMode =
-                                                              false;
-                                                        }
-                                                      } else {
-                                                        _selectedIndexes.add(
-                                                          key,
-                                                        );
-                                                        _isSelectionMode = true;
-                                                      }
-                                                    });
-                                                  } else {
-                                                    showModalBottomSheet(
-                                                      context: context,
-                                                      shape: const RoundedRectangleBorder(
-                                                        borderRadius:
-                                                            BorderRadius.vertical(
-                                                              top:
-                                                                  Radius.circular(
-                                                                    16,
-                                                                  ),
-                                                            ),
+
+                                              final isDark =
+                                                  Theme.of(
+                                                    context,
+                                                  ).brightness ==
+                                                  Brightness.dark;
+                                              final cardColor = isDark
+                                                  ? Theme.of(context)
+                                                        .colorScheme
+                                                        .onSecondary
+                                                        .withValues(alpha: 0.5)
+                                                  : Theme.of(context)
+                                                        .colorScheme
+                                                        .secondaryContainer
+                                                        .withValues(alpha: 0.5);
+
+                                              final bool isFirst = idx == 0;
+                                              final bool isLast =
+                                                  idx ==
+                                                  _playlistSongs.length - 1;
+                                              final bool isOnly =
+                                                  _playlistSongs.length == 1;
+
+                                              BorderRadius borderRadius;
+                                              if (isOnly) {
+                                                borderRadius =
+                                                    BorderRadius.circular(16);
+                                              } else if (isFirst) {
+                                                borderRadius =
+                                                    const BorderRadius.only(
+                                                      topLeft: Radius.circular(
+                                                        16,
                                                       ),
-                                                      builder: (context) {
-                                                        return SafeArea(
-                                                          child: Padding(
-                                                            padding:
-                                                                const EdgeInsets.all(
-                                                                  24,
-                                                                ),
-                                                            child: YtPreviewPlayer(
-                                                              results:
-                                                                  _playlistSongs,
-                                                              currentIndex: idx,
-                                                              fallbackThumbUrl:
-                                                                  _currentPlaylist?['thumbUrl'],
-                                                              fallbackArtist:
-                                                                  LocaleProvider.tr(
-                                                                    'artist_unknown',
-                                                                  ),
-                                                            ),
-                                                          ),
-                                                        );
-                                                      },
+                                                      topRight: Radius.circular(
+                                                        16,
+                                                      ),
+                                                      bottomLeft:
+                                                          Radius.circular(4),
+                                                      bottomRight:
+                                                          Radius.circular(4),
                                                     );
-                                                  }
-                                                },
-                                                child: Container(
-                                                  width: double.infinity,
-                                                  margin:
-                                                      const EdgeInsets.symmetric(),
-                                                  child: ListTile(
-                                                    contentPadding:
-                                                        const EdgeInsets.symmetric(
-                                                          horizontal: 0,
-                                                          vertical: 4,
-                                                        ),
-                                                    leading: Row(
-                                                      mainAxisSize:
-                                                          MainAxisSize.min,
-                                                      children: [
-                                                        if (_isSelectionMode)
-                                                          Checkbox(
-                                                            value: isSelected,
-                                                            onChanged: (checked) {
-                                                              setState(() {
-                                                                if (videoId ==
-                                                                    null) {
-                                                                  return;
-                                                                }
-                                                                final key =
-                                                                    'playlist-$videoId';
-                                                                if (checked ==
-                                                                    true) {
-                                                                  _selectedIndexes
-                                                                      .add(key);
-                                                                } else {
-                                                                  _selectedIndexes
-                                                                      .remove(
-                                                                        key,
-                                                                      );
-                                                                  if (_selectedIndexes
-                                                                      .isEmpty) {
-                                                                    _isSelectionMode =
-                                                                        false;
-                                                                  }
-                                                                }
-                                                              });
-                                                            },
+                                              } else if (isLast) {
+                                                borderRadius =
+                                                    const BorderRadius.only(
+                                                      topLeft: Radius.circular(
+                                                        4,
+                                                      ),
+                                                      topRight: Radius.circular(
+                                                        4,
+                                                      ),
+                                                      bottomLeft:
+                                                          Radius.circular(16),
+                                                      bottomRight:
+                                                          Radius.circular(16),
+                                                    );
+                                              } else {
+                                                borderRadius =
+                                                    BorderRadius.circular(4);
+                                              }
+
+                                              return Padding(
+                                                padding: EdgeInsets.only(
+                                                  bottom: isLast ? 0 : 4,
+                                                ),
+                                                child: Card(
+                                                  color: cardColor,
+                                                  margin: EdgeInsets.zero,
+                                                  elevation: 0,
+                                                  shape: RoundedRectangleBorder(
+                                                    borderRadius: borderRadius,
+                                                  ),
+                                                  child: InkWell(
+                                                    borderRadius: borderRadius,
+                                                    onLongPress: () {
+                                                      HapticFeedback.selectionClick();
+                                                      if (videoId == null) {
+                                                        return;
+                                                      }
+                                                      setState(() {
+                                                        final key =
+                                                            'playlist-$videoId';
+                                                        if (_selectedIndexes
+                                                            .contains(key)) {
+                                                          _selectedIndexes
+                                                              .remove(key);
+                                                          if (_selectedIndexes
+                                                              .isEmpty) {
+                                                            _isSelectionMode =
+                                                                false;
+                                                          }
+                                                        } else {
+                                                          _selectedIndexes.add(
+                                                            key,
+                                                          );
+                                                          _isSelectionMode =
+                                                              true;
+                                                        }
+                                                      });
+                                                    },
+                                                    onTap: () {
+                                                      if (_isSelectionMode) {
+                                                        if (videoId == null) {
+                                                          return;
+                                                        }
+                                                        setState(() {
+                                                          final key =
+                                                              'playlist-$videoId';
+                                                          if (_selectedIndexes
+                                                              .contains(key)) {
+                                                            _selectedIndexes
+                                                                .remove(key);
+                                                            if (_selectedIndexes
+                                                                .isEmpty) {
+                                                              _isSelectionMode =
+                                                                  false;
+                                                            }
+                                                          } else {
+                                                            _selectedIndexes
+                                                                .add(key);
+                                                            _isSelectionMode =
+                                                                true;
+                                                          }
+                                                        });
+                                                      } else {
+                                                        showModalBottomSheet(
+                                                          context: context,
+                                                          shape: const RoundedRectangleBorder(
+                                                            borderRadius:
+                                                                BorderRadius.vertical(
+                                                                  top:
+                                                                      Radius.circular(
+                                                                        16,
+                                                                      ),
+                                                                ),
                                                           ),
-                                                        ClipRRect(
-                                                          borderRadius:
-                                                              BorderRadius.circular(
-                                                                8,
+                                                          builder: (context) {
+                                                            return SafeArea(
+                                                              child: Padding(
+                                                                padding:
+                                                                    const EdgeInsets.all(
+                                                                      24,
+                                                                    ),
+                                                                child: YtPreviewPlayer(
+                                                                  results:
+                                                                      _playlistSongs,
+                                                                  currentIndex:
+                                                                      idx,
+                                                                  fallbackThumbUrl:
+                                                                      _currentPlaylist?['thumbUrl'],
+                                                                  fallbackArtist:
+                                                                      LocaleProvider.tr(
+                                                                        'artist_unknown',
+                                                                      ),
+                                                                ),
                                                               ),
-                                                          child:
-                                                              item.thumbUrl !=
-                                                                  null
-                                                              ? _buildSafeNetworkImage(
-                                                                  item.thumbUrl!,
-                                                                  width: 56,
-                                                                  height: 56,
-                                                                  fit: BoxFit
-                                                                      .cover,
-                                                                )
-                                                              : (_currentPlaylist !=
-                                                                        null &&
-                                                                    _currentPlaylist!['thumbUrl'] !=
-                                                                        null &&
-                                                                    (_currentPlaylist!['thumbUrl']
-                                                                            as String)
-                                                                        .isNotEmpty)
-                                                              ? _buildSafeNetworkImage(
-                                                                  _currentPlaylist!['thumbUrl'],
-                                                                  width: 56,
-                                                                  height: 56,
-                                                                  fit: BoxFit
-                                                                      .cover,
-                                                                  fallback: Container(
-                                                                    width: 56,
-                                                                    height: 56,
+                                                            );
+                                                          },
+                                                        );
+                                                      }
+                                                    },
+                                                    child: ListTile(
+                                                      contentPadding:
+                                                          const EdgeInsets.symmetric(
+                                                            horizontal: 16,
+                                                            vertical: 4,
+                                                          ),
+                                                      leading: Row(
+                                                        mainAxisSize:
+                                                            MainAxisSize.min,
+                                                        children: [
+                                                          if (_isSelectionMode)
+                                                            Checkbox(
+                                                              value: isSelected,
+                                                              onChanged: (checked) {
+                                                                setState(() {
+                                                                  if (videoId ==
+                                                                      null) {
+                                                                    return;
+                                                                  }
+                                                                  final key =
+                                                                      'playlist-$videoId';
+                                                                  if (checked ==
+                                                                      true) {
+                                                                    _selectedIndexes
+                                                                        .add(
+                                                                          key,
+                                                                        );
+                                                                  } else {
+                                                                    _selectedIndexes
+                                                                        .remove(
+                                                                          key,
+                                                                        );
+                                                                    if (_selectedIndexes
+                                                                        .isEmpty) {
+                                                                      _isSelectionMode =
+                                                                          false;
+                                                                    }
+                                                                  }
+                                                                });
+                                                              },
+                                                            ),
+                                                          ClipRRect(
+                                                            borderRadius:
+                                                                BorderRadius.circular(
+                                                                  8,
+                                                                ),
+                                                            child:
+                                                                item.thumbUrl !=
+                                                                    null
+                                                                ? _buildSafeNetworkImage(
+                                                                    item.thumbUrl!,
+                                                                    width: 50,
+                                                                    height: 50,
+                                                                    fit: BoxFit
+                                                                        .cover,
+                                                                  )
+                                                                : (_currentPlaylist !=
+                                                                          null &&
+                                                                      _currentPlaylist!['thumbUrl'] !=
+                                                                          null &&
+                                                                      (_currentPlaylist!['thumbUrl']
+                                                                              as String)
+                                                                          .isNotEmpty)
+                                                                ? _buildSafeNetworkImage(
+                                                                    _currentPlaylist!['thumbUrl'],
+                                                                    width: 50,
+                                                                    height: 50,
+                                                                    fit: BoxFit
+                                                                        .cover,
+                                                                    fallback: Container(
+                                                                      width: 50,
+                                                                      height:
+                                                                          50,
+                                                                      decoration: BoxDecoration(
+                                                                        color:
+                                                                            isSystem
+                                                                            ? Theme.of(
+                                                                                context,
+                                                                              ).colorScheme.secondaryContainer
+                                                                            : Theme.of(
+                                                                                context,
+                                                                              ).colorScheme.surfaceContainer,
+                                                                        borderRadius:
+                                                                            BorderRadius.circular(
+                                                                              8,
+                                                                            ),
+                                                                      ),
+                                                                      child: const Icon(
+                                                                        Icons
+                                                                            .music_note,
+                                                                      ),
+                                                                    ),
+                                                                  )
+                                                                : Container(
+                                                                    width: 50,
+                                                                    height: 50,
                                                                     decoration: BoxDecoration(
-                                                                      color:
-                                                                          isSystem
-                                                                          ? Theme.of(
-                                                                              context,
-                                                                            ).colorScheme.secondaryContainer
-                                                                          : Theme.of(
-                                                                              context,
-                                                                            ).colorScheme.surfaceContainer,
+                                                                      color: Colors
+                                                                          .grey[300],
                                                                       borderRadius:
                                                                           BorderRadius.circular(
                                                                             8,
@@ -3425,71 +4049,54 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                                     child: const Icon(
                                                                       Icons
                                                                           .music_note,
-                                                                      size: 24,
+                                                                      color: Colors
+                                                                          .grey,
                                                                     ),
                                                                   ),
-                                                                )
-                                                              : Container(
-                                                                  width: 56,
-                                                                  height: 56,
-                                                                  decoration: BoxDecoration(
-                                                                    color: Colors
-                                                                        .grey[300],
-                                                                    borderRadius:
-                                                                        BorderRadius.circular(
-                                                                          12,
-                                                                        ),
-                                                                  ),
-                                                                  child: const Icon(
-                                                                    Icons
-                                                                        .music_note,
-                                                                    size: 32,
-                                                                  ),
-                                                                ),
-                                                        ),
-                                                      ],
-                                                    ),
-                                                    title: Text(
-                                                      item.title ??
-                                                          LocaleProvider.tr(
-                                                            'title_unknown',
                                                           ),
-                                                      style: Theme.of(
-                                                        context,
-                                                      ).textTheme.titleMedium,
-                                                      maxLines: 1,
-                                                      overflow:
-                                                          TextOverflow.ellipsis,
-                                                    ),
-                                                    subtitle: Text(
-                                                      (item.artist != null &&
-                                                              item.artist!
-                                                                  .trim()
-                                                                  .isNotEmpty)
-                                                          ? item.artist!
-                                                          : LocaleProvider.tr(
+                                                        ],
+                                                      ),
+                                                      title: Text(
+                                                        item.title ??
+                                                            LocaleProvider.tr(
+                                                              'title_unknown',
+                                                            ),
+                                                        style: Theme.of(
+                                                          context,
+                                                        ).textTheme.titleMedium,
+                                                        maxLines: 1,
+                                                        overflow: TextOverflow
+                                                            .ellipsis,
+                                                      ),
+                                                      subtitle: Text(
+                                                        item.artist ??
+                                                            LocaleProvider.tr(
                                                               'artist_unknown',
                                                             ),
-                                                      maxLines: 1,
-                                                      overflow:
-                                                          TextOverflow.ellipsis,
-                                                    ),
-                                                    trailing: IconButton(
-                                                      icon: const Icon(
-                                                        Icons.link,
+                                                        style: Theme.of(
+                                                          context,
+                                                        ).textTheme.bodySmall,
+                                                        maxLines: 1,
+                                                        overflow: TextOverflow
+                                                            .ellipsis,
                                                       ),
-                                                      tooltip:
-                                                          LocaleProvider.tr(
-                                                            'copy_link',
-                                                          ),
-                                                      onPressed: () {
-                                                        Clipboard.setData(
-                                                          ClipboardData(
-                                                            text:
-                                                                'https://music.youtube.com/watch?v=${item.videoId}',
-                                                          ),
-                                                        );
-                                                      },
+                                                      trailing: IconButton(
+                                                        icon: const Icon(
+                                                          Icons.link,
+                                                        ),
+                                                        tooltip:
+                                                            LocaleProvider.tr(
+                                                              'copy_link',
+                                                            ),
+                                                        onPressed: () {
+                                                          Clipboard.setData(
+                                                            ClipboardData(
+                                                              text:
+                                                                  'https://music.youtube.com/watch?v=${item.videoId}',
+                                                            ),
+                                                          );
+                                                        },
+                                                      ),
                                                     ),
                                                   ),
                                                 ),
@@ -3520,10 +4127,23 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                               height: 40,
                                               decoration: BoxDecoration(
                                                 shape: BoxShape.circle,
-                                                color: Theme.of(context)
-                                                    .colorScheme
-                                                    .primary
-                                                    .withValues(alpha: 0.08),
+                                                color:
+                                                    Theme.of(
+                                                          context,
+                                                        ).brightness ==
+                                                        Brightness.dark
+                                                    ? Theme.of(context)
+                                                          .colorScheme
+                                                          .onSecondary
+                                                          .withValues(
+                                                            alpha: 0.5,
+                                                          )
+                                                    : Theme.of(context)
+                                                          .colorScheme
+                                                          .secondaryContainer
+                                                          .withValues(
+                                                            alpha: 0.5,
+                                                          ),
                                               ),
                                               child: const Icon(
                                                 Icons.arrow_back,
@@ -3549,6 +4169,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                       Expanded(
                                         child: ListView.builder(
                                           controller: _playlistScrollController,
+                                          padding: EdgeInsets.zero,
                                           itemCount:
                                               _playlistResults.length +
                                               (_loadingMorePlaylists ? 1 : 0),
@@ -3585,93 +4206,204 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                             }
                                             final playlist =
                                                 _playlistResults[idx];
-                                            return ListTile(
-                                              contentPadding:
-                                                  const EdgeInsets.symmetric(
-                                                    horizontal: 0,
-                                                    vertical: 10,
-                                                  ),
-                                              leading: ClipRRect(
-                                                borderRadius:
-                                                    BorderRadius.circular(8),
-                                                child:
-                                                    playlist['thumbUrl'] != null
-                                                    ? _buildSafeNetworkImage(
-                                                        playlist['thumbUrl']!,
-                                                        width: 56,
-                                                        height: 56,
-                                                        fit: BoxFit.cover,
-                                                      )
-                                                    : Container(
-                                                        width: 56,
-                                                        height: 56,
-                                                        decoration: BoxDecoration(
-                                                          color:
-                                                              Colors.grey[300],
-                                                          borderRadius:
-                                                              BorderRadius.circular(
-                                                                12,
-                                                              ),
-                                                        ),
-                                                        child: const Icon(
-                                                          Icons.playlist_play,
-                                                          size: 32,
-                                                          color: Colors.grey,
-                                                        ),
-                                                      ),
-                                              ),
-                                              title: Text(
-                                                playlist['title'] ??
-                                                    LocaleProvider.tr(
-                                                      'title_unknown',
-                                                    ),
-                                                style: Theme.of(
-                                                  context,
-                                                ).textTheme.titleMedium,
-                                                maxLines: 2,
-                                                overflow: TextOverflow.ellipsis,
-                                              ),
 
-                                              trailing: IconButton(
-                                                icon: const Icon(Icons.link),
-                                                tooltip: LocaleProvider.tr(
-                                                  'copy_link',
-                                                ),
-                                                onPressed: () {
-                                                  Clipboard.setData(
-                                                    ClipboardData(
-                                                      text:
-                                                          'https://music.youtube.com/playlist?list=${playlist['browseId']}',
+                                            final isDark =
+                                                Theme.of(context).brightness ==
+                                                Brightness.dark;
+                                            final cardColor = isDark
+                                                ? Theme.of(context)
+                                                      .colorScheme
+                                                      .onSecondary
+                                                      .withValues(alpha: 0.5)
+                                                : Theme.of(context)
+                                                      .colorScheme
+                                                      .secondaryContainer
+                                                      .withValues(alpha: 0.5);
+
+                                            final bool isFirst = idx == 0;
+                                            final bool isLast =
+                                                idx ==
+                                                _playlistResults.length - 1;
+                                            final bool isOnly =
+                                                _playlistResults.length == 1;
+
+                                            BorderRadius borderRadius;
+                                            if (isOnly) {
+                                              borderRadius =
+                                                  BorderRadius.circular(16);
+                                            } else if (isFirst) {
+                                              borderRadius =
+                                                  const BorderRadius.only(
+                                                    topLeft: Radius.circular(
+                                                      16,
                                                     ),
+                                                    topRight: Radius.circular(
+                                                      16,
+                                                    ),
+                                                    bottomLeft: Radius.circular(
+                                                      4,
+                                                    ),
+                                                    bottomRight:
+                                                        Radius.circular(4),
                                                   );
-                                                },
+                                            } else if (isLast) {
+                                              borderRadius =
+                                                  const BorderRadius.only(
+                                                    topLeft: Radius.circular(4),
+                                                    topRight: Radius.circular(
+                                                      4,
+                                                    ),
+                                                    bottomLeft: Radius.circular(
+                                                      16,
+                                                    ),
+                                                    bottomRight:
+                                                        Radius.circular(16),
+                                                  );
+                                            } else {
+                                              borderRadius =
+                                                  BorderRadius.circular(4);
+                                            }
+
+                                            return Padding(
+                                              padding: EdgeInsets.only(
+                                                bottom: isLast ? 0 : 4,
                                               ),
-                                              onTap: () async {
-                                                if (playlist['browseId'] ==
-                                                    null) {
-                                                  return;
-                                                }
-                                                setState(() {
-                                                  _expandedCategory =
-                                                      'playlist';
-                                                  _loadingPlaylistSongs = true;
-                                                  _playlistSongs = [];
-                                                  _currentPlaylist = {
-                                                    'title': playlist['title'],
-                                                    'thumbUrl':
-                                                        playlist['thumbUrl'],
-                                                  };
-                                                });
-                                                final songs =
-                                                    await getPlaylistSongs(
-                                                      playlist['browseId']!,
-                                                    );
-                                                if (!mounted) return;
-                                                setState(() {
-                                                  _playlistSongs = songs;
-                                                  _loadingPlaylistSongs = false;
-                                                });
-                                              },
+                                              child: Card(
+                                                color: cardColor,
+                                                margin: EdgeInsets.zero,
+                                                elevation: 0,
+                                                shape: RoundedRectangleBorder(
+                                                  borderRadius: borderRadius,
+                                                ),
+                                                child: InkWell(
+                                                  borderRadius: borderRadius,
+                                                  onTap: () async {
+                                                    if (playlist['browseId'] ==
+                                                        null) {
+                                                      return;
+                                                    }
+                                                    setState(() {
+                                                      _expandedCategory =
+                                                          'playlist';
+                                                      _loadingPlaylistSongs =
+                                                          true;
+                                                      _playlistSongs = [];
+                                                      _currentPlaylist = {
+                                                        'title':
+                                                            playlist['title'],
+                                                        'thumbUrl':
+                                                            playlist['thumbUrl'],
+                                                        'id':
+                                                            playlist['browseId'],
+                                                      };
+                                                    });
+                                                    final songs =
+                                                        await getPlaylistSongs(
+                                                          playlist['browseId']!,
+                                                        );
+                                                    if (!mounted) return;
+                                                    setState(() {
+                                                      _playlistSongs = songs;
+                                                      _loadingPlaylistSongs =
+                                                          false;
+                                                    });
+                                                  },
+                                                  child: ListTile(
+                                                    contentPadding:
+                                                        const EdgeInsets.symmetric(
+                                                          horizontal: 16,
+                                                          vertical: 4,
+                                                        ),
+                                                    leading: ClipRRect(
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            8,
+                                                          ),
+                                                      child:
+                                                          playlist['thumbUrl'] !=
+                                                              null
+                                                          ? _buildSafeNetworkImage(
+                                                              playlist['thumbUrl']!,
+                                                              width: 50,
+                                                              height: 50,
+                                                              fit: BoxFit.cover,
+                                                              fallback: Container(
+                                                                width: 50,
+                                                                height: 50,
+                                                                decoration: BoxDecoration(
+                                                                  color:
+                                                                      isSystem
+                                                                      ? Theme.of(
+                                                                          context,
+                                                                        ).colorScheme.secondaryContainer
+                                                                      : Theme.of(
+                                                                          context,
+                                                                        ).colorScheme.surfaceContainer,
+                                                                  borderRadius:
+                                                                      BorderRadius.circular(
+                                                                        8,
+                                                                      ),
+                                                                ),
+                                                                child: const Icon(
+                                                                  Icons
+                                                                      .playlist_play,
+                                                                  size: 24,
+                                                                ),
+                                                              ),
+                                                            )
+                                                          : Container(
+                                                              width: 50,
+                                                              height: 50,
+                                                              decoration: BoxDecoration(
+                                                                color: Colors
+                                                                    .grey[300],
+                                                                borderRadius:
+                                                                    BorderRadius.circular(
+                                                                      8,
+                                                                    ),
+                                                              ),
+                                                              child: const Icon(
+                                                                Icons
+                                                                    .playlist_play,
+                                                                size: 24,
+                                                                color:
+                                                                    Colors.grey,
+                                                              ),
+                                                            ),
+                                                    ),
+                                                    title: Text(
+                                                      playlist['title'] ??
+                                                          LocaleProvider.tr(
+                                                            'title_unknown',
+                                                          ),
+                                                      style: Theme.of(
+                                                        context,
+                                                      ).textTheme.titleMedium,
+                                                      maxLines: 2,
+                                                      overflow:
+                                                          TextOverflow.ellipsis,
+                                                    ),
+
+                                                    trailing: IconButton(
+                                                      icon: const Icon(
+                                                        Icons.link,
+                                                      ),
+                                                      tooltip:
+                                                          LocaleProvider.tr(
+                                                            'copy_link',
+                                                          ),
+                                                      onPressed: () {
+                                                        Clipboard.setData(
+                                                          ClipboardData(
+                                                            text:
+                                                                'https://www.youtube.com/playlist?list=${playlist['browseId']}',
+                                                          ),
+                                                        );
+                                                      },
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
                                             );
                                           },
                                         ),
@@ -3701,122 +4433,204 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                     ?.copyWith(fontSize: 20),
                                               ),
                                             ),
-                                            const SizedBox(height: 8),
+                                            const SizedBox(height: 2),
                                             Column(
-                                              children: _artistResults.take(3).map((
-                                                artist,
+                                              children: _artistResults.take(3).toList().asMap().entries.map((
+                                                entry,
                                               ) {
+                                                final idx = entry.key;
+                                                final artist = entry.value;
                                                 final artistName =
                                                     artist['name'] ??
-                                                    'Artista desconocido';
+                                                    LocaleProvider.tr(
+                                                      'artist_unknown',
+                                                    );
                                                 final thumbUrl =
                                                     artist['thumbUrl'];
                                                 final browseId =
                                                     artist['browseId'];
-                                                return GestureDetector(
-                                                  onTap: () {
-                                                    // print('🚀 Navegando a artista: $artistName con browseId: $browseId');
-                                                    Navigator.of(context).push(
-                                                      PageRouteBuilder(
-                                                        settings:
-                                                            const RouteSettings(
-                                                              name: '/artist',
-                                                            ),
-                                                        pageBuilder:
-                                                            (
-                                                              context,
-                                                              animation,
-                                                              secondaryAnimation,
-                                                            ) => ArtistScreen(
-                                                              artistName:
-                                                                  artistName,
-                                                              browseId:
-                                                                  browseId,
-                                                            ),
-                                                        transitionsBuilder:
-                                                            (
-                                                              context,
-                                                              animation,
-                                                              secondaryAnimation,
-                                                              child,
-                                                            ) {
-                                                              const begin =
-                                                                  Offset(
-                                                                    1.0,
-                                                                    0.0,
-                                                                  );
-                                                              const end =
-                                                                  Offset.zero;
-                                                              const curve = Curves
-                                                                  .easeInOutCubic;
-                                                              var tween =
-                                                                  Tween(
-                                                                    begin:
-                                                                        begin,
-                                                                    end: end,
-                                                                  ).chain(
-                                                                    CurveTween(
-                                                                      curve:
-                                                                          curve,
-                                                                    ),
-                                                                  );
-                                                              return SlideTransition(
-                                                                position:
-                                                                    animation
+                                                final resultsCount =
+                                                    _artistResults
+                                                        .take(3)
+                                                        .length;
+
+                                                final isDark =
+                                                    Theme.of(
+                                                      context,
+                                                    ).brightness ==
+                                                    Brightness.dark;
+                                                final cardColor = isDark
+                                                    ? Theme.of(context)
+                                                          .colorScheme
+                                                          .onSecondary
+                                                          .withValues(
+                                                            alpha: 0.5,
+                                                          )
+                                                    : Theme.of(context)
+                                                          .colorScheme
+                                                          .secondaryContainer
+                                                          .withValues(
+                                                            alpha: 0.5,
+                                                          );
+
+                                                final bool isFirst = idx == 0;
+                                                final bool isLast =
+                                                    idx == resultsCount - 1;
+                                                final bool isOnly =
+                                                    resultsCount == 1;
+
+                                                BorderRadius borderRadius;
+                                                if (isOnly) {
+                                                  borderRadius =
+                                                      BorderRadius.circular(16);
+                                                } else if (isFirst) {
+                                                  borderRadius =
+                                                      const BorderRadius.only(
+                                                        topLeft:
+                                                            Radius.circular(16),
+                                                        topRight:
+                                                            Radius.circular(16),
+                                                        bottomLeft:
+                                                            Radius.circular(4),
+                                                        bottomRight:
+                                                            Radius.circular(4),
+                                                      );
+                                                } else if (isLast) {
+                                                  borderRadius =
+                                                      const BorderRadius.only(
+                                                        topLeft:
+                                                            Radius.circular(4),
+                                                        topRight:
+                                                            Radius.circular(4),
+                                                        bottomLeft:
+                                                            Radius.circular(16),
+                                                        bottomRight:
+                                                            Radius.circular(16),
+                                                      );
+                                                } else {
+                                                  borderRadius =
+                                                      BorderRadius.circular(4);
+                                                }
+
+                                                return Padding(
+                                                  padding: EdgeInsets.only(
+                                                    bottom: isLast ? 0 : 4,
+                                                  ),
+                                                  child: Card(
+                                                    color: cardColor,
+                                                    margin: EdgeInsets.zero,
+                                                    elevation: 0,
+                                                    shape:
+                                                        RoundedRectangleBorder(
+                                                          borderRadius:
+                                                              borderRadius,
+                                                        ),
+                                                    child: InkWell(
+                                                      borderRadius:
+                                                          borderRadius,
+                                                      onTap: () {
+                                                        Navigator.of(
+                                                          context,
+                                                        ).push(
+                                                          PageRouteBuilder(
+                                                            settings:
+                                                                const RouteSettings(
+                                                                  name:
+                                                                      '/artist',
+                                                                ),
+                                                            pageBuilder:
+                                                                (
+                                                                  context,
+                                                                  animation,
+                                                                  secondaryAnimation,
+                                                                ) => ArtistScreen(
+                                                                  artistName:
+                                                                      artistName,
+                                                                  browseId:
+                                                                      browseId,
+                                                                ),
+                                                            transitionsBuilder:
+                                                                (
+                                                                  context,
+                                                                  animation,
+                                                                  secondaryAnimation,
+                                                                  child,
+                                                                ) {
+                                                                  const begin =
+                                                                      Offset(
+                                                                        1.0,
+                                                                        0.0,
+                                                                      );
+                                                                  const end =
+                                                                      Offset
+                                                                          .zero;
+                                                                  const curve =
+                                                                      Curves
+                                                                          .easeInOutCubic;
+                                                                  var tween =
+                                                                      Tween(
+                                                                        begin:
+                                                                            begin,
+                                                                        end:
+                                                                            end,
+                                                                      ).chain(
+                                                                        CurveTween(
+                                                                          curve:
+                                                                              curve,
+                                                                        ),
+                                                                      );
+                                                                  return SlideTransition(
+                                                                    position: animation
                                                                         .drive(
                                                                           tween,
                                                                         ),
-                                                                child: child,
-                                                              );
-                                                            },
-                                                        transitionDuration:
-                                                            const Duration(
-                                                              milliseconds: 300,
-                                                            ),
-                                                      ),
-                                                    );
-                                                  },
-                                                  child: Container(
-                                                    width: double.infinity,
-                                                    margin:
-                                                        const EdgeInsets.symmetric(),
-                                                    child: ListTile(
-                                                      contentPadding:
-                                                          const EdgeInsets.symmetric(
-                                                            horizontal: 0,
-                                                            vertical: 8,
+                                                                    child:
+                                                                        child,
+                                                                  );
+                                                                },
+                                                            transitionDuration:
+                                                                const Duration(
+                                                                  milliseconds:
+                                                                      300,
+                                                                ),
                                                           ),
-                                                      leading: ClipRRect(
-                                                        borderRadius:
-                                                            BorderRadius.circular(
-                                                              28,
+                                                        );
+                                                      },
+                                                      child: ListTile(
+                                                        contentPadding:
+                                                            const EdgeInsets.symmetric(
+                                                              horizontal: 16,
+                                                              vertical: 10,
                                                             ),
-                                                        child:
-                                                            thumbUrl != null &&
-                                                                thumbUrl
-                                                                    .isNotEmpty
-                                                            ? _buildSafeNetworkImage(
-                                                                thumbUrl,
-                                                                width: 56,
-                                                                height: 56,
-                                                                fit: BoxFit
-                                                                    .cover,
-                                                                fallback: Container(
-                                                                  width: 56,
-                                                                  height: 56,
+                                                        leading: ClipRRect(
+                                                          borderRadius:
+                                                              BorderRadius.circular(
+                                                                25,
+                                                              ),
+                                                          child:
+                                                              thumbUrl !=
+                                                                      null &&
+                                                                  thumbUrl
+                                                                      .isNotEmpty
+                                                              ? _buildSafeNetworkImage(
+                                                                  thumbUrl,
+                                                                  width: 50,
+                                                                  height: 50,
+                                                                  fit: BoxFit
+                                                                      .cover,
+                                                                )
+                                                              : Container(
+                                                                  width: 50,
+                                                                  height: 50,
                                                                   decoration: BoxDecoration(
                                                                     color:
-                                                                        colorSchemeNotifier.value ==
-                                                                            AppColorScheme.amoled
-                                                                        ? Colors.white.withValues(
-                                                                            alpha:
-                                                                                0.1,
-                                                                          )
-                                                                        : (isSystem
-                                                                              ? Theme.of(
-                                                                                  context,
-                                                                                ).colorScheme.secondaryContainer
-                                                                              : Theme.of(context).colorScheme.surfaceContainer),
+                                                                        isSystem
+                                                                        ? Theme.of(
+                                                                            context,
+                                                                          ).colorScheme.secondaryContainer
+                                                                        : Theme.of(
+                                                                            context,
+                                                                          ).colorScheme.surfaceContainer,
                                                                     shape: BoxShape
                                                                         .circle,
                                                                   ),
@@ -3826,115 +4640,20 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                                     size: 28,
                                                                   ),
                                                                 ),
-                                                              )
-                                                            : Container(
-                                                                width: 56,
-                                                                height: 56,
-                                                                decoration: BoxDecoration(
-                                                                  color:
-                                                                      colorSchemeNotifier
-                                                                              .value ==
-                                                                          AppColorScheme
-                                                                              .amoled
-                                                                      ? Colors.white.withValues(
-                                                                          alpha:
-                                                                              0.1,
-                                                                        )
-                                                                      : Theme.of(
-                                                                          context,
-                                                                        ).colorScheme.surfaceContainer,
-                                                                  shape: BoxShape
-                                                                      .circle,
-                                                                ),
-                                                                child: const Icon(
-                                                                  Icons.person,
-                                                                  size: 28,
-                                                                ),
-                                                              ),
-                                                      ),
-                                                      title: Text(
-                                                        artistName,
-                                                        maxLines: 1,
-                                                        overflow: TextOverflow
-                                                            .ellipsis,
-                                                      ),
-                                                      trailing: IconButton(
-                                                        icon: const Icon(
+                                                        ),
+                                                        title: Text(
+                                                          artistName,
+                                                          maxLines: 1,
+                                                          overflow: TextOverflow
+                                                              .ellipsis,
+                                                          style:
+                                                              Theme.of(context)
+                                                                  .textTheme
+                                                                  .titleMedium,
+                                                        ),
+                                                        trailing: const Icon(
                                                           Icons.chevron_right,
                                                         ),
-                                                        tooltip:
-                                                            LocaleProvider.tr(
-                                                              'view_artist',
-                                                            ),
-                                                        onPressed: () {
-                                                          // print('🚀 Navegando a artista (botón): $artistName con browseId: $browseId');
-                                                          Navigator.of(
-                                                            context,
-                                                          ).push(
-                                                            PageRouteBuilder(
-                                                              settings:
-                                                                  const RouteSettings(
-                                                                    name:
-                                                                        '/artist',
-                                                                  ),
-                                                              pageBuilder:
-                                                                  (
-                                                                    context,
-                                                                    animation,
-                                                                    secondaryAnimation,
-                                                                  ) => ArtistScreen(
-                                                                    artistName:
-                                                                        artistName,
-                                                                    browseId:
-                                                                        browseId,
-                                                                  ),
-                                                              transitionsBuilder:
-                                                                  (
-                                                                    context,
-                                                                    animation,
-                                                                    secondaryAnimation,
-                                                                    child,
-                                                                  ) {
-                                                                    const begin =
-                                                                        Offset(
-                                                                          1.0,
-                                                                          0.0,
-                                                                        );
-                                                                    const end =
-                                                                        Offset
-                                                                            .zero;
-                                                                    const curve =
-                                                                        Curves
-                                                                            .easeInOutCubic;
-                                                                    var tween =
-                                                                        Tween(
-                                                                          begin:
-                                                                              begin,
-                                                                          end:
-                                                                              end,
-                                                                        ).chain(
-                                                                          CurveTween(
-                                                                            curve:
-                                                                                curve,
-                                                                          ),
-                                                                        );
-                                                                    return SlideTransition(
-                                                                      position: animation
-                                                                          .drive(
-                                                                            tween,
-                                                                          ),
-                                                                      child:
-                                                                          child,
-                                                                    );
-                                                                  },
-                                                              transitionDuration:
-                                                                  const Duration(
-                                                                    milliseconds:
-                                                                        300,
-                                                                  ),
-                                                            ),
-                                                          );
-                                                        },
                                                       ),
                                                     ),
                                                   ),
@@ -4001,173 +4720,302 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                       _selectedIndexes.contains(
                                                         'song-$videoId',
                                                       );
-                                                  return GestureDetector(
-                                                    onLongPress: () {
-                                                      HapticFeedback.selectionClick();
-                                                      _toggleSelection(
-                                                        index,
-                                                        isVideo: false,
-                                                      );
-                                                    },
-                                                    onTap: () {
-                                                      if (_isSelectionMode) {
-                                                        _toggleSelection(
-                                                          index,
-                                                          isVideo: false,
+
+                                                  final isDark =
+                                                      Theme.of(
+                                                        context,
+                                                      ).brightness ==
+                                                      Brightness.dark;
+                                                  final cardColor = isDark
+                                                      ? Theme.of(context)
+                                                            .colorScheme
+                                                            .onSecondary
+                                                            .withValues(
+                                                              alpha: 0.5,
+                                                            )
+                                                      : Theme.of(context)
+                                                            .colorScheme
+                                                            .secondaryContainer
+                                                            .withValues(
+                                                              alpha: 0.5,
+                                                            );
+
+                                                  final int totalToShow =
+                                                      _songResults.length < 3
+                                                      ? _songResults.length
+                                                      : 3;
+                                                  final bool isFirst =
+                                                      index == 0;
+                                                  final bool isLast =
+                                                      index == totalToShow - 1;
+                                                  final bool isOnly =
+                                                      totalToShow == 1;
+
+                                                  BorderRadius borderRadius;
+                                                  if (isOnly) {
+                                                    borderRadius =
+                                                        BorderRadius.circular(
+                                                          16,
                                                         );
-                                                      } else {
-                                                        showModalBottomSheet(
-                                                          context: context,
-                                                          shape: const RoundedRectangleBorder(
+                                                  } else if (isFirst) {
+                                                    borderRadius =
+                                                        const BorderRadius.only(
+                                                          topLeft:
+                                                              Radius.circular(
+                                                                16,
+                                                              ),
+                                                          topRight:
+                                                              Radius.circular(
+                                                                16,
+                                                              ),
+                                                          bottomLeft:
+                                                              Radius.circular(
+                                                                4,
+                                                              ),
+                                                          bottomRight:
+                                                              Radius.circular(
+                                                                4,
+                                                              ),
+                                                        );
+                                                  } else if (isLast) {
+                                                    borderRadius =
+                                                        const BorderRadius.only(
+                                                          topLeft:
+                                                              Radius.circular(
+                                                                4,
+                                                              ),
+                                                          topRight:
+                                                              Radius.circular(
+                                                                4,
+                                                              ),
+                                                          bottomLeft:
+                                                              Radius.circular(
+                                                                16,
+                                                              ),
+                                                          bottomRight:
+                                                              Radius.circular(
+                                                                16,
+                                                              ),
+                                                        );
+                                                  } else {
+                                                    borderRadius =
+                                                        BorderRadius.circular(
+                                                          4,
+                                                        );
+                                                  }
+
+                                                  return Padding(
+                                                    padding: EdgeInsets.only(
+                                                      bottom: isLast ? 0 : 4,
+                                                    ),
+                                                    child: Card(
+                                                      color: cardColor,
+                                                      margin: EdgeInsets.zero,
+                                                      elevation: 0,
+                                                      shape:
+                                                          RoundedRectangleBorder(
                                                             borderRadius:
-                                                                BorderRadius.vertical(
-                                                                  top:
-                                                                      Radius.circular(
-                                                                        16,
-                                                                      ),
-                                                                ),
+                                                                borderRadius,
                                                           ),
-                                                          builder: (context) {
-                                                            return SafeArea(
-                                                              child: Padding(
-                                                                padding:
-                                                                    const EdgeInsets.all(
-                                                                      24,
-                                                                    ),
-                                                                child: YtPreviewPlayer(
-                                                                  results:
-                                                                      _songResults,
-                                                                  currentIndex:
-                                                                      index,
-                                                                ),
-                                                              ),
+                                                      child: InkWell(
+                                                        borderRadius:
+                                                            borderRadius,
+                                                        onLongPress: () {
+                                                          HapticFeedback.selectionClick();
+                                                          _toggleSelection(
+                                                            index,
+                                                            isVideo: false,
+                                                          );
+                                                        },
+                                                        onTap: () {
+                                                          if (_isSelectionMode) {
+                                                            _toggleSelection(
+                                                              index,
+                                                              isVideo: false,
                                                             );
-                                                          },
-                                                        );
-                                                      }
-                                                    },
-                                                    child: Container(
-                                                      width: double.infinity,
-                                                      margin:
-                                                          const EdgeInsets.symmetric(),
-                                                      child: ListTile(
-                                                        contentPadding:
-                                                            const EdgeInsets.symmetric(
-                                                              horizontal: 0,
-                                                              vertical: 4,
-                                                            ),
-                                                        leading: Row(
-                                                          mainAxisSize:
-                                                              MainAxisSize.min,
-                                                          children: [
-                                                            if (_isSelectionMode)
-                                                              Checkbox(
-                                                                value:
-                                                                    isSelected,
-                                                                onChanged: (checked) {
-                                                                  setState(() {
-                                                                    if (videoId ==
-                                                                        null) {
-                                                                      return;
-                                                                    }
-                                                                    final key =
-                                                                        'song-$videoId';
-                                                                    if (checked ==
-                                                                        true) {
-                                                                      _selectedIndexes
-                                                                          .add(
-                                                                            key,
-                                                                          );
-                                                                    } else {
-                                                                      _selectedIndexes
-                                                                          .remove(
-                                                                            key,
-                                                                          );
-                                                                      if (_selectedIndexes
-                                                                          .isEmpty) {
-                                                                        _isSelectionMode =
-                                                                            false;
-                                                                      }
-                                                                    }
-                                                                  });
-                                                                },
+                                                          } else {
+                                                            showModalBottomSheet(
+                                                              context: context,
+                                                              shape: const RoundedRectangleBorder(
+                                                                borderRadius:
+                                                                    BorderRadius.vertical(
+                                                                      top:
+                                                                          Radius.circular(
+                                                                            16,
+                                                                          ),
+                                                                    ),
                                                               ),
-                                                            ClipRRect(
-                                                              borderRadius:
-                                                                  BorderRadius.circular(
-                                                                    8,
+                                                              builder: (context) {
+                                                                return SafeArea(
+                                                                  child: Padding(
+                                                                    padding:
+                                                                        const EdgeInsets.all(
+                                                                          24,
+                                                                        ),
+                                                                    child: YtPreviewPlayer(
+                                                                      results:
+                                                                          _songResults,
+                                                                      currentIndex:
+                                                                          index,
+                                                                    ),
                                                                   ),
-                                                              child:
-                                                                  item.thumbUrl !=
-                                                                      null
-                                                                  ? _buildSafeNetworkImage(
-                                                                      item.thumbUrl!,
-                                                                      width: 56,
-                                                                      height:
-                                                                          56,
-                                                                      fit: BoxFit
-                                                                          .cover,
-                                                                    )
-                                                                  : Container(
-                                                                      width: 56,
-                                                                      height:
-                                                                          56,
-                                                                      decoration: BoxDecoration(
-                                                                        color: Colors
-                                                                            .grey[300],
-                                                                        borderRadius:
-                                                                            BorderRadius.circular(
-                                                                              12,
-                                                                            ),
-                                                                      ),
-                                                                      child: const Icon(
-                                                                        Icons
-                                                                            .music_note,
-                                                                        size:
-                                                                            32,
-                                                                      ),
-                                                                    ),
-                                                            ),
-                                                          ],
-                                                        ),
-                                                        title: Text(
-                                                          item.title ??
-                                                              LocaleProvider.tr(
-                                                                'title_unknown',
-                                                              ),
-                                                          style:
-                                                              Theme.of(context)
-                                                                  .textTheme
-                                                                  .titleMedium,
-                                                          maxLines: 1,
-                                                          overflow: TextOverflow
-                                                              .ellipsis,
-                                                        ),
-                                                        subtitle: Text(
-                                                          item.artist ??
-                                                              LocaleProvider.tr(
-                                                                'artist_unknown',
-                                                              ),
-                                                          maxLines: 1,
-                                                          overflow: TextOverflow
-                                                              .ellipsis,
-                                                        ),
-                                                        trailing: IconButton(
-                                                          icon: const Icon(
-                                                            Icons.link,
-                                                          ),
-                                                          tooltip:
-                                                              LocaleProvider.tr(
-                                                                'copy_link',
-                                                              ),
-                                                          onPressed: () {
-                                                            Clipboard.setData(
-                                                              ClipboardData(
-                                                                text:
-                                                                    'https://music.youtube.com/watch?v=${item.videoId}',
-                                                              ),
+                                                                );
+                                                              },
                                                             );
-                                                          },
+                                                          }
+                                                        },
+                                                        child: ListTile(
+                                                          contentPadding:
+                                                              const EdgeInsets.symmetric(
+                                                                horizontal: 16,
+                                                                vertical: 4,
+                                                              ),
+                                                          leading: Row(
+                                                            mainAxisSize:
+                                                                MainAxisSize
+                                                                    .min,
+                                                            children: [
+                                                              if (_isSelectionMode)
+                                                                Checkbox(
+                                                                  value:
+                                                                      isSelected,
+                                                                  onChanged: (checked) {
+                                                                    setState(() {
+                                                                      if (videoId ==
+                                                                          null) {
+                                                                        return;
+                                                                      }
+                                                                      final key =
+                                                                          'song-$videoId';
+                                                                      if (checked ==
+                                                                          true) {
+                                                                        _selectedIndexes
+                                                                            .add(
+                                                                              key,
+                                                                            );
+                                                                      } else {
+                                                                        _selectedIndexes
+                                                                            .remove(
+                                                                              key,
+                                                                            );
+                                                                        if (_selectedIndexes
+                                                                            .isEmpty) {
+                                                                          _isSelectionMode =
+                                                                              false;
+                                                                        }
+                                                                      }
+                                                                    });
+                                                                  },
+                                                                ),
+                                                              ClipRRect(
+                                                                borderRadius:
+                                                                    BorderRadius.circular(
+                                                                      8,
+                                                                    ),
+                                                                child:
+                                                                    item.thumbUrl !=
+                                                                        null
+                                                                    ? _buildSafeNetworkImage(
+                                                                        item.thumbUrl!,
+                                                                        width:
+                                                                            50,
+                                                                        height:
+                                                                            50,
+                                                                        fit: BoxFit
+                                                                            .cover,
+                                                                        fallback: Container(
+                                                                          width:
+                                                                              50,
+                                                                          height:
+                                                                              50,
+                                                                          decoration: BoxDecoration(
+                                                                            color:
+                                                                                isSystem
+                                                                                ? Theme.of(
+                                                                                    context,
+                                                                                  ).colorScheme.secondaryContainer
+                                                                                : Theme.of(
+                                                                                    context,
+                                                                                  ).colorScheme.surfaceContainer,
+                                                                            borderRadius: BorderRadius.circular(
+                                                                              8,
+                                                                            ),
+                                                                          ),
+                                                                          child: const Icon(
+                                                                            Icons.music_note,
+                                                                            size:
+                                                                                24,
+                                                                            color:
+                                                                                Colors.grey,
+                                                                          ),
+                                                                        ),
+                                                                      )
+                                                                    : Container(
+                                                                        width:
+                                                                            50,
+                                                                        height:
+                                                                            50,
+                                                                        decoration: BoxDecoration(
+                                                                          color:
+                                                                              Colors.grey[300],
+                                                                          borderRadius:
+                                                                              BorderRadius.circular(
+                                                                                8,
+                                                                              ),
+                                                                        ),
+                                                                        child: const Icon(
+                                                                          Icons
+                                                                              .music_note,
+                                                                          size:
+                                                                              24,
+                                                                        ),
+                                                                      ),
+                                                              ),
+                                                            ],
+                                                          ),
+                                                          title: Text(
+                                                            item.title ??
+                                                                LocaleProvider.tr(
+                                                                  'title_unknown',
+                                                                ),
+                                                            style:
+                                                                Theme.of(
+                                                                      context,
+                                                                    )
+                                                                    .textTheme
+                                                                    .titleMedium,
+                                                            maxLines: 1,
+                                                            overflow:
+                                                                TextOverflow
+                                                                    .ellipsis,
+                                                          ),
+                                                          subtitle: Text(
+                                                            item.artist ??
+                                                                LocaleProvider.tr(
+                                                                  'artist_unknown',
+                                                                ),
+                                                            maxLines: 1,
+                                                            overflow:
+                                                                TextOverflow
+                                                                    .ellipsis,
+                                                          ),
+                                                          trailing: IconButton(
+                                                            icon: const Icon(
+                                                              Icons.link,
+                                                            ),
+                                                            tooltip:
+                                                                LocaleProvider.tr(
+                                                                  'copy_link',
+                                                                ),
+                                                            onPressed: () {
+                                                              Clipboard.setData(
+                                                                ClipboardData(
+                                                                  text:
+                                                                      'https://music.youtube.com/watch?v=${item.videoId}',
+                                                                ),
+                                                              );
+                                                            },
+                                                          ),
                                                         ),
                                                       ),
                                                     ),
@@ -4234,170 +5082,276 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                     _selectedIndexes.contains(
                                                       'video-$videoId',
                                                     );
-                                                return GestureDetector(
-                                                  onLongPress: () {
-                                                    HapticFeedback.selectionClick();
-                                                    _toggleSelection(
-                                                      index,
-                                                      isVideo: true,
-                                                    );
-                                                  },
-                                                  onTap: () {
-                                                    if (_isSelectionMode) {
-                                                      _toggleSelection(
-                                                        index,
-                                                        isVideo: true,
+
+                                                final isDark =
+                                                    Theme.of(
+                                                      context,
+                                                    ).brightness ==
+                                                    Brightness.dark;
+                                                final cardColor = isDark
+                                                    ? Theme.of(context)
+                                                          .colorScheme
+                                                          .onSecondary
+                                                          .withValues(
+                                                            alpha: 0.5,
+                                                          )
+                                                    : Theme.of(context)
+                                                          .colorScheme
+                                                          .secondaryContainer
+                                                          .withValues(
+                                                            alpha: 0.5,
+                                                          );
+
+                                                final int totalToShow =
+                                                    _videoResults.length < 3
+                                                    ? _videoResults.length
+                                                    : 3;
+                                                final bool isFirst = index == 0;
+                                                final bool isLast =
+                                                    index == totalToShow - 1;
+                                                final bool isOnly =
+                                                    totalToShow == 1;
+
+                                                BorderRadius borderRadius;
+                                                if (isOnly) {
+                                                  borderRadius =
+                                                      BorderRadius.circular(16);
+                                                } else if (isFirst) {
+                                                  borderRadius =
+                                                      const BorderRadius.only(
+                                                        topLeft:
+                                                            Radius.circular(16),
+                                                        topRight:
+                                                            Radius.circular(16),
+                                                        bottomLeft:
+                                                            Radius.circular(4),
+                                                        bottomRight:
+                                                            Radius.circular(4),
                                                       );
-                                                    } else {
-                                                      showModalBottomSheet(
-                                                        context: context,
-                                                        shape: const RoundedRectangleBorder(
+                                                } else if (isLast) {
+                                                  borderRadius =
+                                                      const BorderRadius.only(
+                                                        topLeft:
+                                                            Radius.circular(4),
+                                                        topRight:
+                                                            Radius.circular(4),
+                                                        bottomLeft:
+                                                            Radius.circular(16),
+                                                        bottomRight:
+                                                            Radius.circular(16),
+                                                      );
+                                                } else {
+                                                  borderRadius =
+                                                      BorderRadius.circular(4);
+                                                }
+
+                                                return Padding(
+                                                  padding: EdgeInsets.only(
+                                                    bottom: isLast ? 0 : 4,
+                                                  ),
+                                                  child: Card(
+                                                    color: cardColor,
+                                                    margin: EdgeInsets.zero,
+                                                    elevation: 0,
+                                                    shape:
+                                                        RoundedRectangleBorder(
                                                           borderRadius:
-                                                              BorderRadius.vertical(
-                                                                top:
-                                                                    Radius.circular(
-                                                                      16,
-                                                                    ),
-                                                              ),
+                                                              borderRadius,
                                                         ),
-                                                        builder: (context) {
-                                                          return SafeArea(
-                                                            child: Padding(
-                                                              padding:
-                                                                  const EdgeInsets.all(
-                                                                    24,
-                                                                  ),
-                                                              child: YtPreviewPlayer(
-                                                                results:
-                                                                    _videoResults,
-                                                                currentIndex:
-                                                                    index,
-                                                              ),
-                                                            ),
+                                                    child: InkWell(
+                                                      borderRadius:
+                                                          borderRadius,
+                                                      onLongPress: () {
+                                                        HapticFeedback.selectionClick();
+                                                        _toggleSelection(
+                                                          index,
+                                                          isVideo: true,
+                                                        );
+                                                      },
+                                                      onTap: () {
+                                                        if (_isSelectionMode) {
+                                                          _toggleSelection(
+                                                            index,
+                                                            isVideo: true,
                                                           );
-                                                        },
-                                                      );
-                                                    }
-                                                  },
-                                                  child: Container(
-                                                    width: double.infinity,
-                                                    margin:
-                                                        const EdgeInsets.symmetric(),
-                                                    child: ListTile(
-                                                      contentPadding:
-                                                          const EdgeInsets.symmetric(
-                                                            horizontal: 0,
-                                                            vertical: 4,
-                                                          ),
-                                                      leading: Row(
-                                                        mainAxisSize:
-                                                            MainAxisSize.min,
-                                                        children: [
-                                                          if (_isSelectionMode)
-                                                            Checkbox(
-                                                              value: isSelected,
-                                                              onChanged: (checked) {
-                                                                setState(() {
-                                                                  if (videoId ==
-                                                                      null) {
-                                                                    return;
-                                                                  }
-                                                                  final key =
-                                                                      'video-$videoId';
-                                                                  if (checked ==
-                                                                      true) {
-                                                                    _selectedIndexes
-                                                                        .add(
-                                                                          key,
-                                                                        );
-                                                                  } else {
-                                                                    _selectedIndexes
-                                                                        .remove(
-                                                                          key,
-                                                                        );
-                                                                    if (_selectedIndexes
-                                                                        .isEmpty) {
-                                                                      _isSelectionMode =
-                                                                          false;
-                                                                    }
-                                                                  }
-                                                                });
-                                                              },
+                                                        } else {
+                                                          showModalBottomSheet(
+                                                            context: context,
+                                                            shape: const RoundedRectangleBorder(
+                                                              borderRadius:
+                                                                  BorderRadius.vertical(
+                                                                    top:
+                                                                        Radius.circular(
+                                                                          16,
+                                                                        ),
+                                                                  ),
                                                             ),
-                                                          ClipRRect(
-                                                            borderRadius:
-                                                                BorderRadius.circular(
-                                                                  8,
+                                                            builder: (context) {
+                                                              return SafeArea(
+                                                                child: Padding(
+                                                                  padding:
+                                                                      const EdgeInsets.all(
+                                                                        24,
+                                                                      ),
+                                                                  child: YtPreviewPlayer(
+                                                                    results:
+                                                                        _videoResults,
+                                                                    currentIndex:
+                                                                        index,
+                                                                  ),
                                                                 ),
-                                                            child:
-                                                                item.thumbUrl !=
-                                                                    null
-                                                                ? _buildSafeNetworkImage(
-                                                                    item.thumbUrl!,
-                                                                    width: 56,
-                                                                    height: 56,
-                                                                    fit: BoxFit
-                                                                        .cover,
-                                                                  )
-                                                                : Container(
-                                                                    width: 56,
-                                                                    height: 56,
-                                                                    decoration: BoxDecoration(
-                                                                      color: Colors
-                                                                          .grey[300],
-                                                                      borderRadius:
-                                                                          BorderRadius.circular(
-                                                                            12,
-                                                                          ),
-                                                                    ),
-                                                                    child: const Icon(
-                                                                      Icons
-                                                                          .music_video,
-                                                                      size: 32,
-                                                                      color: Colors
-                                                                          .grey,
-                                                                    ),
-                                                                  ),
-                                                          ),
-                                                        ],
-                                                      ),
-                                                      title: Text(
-                                                        item.title ??
-                                                            LocaleProvider.tr(
-                                                              'title_unknown',
-                                                            ),
-                                                        style: Theme.of(
-                                                          context,
-                                                        ).textTheme.titleMedium,
-                                                        maxLines: 1,
-                                                        overflow: TextOverflow
-                                                            .ellipsis,
-                                                      ),
-                                                      subtitle: Text(
-                                                        item.artist ??
-                                                            LocaleProvider.tr(
-                                                              'artist_unknown',
-                                                            ),
-                                                        maxLines: 1,
-                                                        overflow: TextOverflow
-                                                            .ellipsis,
-                                                      ),
-                                                      trailing: IconButton(
-                                                        icon: const Icon(
-                                                          Icons.link,
-                                                        ),
-                                                        tooltip:
-                                                            LocaleProvider.tr(
-                                                              'copy_link',
-                                                            ),
-                                                        onPressed: () {
-                                                          Clipboard.setData(
-                                                            ClipboardData(
-                                                              text:
-                                                                  'https://music.youtube.com/watch?v=${item.videoId}',
-                                                            ),
+                                                              );
+                                                            },
                                                           );
-                                                        },
+                                                        }
+                                                      },
+                                                      child: ListTile(
+                                                        contentPadding:
+                                                            const EdgeInsets.symmetric(
+                                                              horizontal: 16,
+                                                              vertical: 4,
+                                                            ),
+                                                        leading: Row(
+                                                          mainAxisSize:
+                                                              MainAxisSize.min,
+                                                          children: [
+                                                            if (_isSelectionMode)
+                                                              Checkbox(
+                                                                value:
+                                                                    isSelected,
+                                                                onChanged: (checked) {
+                                                                  setState(() {
+                                                                    if (videoId ==
+                                                                        null) {
+                                                                      return;
+                                                                    }
+                                                                    final key =
+                                                                        'video-$videoId';
+                                                                    if (checked ==
+                                                                        true) {
+                                                                      _selectedIndexes
+                                                                          .add(
+                                                                            key,
+                                                                          );
+                                                                    } else {
+                                                                      _selectedIndexes
+                                                                          .remove(
+                                                                            key,
+                                                                          );
+                                                                      if (_selectedIndexes
+                                                                          .isEmpty) {
+                                                                        _isSelectionMode =
+                                                                            false;
+                                                                      }
+                                                                    }
+                                                                  });
+                                                                },
+                                                              ),
+                                                            ClipRRect(
+                                                              borderRadius:
+                                                                  BorderRadius.circular(
+                                                                    8,
+                                                                  ),
+                                                              child:
+                                                                  item.thumbUrl !=
+                                                                      null
+                                                                  ? _buildSafeNetworkImage(
+                                                                      item.thumbUrl!,
+                                                                      width: 50,
+                                                                      height:
+                                                                          50,
+                                                                      fit: BoxFit
+                                                                          .cover,
+                                                                      fallback: Container(
+                                                                        width:
+                                                                            50,
+                                                                        height:
+                                                                            50,
+                                                                        decoration: BoxDecoration(
+                                                                          color:
+                                                                              isSystem
+                                                                              ? Theme.of(
+                                                                                  context,
+                                                                                ).colorScheme.secondaryContainer
+                                                                              : Theme.of(
+                                                                                  context,
+                                                                                ).colorScheme.surfaceContainer,
+                                                                          borderRadius:
+                                                                              BorderRadius.circular(
+                                                                                8,
+                                                                              ),
+                                                                        ),
+                                                                        child: const Icon(
+                                                                          Icons
+                                                                              .music_note,
+                                                                          size:
+                                                                              24,
+                                                                        ),
+                                                                      ),
+                                                                    )
+                                                                  : Container(
+                                                                      width: 50,
+                                                                      height:
+                                                                          50,
+                                                                      decoration: BoxDecoration(
+                                                                        color: Colors
+                                                                            .grey[300],
+                                                                        borderRadius:
+                                                                            BorderRadius.circular(
+                                                                              8,
+                                                                            ),
+                                                                      ),
+                                                                      child: const Icon(
+                                                                        Icons
+                                                                            .music_video,
+                                                                        size:
+                                                                            24,
+                                                                        color: Colors
+                                                                            .grey,
+                                                                      ),
+                                                                    ),
+                                                            ),
+                                                          ],
+                                                        ),
+                                                        title: Text(
+                                                          item.title ??
+                                                              LocaleProvider.tr(
+                                                                'title_unknown',
+                                                              ),
+                                                          style:
+                                                              Theme.of(context)
+                                                                  .textTheme
+                                                                  .titleMedium,
+                                                          maxLines: 1,
+                                                          overflow: TextOverflow
+                                                              .ellipsis,
+                                                        ),
+                                                        subtitle: Text(
+                                                          item.artist ??
+                                                              LocaleProvider.tr(
+                                                                'artist_unknown',
+                                                              ),
+                                                          maxLines: 1,
+                                                          overflow: TextOverflow
+                                                              .ellipsis,
+                                                        ),
+                                                        trailing: IconButton(
+                                                          icon: const Icon(
+                                                            Icons.link,
+                                                          ),
+                                                          tooltip:
+                                                              LocaleProvider.tr(
+                                                                'copy_link',
+                                                              ),
+                                                          onPressed: () {
+                                                            Clipboard.setData(
+                                                              ClipboardData(
+                                                                text:
+                                                                    'https://www.youtube.com/watch?v=${item.videoId}',
+                                                              ),
+                                                            );
+                                                          },
+                                                        ),
                                                       ),
                                                     ),
                                                   ),
@@ -4458,105 +5412,216 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                               children: _playlistResults.take(3).map((
                                                 playlist,
                                               ) {
-                                                return ListTile(
-                                                  contentPadding:
-                                                      const EdgeInsets.symmetric(
-                                                        horizontal: 0,
-                                                        vertical: 10,
-                                                      ),
-                                                  leading: ClipRRect(
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                          8,
-                                                        ),
-                                                    child:
-                                                        playlist['thumbUrl'] !=
-                                                            null
-                                                        ? _buildSafeNetworkImage(
-                                                            playlist['thumbUrl']!,
-                                                            width: 56,
-                                                            height: 56,
-                                                            fit: BoxFit.cover,
-                                                          )
-                                                        : Container(
-                                                            width: 56,
-                                                            height: 56,
-                                                            decoration:
-                                                                BoxDecoration(
-                                                                  color: Colors
-                                                                      .grey[300],
-                                                                  borderRadius:
-                                                                      BorderRadius.circular(
-                                                                        12,
-                                                                      ),
-                                                                ),
-                                                            child: const Icon(
-                                                              Icons
-                                                                  .playlist_play,
-                                                              size: 32,
-                                                              color:
-                                                                  Colors.grey,
-                                                            ),
-                                                          ),
-                                                  ),
-                                                  title: Text(
-                                                    playlist['title'] ??
-                                                        LocaleProvider.tr(
-                                                          'title_unknown',
-                                                        ),
-                                                    style: Theme.of(
-                                                      context,
-                                                    ).textTheme.titleMedium,
-                                                    maxLines: 2,
-                                                    overflow:
-                                                        TextOverflow.ellipsis,
-                                                  ),
+                                                final index = _playlistResults
+                                                    .indexOf(playlist);
 
-                                                  trailing: IconButton(
-                                                    icon: const Icon(
-                                                      Icons.link,
-                                                    ),
-                                                    tooltip: LocaleProvider.tr(
-                                                      'copy_link',
-                                                    ),
-                                                    onPressed: () {
-                                                      Clipboard.setData(
-                                                        ClipboardData(
-                                                          text:
-                                                              'https://music.youtube.com/playlist?list=${playlist['browseId']}',
-                                                        ),
+                                                final isDark =
+                                                    Theme.of(
+                                                      context,
+                                                    ).brightness ==
+                                                    Brightness.dark;
+                                                final cardColor = isDark
+                                                    ? Theme.of(context)
+                                                          .colorScheme
+                                                          .onSecondary
+                                                          .withValues(
+                                                            alpha: 0.5,
+                                                          )
+                                                    : Theme.of(context)
+                                                          .colorScheme
+                                                          .secondaryContainer
+                                                          .withValues(
+                                                            alpha: 0.5,
+                                                          );
+
+                                                final int totalToShow =
+                                                    _playlistResults.length < 3
+                                                    ? _playlistResults.length
+                                                    : 3;
+                                                final bool isFirst = index == 0;
+                                                final bool isLast =
+                                                    index == totalToShow - 1;
+                                                final bool isOnly =
+                                                    totalToShow == 1;
+
+                                                BorderRadius borderRadius;
+                                                if (isOnly) {
+                                                  borderRadius =
+                                                      BorderRadius.circular(16);
+                                                } else if (isFirst) {
+                                                  borderRadius =
+                                                      const BorderRadius.only(
+                                                        topLeft:
+                                                            Radius.circular(16),
+                                                        topRight:
+                                                            Radius.circular(16),
+                                                        bottomLeft:
+                                                            Radius.circular(4),
+                                                        bottomRight:
+                                                            Radius.circular(4),
                                                       );
-                                                    },
+                                                } else if (isLast) {
+                                                  borderRadius =
+                                                      const BorderRadius.only(
+                                                        topLeft:
+                                                            Radius.circular(4),
+                                                        topRight:
+                                                            Radius.circular(4),
+                                                        bottomLeft:
+                                                            Radius.circular(16),
+                                                        bottomRight:
+                                                            Radius.circular(16),
+                                                      );
+                                                } else {
+                                                  borderRadius =
+                                                      BorderRadius.circular(4);
+                                                }
+
+                                                return Padding(
+                                                  padding: EdgeInsets.only(
+                                                    bottom: isLast ? 0 : 4,
                                                   ),
-                                                  onTap: () async {
-                                                    if (playlist['browseId'] ==
-                                                        null) {
-                                                      return;
-                                                    }
-                                                    setState(() {
-                                                      _expandedCategory =
-                                                          'playlist';
-                                                      _loadingPlaylistSongs =
-                                                          true;
-                                                      _playlistSongs = [];
-                                                      _currentPlaylist = {
-                                                        'title':
-                                                            playlist['title'],
-                                                        'thumbUrl':
-                                                            playlist['thumbUrl'],
-                                                      };
-                                                    });
-                                                    final songs =
-                                                        await getPlaylistSongs(
-                                                          playlist['browseId']!,
-                                                        );
-                                                    if (!mounted) return;
-                                                    setState(() {
-                                                      _playlistSongs = songs;
-                                                      _loadingPlaylistSongs =
-                                                          false;
-                                                    });
-                                                  },
+                                                  child: Card(
+                                                    color: cardColor,
+                                                    margin: EdgeInsets.zero,
+                                                    elevation: 0,
+                                                    shape:
+                                                        RoundedRectangleBorder(
+                                                          borderRadius:
+                                                              borderRadius,
+                                                        ),
+                                                    child: InkWell(
+                                                      borderRadius:
+                                                          borderRadius,
+                                                      onTap: () async {
+                                                        if (playlist['browseId'] ==
+                                                            null) {
+                                                          return;
+                                                        }
+                                                        setState(() {
+                                                          _expandedCategory =
+                                                              'playlist';
+                                                          _loadingPlaylistSongs =
+                                                              true;
+                                                          _playlistSongs = [];
+                                                          _currentPlaylist = {
+                                                            'title':
+                                                                playlist['title'],
+                                                            'thumbUrl':
+                                                                playlist['thumbUrl'],
+                                                            'id':
+                                                                playlist['browseId'],
+                                                          };
+                                                        });
+                                                        final songs =
+                                                            await getPlaylistSongs(
+                                                              playlist['browseId']!,
+                                                            );
+                                                        if (!mounted) return;
+                                                        setState(() {
+                                                          _playlistSongs =
+                                                              songs;
+                                                          _loadingPlaylistSongs =
+                                                              false;
+                                                        });
+                                                      },
+                                                      child: ListTile(
+                                                        contentPadding:
+                                                            const EdgeInsets.symmetric(
+                                                              horizontal: 16,
+                                                              vertical: 4,
+                                                            ),
+                                                        leading: ClipRRect(
+                                                          borderRadius:
+                                                              BorderRadius.circular(
+                                                                8,
+                                                              ),
+                                                          child:
+                                                              playlist['thumbUrl'] !=
+                                                                  null
+                                                              ? _buildSafeNetworkImage(
+                                                                  playlist['thumbUrl']!,
+                                                                  width: 50,
+                                                                  height: 50,
+                                                                  fit: BoxFit
+                                                                      .cover,
+                                                                  fallback: Container(
+                                                                    width: 50,
+                                                                    height: 50,
+                                                                    decoration: BoxDecoration(
+                                                                      color:
+                                                                          isSystem
+                                                                          ? Theme.of(
+                                                                              context,
+                                                                            ).colorScheme.secondaryContainer
+                                                                          : Theme.of(
+                                                                              context,
+                                                                            ).colorScheme.surfaceContainer,
+                                                                      borderRadius:
+                                                                          BorderRadius.circular(
+                                                                            8,
+                                                                          ),
+                                                                    ),
+                                                                    child: const Icon(
+                                                                      Icons
+                                                                          .playlist_play,
+                                                                      size: 24,
+                                                                    ),
+                                                                  ),
+                                                                )
+                                                              : Container(
+                                                                  width: 50,
+                                                                  height: 50,
+                                                                  decoration: BoxDecoration(
+                                                                    color: Colors
+                                                                        .grey[300],
+                                                                    borderRadius:
+                                                                        BorderRadius.circular(
+                                                                          8,
+                                                                        ),
+                                                                  ),
+                                                                  child: const Icon(
+                                                                    Icons
+                                                                        .playlist_play,
+                                                                    size: 24,
+                                                                    color: Colors
+                                                                        .grey,
+                                                                  ),
+                                                                ),
+                                                        ),
+                                                        title: Text(
+                                                          playlist['title'] ??
+                                                              LocaleProvider.tr(
+                                                                'title_unknown',
+                                                              ),
+                                                          style:
+                                                              Theme.of(context)
+                                                                  .textTheme
+                                                                  .titleMedium,
+                                                          maxLines: 2,
+                                                          overflow: TextOverflow
+                                                              .ellipsis,
+                                                        ),
+                                                        trailing: IconButton(
+                                                          icon: const Icon(
+                                                            Icons.link,
+                                                          ),
+                                                          tooltip:
+                                                              LocaleProvider.tr(
+                                                                'copy_link',
+                                                              ),
+                                                          onPressed: () {
+                                                            Clipboard.setData(
+                                                              ClipboardData(
+                                                                text:
+                                                                    'https://www.youtube.com/playlist?list=${playlist['browseId']}',
+                                                              ),
+                                                            );
+                                                          },
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ),
                                                 );
                                               }).toList(),
                                             ),
@@ -4570,16 +5635,37 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                         crossAxisAlignment:
                                             CrossAxisAlignment.start,
                                         children: [
-                                          Padding(
-                                            padding: const EdgeInsets.symmetric(
-                                              vertical: 4,
+                                          InkWell(
+                                            borderRadius: BorderRadius.circular(
+                                              8,
                                             ),
-                                            child: Text(
-                                              LocaleProvider.tr('albums'),
-                                              style: Theme.of(context)
-                                                  .textTheme
-                                                  .titleMedium
-                                                  ?.copyWith(fontSize: 20),
+                                            onTap: () {
+                                              setState(() {
+                                                _expandedCategory = 'albums';
+                                              });
+                                            },
+                                            child: Padding(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    vertical: 4,
+                                                  ),
+                                              child: Row(
+                                                mainAxisAlignment:
+                                                    MainAxisAlignment
+                                                        .spaceBetween,
+                                                children: [
+                                                  Text(
+                                                    LocaleProvider.tr('albums'),
+                                                    style: Theme.of(context)
+                                                        .textTheme
+                                                        .titleMedium
+                                                        ?.copyWith(
+                                                          fontSize: 20,
+                                                        ),
+                                                  ),
+                                                  Icon(Icons.chevron_right),
+                                                ],
+                                              ),
                                             ),
                                           ),
                                           const SizedBox(height: 8),
@@ -4619,7 +5705,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                 } else {
                                                   album = YtMusicResult();
                                                 }
-                                                return GestureDetector(
+                                                return AnimatedTapButton(
                                                   onTap: () async {
                                                     if (album.videoId == null) {
                                                       return;
@@ -6035,6 +7121,53 @@ class YtPreviewPlayerState extends State<YtPreviewPlayer>
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+class AnimatedTapButton extends StatefulWidget {
+  final Widget child;
+  final VoidCallback onTap;
+  final VoidCallback? onLongPress;
+
+  const AnimatedTapButton({
+    super.key,
+    required this.child,
+    required this.onTap,
+    this.onLongPress,
+  });
+
+  @override
+  State<AnimatedTapButton> createState() => _AnimatedTapButtonState();
+}
+
+class _AnimatedTapButtonState extends State<AnimatedTapButton> {
+  bool _pressed = false;
+
+  void _handleTapUp(_) async {
+    await Future.delayed(const Duration(milliseconds: 70));
+    if (mounted) setState(() => _pressed = false);
+  }
+
+  void _handleTapCancel() async {
+    await Future.delayed(const Duration(milliseconds: 70));
+    if (mounted) setState(() => _pressed = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: widget.onTap,
+      onLongPress: widget.onLongPress,
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapUp: _handleTapUp,
+      onTapCancel: _handleTapCancel,
+      child: AnimatedScale(
+        scale: _pressed ? 0.93 : 1.0,
+        duration: const Duration(milliseconds: 90),
+        curve: Curves.easeOut,
+        child: widget.child,
       ),
     );
   }
