@@ -391,9 +391,13 @@ class _EditMetadataScreenState extends State<EditMetadataScreen> {
             height: 40,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: Theme.of(
-                context,
-              ).colorScheme.primary.withValues(alpha: 0.08),
+              color: isDark
+                  ? Theme.of(
+                      context,
+                    ).colorScheme.onSecondary.withValues(alpha: 0.5)
+                  : Theme.of(
+                      context,
+                    ).colorScheme.secondaryContainer.withValues(alpha: 0.5),
             ),
             child: const Icon(Icons.arrow_back, size: 24),
           ),

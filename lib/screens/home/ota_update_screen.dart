@@ -377,7 +377,7 @@ class _UpdateScreenState extends State<UpdateScreen> {
     // Para 16:9 (≈1.77)
     // final is16by9 = (aspectRatio < 1.85);
     // final isSystem = colorSchemeNotifier.value == AppColorScheme.system;
-    // final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final isLight = Theme.of(context).brightness == Brightness.light;
 
     return Scaffold(
@@ -403,9 +403,12 @@ class _UpdateScreenState extends State<UpdateScreen> {
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.primary.withValues(alpha: 0.08),
+                    color: isDark
+                        ? Theme.of(
+                            context,
+                          ).colorScheme.onSecondary.withValues(alpha: 0.5)
+                        : Theme.of(context).colorScheme.secondaryContainer
+                              .withValues(alpha: 0.5),
                   ),
                   child: const Icon(Icons.arrow_back, size: 24),
                 ),
@@ -490,9 +493,13 @@ class _UpdateScreenState extends State<UpdateScreen> {
                           alignment: Alignment.center,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.primary.withValues(alpha: 0.08),
+                            color: isDark
+                                ? Theme.of(context).colorScheme.onSecondary
+                                      .withValues(alpha: 0.5)
+                                : Theme.of(context)
+                                      .colorScheme
+                                      .secondaryContainer
+                                      .withValues(alpha: 0.5),
                           ),
                           child: Icon(
                             Symbols.update_rounded,
@@ -570,9 +577,12 @@ class _UpdateScreenState extends State<UpdateScreen> {
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: Theme.of(
-                          context,
-                        ).colorScheme.primary.withValues(alpha: 0.08),
+                        color: isDark
+                            ? Theme.of(
+                                context,
+                              ).colorScheme.onSecondary.withValues(alpha: 0.5)
+                            : Theme.of(context).colorScheme.secondaryContainer
+                                  .withValues(alpha: 0.5),
                       ),
                       child: CircularProgressIndicator(
                         strokeWidth: 4,
@@ -605,9 +615,12 @@ class _UpdateScreenState extends State<UpdateScreen> {
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: Theme.of(
-                          context,
-                        ).colorScheme.primary.withValues(alpha: 0.08),
+                        color: isDark
+                            ? Theme.of(
+                                context,
+                              ).colorScheme.onSecondary.withValues(alpha: 0.5)
+                            : Theme.of(context).colorScheme.secondaryContainer
+                                  .withValues(alpha: 0.5),
                       ),
                       child: Icon(
                         Symbols.check_circle_outline_rounded,

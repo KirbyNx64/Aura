@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:mini_music_visualizer/mini_music_visualizer.dart';
 import 'package:music/widgets/marquee.dart';
 import 'package:music/main.dart';
 import 'package:music/widgets/hero_cached.dart';
@@ -5114,52 +5115,130 @@ class _PlaylistListViewState extends State<_PlaylistListView> {
             final isFirstItem = index == 0;
             final isLastItem = index == widget.queue.length - 1;
 
+            // Variables para diseño Material3
+            final isDark = Theme.of(context).brightness == Brightness.dark;
+            final cardColor = isDark
+                ? Theme.of(
+                    context,
+                  ).colorScheme.onSecondary.withValues(alpha: 0.5)
+                : Theme.of(
+                    context,
+                  ).colorScheme.secondaryContainer.withValues(alpha: 0.5);
+
+            // Calcular borderRadius según posición
+            final bool isFirst = index == 0;
+            final bool isLast = index == widget.queue.length - 1;
+            final bool isOnly = widget.queue.length == 1;
+
+            BorderRadius borderRadius;
+            if (isOnly) {
+              borderRadius = BorderRadius.circular(16);
+            } else if (isFirst) {
+              borderRadius = const BorderRadius.only(
+                topLeft: Radius.circular(16),
+                topRight: Radius.circular(16),
+                bottomLeft: Radius.circular(4),
+                bottomRight: Radius.circular(4),
+              );
+            } else if (isLast) {
+              borderRadius = const BorderRadius.only(
+                topLeft: Radius.circular(4),
+                topRight: Radius.circular(4),
+                bottomLeft: Radius.circular(16),
+                bottomRight: Radius.circular(16),
+              );
+            } else {
+              borderRadius = BorderRadius.circular(4);
+            }
+
             return Padding(
               padding: EdgeInsets.only(
+                left: 16,
+                right: 16,
                 top: isFirstItem ? 42.0 : 0.0,
-                bottom: isFirstItem ? 8.0 : (isLastItem ? 20.0 : 0.0),
+                bottom: isLastItem ? 20.0 : 4.0,
               ),
-              child: ListTile(
-                leading: ArtworkListTile(
-                  songId: songId,
-                  songPath: songPath,
-                  artUri: item.artUri,
-                  size: 48,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                title: Text(
-                  item.title,
-                  maxLines: 1,
-                  style: TextStyle(
-                    fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
-                    color: isCurrent
-                        ? (isAmoledTheme
-                              ? Colors.white
-                              : Theme.of(context).colorScheme.primary)
-                        : null,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-                subtitle: Text(
-                  item.artist ?? LocaleProvider.tr('unknown_artist'),
-                  maxLines: 1,
-                ),
-                selected: isCurrent,
-                selectedTileColor: isCurrent
+              child: Card(
+                color: isCurrent
                     ? (isAmoledTheme
-                          ? null
+                          ? Colors.white.withValues(alpha: 0.15)
                           : Theme.of(context).colorScheme.primaryContainer
                                 .withValues(alpha: 0.8))
-                    : null,
-                shape: isCurrent
-                    ? RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      )
-                    : null,
-                onTap: () {
-                  audioHandler?.skipToQueueItem(index);
-                  // No cerramos el modal, así se mantiene abierto
-                },
+                    : cardColor,
+                margin: EdgeInsets.zero,
+                elevation: 0,
+                shape: RoundedRectangleBorder(borderRadius: borderRadius),
+                child: ClipRRect(
+                  borderRadius: borderRadius,
+                  child: ListTile(
+                    leading: ArtworkListTile(
+                      songId: songId,
+                      songPath: songPath,
+                      artUri: item.artUri,
+                      size: 48,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    title: Row(
+                      children: [
+                        if (isCurrent)
+                          StreamBuilder<PlaybackState>(
+                            stream: audioHandler?.playbackState,
+                            builder: (context, snapshot) {
+                              final playing = snapshot.data?.playing ?? false;
+                              return Padding(
+                                padding: const EdgeInsets.only(right: 8.0),
+                                child: MiniMusicVisualizer(
+                                  color: isAmoledTheme
+                                      ? Colors.white
+                                      : Theme.of(context).colorScheme.primary,
+                                  width: 4,
+                                  height: 15,
+                                  radius: 4,
+                                  animate: playing,
+                                ),
+                              );
+                            },
+                          ),
+                        Expanded(
+                          child: Text(
+                            item.title,
+                            maxLines: 1,
+                            style: TextStyle(
+                              fontWeight: isCurrent
+                                  ? FontWeight.bold
+                                  : FontWeight.normal,
+                              color: isCurrent
+                                  ? (isAmoledTheme
+                                        ? Colors.white
+                                        : Theme.of(context).colorScheme.primary)
+                                  : null,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                    subtitle: Text(
+                      item.artist ?? LocaleProvider.tr('unknown_artist'),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: isCurrent
+                            ? (isAmoledTheme
+                                  ? Colors.white
+                                  : Theme.of(context).colorScheme.primary)
+                            : null,
+                      ),
+                    ),
+                    tileColor: Colors.transparent,
+                    splashColor: Theme.of(
+                      context,
+                    ).colorScheme.primary.withValues(alpha: 0.1),
+                    onTap: () {
+                      audioHandler?.skipToQueueItem(index);
+                    },
+                  ),
+                ),
               ),
             );
           },

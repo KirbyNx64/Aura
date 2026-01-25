@@ -2793,31 +2793,64 @@ class _FoldersScreenState extends State<FoldersScreen>
             preferredSize: const Size.fromHeight(56),
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-              child: TextField(
-                controller: _folderSearchController,
-                focusNode: _folderSearchFocusNode,
-                onChanged: (_) => _onFolderSearchChanged(),
-                onEditingComplete: () {
-                  _folderSearchFocusNode.unfocus();
+              child: Builder(
+                builder: (context) {
+                  final innerDark =
+                      Theme.of(context).brightness == Brightness.dark;
+                  final barColor = innerDark
+                      ? Theme.of(
+                          context,
+                        ).colorScheme.onSecondary.withValues(alpha: 0.5)
+                      : Theme.of(
+                          context,
+                        ).colorScheme.secondaryContainer.withValues(alpha: 0.5);
+
+                  return TextField(
+                    controller: _folderSearchController,
+                    focusNode: _folderSearchFocusNode,
+                    onChanged: (_) => _onFolderSearchChanged(),
+                    onEditingComplete: () {
+                      _folderSearchFocusNode.unfocus();
+                    },
+                    cursorColor: Theme.of(context).colorScheme.primary,
+                    decoration: InputDecoration(
+                      hintText: LocaleProvider.tr('search_folders_and_songs'),
+                      hintStyle: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        fontSize: 15,
+                      ),
+                      prefixIcon: const Icon(Icons.search),
+                      suffixIcon: _folderSearchController.text.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(Icons.close),
+                              onPressed: () {
+                                _folderSearchController.clear();
+                                _onFolderSearchChanged();
+                                setState(() {});
+                              },
+                            )
+                          : null,
+                      filled: true,
+                      fillColor: barColor,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(28),
+                        borderSide: BorderSide.none,
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(28),
+                        borderSide: BorderSide.none,
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(28),
+                        borderSide: BorderSide.none,
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 12,
+                      ),
+                    ),
+                  );
                 },
-                decoration: InputDecoration(
-                  hintText: LocaleProvider.tr('search_folders_and_songs'),
-                  prefixIcon: const Icon(Icons.search),
-                  suffixIcon: _folderSearchController.text.isNotEmpty
-                      ? IconButton(
-                          icon: const Icon(Icons.close),
-                          onPressed: () {
-                            _folderSearchController.clear();
-                            _onFolderSearchChanged();
-                            setState(() {});
-                          },
-                        )
-                      : null,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(24),
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(vertical: 0),
-                ),
               ),
             ),
           ),
@@ -3049,9 +3082,12 @@ class _FoldersScreenState extends State<FoldersScreen>
                     height: 40,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.primary.withValues(alpha: 0.08),
+                      color: isDark
+                          ? Theme.of(
+                              context,
+                            ).colorScheme.onSecondary.withValues(alpha: 0.5)
+                          : Theme.of(context).colorScheme.secondaryContainer
+                                .withValues(alpha: 0.5),
                     ),
                     child: const Icon(Icons.arrow_back, size: 24),
                   ),
@@ -3276,10 +3312,20 @@ class _FoldersScreenState extends State<FoldersScreen>
           bottom: PreferredSize(
             preferredSize: const Size.fromHeight(56),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
               child: ValueListenableBuilder<String>(
                 valueListenable: languageNotifier,
                 builder: (context, lang, child) {
+                  final innerDark =
+                      Theme.of(context).brightness == Brightness.dark;
+                  final barColor = innerDark
+                      ? Theme.of(
+                          context,
+                        ).colorScheme.onSecondary.withValues(alpha: 0.5)
+                      : Theme.of(
+                          context,
+                        ).colorScheme.secondaryContainer.withValues(alpha: 0.5);
+
                   return TextField(
                     controller: _searchController,
                     focusNode: _searchFocusNode,
@@ -3287,8 +3333,13 @@ class _FoldersScreenState extends State<FoldersScreen>
                     onEditingComplete: () {
                       _searchFocusNode.unfocus();
                     },
+                    cursorColor: Theme.of(context).colorScheme.primary,
                     decoration: InputDecoration(
                       hintText: LocaleProvider.tr('search_by_title_or_artist'),
+                      hintStyle: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        fontSize: 15,
+                      ),
                       prefixIcon: const Icon(Icons.search),
                       suffixIcon: _searchController.text.isNotEmpty
                           ? IconButton(
@@ -3300,10 +3351,24 @@ class _FoldersScreenState extends State<FoldersScreen>
                               },
                             )
                           : null,
+                      filled: true,
+                      fillColor: barColor,
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(24),
+                        borderRadius: BorderRadius.circular(28),
+                        borderSide: BorderSide.none,
                       ),
-                      contentPadding: const EdgeInsets.symmetric(vertical: 0),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(28),
+                        borderSide: BorderSide.none,
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(28),
+                        borderSide: BorderSide.none,
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 12,
+                      ),
                     ),
                   );
                 },

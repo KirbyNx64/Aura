@@ -596,6 +596,7 @@ class _DownloadHistoryScreenState extends State<DownloadHistoryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
       appBar: AppBar(
         title: Text(LocaleProvider.tr('download_history')),
@@ -612,14 +613,19 @@ class _DownloadHistoryScreenState extends State<DownloadHistoryScreen> {
           ),
           padding: EdgeInsets.zero,
           icon: Container(
+            width: 40,
+            height: 40,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: Theme.of(
-                context,
-              ).colorScheme.primary.withValues(alpha: 0.08),
+              color: isDark
+                  ? Theme.of(
+                      context,
+                    ).colorScheme.onSecondary.withValues(alpha: 0.5)
+                  : Theme.of(
+                      context,
+                    ).colorScheme.secondaryContainer.withValues(alpha: 0.5),
             ),
-            padding: const EdgeInsets.all(8),
-            child: const Icon(Icons.arrow_back),
+            child: const Icon(Icons.arrow_back, size: 24),
           ),
           onPressed: () => Navigator.of(context).pop(),
         ),

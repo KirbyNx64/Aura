@@ -266,7 +266,7 @@ const Map<String, String> appLocalizationsEs = {
   'select_all': 'Seleccionar todos',
   'add': 'Añadir',
   'add_from_recents': 'Añadir de recientes',
-  'search_by_title_or_artist': 'Buscar por título o artista',
+  'search_by_title_or_artist': 'Buscar por título o artista...',
   'search_folders': 'Buscar carpeta',
   'search_folders_and_songs': 'Buscar...',
   'folders_and_songs_info': 'Carpetas y canciones guardadas en el dispositivo.',

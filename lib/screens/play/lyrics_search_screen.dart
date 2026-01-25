@@ -587,6 +587,7 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -607,9 +608,13 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
             height: 40,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: Theme.of(
-                context,
-              ).colorScheme.primary.withValues(alpha: 0.08),
+              color: isDark
+                  ? Theme.of(
+                      context,
+                    ).colorScheme.onSecondary.withValues(alpha: 0.5)
+                  : Theme.of(
+                      context,
+                    ).colorScheme.secondaryContainer.withValues(alpha: 0.5),
             ),
             child: const Icon(Icons.arrow_back, size: 24),
           ),
@@ -632,68 +637,73 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
             children: [
               // Barra de búsqueda con botón
               Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Row(
-                  children: [
-                    // TextField
-                    Expanded(
-                      child: TextField(
-                        controller: _searchController,
-                        focusNode: _searchFocusNode,
-                        decoration: InputDecoration(
-                          hintText: LocaleProvider.tr('search_lyrics_hint'),
-                          suffixIcon: _searchController.text.isNotEmpty
-                              ? IconButton(
-                                  icon: const Icon(Symbols.clear_rounded),
-                                  onPressed: () {
-                                    _searchController.clear();
-                                    if (mounted) {
-                                      setState(() {
-                                        _searchResults = [];
-                                        _hasSearched = false;
-                                      });
-                                    }
-                                  },
-                                )
-                              : null,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16.0,
+                  vertical: 8.0,
+                ),
+                child: Builder(
+                  builder: (context) {
+                    final isDark =
+                        Theme.of(context).brightness == Brightness.dark;
+                    final barColor = isDark
+                        ? Theme.of(
+                            context,
+                          ).colorScheme.onSecondary.withValues(alpha: 0.5)
+                        : Theme.of(context).colorScheme.secondaryContainer
+                              .withValues(alpha: 0.5);
+
+                    return TextField(
+                      controller: _searchController,
+                      focusNode: _searchFocusNode,
+                      onChanged: (value) {
+                        if (mounted) {
+                          setState(() {});
+                        }
+                      },
+                      onSubmitted: (_) => _performSearch(),
+                      cursorColor: Theme.of(context).colorScheme.primary,
+                      decoration: InputDecoration(
+                        hintText: LocaleProvider.tr('search_lyrics_hint'),
+                        hintStyle: TextStyle(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          fontSize: 15,
                         ),
-                        onSubmitted: (_) => _performSearch(),
-                        onChanged: (value) {
-                          if (mounted) {
-                            setState(() {});
-                          }
-                        },
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    // Botón de búsqueda
-                    SizedBox(
-                      height: 56,
-                      width: 56,
-                      child: Material(
-                        borderRadius: BorderRadius.circular(8),
-                        color: colorScheme == AppColorScheme.amoled
-                            ? Colors.white
-                            : Theme.of(context).colorScheme.primary,
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(8),
-                          onTap: _isSearching ? null : _performSearch,
-                          child: Tooltip(
-                            message: LocaleProvider.tr('search_lyrics'),
-                            child: Icon(
-                              Icons.search,
-                              color: colorScheme == AppColorScheme.amoled
-                                  ? Colors.black
-                                  : Theme.of(context).colorScheme.onPrimary,
-                            ),
-                          ),
+                        prefixIcon: const Icon(Icons.search),
+                        suffixIcon: _searchController.text.isNotEmpty
+                            ? IconButton(
+                                icon: const Icon(Symbols.clear_rounded),
+                                onPressed: () {
+                                  _searchController.clear();
+                                  if (mounted) {
+                                    setState(() {
+                                      _searchResults = [];
+                                      _hasSearched = false;
+                                    });
+                                  }
+                                },
+                              )
+                            : null,
+                        filled: true,
+                        fillColor: barColor,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(28),
+                          borderSide: BorderSide.none,
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(28),
+                          borderSide: BorderSide.none,
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(28),
+                          borderSide: BorderSide.none,
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 12,
                         ),
                       ),
-                    ),
-                  ],
+                    );
+                  },
                 ),
               ),
 

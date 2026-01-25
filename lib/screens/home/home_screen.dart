@@ -988,8 +988,9 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
                   return ListView.builder(
                     padding: EdgeInsets.only(
-                      left: 0,
-                      right: 0,
+                      left: 16,
+                      right: 16,
+                      top: 8,
                       bottom: MediaQuery.of(context).padding.bottom,
                     ),
                     itemCount: songs.length,
@@ -1002,12 +1003,45 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       final isAmoledTheme =
                           colorSchemeNotifier.value == AppColorScheme.amoled;
 
-                      return Container(
-                        margin: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
+                      // Variables para diseño Material3
+                      final isDark =
+                          Theme.of(context).brightness == Brightness.dark;
+                      final cardColor = isDark
+                          ? Theme.of(
+                              context,
+                            ).colorScheme.onSecondary.withValues(alpha: 0.5)
+                          : Theme.of(context).colorScheme.secondaryContainer
+                                .withValues(alpha: 0.5);
+
+                      // Calcular borderRadius según posición
+                      final bool isFirst = index == 0;
+                      final bool isLast = index == songs.length - 1;
+                      final bool isOnly = songs.length == 1;
+
+                      BorderRadius borderRadius;
+                      if (isOnly) {
+                        borderRadius = BorderRadius.circular(16);
+                      } else if (isFirst) {
+                        borderRadius = const BorderRadius.only(
+                          topLeft: Radius.circular(16),
+                          topRight: Radius.circular(16),
+                          bottomLeft: Radius.circular(4),
+                          bottomRight: Radius.circular(4),
+                        );
+                      } else if (isLast) {
+                        borderRadius = const BorderRadius.only(
+                          topLeft: Radius.circular(4),
+                          topRight: Radius.circular(4),
+                          bottomLeft: Radius.circular(16),
+                          bottomRight: Radius.circular(16),
+                        );
+                      } else {
+                        borderRadius = BorderRadius.circular(4);
+                      }
+
+                      return Padding(
+                        padding: EdgeInsets.only(bottom: isLast ? 0 : 4),
+                        child: Card(
                           color: isCurrent
                               ? (isAmoledTheme
                                     ? Colors.white.withValues(alpha: 0.15)
@@ -1015,88 +1049,134 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                           .colorScheme
                                           .primaryContainer
                                           .withValues(alpha: 0.8))
-                              : Colors.transparent,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: ListTile(
-                          leading: FutureBuilder<Uint8List?>(
-                            future: _getCachedArtwork(song.id),
-                            builder: (context, snapshot) {
-                              if (snapshot.hasData && snapshot.data != null) {
-                                return Container(
-                                  width: 50,
-                                  height: 50,
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(8),
-                                    image: DecorationImage(
-                                      image: MemoryImage(snapshot.data!),
-                                      fit: BoxFit.cover,
+                              : cardColor,
+                          margin: EdgeInsets.zero,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: borderRadius,
+                          ),
+                          child: ClipRRect(
+                            borderRadius: borderRadius,
+                            child: ListTile(
+                              shape: RoundedRectangleBorder(
+                                borderRadius: borderRadius,
+                              ),
+                              leading: FutureBuilder<Uint8List?>(
+                                future: _getCachedArtwork(song.id),
+                                builder: (context, snapshot) {
+                                  if (snapshot.hasData &&
+                                      snapshot.data != null) {
+                                    return Container(
+                                      width: 50,
+                                      height: 50,
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(8),
+                                        image: DecorationImage(
+                                          image: MemoryImage(snapshot.data!),
+                                          fit: BoxFit.cover,
+                                        ),
+                                      ),
+                                    );
+                                  } else {
+                                    return Container(
+                                      width: 50,
+                                      height: 50,
+                                      decoration: BoxDecoration(
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.surfaceContainer,
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Icon(
+                                        Icons.music_note,
+                                        size: 25,
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.onSurface,
+                                      ),
+                                    );
+                                  }
+                                },
+                              ),
+                              title: Row(
+                                children: [
+                                  if (isCurrent)
+                                    ValueListenableBuilder<bool>(
+                                      valueListenable: _isPlayingNotifier,
+                                      builder: (context, playing, child) {
+                                        return Padding(
+                                          padding: const EdgeInsets.only(
+                                            right: 8.0,
+                                          ),
+                                          child: MiniMusicVisualizer(
+                                            color: isAmoledTheme
+                                                ? Colors.white
+                                                : Theme.of(
+                                                    context,
+                                                  ).colorScheme.primary,
+                                            width: 4,
+                                            height: 15,
+                                            radius: 4,
+                                            animate: playing,
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  Expanded(
+                                    child: Text(
+                                      song.title,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: isCurrent
+                                          ? Theme.of(
+                                              context,
+                                            ).textTheme.titleMedium?.copyWith(
+                                              fontWeight: FontWeight.bold,
+                                              color: isAmoledTheme
+                                                  ? Colors.white
+                                                  : Theme.of(
+                                                      context,
+                                                    ).colorScheme.primary,
+                                            )
+                                          : Theme.of(
+                                              context,
+                                            ).textTheme.titleMedium,
                                     ),
                                   ),
+                                ],
+                              ),
+                              subtitle: Text(
+                                song.artist ??
+                                    LocaleProvider.tr('unknown_artist'),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: isCurrent
+                                      ? (isAmoledTheme
+                                            ? Colors.white
+                                            : Theme.of(
+                                                context,
+                                              ).colorScheme.primary)
+                                      : null,
+                                ),
+                              ),
+                              tileColor: Colors.transparent,
+                              splashColor: Theme.of(
+                                context,
+                              ).colorScheme.primary.withValues(alpha: 0.1),
+                              onTap: () async {
+                                await _playSongAndOpenPlayer(
+                                  song,
+                                  songs,
+                                  queueSource:
+                                      '${LocaleProvider.tr('artist')}: $artistName',
                                 );
-                              } else {
-                                return Container(
-                                  width: 50,
-                                  height: 50,
-                                  decoration: BoxDecoration(
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.surfaceContainer,
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Icon(
-                                    Icons.music_note,
-                                    size: 25, // 50 * 0.5
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.onSurface,
-                                  ),
-                                );
-                              }
-                            },
-                          ),
-                          title: Text(
-                            song.title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: isCurrent
-                                ? Theme.of(
-                                    context,
-                                  ).textTheme.titleMedium?.copyWith(
-                                    fontWeight: FontWeight.bold,
-                                    color: isAmoledTheme
-                                        ? Colors.white
-                                        : Theme.of(context).colorScheme.primary,
-                                  )
-                                : Theme.of(context).textTheme.titleMedium,
-                          ),
-                          subtitle: Text(
-                            song.artist ?? LocaleProvider.tr('unknown_artist'),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: isCurrent
-                                  ? (isAmoledTheme
-                                        ? Colors.white
-                                        : Theme.of(context).colorScheme.primary)
-                                  : null,
+                                if (context.mounted) {
+                                  Navigator.of(context).pop();
+                                }
+                              },
                             ),
                           ),
-                          tileColor: Colors.transparent,
-                          splashColor: Theme.of(
-                            context,
-                          ).colorScheme.primary.withValues(alpha: 0.1),
-                          onTap: () async {
-                            await _playSongAndOpenPlayer(
-                              song,
-                              songs,
-                              queueSource:
-                                  '${LocaleProvider.tr('artist')}: $artistName',
-                            );
-                            if (context.mounted) {
-                              Navigator.of(context).pop();
-                            }
-                          },
                         ),
                       );
                     },
@@ -3027,9 +3107,12 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         height: 40,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.primary.withValues(alpha: 0.08),
+                          color: isDark
+                              ? Theme.of(
+                                  context,
+                                ).colorScheme.onSecondary.withValues(alpha: 0.5)
+                              : Theme.of(context).colorScheme.secondaryContainer
+                                    .withValues(alpha: 0.5),
                         ),
                         child: const Icon(Icons.arrow_back, size: 24),
                       ),
@@ -3257,43 +3340,79 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 preferredSize: const Size.fromHeight(56),
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                  child: TextField(
-                    controller: _showingRecents
-                        ? _searchRecentsController
-                        : _searchPlaylistController,
-                    focusNode: _showingRecents
-                        ? _searchRecentsFocus
-                        : _searchPlaylistFocus,
-                    onChanged: (_) => _showingRecents
-                        ? _onSearchRecentsChanged()
-                        : _onSearchPlaylistChanged(),
-                    decoration: InputDecoration(
-                      hintText: LocaleProvider.tr('search_by_title_or_artist'),
-                      prefixIcon: const Icon(Icons.search),
-                      suffixIcon:
-                          (_showingRecents
-                              ? _searchRecentsController.text.isNotEmpty
-                              : _searchPlaylistController.text.isNotEmpty)
-                          ? IconButton(
-                              icon: const Icon(Icons.close),
-                              onPressed: () {
-                                if (_showingRecents) {
-                                  _searchRecentsController.clear();
-                                  _onSearchRecentsChanged();
-                                  setState(() {});
-                                } else {
-                                  _searchPlaylistController.clear();
-                                  _onSearchPlaylistChanged();
-                                  setState(() {});
-                                }
-                              },
-                            )
-                          : null,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(24),
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(vertical: 0),
-                    ),
+                  child: Builder(
+                    builder: (context) {
+                      final innerDark =
+                          Theme.of(context).brightness == Brightness.dark;
+                      final barColor = innerDark
+                          ? Theme.of(
+                              context,
+                            ).colorScheme.onSecondary.withValues(alpha: 0.5)
+                          : Theme.of(context).colorScheme.secondaryContainer
+                                .withValues(alpha: 0.5);
+
+                      return TextField(
+                        controller: _showingRecents
+                            ? _searchRecentsController
+                            : _searchPlaylistController,
+                        focusNode: _showingRecents
+                            ? _searchRecentsFocus
+                            : _searchPlaylistFocus,
+                        onChanged: (_) => _showingRecents
+                            ? _onSearchRecentsChanged()
+                            : _onSearchPlaylistChanged(),
+                        cursorColor: Theme.of(context).colorScheme.primary,
+                        decoration: InputDecoration(
+                          hintText: LocaleProvider.tr(
+                            'search_by_title_or_artist',
+                          ),
+                          hintStyle: TextStyle(
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onSurfaceVariant,
+                            fontSize: 15,
+                          ),
+                          prefixIcon: const Icon(Icons.search),
+                          suffixIcon:
+                              (_showingRecents
+                                  ? _searchRecentsController.text.isNotEmpty
+                                  : _searchPlaylistController.text.isNotEmpty)
+                              ? IconButton(
+                                  icon: const Icon(Icons.close),
+                                  onPressed: () {
+                                    if (_showingRecents) {
+                                      _searchRecentsController.clear();
+                                      _onSearchRecentsChanged();
+                                      setState(() {});
+                                    } else {
+                                      _searchPlaylistController.clear();
+                                      _onSearchPlaylistChanged();
+                                      setState(() {});
+                                    }
+                                  },
+                                )
+                              : null,
+                          filled: true,
+                          fillColor: barColor,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(28),
+                            borderSide: BorderSide.none,
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(28),
+                            borderSide: BorderSide.none,
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(28),
+                            borderSide: BorderSide.none,
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 12,
+                          ),
+                        ),
+                      );
+                    },
                   ),
                 ),
               )
@@ -3450,9 +3569,11 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                 right: 8.0,
                                               ),
                                               child: MiniMusicVisualizer(
-                                                color: Theme.of(
-                                                  context,
-                                                ).colorScheme.primary,
+                                                color: isAmoledTheme
+                                                    ? Colors.white
+                                                    : Theme.of(
+                                                        context,
+                                                      ).colorScheme.primary,
                                                 width: 4,
                                                 height: 15,
                                                 radius: 4,

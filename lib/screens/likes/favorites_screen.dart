@@ -1284,13 +1284,27 @@ class _FavoritesScreenState extends State<FavoritesScreen>
             child: ValueListenableBuilder<String>(
               valueListenable: languageNotifier,
               builder: (context, lang, child) {
+                final isDark = Theme.of(context).brightness == Brightness.dark;
+                final barColor = isDark
+                    ? Theme.of(
+                        context,
+                      ).colorScheme.onSecondary.withValues(alpha: 0.5)
+                    : Theme.of(
+                        context,
+                      ).colorScheme.secondaryContainer.withValues(alpha: 0.5);
+
                 return TextField(
                   controller: _searchController,
                   focusNode: _searchFocusNode,
                   onChanged: (_) => _onSearchChanged(),
+                  cursorColor: Theme.of(context).colorScheme.primary,
                   decoration: InputDecoration(
                     hintText: LocaleProvider.tr('search_by_title_or_artist'),
-                    prefixIcon: const Icon(Icons.search),
+                    hintStyle: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      fontSize: 15,
+                    ),
+                    prefixIcon: Icon(Icons.search),
                     suffixIcon: _searchController.text.isNotEmpty
                         ? IconButton(
                             icon: const Icon(Icons.close),
@@ -1301,10 +1315,24 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                             },
                           )
                         : null,
+                    filled: true,
+                    fillColor: barColor,
                     border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(24),
+                      borderRadius: BorderRadius.circular(28),
+                      borderSide: BorderSide.none,
                     ),
-                    contentPadding: const EdgeInsets.symmetric(vertical: 0),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(28),
+                      borderSide: BorderSide.none,
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(28),
+                      borderSide: BorderSide.none,
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 12,
+                    ),
                   ),
                 );
               },

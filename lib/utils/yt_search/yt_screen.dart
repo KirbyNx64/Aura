@@ -1831,130 +1831,94 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                   double bottomSpace = mediaItem != null ? 100.0 : 0.0;
                   return Column(
                     children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: ValueListenableBuilder<String>(
-                              valueListenable: languageNotifier,
-                              builder: (context, lang, child) {
-                                return TextField(
-                                  controller: _controller,
-                                  focusNode: _focusNode,
-                                  decoration: InputDecoration(
-                                    suffixIcon: _controller.text.isNotEmpty
-                                        ? IconButton(
-                                            icon: const Icon(Icons.clear),
-                                            onPressed: () {
-                                              _controller.clear();
-                                              _clearResults();
-                                              setState(() {
-                                                _showSuggestions = true;
-                                                _hasSearched = false;
-                                              });
-                                            },
-                                          )
-                                        : null,
-                                    labelText: LocaleProvider.tr(
-                                      'search_in_youtube_music',
-                                    ),
-                                    border: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(
-                                        8,
-                                      ), // Cambiado a cuadrado
-                                    ),
-                                    enabledBorder: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(
-                                        8,
-                                      ), // Cambiado a cuadrado
-                                      borderSide: const BorderSide(
-                                        color: Colors.grey,
-                                      ),
-                                    ),
-                                    focusedBorder: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(
-                                        8,
-                                      ), // Cambiado a cuadrado
-                                      borderSide: BorderSide(
-                                        color: Theme.of(
-                                          context,
-                                        ).colorScheme.primary,
-                                        width: 2,
-                                      ),
-                                    ),
-                                  ),
-                                  onChanged: (value) {
-                                    setState(() {
-                                      _showSuggestions = true;
-                                      _noInternet = false;
-                                      // Si el usuario está escribiendo, permitir sugerencias incluso después de una búsqueda
-                                      if (value.isNotEmpty) {
-                                        _hasSearched = false;
-                                        // Limpiar resultados anteriores cuando se escribe algo nuevo
-                                        _songResults = [];
-                                        _videoResults = [];
-                                        _albumResults = [];
-                                        _artistResults = [];
-                                      }
-                                    });
-                                    if (value.isEmpty) {
-                                      _checkHistory().then((_) {
-                                        setState(() {});
-                                      });
-                                    }
-                                  },
-                                  onSubmitted: (_) => _search(),
-                                  onTap: () {
-                                    setState(() {
-                                      _showSuggestions = true;
-                                      // Si hay texto, permitir sugerencias
-                                      if (_controller.text.isNotEmpty) {
-                                        _hasSearched = false;
-                                      }
-                                    });
-                                  },
-                                );
-                              },
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          SizedBox(
-                            height: 56,
-                            width: 56,
-                            child: ValueListenableBuilder<AppColorScheme>(
-                              valueListenable: colorSchemeNotifier,
-                              builder: (context, colorScheme, child) {
-                                return Material(
-                                  borderRadius: BorderRadius.circular(8),
-                                  color: colorScheme == AppColorScheme.amoled
-                                      ? Colors.white
-                                      : Theme.of(context).colorScheme.primary,
-                                  child: InkWell(
-                                    borderRadius: BorderRadius.circular(8),
-                                    onTap: _loading ? null : _search,
-                                    child: ValueListenableBuilder<String>(
-                                      valueListenable: languageNotifier,
-                                      builder: (context, lang, child) {
-                                        return Tooltip(
-                                          message: LocaleProvider.tr('search'),
-                                          child: Icon(
-                                            Icons.search,
-                                            color:
-                                                colorScheme ==
-                                                    AppColorScheme.amoled
-                                                ? Colors.black
-                                                : Theme.of(
-                                                    context,
-                                                  ).colorScheme.onPrimary,
-                                          ),
-                                        );
+                      ValueListenableBuilder<String>(
+                        valueListenable: languageNotifier,
+                        builder: (context, lang, child) {
+                          final isDark =
+                              Theme.of(context).brightness == Brightness.dark;
+                          final barColor = isDark
+                              ? Theme.of(
+                                  context,
+                                ).colorScheme.onSecondary.withValues(alpha: 0.5)
+                              : Theme.of(context).colorScheme.secondaryContainer
+                                    .withValues(alpha: 0.5);
+
+                          return TextField(
+                            controller: _controller,
+                            focusNode: _focusNode,
+                            onChanged: (value) {
+                              setState(() {
+                                _showSuggestions = true;
+                                _noInternet = false;
+                                if (value.isNotEmpty) {
+                                  _hasSearched = false;
+                                  _songResults = [];
+                                  _videoResults = [];
+                                  _albumResults = [];
+                                  _artistResults = [];
+                                }
+                              });
+                              if (value.isEmpty) {
+                                _checkHistory().then((_) {
+                                  setState(() {});
+                                });
+                              }
+                            },
+                            onSubmitted: (_) => _search(),
+                            onTap: () {
+                              setState(() {
+                                _showSuggestions = true;
+                                if (_controller.text.isNotEmpty) {
+                                  _hasSearched = false;
+                                }
+                              });
+                            },
+                            cursorColor: Theme.of(context).colorScheme.primary,
+                            decoration: InputDecoration(
+                              hintText: LocaleProvider.tr(
+                                'search_in_youtube_music',
+                              ),
+                              hintStyle: TextStyle(
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurfaceVariant,
+                                fontSize: 15,
+                              ),
+                              prefixIcon: const Icon(Icons.search),
+                              suffixIcon: _controller.text.isNotEmpty
+                                  ? IconButton(
+                                      icon: const Icon(Icons.close),
+                                      onPressed: () {
+                                        _controller.clear();
+                                        _clearResults();
+                                        setState(() {
+                                          _showSuggestions = true;
+                                          _hasSearched = false;
+                                        });
                                       },
-                                    ),
-                                  ),
-                                );
-                              },
+                                    )
+                                  : null,
+                              filled: true,
+                              fillColor: barColor,
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(28),
+                                borderSide: BorderSide.none,
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(28),
+                                borderSide: BorderSide.none,
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(28),
+                                borderSide: BorderSide.none,
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 20,
+                                vertical: 12,
+                              ),
                             ),
-                          ),
-                        ],
+                          );
+                        },
                       ),
                       const SizedBox(height: 14),
                       // SOLO UNO de estos bloques se muestra a la vez

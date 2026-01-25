@@ -422,6 +422,7 @@ class _EqualizerScreenState extends State<EqualizerScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
 
     return Scaffold(
       appBar: AppBar(
@@ -439,12 +440,15 @@ class _EqualizerScreenState extends State<EqualizerScreen> {
           ),
           padding: EdgeInsets.zero,
           icon: Container(
+            width: 40,
+            height: 40,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: theme.colorScheme.primary.withValues(alpha: 0.08),
+              color: isDark
+                  ? theme.colorScheme.onSecondary.withValues(alpha: 0.5)
+                  : theme.colorScheme.secondaryContainer.withValues(alpha: 0.5),
             ),
-            padding: const EdgeInsets.all(8),
-            child: const Icon(Icons.arrow_back),
+            child: const Icon(Icons.arrow_back, size: 24),
           ),
           onPressed: () => Navigator.of(context).pop(),
         ),
