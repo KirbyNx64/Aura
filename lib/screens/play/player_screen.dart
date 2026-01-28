@@ -1614,12 +1614,6 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     // Para 16:9 (≈1.77)
     final is16by9 = (aspectRatio < 1.85);
 
-    // Para 18:9 (≈2.0)
-    final is18by9 = (aspectRatio >= 1.95 && aspectRatio < 2.05);
-
-    // Para 19.5:9 (≈2.16)
-    final is195by9 = (aspectRatio >= 2.10);
-
     final isSmallScreen = height < 650;
     final artworkSize = isSmallScreen ? width * 0.6 : width * 0.85;
     double progressBarWidth;
@@ -2240,13 +2234,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                               ),
                           ],
                         ),
-                        SizedBox(
-                          height: isSmallScreen
-                              ? 20
-                              : is16by9
-                              ? height * 0.045
-                              : height * 0.03,
-                        ),
+                        const Spacer(flex: 4),
                         SizedBox(
                           width: width * 0.85,
                           child: TitleMarquee(
@@ -2400,7 +2388,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                             ],
                           ),
                         ),
-                        SizedBox(height: height * 0.015),
+                        const Spacer(flex: 1),
                         // Barra de progreso + tiempos
                         StreamBuilder<PlaybackState>(
                           stream: audioHandler?.playbackState,
@@ -2628,13 +2616,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                           },
                         ),
 
-                        SizedBox(
-                          height: isSmallScreen
-                              ? 12
-                              : is16by9
-                              ? 24
-                              : 12,
-                        ),
+                        const Spacer(flex: 2),
                         // Controles de reproducción
                         StreamBuilder<PlaybackState>(
                           stream: audioHandler?.playbackState,
@@ -3133,13 +3115,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                         ),
 
                         if (!is16by9 && !isSmallScreen) ...[
-                          SizedBox(
-                            height: is18by9
-                                ? 20
-                                : is195by9
-                                ? 34
-                                : 16,
-                          ),
+                          const Spacer(flex: 4),
                           SafeArea(
                             child: LayoutBuilder(
                               builder: (context, constraints) {

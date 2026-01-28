@@ -2795,9 +2795,13 @@ class _FoldersScreenState extends State<FoldersScreen>
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
               child: Builder(
                 builder: (context) {
+                  final colorScheme = colorSchemeNotifier.value;
+                  final isAmoled = colorScheme == AppColorScheme.amoled;
                   final innerDark =
                       Theme.of(context).brightness == Brightness.dark;
-                  final barColor = innerDark
+                  final barColor = isAmoled
+                      ? Colors.white.withAlpha(30)
+                      : innerDark
                       ? Theme.of(
                           context,
                         ).colorScheme.onSecondary.withValues(alpha: 0.5)
@@ -2816,7 +2820,9 @@ class _FoldersScreenState extends State<FoldersScreen>
                     decoration: InputDecoration(
                       hintText: LocaleProvider.tr('search_folders_and_songs'),
                       hintStyle: TextStyle(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        color: isAmoled
+                            ? Colors.white.withAlpha(160)
+                            : Theme.of(context).colorScheme.onSurfaceVariant,
                         fontSize: 15,
                       ),
                       prefixIcon: const Icon(Icons.search),
@@ -3316,9 +3322,13 @@ class _FoldersScreenState extends State<FoldersScreen>
               child: ValueListenableBuilder<String>(
                 valueListenable: languageNotifier,
                 builder: (context, lang, child) {
+                  final colorScheme = colorSchemeNotifier.value;
+                  final isAmoled = colorScheme == AppColorScheme.amoled;
                   final innerDark =
                       Theme.of(context).brightness == Brightness.dark;
-                  final barColor = innerDark
+                  final barColor = isAmoled
+                      ? Colors.white.withAlpha(30)
+                      : innerDark
                       ? Theme.of(
                           context,
                         ).colorScheme.onSecondary.withValues(alpha: 0.5)
@@ -3337,7 +3347,9 @@ class _FoldersScreenState extends State<FoldersScreen>
                     decoration: InputDecoration(
                       hintText: LocaleProvider.tr('search_by_title_or_artist'),
                       hintStyle: TextStyle(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        color: isAmoled
+                            ? Colors.white.withAlpha(160)
+                            : Theme.of(context).colorScheme.onSurfaceVariant,
                         fontSize: 15,
                       ),
                       prefixIcon: const Icon(Icons.search),

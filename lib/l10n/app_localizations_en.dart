@@ -244,6 +244,7 @@ const Map<String, String> appLocalizationsEn = {
   'videos': 'Videos',
   'albums': 'Albums',
   'no_results': 'No results',
+  'results': 'Results',
   'no_description': 'Description not available',
   'write_song_or_artist': 'Type the name of a song or artist',
   'loading_more': 'Loading more results...',

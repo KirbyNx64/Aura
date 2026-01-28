@@ -1284,8 +1284,12 @@ class _FavoritesScreenState extends State<FavoritesScreen>
             child: ValueListenableBuilder<String>(
               valueListenable: languageNotifier,
               builder: (context, lang, child) {
+                final colorScheme = colorSchemeNotifier.value;
+                final isAmoled = colorScheme == AppColorScheme.amoled;
                 final isDark = Theme.of(context).brightness == Brightness.dark;
-                final barColor = isDark
+                final barColor = isAmoled
+                    ? Colors.white.withAlpha(30)
+                    : isDark
                     ? Theme.of(
                         context,
                       ).colorScheme.onSecondary.withValues(alpha: 0.5)
@@ -1301,7 +1305,9 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                   decoration: InputDecoration(
                     hintText: LocaleProvider.tr('search_by_title_or_artist'),
                     hintStyle: TextStyle(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      color: isAmoled
+                          ? Colors.white.withAlpha(160)
+                          : Theme.of(context).colorScheme.onSurfaceVariant,
                       fontSize: 15,
                     ),
                     prefixIcon: Icon(Icons.search),

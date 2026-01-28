@@ -249,6 +249,7 @@ const Map<String, String> appLocalizationsEs = {
   'search_music_in_ytm': 'Busca y descarga música de YouTube Music.',
   'download_understood': 'Entendido',
   'no_results': 'Sin resultados',
+  'results': 'Resultados',
   'no_description': 'Descripción no disponible',
   'songs_search': 'Canciones',
   'videos': 'Videos',

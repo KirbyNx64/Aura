@@ -643,9 +643,13 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
                 ),
                 child: Builder(
                   builder: (context) {
+                    final colorScheme = colorSchemeNotifier.value;
+                    final isAmoled = colorScheme == AppColorScheme.amoled;
                     final isDark =
                         Theme.of(context).brightness == Brightness.dark;
-                    final barColor = isDark
+                    final barColor = isAmoled
+                        ? Colors.white.withAlpha(30)
+                        : isDark
                         ? Theme.of(
                             context,
                           ).colorScheme.onSecondary.withValues(alpha: 0.5)
@@ -665,7 +669,9 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
                       decoration: InputDecoration(
                         hintText: LocaleProvider.tr('search_lyrics_hint'),
                         hintStyle: TextStyle(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          color: isAmoled
+                              ? Colors.white.withAlpha(160)
+                              : Theme.of(context).colorScheme.onSurfaceVariant,
                           fontSize: 15,
                         ),
                         prefixIcon: const Icon(Icons.search),

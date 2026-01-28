@@ -3342,9 +3342,13 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                   child: Builder(
                     builder: (context) {
-                      final innerDark =
+                      final colorScheme = colorSchemeNotifier.value;
+                      final isAmoled = colorScheme == AppColorScheme.amoled;
+                      final isDark =
                           Theme.of(context).brightness == Brightness.dark;
-                      final barColor = innerDark
+                      final barColor = isAmoled
+                          ? Colors.white.withAlpha(30)
+                          : isDark
                           ? Theme.of(
                               context,
                             ).colorScheme.onSecondary.withValues(alpha: 0.5)
@@ -3367,9 +3371,11 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                             'search_by_title_or_artist',
                           ),
                           hintStyle: TextStyle(
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.onSurfaceVariant,
+                            color: isAmoled
+                                ? Colors.white.withAlpha(160)
+                                : Theme.of(
+                                    context,
+                                  ).colorScheme.onSurfaceVariant,
                             fontSize: 15,
                           ),
                           prefixIcon: const Icon(Icons.search),

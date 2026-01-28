@@ -3962,6 +3962,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           ? Symbols.dark_mode_rounded
                           : Symbols.light_mode_rounded,
                       fill: 1,
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurface.withValues(alpha: 0.95),
                     ),
                     title: TranslatedText(
                       'select_theme',
@@ -3969,7 +3972,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         fontWeight: FontWeight.bold,
                         color: Theme.of(
                           context,
-                        ).colorScheme.onSurface.withValues(alpha: 0.85),
+                        ).colorScheme.onSurface.withValues(alpha: 0.95),
                       ),
                     ),
                     subtitle: TranslatedText(
@@ -3978,7 +3981,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         fontSize: 12,
                         color: Theme.of(
                           context,
-                        ).colorScheme.onSurface.withValues(alpha: 0.7),
+                        ).colorScheme.onSurface.withValues(alpha: 0.8),
                       ),
                     ),
                     shape: const RoundedRectangleBorder(
@@ -4010,14 +4013,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: Column(
                 children: [
                   ListTile(
-                    leading: const Icon(Icons.palette),
+                    leading: Icon(
+                      Icons.palette,
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurface.withValues(alpha: 0.95),
+                    ),
                     title: Text(
                       LocaleProvider.tr('select_color'),
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         color: Theme.of(
                           context,
-                        ).colorScheme.onSurface.withValues(alpha: 0.85),
+                        ).colorScheme.onSurface.withValues(alpha: 0.95),
                       ),
                     ),
                     subtitle: Text(
@@ -4026,7 +4034,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         fontSize: 12,
                         color: Theme.of(
                           context,
-                        ).colorScheme.onSurface.withValues(alpha: 0.7),
+                        ).colorScheme.onSurface.withValues(alpha: 0.8),
                       ),
                     ),
                     shape: const RoundedRectangleBorder(
@@ -4053,14 +4061,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: Column(
                 children: [
                   ListTile(
-                    leading: const Icon(Icons.language),
+                    leading: Icon(
+                      Icons.language,
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurface.withValues(alpha: 0.95),
+                    ),
                     title: TranslatedText(
                       'change_language',
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         color: Theme.of(
                           context,
-                        ).colorScheme.onSurface.withValues(alpha: 0.85),
+                        ).colorScheme.onSurface.withValues(alpha: 0.95),
                       ),
                     ),
                     subtitle: TranslatedText(
@@ -4069,7 +4082,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         fontSize: 12,
                         color: Theme.of(
                           context,
-                        ).colorScheme.onSurface.withValues(alpha: 0.7),
+                        ).colorScheme.onSurface.withValues(alpha: 0.8),
                       ),
                     ),
                     shape: const RoundedRectangleBorder(
@@ -4096,14 +4109,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: Column(
                 children: [
                   ListTile(
-                    leading: const Icon(Icons.touch_app),
+                    leading: Icon(
+                      Icons.touch_app,
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurface.withValues(alpha: 0.95),
+                    ),
                     title: TranslatedText(
                       'gesture_settings',
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         color: Theme.of(
                           context,
-                        ).colorScheme.onSurface.withValues(alpha: 0.85),
+                        ).colorScheme.onSurface.withValues(alpha: 0.95),
                       ),
                     ),
                     subtitle: TranslatedText(
@@ -4112,7 +4130,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         fontSize: 12,
                         color: Theme.of(
                           context,
-                        ).colorScheme.onSurface.withValues(alpha: 0.7),
+                        ).colorScheme.onSurface.withValues(alpha: 0.8),
                       ),
                     ),
                     shape: const RoundedRectangleBorder(
@@ -4155,7 +4173,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: Column(
                 children: [
                   ListTile(
-                    leading: const Icon(Icons.sd_storage),
+                    leading: Icon(
+                      Icons.sd_storage,
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurface.withValues(alpha: 0.95),
+                    ),
                     title: Text(
                       _availableBytesAtDownloadDir != null &&
                               _totalBytesAtDownloadDir != null
@@ -4164,7 +4187,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       style: TextStyle(
                         color: Theme.of(
                           context,
-                        ).colorScheme.onSurface.withValues(alpha: 0.85),
+                        ).colorScheme.onSurface.withValues(alpha: 0.95),
                       ),
                     ),
                     subtitle:
@@ -4218,14 +4241,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: Column(
                 children: [
                   ListTile(
-                    leading: const Icon(Icons.folder),
+                    leading: Icon(
+                      Icons.folder,
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurface.withValues(alpha: 0.95),
+                    ),
                     title: TranslatedText(
                       'save_path',
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         color: Theme.of(
                           context,
-                        ).colorScheme.onSurface.withValues(alpha: 0.85),
+                        ).colorScheme.onSurface.withValues(alpha: 0.95),
                       ),
                     ),
                     subtitle:
@@ -4244,7 +4272,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               fontSize: 12,
                               color: Theme.of(
                                 context,
-                              ).colorScheme.onSurface.withValues(alpha: 0.7),
+                              ).colorScheme.onSurface.withValues(alpha: 0.8),
                             ),
                             overflow: TextOverflow.ellipsis,
                           )
@@ -4254,7 +4282,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               fontSize: 12,
                               color: Theme.of(
                                 context,
-                              ).colorScheme.onSurface.withValues(alpha: 0.7),
+                              ).colorScheme.onSurface.withValues(alpha: 0.8),
                             ),
                           ),
                     trailing: const Icon(Icons.edit),
@@ -4282,14 +4310,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: Column(
                 children: [
                   ListTile(
-                    leading: const Icon(Icons.download),
+                    leading: Icon(
+                      Icons.download,
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurface.withValues(alpha: 0.95),
+                    ),
                     title: TranslatedText(
                       'download_type',
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         color: Theme.of(
                           context,
-                        ).colorScheme.onSurface.withValues(alpha: 0.85),
+                        ).colorScheme.onSurface.withValues(alpha: 0.95),
                       ),
                     ),
                     subtitle: TranslatedText(
@@ -4298,11 +4331,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         fontSize: 12,
                         color: Theme.of(
                           context,
-                        ).colorScheme.onSurface.withValues(alpha: 0.7),
+                        ).colorScheme.onSurface.withValues(alpha: 0.8),
                       ),
                     ),
                     trailing: IconButton(
-                      icon: const Icon(Icons.arrow_drop_down),
+                      icon: Icon(
+                        Icons.arrow_drop_down,
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withValues(alpha: 0.95),
+                      ),
                       onPressed: () => _showDownloadTypeSelection(),
                     ),
                     shape: const RoundedRectangleBorder(
@@ -4329,14 +4367,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: Column(
                 children: [
                   ListTile(
-                    leading: const Icon(Icons.audiotrack),
+                    leading: Icon(
+                      Icons.audiotrack,
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurface.withValues(alpha: 0.95),
+                    ),
                     title: TranslatedText(
                       'audio_quality',
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         color: Theme.of(
                           context,
-                        ).colorScheme.onSurface.withValues(alpha: 0.85),
+                        ).colorScheme.onSurface.withValues(alpha: 0.95),
                       ),
                     ),
                     subtitle: TranslatedText(
@@ -4345,11 +4388,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         fontSize: 12,
                         color: Theme.of(
                           context,
-                        ).colorScheme.onSurface.withValues(alpha: 0.7),
+                        ).colorScheme.onSurface.withValues(alpha: 0.8),
                       ),
                     ),
                     trailing: IconButton(
-                      icon: const Icon(Icons.arrow_drop_down),
+                      icon: Icon(
+                        Icons.arrow_drop_down,
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withValues(alpha: 0.95),
+                      ),
                       onPressed: () => _showAudioQualitySelection(),
                     ),
                     shape: const RoundedRectangleBorder(
@@ -4376,9 +4424,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: Column(
                 children: [
                   ListTile(
-                    leading: const Icon(
+                    leading: Icon(
                       Symbols.add_photo_alternate,
                       weight: 600,
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurface.withValues(alpha: 0.95),
                     ),
                     title: TranslatedText(
                       'cover_quality',
@@ -4386,7 +4437,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         fontWeight: FontWeight.bold,
                         color: Theme.of(
                           context,
-                        ).colorScheme.onSurface.withValues(alpha: 0.85),
+                        ).colorScheme.onSurface.withValues(alpha: 0.95),
                       ),
                     ),
                     subtitle: TranslatedText(
@@ -4395,11 +4446,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         fontSize: 12,
                         color: Theme.of(
                           context,
-                        ).colorScheme.onSurface.withValues(alpha: 0.7),
+                        ).colorScheme.onSurface.withValues(alpha: 0.8),
                       ),
                     ),
                     trailing: IconButton(
-                      icon: const Icon(Icons.arrow_drop_down),
+                      icon: Icon(
+                        Icons.arrow_drop_down,
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withValues(alpha: 0.95),
+                      ),
                       onPressed: () => _showCoverQualitySelection(),
                     ),
                     shape: const RoundedRectangleBorder(
@@ -4426,14 +4482,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: Column(
                 children: [
                   ListTile(
-                    leading: const Icon(Icons.security),
+                    leading: Icon(
+                      Icons.security,
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurface.withValues(alpha: 0.95),
+                    ),
                     title: Text(
                       LocaleProvider.tr('grant_all_files_permission'),
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         color: Theme.of(
                           context,
-                        ).colorScheme.onSurface.withValues(alpha: 0.85),
+                        ).colorScheme.onSurface.withValues(alpha: 0.95),
                       ),
                     ),
                     subtitle: Text(
@@ -4442,7 +4503,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         fontSize: 12,
                         color: Theme.of(
                           context,
-                        ).colorScheme.onSurface.withValues(alpha: 0.7),
+                        ).colorScheme.onSurface.withValues(alpha: 0.8),
                       ),
                     ),
                     shape: const RoundedRectangleBorder(
@@ -4517,14 +4578,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: Column(
                 children: [
                   ListTile(
-                    leading: const Icon(Icons.image),
+                    leading: Icon(
+                      Icons.image,
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurface.withValues(alpha: 0.95),
+                    ),
                     title: Text(
                       LocaleProvider.tr('artwork_quality'),
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         color: Theme.of(
                           context,
-                        ).colorScheme.onSurface.withValues(alpha: 0.85),
+                        ).colorScheme.onSurface.withValues(alpha: 0.95),
                       ),
                     ),
                     subtitle: Column(
@@ -4540,7 +4606,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               : _artworkQuality == 205
                               ? LocaleProvider.tr('40_percent_low')
                               : LocaleProvider.tr('20_percent_minimum'),
-                          style: const TextStyle(fontWeight: FontWeight.bold),
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onSurface.withValues(alpha: 0.85),
+                          ),
                         ),
                         const SizedBox(height: 2),
                         Text(
@@ -4551,7 +4622,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             fontSize: 12,
                             color: Theme.of(
                               context,
-                            ).colorScheme.onSurface.withValues(alpha: 0.7),
+                            ).colorScheme.onSurface.withValues(alpha: 0.8),
                           ),
                         ),
                       ],
@@ -4603,7 +4674,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             fontWeight: FontWeight.bold,
                             color: Theme.of(
                               context,
-                            ).colorScheme.onSurface.withValues(alpha: 0.85),
+                            ).colorScheme.onSurface.withValues(alpha: 0.95),
                           ),
                         ),
                         subtitle: Text(
@@ -4612,10 +4683,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             fontSize: 12,
                             color: Theme.of(
                               context,
-                            ).colorScheme.onSurface.withValues(alpha: 0.7),
+                            ).colorScheme.onSurface.withValues(alpha: 0.8),
                           ),
                         ),
-                        secondary: const Icon(Icons.library_music),
+                        secondary: Icon(
+                          Icons.library_music,
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onSurface.withValues(alpha: 0.95),
+                        ),
                         shape: const RoundedRectangleBorder(
                           borderRadius: BorderRadius.all(Radius.circular(4)),
                         ),
@@ -4675,7 +4751,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             fontWeight: FontWeight.bold,
                             color: Theme.of(
                               context,
-                            ).colorScheme.onSurface.withValues(alpha: 0.85),
+                            ).colorScheme.onSurface.withValues(alpha: 0.95),
                           ),
                         ),
                         subtitle: Text(
@@ -4684,10 +4760,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             fontSize: 12,
                             color: Theme.of(
                               context,
-                            ).colorScheme.onSurface.withValues(alpha: 0.7),
+                            ).colorScheme.onSurface.withValues(alpha: 0.8),
                           ),
                         ),
-                        secondary: const Icon(Symbols.slab_serif, weight: 600),
+                        secondary: Icon(
+                          Symbols.slab_serif,
+                          weight: 600,
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onSurface.withValues(alpha: 0.95),
+                        ),
                         shape: const RoundedRectangleBorder(
                           borderRadius: BorderRadius.all(Radius.circular(4)),
                         ),
@@ -4735,7 +4817,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         fontWeight: FontWeight.bold,
                         color: Theme.of(
                           context,
-                        ).colorScheme.onSurface.withValues(alpha: 0.85),
+                        ).colorScheme.onSurface.withValues(alpha: 0.95),
                       ),
                     ),
                     subtitle: ValueListenableBuilder<String>(
@@ -4789,12 +4871,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             fontSize: 12,
                             color: Theme.of(
                               context,
-                            ).colorScheme.onSurface.withValues(alpha: 0.7),
+                            ).colorScheme.onSurface.withValues(alpha: 0.8),
                           ),
                         );
                       },
                     ),
-                    leading: const Icon(Icons.translate),
+                    leading: Icon(
+                      Icons.translate,
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurface.withValues(alpha: 0.95),
+                    ),
                     shape: const RoundedRectangleBorder(
                       borderRadius: BorderRadius.all(Radius.circular(4)),
                     ),
@@ -4835,7 +4922,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             fontWeight: FontWeight.bold,
                             color: Theme.of(
                               context,
-                            ).colorScheme.onSurface.withValues(alpha: 0.85),
+                            ).colorScheme.onSurface.withValues(alpha: 0.95),
                           ),
                         ),
                         subtitle: Text(
@@ -4844,10 +4931,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             fontSize: 12,
                             color: Theme.of(
                               context,
-                            ).colorScheme.onSurface.withValues(alpha: 0.7),
+                            ).colorScheme.onSurface.withValues(alpha: 0.8),
                           ),
                         ),
-                        secondary: const Icon(Icons.animation),
+                        secondary: Icon(
+                          Icons.animation,
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onSurface.withValues(alpha: 0.95),
+                        ),
                         shape: const RoundedRectangleBorder(
                           borderRadius: BorderRadius.all(Radius.circular(4)),
                         ),
@@ -4905,7 +4997,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             fontWeight: FontWeight.bold,
                             color: Theme.of(
                               context,
-                            ).colorScheme.onSurface.withValues(alpha: 0.85),
+                            ).colorScheme.onSurface.withValues(alpha: 0.95),
                           ),
                         ),
                         subtitle: Text(
@@ -4914,14 +5006,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             fontSize: 12,
                             color: Theme.of(
                               context,
-                            ).colorScheme.onSurface.withValues(alpha: 0.7),
+                            ).colorScheme.onSurface.withValues(alpha: 0.8),
                           ),
                         ),
-                        secondary: const Icon(
+                        secondary: Icon(
                           Symbols.skip_next_rounded,
                           grade: 200,
                           fill: 1,
                           size: 28,
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onSurface.withValues(alpha: 0.95),
                         ),
                         shape: const RoundedRectangleBorder(
                           borderRadius: BorderRadius.all(Radius.circular(4)),
@@ -4964,14 +5059,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: Column(
                 children: [
                   ListTile(
-                    leading: const Icon(Icons.equalizer_rounded),
+                    leading: Icon(
+                      Icons.equalizer_rounded,
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurface.withValues(alpha: 0.95),
+                    ),
                     title: Text(
                       LocaleProvider.tr('equalizer'),
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         color: Theme.of(
                           context,
-                        ).colorScheme.onSurface.withValues(alpha: 0.85),
+                        ).colorScheme.onSurface.withValues(alpha: 0.95),
                       ),
                     ),
                     subtitle: Text(
@@ -4980,10 +5080,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         fontSize: 12,
                         color: Theme.of(
                           context,
-                        ).colorScheme.onSurface.withValues(alpha: 0.7),
+                        ).colorScheme.onSurface.withValues(alpha: 0.8),
                       ),
                     ),
-                    trailing: const Icon(Icons.chevron_right),
+                    trailing: Icon(
+                      Icons.chevron_right,
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurface.withValues(alpha: 0.95),
+                    ),
                     shape: const RoundedRectangleBorder(
                       borderRadius: BorderRadius.all(Radius.circular(4)),
                     ),
@@ -5030,14 +5135,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: Column(
                 children: [
                   ListTile(
-                    leading: const Icon(Icons.lyrics_outlined),
+                    leading: Icon(
+                      Icons.lyrics_outlined,
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurface.withValues(alpha: 0.95),
+                    ),
                     title: Text(
                       LocaleProvider.tr('delete_lyrics'),
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         color: Theme.of(
                           context,
-                        ).colorScheme.onSurface.withValues(alpha: 0.85),
+                        ).colorScheme.onSurface.withValues(alpha: 0.95),
                       ),
                     ),
                     subtitle: Text(
@@ -5046,7 +5156,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         fontSize: 12,
                         color: Theme.of(
                           context,
-                        ).colorScheme.onSurface.withValues(alpha: 0.7),
+                        ).colorScheme.onSurface.withValues(alpha: 0.8),
                       ),
                     ),
                     shape: const RoundedRectangleBorder(
@@ -5073,14 +5183,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: Column(
                 children: [
                   ListTile(
-                    leading: const Icon(Icons.battery_alert),
+                    leading: Icon(
+                      Icons.battery_alert,
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurface.withValues(alpha: 0.95),
+                    ),
                     title: Text(
                       LocaleProvider.tr('ignore_battery_optimization'),
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         color: Theme.of(
                           context,
-                        ).colorScheme.onSurface.withValues(alpha: 0.85),
+                        ).colorScheme.onSurface.withValues(alpha: 0.95),
                       ),
                     ),
                     subtitle: Column(
@@ -5096,7 +5211,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             fontWeight: FontWeight.bold,
                             color: Theme.of(
                               context,
-                            ).colorScheme.onSurface.withValues(alpha: 0.75),
+                            ).colorScheme.onSurface.withValues(alpha: 0.85),
                           ),
                         ),
                         const SizedBox(height: 2),
@@ -5106,7 +5221,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             fontSize: 12,
                             color: Theme.of(
                               context,
-                            ).colorScheme.onSurface.withValues(alpha: 0.7),
+                            ).colorScheme.onSurface.withValues(alpha: 0.8),
                           ),
                         ),
                       ],
@@ -5152,14 +5267,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: Column(
                 children: [
                   ListTile(
-                    leading: const Icon(Icons.save_alt),
+                    leading: Icon(
+                      Icons.save_alt,
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurface.withValues(alpha: 0.95),
+                    ),
                     title: Text(
                       LocaleProvider.tr('export_backup'),
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         color: Theme.of(
                           context,
-                        ).colorScheme.onSurface.withValues(alpha: 0.85),
+                        ).colorScheme.onSurface.withValues(alpha: 0.95),
                       ),
                     ),
                     subtitle: Text(
@@ -5168,7 +5288,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         fontSize: 12,
                         color: Theme.of(
                           context,
-                        ).colorScheme.onSurface.withValues(alpha: 0.7),
+                        ).colorScheme.onSurface.withValues(alpha: 0.8),
                       ),
                     ),
                     shape: const RoundedRectangleBorder(
@@ -5200,14 +5320,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: Column(
                 children: [
                   ListTile(
-                    leading: const Icon(Icons.upload_file),
+                    leading: Icon(
+                      Icons.upload_file,
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurface.withValues(alpha: 0.95),
+                    ),
                     title: Text(
                       LocaleProvider.tr('import_backup'),
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         color: Theme.of(
                           context,
-                        ).colorScheme.onSurface.withValues(alpha: 0.85),
+                        ).colorScheme.onSurface.withValues(alpha: 0.95),
                       ),
                     ),
                     subtitle: Text(
@@ -5216,7 +5341,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         fontSize: 12,
                         color: Theme.of(
                           context,
-                        ).colorScheme.onSurface.withValues(alpha: 0.7),
+                        ).colorScheme.onSurface.withValues(alpha: 0.8),
                       ),
                     ),
                     shape: const RoundedRectangleBorder(
@@ -5259,14 +5384,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: Column(
                 children: [
                   ListTile(
-                    leading: const Icon(Icons.restore),
+                    leading: Icon(
+                      Icons.restore,
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurface.withValues(alpha: 0.95),
+                    ),
                     title: Text(
                       LocaleProvider.tr('reset_app'),
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         color: Theme.of(
                           context,
-                        ).colorScheme.onSurface.withValues(alpha: 0.85),
+                        ).colorScheme.onSurface.withValues(alpha: 0.95),
                       ),
                     ),
                     subtitle: Text(
@@ -5275,7 +5405,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         fontSize: 12,
                         color: Theme.of(
                           context,
-                        ).colorScheme.onSurface.withValues(alpha: 0.7),
+                        ).colorScheme.onSurface.withValues(alpha: 0.8),
                       ),
                     ),
                     shape: const RoundedRectangleBorder(
@@ -5307,10 +5437,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: Column(
                 children: [
                   ListTile(
-                    leading: const Icon(
+                    leading: Icon(
                       Symbols.system_update_alt_rounded,
                       weight: 500,
                       grade: 200,
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurface.withValues(alpha: 0.95),
                     ),
                     title: Text(
                       LocaleProvider.tr('app_updates'),
@@ -5318,7 +5451,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         fontWeight: FontWeight.bold,
                         color: Theme.of(
                           context,
-                        ).colorScheme.onSurface.withValues(alpha: 0.85),
+                        ).colorScheme.onSurface.withValues(alpha: 0.95),
                       ),
                     ),
                     subtitle: Text(
@@ -5327,7 +5460,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         fontSize: 12,
                         color: Theme.of(
                           context,
-                        ).colorScheme.onSurface.withValues(alpha: 0.7),
+                        ).colorScheme.onSurface.withValues(alpha: 0.8),
                       ),
                     ),
                     shape: const RoundedRectangleBorder(
@@ -5376,14 +5509,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: Column(
                 children: [
                   ListTile(
-                    leading: const Icon(Icons.info_outline),
+                    leading: Icon(
+                      Icons.info_outline,
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurface.withValues(alpha: 0.95),
+                    ),
                     title: Text(
                       LocaleProvider.tr('about'),
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         color: Theme.of(
                           context,
-                        ).colorScheme.onSurface.withValues(alpha: 0.85),
+                        ).colorScheme.onSurface.withValues(alpha: 0.95),
                       ),
                     ),
                     subtitle: Text(
@@ -5392,7 +5530,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         fontSize: 12,
                         color: Theme.of(
                           context,
-                        ).colorScheme.onSurface.withValues(alpha: 0.7),
+                        ).colorScheme.onSurface.withValues(alpha: 0.8),
                       ),
                     ),
                     shape: const RoundedRectangleBorder(
