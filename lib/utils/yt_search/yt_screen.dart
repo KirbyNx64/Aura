@@ -457,6 +457,12 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
     }
   }
 
+  void _handleFocusChange() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -466,6 +472,8 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
 
     // Mostrar sugerencias por defecto
     _showSuggestions = true;
+
+    _focusNode.addListener(_handleFocusChange);
 
     _songScrollController.addListener(() {
       if (_expandedCategory == 'songs' &&
@@ -508,6 +516,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
     WidgetsBinding.instance.removeObserver(this);
     _tabController.removeListener(_handleTabSelection);
     _tabController.dispose();
+    _focusNode.removeListener(_handleFocusChange);
     _focusNode.dispose();
     _controller.dispose();
     downloadProgressNotifier.dispose();
@@ -1864,6 +1873,104 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                     },
                   ),
                 ],
+          bottom: PreferredSize(
+            preferredSize: const Size.fromHeight(56),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: ValueListenableBuilder<String>(
+                valueListenable: languageNotifier,
+                builder: (context, lang, child) {
+                  final colorScheme = colorSchemeNotifier.value;
+                  final isDark =
+                      Theme.of(context).brightness == Brightness.dark;
+                  final isAmoled = colorScheme == AppColorScheme.amoled;
+                  final barColor = isAmoled
+                      ? Colors.white.withAlpha(30)
+                      : isDark
+                      ? Theme.of(
+                          context,
+                        ).colorScheme.onSecondary.withValues(alpha: 0.5)
+                      : Theme.of(
+                          context,
+                        ).colorScheme.secondaryContainer.withValues(alpha: 0.5);
+
+                  return TextField(
+                    controller: _controller,
+                    focusNode: _focusNode,
+                    onChanged: (value) {
+                      setState(() {
+                        _showSuggestions = true;
+                        _noInternet = false;
+                        if (value.isNotEmpty) {
+                          _hasSearched = false;
+                          _songResults = [];
+                          _videoResults = [];
+                          _albumResults = [];
+                          _artistResults = [];
+                        }
+                      });
+                      if (value.isEmpty) {
+                        _checkHistory().then((_) {
+                          setState(() {});
+                        });
+                      }
+                    },
+                    onSubmitted: (_) => _search(),
+                    onTap: () {
+                      setState(() {
+                        _showSuggestions = true;
+                        if (_controller.text.isNotEmpty) {
+                          _hasSearched = false;
+                        }
+                      });
+                    },
+                    cursorColor: Theme.of(context).colorScheme.primary,
+                    decoration: InputDecoration(
+                      hintText: LocaleProvider.tr('search_in_youtube_music'),
+                      hintStyle: TextStyle(
+                        color: isAmoled
+                            ? Colors.white.withAlpha(160)
+                            : Theme.of(context).colorScheme.onSurfaceVariant,
+                        fontSize: 15,
+                      ),
+                      prefixIcon: const Icon(Icons.search),
+                      suffixIcon: _controller.text.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(Icons.close),
+                              onPressed: () {
+                                _controller.clear();
+                                _clearResults();
+                                setState(() {
+                                  _showSuggestions = true;
+                                  _hasSearched = false;
+                                });
+                              },
+                            )
+                          : null,
+                      filled: true,
+                      fillColor: barColor,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(28),
+                        borderSide: BorderSide.none,
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(28),
+                        borderSide: BorderSide.none,
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(28),
+                        borderSide: BorderSide.none,
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 12,
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
         ),
         body: Column(
           children: [
@@ -1881,111 +1988,6 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                     double bottomSpace = mediaItem != null ? 100.0 : 0.0;
                     return Column(
                       children: [
-                        ValueListenableBuilder<String>(
-                          valueListenable: languageNotifier,
-                          builder: (context, lang, child) {
-                            final colorScheme = colorSchemeNotifier.value;
-                            final isDark =
-                                Theme.of(context).brightness == Brightness.dark;
-                            final isAmoled =
-                                colorScheme == AppColorScheme.amoled;
-                            final barColor = isAmoled
-                                ? Colors.white.withAlpha(30)
-                                : isDark
-                                ? Theme.of(context).colorScheme.onSecondary
-                                      .withValues(alpha: 0.5)
-                                : Theme.of(context)
-                                      .colorScheme
-                                      .secondaryContainer
-                                      .withValues(alpha: 0.5);
-
-                            return Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                              ),
-                              child: TextField(
-                                controller: _controller,
-                                focusNode: _focusNode,
-                                onChanged: (value) {
-                                  setState(() {
-                                    _showSuggestions = true;
-                                    _noInternet = false;
-                                    if (value.isNotEmpty) {
-                                      _hasSearched = false;
-                                      _songResults = [];
-                                      _videoResults = [];
-                                      _albumResults = [];
-                                      _artistResults = [];
-                                    }
-                                  });
-                                  if (value.isEmpty) {
-                                    _checkHistory().then((_) {
-                                      setState(() {});
-                                    });
-                                  }
-                                },
-                                onSubmitted: (_) => _search(),
-                                onTap: () {
-                                  setState(() {
-                                    _showSuggestions = true;
-                                    if (_controller.text.isNotEmpty) {
-                                      _hasSearched = false;
-                                    }
-                                  });
-                                },
-                                cursorColor: Theme.of(
-                                  context,
-                                ).colorScheme.primary,
-                                decoration: InputDecoration(
-                                  hintText: LocaleProvider.tr(
-                                    'search_in_youtube_music',
-                                  ),
-                                  hintStyle: TextStyle(
-                                    color: isAmoled
-                                        ? Colors.white.withAlpha(160)
-                                        : Theme.of(
-                                            context,
-                                          ).colorScheme.onSurfaceVariant,
-                                    fontSize: 15,
-                                  ),
-                                  prefixIcon: const Icon(Icons.search),
-                                  suffixIcon: _controller.text.isNotEmpty
-                                      ? IconButton(
-                                          icon: const Icon(Icons.close),
-                                          onPressed: () {
-                                            _controller.clear();
-                                            _clearResults();
-                                            setState(() {
-                                              _showSuggestions = true;
-                                              _hasSearched = false;
-                                            });
-                                          },
-                                        )
-                                      : null,
-                                  filled: true,
-                                  fillColor: barColor,
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(28),
-                                    borderSide: BorderSide.none,
-                                  ),
-                                  enabledBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(28),
-                                    borderSide: BorderSide.none,
-                                  ),
-                                  focusedBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(28),
-                                    borderSide: BorderSide.none,
-                                  ),
-                                  contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: 20,
-                                    vertical: 12,
-                                  ),
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                        const SizedBox(height: 10),
                         if (!_loading &&
                             (_songResults.isNotEmpty ||
                                 _videoResults.isNotEmpty ||
@@ -2176,6 +2178,9 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                       snapshot.hasData &&
                                       snapshot.data!.isNotEmpty;
                                   if (!hasHistory) {
+                                    if (_focusNode.hasFocus) {
+                                      return const SizedBox.shrink();
+                                    }
                                     return Center(
                                       child: Column(
                                         mainAxisAlignment:

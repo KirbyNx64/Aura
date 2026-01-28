@@ -36,7 +36,7 @@ dependencies:
   url_launcher: ^6.3.2
   media_scanner: ^2.2.0
   device_info_plus: ^12.3.0
-  dio: ^5.9.0
+  dio: ^5.9.1
   open_file: ^3.5.11
   smooth_page_indicator: ^2.0.1
   image: ^4.7.2

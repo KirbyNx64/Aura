@@ -1152,10 +1152,10 @@ class _ArtistScreenState extends State<ArtistScreen> {
                       child: Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: Theme.of(context)
-                              .colorScheme
-                              .secondaryContainer
-                              .withValues(alpha: 0.4),
+                          color: isAmoled
+                              ? Colors.white.withAlpha(30)
+                              : Theme.of(context).colorScheme.secondaryContainer
+                                    .withValues(alpha: 0.4),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Row(
@@ -1187,7 +1187,9 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                 height: 32,
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
-                                  color: isSystem
+                                  color: isAmoled
+                                      ? Colors.white.withAlpha(60)
+                                      : isSystem
                                       ? Theme.of(context)
                                             .colorScheme
                                             .secondaryContainer
