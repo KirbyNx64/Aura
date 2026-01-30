@@ -3874,7 +3874,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     // final isSystem = colorSchemeNotifier.value == AppColorScheme.system;
-    final cardColor = isDark
+    final cardColor = isAmoled
+        ? Colors.white.withAlpha(20)
+        : isDark
         ? Theme.of(context).colorScheme.onSecondary.withValues(alpha: 0.5)
         : Theme.of(
             context,

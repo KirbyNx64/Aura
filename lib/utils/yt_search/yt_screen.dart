@@ -1388,12 +1388,12 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                         padding: EdgeInsets.all(16),
                         decoration: BoxDecoration(
                           color: (isAmoled && isDark
-                              ? Colors.white.withValues(alpha: 0.2)
+                              ? Colors.white.withAlpha(20)
                               : Theme.of(context).colorScheme.primaryContainer),
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(
                             color: (isAmoled && isDark
-                                ? Colors.white.withValues(alpha: 0.4)
+                                ? Colors.white.withAlpha(40)
                                 : Theme.of(
                                     context,
                                   ).colorScheme.primary.withValues(alpha: 0.3)),
@@ -1407,7 +1407,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                               decoration: BoxDecoration(
                                 borderRadius: BorderRadius.circular(12),
                                 color: (isAmoled && isDark
-                                    ? Colors.white.withValues(alpha: 0.2)
+                                    ? Colors.white.withAlpha(20)
                                     : Theme.of(context).colorScheme.primary
                                           .withValues(alpha: 0.1)),
                               ),
@@ -1882,7 +1882,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                       Theme.of(context).brightness == Brightness.dark;
                   final isAmoled = colorScheme == AppColorScheme.amoled;
                   final barColor = isAmoled
-                      ? Colors.white.withAlpha(30)
+                      ? Colors.white.withAlpha(20)
                       : isDark
                       ? Theme.of(
                           context,
@@ -2306,7 +2306,10 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                     context,
                                                   ).brightness ==
                                                   Brightness.dark;
-                                              final cardColor = isDark
+                                              final cardColor =
+                                                  isAmoled && isDark
+                                                  ? Colors.white.withAlpha(20)
+                                                  : isDark
                                                   ? Theme.of(context)
                                                         .colorScheme
                                                         .onSecondary
@@ -2624,7 +2627,10 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                     context,
                                                   ).brightness ==
                                                   Brightness.dark;
-                                              final cardColor = isDark
+                                              final cardColor =
+                                                  isAmoled && isDark
+                                                  ? Colors.white.withAlpha(20)
+                                                  : isDark
                                                   ? Theme.of(context)
                                                         .colorScheme
                                                         .onSecondary
@@ -2926,7 +2932,10 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                     context,
                                                   ).brightness ==
                                                   Brightness.dark;
-                                              final cardColor = isDark
+                                              final cardColor =
+                                                  isAmoled && isDark
+                                                  ? Colors.white.withAlpha(20)
+                                                  : isDark
                                                   ? Theme.of(context)
                                                         .colorScheme
                                                         .onSecondary
@@ -3255,7 +3264,10 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                       context,
                                                     ).brightness ==
                                                     Brightness.dark;
-                                                final cardColor = isDark
+                                                final cardColor =
+                                                    isAmoled && isDark
+                                                    ? Colors.white.withAlpha(20)
+                                                    : isDark
                                                     ? Theme.of(context)
                                                           .colorScheme
                                                           .onSecondary
@@ -3752,7 +3764,10 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                       context,
                                                     ).brightness ==
                                                     Brightness.dark;
-                                                final cardColor = isDark
+                                                final cardColor =
+                                                    isAmoled && isDark
+                                                    ? Colors.white.withAlpha(20)
+                                                    : isDark
                                                     ? Theme.of(context)
                                                           .colorScheme
                                                           .onSecondary
@@ -4131,7 +4146,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                     context,
                                                   ).brightness ==
                                                   Brightness.dark;
-                                              final cardColor = isDark
+                                              final cardColor = isAmoled && isDark ? Colors.white.withAlpha(20) : isDark
                                                   ? Theme.of(context)
                                                         .colorScheme
                                                         .onSecondary
@@ -4432,7 +4447,12 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                         context,
                                                       ).brightness ==
                                                       Brightness.dark;
-                                                  final cardColor = isDark
+                                                  final cardColor =
+                                                      isAmoled && isDark
+                                                      ? Colors.white.withAlpha(
+                                                          20,
+                                                        )
+                                                      : isDark
                                                       ? Theme.of(context)
                                                             .colorScheme
                                                             .onSecondary
@@ -4725,7 +4745,11 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                           context,
                                                         ).brightness ==
                                                         Brightness.dark;
-                                                    final cardColor = isDark
+                                                    final cardColor =
+                                                        isAmoled && isDark
+                                                        ? Colors.white
+                                                              .withAlpha(20)
+                                                        : isDark
                                                         ? Theme.of(context)
                                                               .colorScheme
                                                               .onSecondary
@@ -5084,7 +5108,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                         context,
                                                       ).brightness ==
                                                       Brightness.dark;
-                                                  final cardColor = isDark
+                                                  final cardColor = isAmoled && isDark ? Colors.white.withAlpha(20) : isDark
                                                       ? Theme.of(context)
                                                             .colorScheme
                                                             .onSecondary
@@ -5443,7 +5467,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                         context,
                                                       ).brightness ==
                                                       Brightness.dark;
-                                                  final cardColor = isDark
+                                                  final cardColor = isAmoled && isDark ? Colors.white.withAlpha(20) : isDark
                                                       ? Theme.of(context)
                                                             .colorScheme
                                                             .onSecondary

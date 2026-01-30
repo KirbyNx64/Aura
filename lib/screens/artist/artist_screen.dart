@@ -1191,7 +1191,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
                                   color: isAmoled
-                                      ? Colors.white.withAlpha(60)
+                                      ? Colors.white.withAlpha(30)
                                       : isSystem
                                       ? Theme.of(context)
                                             .colorScheme
@@ -1306,7 +1306,9 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                   videoId != null &&
                                   _selectedIndexes.contains('song-$videoId');
 
-                              final cardColor = isDark
+                              final cardColor = isAmoled && isDark
+                                  ? Colors.white.withAlpha(20)
+                                  : isDark
                                   ? Theme.of(context).colorScheme.onSecondary
                                         .withValues(alpha: 0.5)
                                   : Theme.of(context)
@@ -1618,7 +1620,9 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                     videoId != null &&
                                     _selectedIndexes.contains('album-$videoId');
 
-                                final cardColor = isDark
+                                final cardColor = isAmoled && isDark
+                                    ? Colors.white.withAlpha(20)
+                                    : isDark
                                     ? Theme.of(context).colorScheme.onSecondary
                                           .withValues(alpha: 0.5)
                                     : Theme.of(context)
@@ -1925,7 +1929,9 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                   videoId != null &&
                                   _selectedIndexes.contains('video-$videoId');
 
-                              final cardColor = isDark
+                              final cardColor = isAmoled && isDark
+                                  ? Colors.white.withAlpha(20)
+                                  : isDark
                                   ? Theme.of(context).colorScheme.onSecondary
                                         .withValues(alpha: 0.5)
                                   : Theme.of(context)
@@ -2166,7 +2172,9 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                 'album-$index',
                               );
 
-                              final cardColor = isDark
+                              final cardColor = isAmoled && isDark
+                                  ? Colors.white.withAlpha(20)
+                                  : isDark
                                   ? Theme.of(context).colorScheme.onSecondary
                                         .withValues(alpha: 0.5)
                                   : Theme.of(context)
@@ -2396,7 +2404,9 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                         'song-$videoId',
                                       );
 
-                                  final cardColor = isDark
+                                  final cardColor = isAmoled && isDark
+                                      ? Colors.white.withAlpha(20)
+                                      : isDark
                                       ? Theme.of(context)
                                             .colorScheme
                                             .onSecondary
@@ -2797,7 +2807,9 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                         'video-$videoId',
                                       );
 
-                                  final cardColor = isDark
+                                  final cardColor = isAmoled && isDark
+                                      ? Colors.white.withAlpha(20)
+                                      : isDark
                                       ? Theme.of(context)
                                             .colorScheme
                                             .onSecondary

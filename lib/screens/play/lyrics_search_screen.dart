@@ -651,7 +651,7 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
                     final isDark =
                         Theme.of(context).brightness == Brightness.dark;
                     final barColor = isAmoled
-                        ? Colors.white.withAlpha(30)
+                        ? Colors.white.withAlpha(20)
                         : isDark
                         ? Theme.of(
                             context,
@@ -840,27 +840,16 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
     final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final isSystem = colorSchemeNotifier.value == AppColorScheme.system;
-    final isLight = Theme.of(context).brightness == Brightness.light;
     final isExpanded = _expandedCards.contains(index);
     final fullLyrics = _getFullLyrics(result.syncedLyrics);
     final previewLyrics = _getLyricsPreview(result.syncedLyrics);
 
     return Card(
       shadowColor: Colors.transparent,
-      color: isSystem && isDark
-          ? Theme.of(
-              context,
-            ).colorScheme.secondaryContainer.withValues(alpha: 0.3)
-          : isSystem && isLight
-          ? Theme.of(
-              context,
-            ).colorScheme.primaryContainer.withValues(alpha: 0.3)
-          : null,
+      color: Colors.white.withAlpha(20),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: isAmoled && isDark
-            ? const BorderSide(color: Colors.white, width: 1)
-            : BorderSide.none,
+        side: BorderSide.none,
       ),
       margin: const EdgeInsets.only(bottom: 8),
       child: Padding(
@@ -941,9 +930,7 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
                               .withValues(alpha: 0.5)
                         : Theme.of(context).colorScheme.surfaceContainer,
                     borderRadius: BorderRadius.circular(8),
-                    border: isAmoled && isDark
-                        ? Border.all(color: Colors.white, width: 1)
-                        : null,
+                    border: null,
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -997,9 +984,7 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
                     context,
                   ).colorScheme.surfaceContainer.withValues(alpha: 0.5),
                   borderRadius: BorderRadius.circular(8),
-                  border: isAmoled && isDark
-                      ? Border.all(color: Colors.white, width: 1.5)
-                      : null,
+                  border: null,
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,

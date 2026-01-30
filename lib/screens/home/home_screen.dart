@@ -68,7 +68,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   final PageController _quickPickPageController = PageController(
     viewportFraction: 0.90,
   );
-  List<Map<String, dynamic>> _playlists = [];
+  // List<Map<String, dynamic>> _playlists = [];
 
   final TextEditingController _searchRecentsController =
       TextEditingController();
@@ -1003,10 +1003,13 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       final isAmoledTheme =
                           colorSchemeNotifier.value == AppColorScheme.amoled;
 
-                      // Variables para diseño Material3
+                      final colorScheme = colorSchemeNotifier.value;
+                      final isAmoled = colorScheme == AppColorScheme.amoled;
                       final isDark =
                           Theme.of(context).brightness == Brightness.dark;
-                      final cardColor = isDark
+                      final cardColor = isAmoled && isDark
+                          ? Colors.white.withAlpha(20)
+                          : isDark
                           ? Theme.of(
                               context,
                             ).colorScheme.onSecondary.withValues(alpha: 0.5)
@@ -1987,9 +1990,11 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         'songs': playlist.songPaths,
       });
     }
+    /*  
     setState(() {
       _playlists = playlistsWithSongs;
     });
+    */
   }
 
   Future<void> _loadPlaylistSongs(Map<String, dynamic> playlist) async {
@@ -3007,7 +3012,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
+    // final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     // Mostrar pantalla de carga mientras se cargan las bases de datos
@@ -3348,7 +3353,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       final isDark =
                           Theme.of(context).brightness == Brightness.dark;
                       final barColor = isAmoled
-                          ? Colors.white.withAlpha(30)
+                          ? Colors.white.withAlpha(20)
                           : isDark
                           ? Theme.of(
                               context,
@@ -3467,9 +3472,13 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       return ValueListenableBuilder<MediaItem?>(
                         valueListenable: _immediateMediaItemNotifier,
                         builder: (context, immediateMediaItem, child) {
+                          final colorScheme = colorSchemeNotifier.value;
+                          final isAmoled = colorScheme == AppColorScheme.amoled;
                           final isDark =
                               Theme.of(context).brightness == Brightness.dark;
-                          final cardColor = isDark
+                          final cardColor = isAmoled && isDark
+                              ? Colors.white.withAlpha(20)
+                              : isDark
                               ? Theme.of(
                                   context,
                                 ).colorScheme.onSecondary.withValues(alpha: 0.5)
@@ -4555,9 +4564,14 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         return ValueListenableBuilder<MediaItem?>(
                           valueListenable: _immediateMediaItemNotifier,
                           builder: (context, immediateMediaItem, child) {
+                            final colorScheme = colorSchemeNotifier.value;
+                            final isAmoled =
+                                colorScheme == AppColorScheme.amoled;
                             final isDark =
                                 Theme.of(context).brightness == Brightness.dark;
-                            final cardColor = isDark
+                            final cardColor = isAmoled && isDark
+                                ? Colors.white.withAlpha(20)
+                                : isDark
                                 ? Theme.of(context).colorScheme.onSecondary
                                       .withValues(alpha: 0.5)
                                 : Theme.of(context)
@@ -6294,15 +6308,17 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                               ],
                             ),
                           ],
+                          const SizedBox(height: 24),
+                          /*
                           const SizedBox(height: 32),
-
                           Padding(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 20,
                               vertical: 8,
                             ),
                             child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              mainAxisAlignment:
+                                  MainAxisAlignment.spaceBetween,
                               children: [
                                 TranslatedText(
                                   'playlists',
@@ -6315,7 +6331,10 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                 Row(
                                   children: [
                                     IconButton(
-                                      icon: const Icon(Icons.refresh, size: 28),
+                                      icon: const Icon(
+                                        Icons.refresh,
+                                        size: 28,
+                                      ),
                                       tooltip: LocaleProvider.tr('reload'),
                                       onPressed: _loadPlaylists,
                                     ),
@@ -6355,17 +6374,24 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                             ),
                                             actions: [
                                               TextButton(
-                                                onPressed: () =>
-                                                    Navigator.of(context).pop(),
-                                                child: TranslatedText('cancel'),
+                                                onPressed: () => Navigator.of(
+                                                  context,
+                                                ).pop(),
+                                                child: TranslatedText(
+                                                  'cancel',
+                                                ),
                                               ),
                                               TextButton(
                                                 onPressed: () {
                                                   Navigator.of(
                                                     context,
-                                                  ).pop(controller.text.trim());
+                                                  ).pop(
+                                                    controller.text.trim(),
+                                                  );
                                                 },
-                                                child: TranslatedText('create'),
+                                                child: TranslatedText(
+                                                  'create',
+                                                ),
                                               ),
                                             ],
                                           ),
@@ -6387,229 +6413,240 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                 ),
                               ],
                             ),
-                          ),
-                          // Aquí mostramos las playlists
-                          if (_playlists.isEmpty)
-                            Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 22),
-                              child: Center(
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(
-                                      Icons.playlist_remove,
-                                      size: 48,
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .onSurface
-                                          .withValues(alpha: 0.6),
-                                    ),
-                                    const SizedBox(height: 16),
-                                    TranslatedText(
-                                      'no_playlists',
-                                      style: TextStyle(
-                                        fontSize: 14,
+                            // Aquí mostramos las playlists
+                            if (_playlists.isEmpty)
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 22,
+                                ),
+                                child: Center(
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(
+                                        Icons.playlist_remove,
+                                        size: 48,
                                         color: Theme.of(context)
                                             .colorScheme
                                             .onSurface
                                             .withValues(alpha: 0.6),
                                       ),
-                                    ),
-                                  ],
+                                      const SizedBox(height: 16),
+                                      TranslatedText(
+                                        'no_playlists',
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .onSurface
+                                              .withValues(alpha: 0.6),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                              ),
-                            )
-                          else
-                            ListView.builder(
-                              shrinkWrap: true,
-                              physics: const NeverScrollableScrollPhysics(),
-                              itemCount: _playlists.length,
-                              itemBuilder: (context, index) {
-                                final playlist = _playlists[index];
-                                return Column(
-                                  children: [
-                                    ListTile(
-                                      leading: _buildPlaylistArtworkGrid(
-                                        playlist,
-                                      ),
-                                      title: Text(
-                                        playlist['name'],
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      onTap: () {
-                                        _loadPlaylistSongs(playlist);
-                                      },
-                                      onLongPress: () async {
-                                        showModalBottomSheet(
-                                          context: context,
-                                          builder: (context) => SafeArea(
-                                            child: Column(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                ListTile(
-                                                  leading: const Icon(
-                                                    Icons.edit,
-                                                  ),
-                                                  title: TranslatedText(
-                                                    'rename_playlist',
-                                                  ),
-                                                  onTap: () async {
-                                                    Navigator.of(context).pop();
-                                                    final controller =
-                                                        TextEditingController(
-                                                          text:
-                                                              playlist['name'],
-                                                        );
-                                                    final result = await showDialog<String>(
-                                                      context: context,
-                                                      builder: (context) => AlertDialog(
-                                                        shape: RoundedRectangleBorder(
-                                                          borderRadius:
-                                                              BorderRadius.circular(
-                                                                16,
-                                                              ),
-                                                          side:
-                                                              isAmoled && isDark
-                                                              ? const BorderSide(
-                                                                  color: Colors
-                                                                      .white,
-                                                                  width: 1,
-                                                                )
-                                                              : BorderSide.none,
-                                                        ),
-                                                        title: TranslatedText(
-                                                          'rename_playlist',
-                                                        ),
-                                                        content: TextField(
-                                                          controller:
-                                                              controller,
-                                                          autofocus: true,
-                                                          decoration:
-                                                              InputDecoration(
-                                                                labelText:
-                                                                    LocaleProvider.tr(
-                                                                      'new_name',
-                                                                    ),
-                                                              ),
-                                                        ),
-                                                        actions: [
-                                                          TextButton(
-                                                            onPressed: () =>
-                                                                Navigator.of(
-                                                                  context,
-                                                                ).pop(),
-                                                            child:
-                                                                TranslatedText(
-                                                                  'cancel',
-                                                                ),
-                                                          ),
-                                                          TextButton(
-                                                            onPressed: () {
-                                                              Navigator.of(
-                                                                context,
-                                                              ).pop(
-                                                                controller.text
-                                                                    .trim(),
-                                                              );
-                                                            },
-                                                            child:
-                                                                TranslatedText(
-                                                                  'save',
-                                                                ),
-                                                          ),
-                                                        ],
-                                                      ),
-                                                    );
-                                                    if (result != null &&
-                                                        result.isNotEmpty &&
-                                                        result !=
-                                                            playlist['name']) {
-                                                      await PlaylistsDB()
-                                                          .renamePlaylist(
-                                                            playlist['id'],
-                                                            result,
+                              )
+                            else
+                              ListView.builder(
+                                shrinkWrap: true,
+                                physics: const NeverScrollableScrollPhysics(),
+                                itemCount: _playlists.length,
+                                itemBuilder: (context, index) {
+                                  final playlist = _playlists[index];
+                                  return Column(
+                                    children: [
+                                      ListTile(
+                                        leading: _buildPlaylistArtworkGrid(
+                                          playlist,
+                                        ),
+                                        title: Text(
+                                          playlist['name'],
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        onTap: () {
+                                          _loadPlaylistSongs(playlist);
+                                        },
+                                        onLongPress: () async {
+                                          showModalBottomSheet(
+                                            context: context,
+                                            builder: (context) => SafeArea(
+                                              child: Column(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  ListTile(
+                                                    leading: const Icon(
+                                                      Icons.edit,
+                                                    ),
+                                                    title: TranslatedText(
+                                                      'rename_playlist',
+                                                    ),
+                                                    onTap: () async {
+                                                      Navigator.of(
+                                                        context,
+                                                      ).pop();
+                                                      final controller =
+                                                          TextEditingController(
+                                                            text:
+                                                                playlist['name'],
                                                           );
-                                                      await _loadPlaylists();
-                                                    }
-                                                  },
-                                                ),
-                                                ListTile(
-                                                  leading: const Icon(
-                                                    Icons.delete_outline,
-                                                  ),
-                                                  title: TranslatedText(
-                                                    'delete_playlist',
-                                                  ),
-                                                  onTap: () async {
-                                                    Navigator.of(context).pop();
-                                                    final confirm = await showDialog<bool>(
-                                                      context: context,
-                                                      builder: (context) => AlertDialog(
-                                                        shape: RoundedRectangleBorder(
-                                                          borderRadius:
-                                                              BorderRadius.circular(
-                                                                16,
-                                                              ),
-                                                          side:
-                                                              isAmoled && isDark
-                                                              ? const BorderSide(
-                                                                  color: Colors
-                                                                      .white,
-                                                                  width: 1,
-                                                                )
-                                                              : BorderSide.none,
-                                                        ),
-                                                        title: TranslatedText(
-                                                          'delete_playlist',
-                                                        ),
-                                                        content: TranslatedText(
-                                                          'delete_playlist_confirm',
-                                                        ),
-                                                        actions: [
-                                                          TextButton(
-                                                            onPressed: () =>
-                                                                Navigator.of(
-                                                                  context,
-                                                                ).pop(false),
-                                                            child:
-                                                                TranslatedText(
-                                                                  'cancel',
+                                                      final result = await showDialog<String>(
+                                                        context: context,
+                                                        builder: (context) => AlertDialog(
+                                                          shape: RoundedRectangleBorder(
+                                                            borderRadius:
+                                                                BorderRadius.circular(
+                                                                  16,
+                                                                ),
+                                                            side:
+                                                                isAmoled &&
+                                                                    isDark
+                                                                ? const BorderSide(
+                                                                    color: Colors
+                                                                        .white,
+                                                                    width: 1,
+                                                                  )
+                                                                : BorderSide
+                                                                      .none,
+                                                          ),
+                                                          title: TranslatedText(
+                                                            'rename_playlist',
+                                                          ),
+                                                          content: TextField(
+                                                            controller:
+                                                                controller,
+                                                            autofocus: true,
+                                                            decoration:
+                                                                InputDecoration(
+                                                                  labelText:
+                                                                      LocaleProvider.tr(
+                                                                        'new_name',
+                                                                      ),
                                                                 ),
                                                           ),
-                                                          TextButton(
-                                                            onPressed: () =>
+                                                          actions: [
+                                                            TextButton(
+                                                              onPressed: () =>
+                                                                  Navigator.of(
+                                                                    context,
+                                                                  ).pop(),
+                                                              child:
+                                                                  TranslatedText(
+                                                                    'cancel',
+                                                                  ),
+                                                            ),
+                                                            TextButton(
+                                                              onPressed: () {
                                                                 Navigator.of(
                                                                   context,
-                                                                ).pop(true),
-                                                            child:
-                                                                TranslatedText(
-                                                                  'delete',
+                                                                ).pop(
+                                                                  controller
+                                                                      .text
+                                                                      .trim(),
+                                                                );
+                                                              },
+                                                              child:
+                                                                  TranslatedText(
+                                                                    'save',
+                                                                  ),
+                                                            ),
+                                                          ],
+                                                        ),
+                                                      );
+                                                      if (result != null &&
+                                                          result.isNotEmpty &&
+                                                          result !=
+                                                              playlist['name']) {
+                                                        await PlaylistsDB()
+                                                            .renamePlaylist(
+                                                              playlist['id'],
+                                                              result,
+                                                            );
+                                                        await _loadPlaylists();
+                                                      }
+                                                    },
+                                                  ),
+                                                  ListTile(
+                                                    leading: const Icon(
+                                                      Icons.delete_outline,
+                                                    ),
+                                                    title: TranslatedText(
+                                                      'delete_playlist',
+                                                    ),
+                                                    onTap: () async {
+                                                      Navigator.of(
+                                                        context,
+                                                      ).pop();
+                                                      final confirm = await showDialog<bool>(
+                                                        context: context,
+                                                        builder: (context) => AlertDialog(
+                                                          shape: RoundedRectangleBorder(
+                                                            borderRadius:
+                                                                BorderRadius.circular(
+                                                                  16,
                                                                 ),
+                                                            side:
+                                                                isAmoled &&
+                                                                    isDark
+                                                                ? const BorderSide(
+                                                                    color: Colors
+                                                                        .white,
+                                                                    width: 1,
+                                                                  )
+                                                                : BorderSide
+                                                                      .none,
                                                           ),
-                                                        ],
-                                                      ),
-                                                    );
-                                                    if (confirm == true) {
-                                                      await PlaylistsDB()
-                                                          .deletePlaylist(
-                                                            playlist['id'],
-                                                          );
-                                                      await _loadPlaylists();
-                                                    }
-                                                  },
-                                                ),
-                                              ],
+                                                          title: TranslatedText(
+                                                            'delete_playlist',
+                                                          ),
+                                                          content: TranslatedText(
+                                                            'delete_playlist_confirm',
+                                                          ),
+                                                          actions: [
+                                                            TextButton(
+                                                              onPressed: () =>
+                                                                  Navigator.of(
+                                                                    context,
+                                                                  ).pop(false),
+                                                              child:
+                                                                  TranslatedText(
+                                                                    'cancel',
+                                                                  ),
+                                                            ),
+                                                            TextButton(
+                                                              onPressed: () =>
+                                                                  Navigator.of(
+                                                                    context,
+                                                                  ).pop(true),
+                                                              child:
+                                                                  TranslatedText(
+                                                                    'delete',
+                                                                  ),
+                                                            ),
+                                                          ],
+                                                        ),
+                                                      );
+                                                      if (confirm == true) {
+                                                        await PlaylistsDB()
+                                                            .deletePlaylist(
+                                                              playlist['id'],
+                                                            );
+                                                        await _loadPlaylists();
+                                                      }
+                                                    },
+                                                  ),
+                                                ],
+                                              ),
                                             ),
-                                          ),
-                                        );
-                                      },
-                                    ),
-                                    const SizedBox(height: 20),
-                                  ],
-                                );
-                              },
-                            ),
+                                          );
+                                        },
+                                      ),
+                                      const SizedBox(height: 20),
+                                    ],
+                                  );
+                                },
+                              ),
+                          */
                         ],
                       ),
                     ),
@@ -6620,6 +6657,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
+  /*
   Widget _buildPlaylistArtworkGrid(Map<String, dynamic> playlist) {
     final rawList = playlist['songs'] as List?;
     // Filtra solo rutas válidas (no nulos ni vacíos)
@@ -6647,7 +6685,9 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       ),
     );
   }
+  */
 
+  /*
   Widget _buildArtworkLayout(List<SongModel> songs) {
     switch (songs.length) {
       case 0:
@@ -6820,6 +6860,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         );
     }
   }
+  */
 
   // Función para construir la carátula del modal
   Widget _buildModalArtwork(SongModel song) {

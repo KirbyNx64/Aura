@@ -234,7 +234,10 @@ const Map<String, String> appLocalizationsEn = {
   'restart_app': 'Close app',
 
   // Others (add as needed)
+  'add_songs': 'Add songs',
+  'search_songs': 'Search songs',
   'search': 'Search',
+  'search_playlists': 'Search playlists',
   'search_in_youtube_music': 'Search in YouTube Music',
   'open_in_youtube_music': 'Open in YouTube Music',
   'info': 'Information',

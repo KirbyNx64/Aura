@@ -743,6 +743,14 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
     });
     // Guardar la preferencia
     await ThemePreferences.setThemeMode(themeMode);
+
+    // Si se activa modo claro o sistema y el color es AMOLED, cambiar a sistema
+    // ya que AMOLED solo tiene sentido en modo oscuro.
+    if (themeMode != AppThemeMode.dark &&
+        colorSchemeNotifier.value == AppColorScheme.amoled) {
+      _setColorScheme(AppColorScheme.system);
+    }
+
     // Actualizar la barra de navegación del sistema con los colores dinámicos actuales
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _updateSystemNavigationBar(_currentLightDynamic, _currentDarkDynamic);
@@ -754,6 +762,12 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
     colorSchemeNotifier.value = colorScheme;
     // Guardar la preferencia
     await ThemePreferences.setColorScheme(colorScheme);
+
+    // Si se activa AMOLED, activar también el modo oscuro
+    if (colorScheme == AppColorScheme.amoled) {
+      _setThemeMode(AppThemeMode.dark);
+    }
+
     // Actualizar la barra de navegación del sistema con los colores dinámicos actuales
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _updateSystemNavigationBar(_currentLightDynamic, _currentDarkDynamic);

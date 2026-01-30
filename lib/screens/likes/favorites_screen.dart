@@ -9,9 +9,9 @@ import 'package:music/utils/notifiers.dart';
 import 'package:music/l10n/locale_provider.dart';
 import 'package:music/utils/theme_preferences.dart';
 import 'package:music/utils/db/playlists_db.dart';
-import 'package:music/utils/db/recent_db.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:music/utils/db/shortcuts_db.dart';
+import 'package:music/utils/db/songs_index_db.dart';
 import 'package:mini_music_visualizer/mini_music_visualizer.dart';
 import 'package:music/utils/db/playlist_model.dart' as hive_model;
 import 'package:music/screens/play/player_screen.dart';
@@ -879,138 +879,175 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     });
   }
 
-  Future<void> _showAddFromRecentsDialog() async {
-    final recents = await RecentsDB().getRecents();
+  Future<void> _showAddSongsToFavoritesDialog() async {
+    final allSongs = await SongsIndexDB().getIndexedSongs();
+    final currentFavoritePaths = _favorites.map((s) => s.data).toSet();
+
+    // Filtrar canciones que ya están en favoritos
+    final availableSongs = allSongs
+        .where((s) => !currentFavoritePaths.contains(s.data))
+        .toList();
+
     if (!mounted) return;
 
-    final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final isSystem = colorSchemeNotifier.value == AppColorScheme.system;
+    final Set<String> selectedPaths = {};
+    String query = "";
 
-    final Set<int> selectedIds = {};
-    await showDialog(
+    final selected = await showDialog<List<String>>(
       context: context,
       builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setStateDialog) {
-            return AlertDialog(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-                side: isAmoled && isDark
-                    ? const BorderSide(color: Colors.white, width: 1)
-                    : BorderSide.none,
-              ),
-              title: TranslatedText('add_from_recents'),
-              content: SizedBox(
-                width: double.maxFinite,
-                height: 400,
-                child: recents.isEmpty
-                    ? Center(child: TranslatedText('no_songs'))
-                    : ListView.builder(
-                        itemCount: recents.length,
-                        itemBuilder: (context, index) {
-                          final song = recents[index];
-                          final isSelected = selectedIds.contains(song.id);
-                          return ListTile(
-                            onTap: () {
-                              setStateDialog(() {
-                                if (isSelected) {
-                                  selectedIds.remove(song.id);
-                                } else {
-                                  selectedIds.add(song.id);
-                                }
-                              });
-                            },
-                            leading: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Checkbox(
-                                  value: isSelected,
-                                  onChanged: (checked) {
-                                    setStateDialog(() {
-                                      if (checked == true) {
-                                        selectedIds.add(song.id);
-                                      } else {
-                                        selectedIds.remove(song.id);
-                                      }
-                                    });
+        return ValueListenableBuilder<AppColorScheme>(
+          valueListenable: colorSchemeNotifier,
+          builder: (context, colorScheme, child) {
+            final isAmoled = colorScheme == AppColorScheme.amoled;
+            final isDark = Theme.of(context).brightness == Brightness.dark;
+
+            return StatefulBuilder(
+              builder: (context, setStateDialog) {
+                final filtered = availableSongs.where((s) {
+                  final title = s.title.toLowerCase();
+                  final artist = (s.artist ?? "").toLowerCase();
+                  final q = query.toLowerCase();
+                  return title.contains(q) || artist.contains(q);
+                }).toList();
+
+                return AlertDialog(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    side: isAmoled && isDark
+                        ? const BorderSide(color: Colors.white, width: 1)
+                        : BorderSide.none,
+                  ),
+                  title: TranslatedText('add_songs'),
+                  content: SizedBox(
+                    width: double.maxFinite,
+                    height: 500,
+                    child: Column(
+                      children: [
+                        TextField(
+                          decoration: InputDecoration(
+                            hintText: LocaleProvider.tr('search_songs'),
+                            prefixIcon: const Icon(Icons.search),
+                          ),
+                          onChanged: (v) {
+                            setStateDialog(() {
+                              query = v;
+                            });
+                          },
+                        ),
+                        const SizedBox(height: 10),
+                        Expanded(
+                          child: filtered.isEmpty
+                              ? Center(child: TranslatedText('no_songs'))
+                              : ListView.builder(
+                                  itemCount: filtered.length,
+                                  itemBuilder: (context, index) {
+                                    final song = filtered[index];
+                                    final isSelected = selectedPaths.contains(
+                                      song.data,
+                                    );
+                                    return ListTile(
+                                      dense: true,
+                                      onTap: () {
+                                        setStateDialog(() {
+                                          if (isSelected) {
+                                            selectedPaths.remove(song.data);
+                                          } else {
+                                            selectedPaths.add(song.data);
+                                          }
+                                        });
+                                      },
+                                      leading: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Checkbox(
+                                            value: isSelected,
+                                            onChanged: (v) {
+                                              setStateDialog(() {
+                                                if (v == true) {
+                                                  selectedPaths.add(song.data);
+                                                } else {
+                                                  selectedPaths.remove(
+                                                    song.data,
+                                                  );
+                                                }
+                                              });
+                                            },
+                                          ),
+                                          ClipRRect(
+                                            borderRadius: BorderRadius.circular(
+                                              8,
+                                            ),
+                                            child: QueryArtworkWidget(
+                                              id: song.id,
+                                              type: ArtworkType.AUDIO,
+                                              artworkBorder:
+                                                  BorderRadius.circular(8),
+                                              artworkHeight: 40,
+                                              artworkWidth: 40,
+                                              keepOldArtwork: true,
+                                              nullArtworkWidget: Container(
+                                                width: 40,
+                                                height: 40,
+                                                color: Theme.of(context)
+                                                    .colorScheme
+                                                    .surfaceContainerHighest,
+                                                child: const Icon(
+                                                  Icons.music_note,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      title: Text(
+                                        song.title,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      subtitle: Text(
+                                        song.artist ?? "",
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    );
                                   },
                                 ),
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(8),
-                                  child: QueryArtworkWidget(
-                                    id: song.id,
-                                    type: ArtworkType.AUDIO,
-                                    artworkBorder: BorderRadius.circular(8),
-                                    artworkHeight: 40,
-                                    artworkWidth: 40,
-                                    keepOldArtwork: true,
-                                    nullArtworkWidget: Container(
-                                      color: isSystem
-                                          ? Theme.of(context)
-                                                .colorScheme
-                                                .secondaryContainer
-                                                .withValues(alpha: 0.5)
-                                          : Theme.of(
-                                              context,
-                                            ).colorScheme.surfaceContainer,
-                                      width: 40,
-                                      height: 40,
-                                      child: Icon(
-                                        Icons.music_note,
-                                        color: Theme.of(
-                                          context,
-                                        ).colorScheme.onSurface,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            title: Text(
-                              song.title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context).textTheme.titleMedium,
-                            ),
-                            subtitle: Text(
-                              song.artist ??
-                                  LocaleProvider.tr('unknown_artist'),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          );
-                        },
-                      ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: TranslatedText('cancel'),
-                ),
-                TextButton(
-                  onPressed: selectedIds.isEmpty
-                      ? null
-                      : () async {
-                          final toAdd = recents.where(
-                            (s) => selectedIds.contains(s.id),
-                          );
-                          for (final song in toAdd) {
-                            await FavoritesDB().addFavorite(song);
-                          }
-                          if (context.mounted) {
-                            Navigator.of(context).pop();
-                            await _loadFavorites();
-                          }
-                        },
-                  child: TranslatedText('add'),
-                ),
-              ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: TranslatedText('cancel'),
+                    ),
+                    TextButton(
+                      onPressed: selectedPaths.isEmpty
+                          ? null
+                          : () =>
+                                Navigator.pop(context, selectedPaths.toList()),
+                      child: TranslatedText('add'),
+                    ),
+                  ],
+                );
+              },
             );
           },
         );
       },
     );
+
+    if (selected != null && selected.isNotEmpty) {
+      for (final path in selected) {
+        try {
+          final song = allSongs.firstWhere((s) => s.data == path);
+          await FavoritesDB().addFavorite(song);
+        } catch (_) {}
+      }
+      favoritesShouldReload.value = !favoritesShouldReload.value;
+      await _loadFavorites();
+    }
   }
 
   Widget _buildOptimizedListTile(
@@ -1240,8 +1277,8 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                 ),
                 IconButton(
                   icon: const Icon(Icons.add, size: 28),
-                  tooltip: LocaleProvider.tr('add_from_recents'),
-                  onPressed: _showAddFromRecentsDialog,
+                  tooltip: LocaleProvider.tr('add_songs'),
+                  onPressed: _showAddSongsToFavoritesDialog,
                 ),
                 PopupMenuButton<OrdenFavoritos>(
                   icon: const Icon(Icons.sort, size: 28),
@@ -1284,7 +1321,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                 final isAmoled = colorScheme == AppColorScheme.amoled;
                 final isDark = Theme.of(context).brightness == Brightness.dark;
                 final barColor = isAmoled
-                    ? Colors.white.withAlpha(30)
+                    ? Colors.white.withAlpha(20)
                     : isDark
                     ? Theme.of(
                         context,
@@ -1390,11 +1427,16 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                           child: ValueListenableBuilder<MediaItem?>(
                             valueListenable: _immediateMediaItemNotifier,
                             builder: (context, immediateMediaItem, child) {
+                              final colorScheme = colorSchemeNotifier.value;
+                              final isAmoled =
+                                  colorScheme == AppColorScheme.amoled;
                               final isDark =
                                   Theme.of(context).brightness ==
                                   Brightness.dark;
 
-                              final cardColor = isDark
+                              final cardColor = isAmoled && isDark
+                                  ? Colors.white.withAlpha(20)
+                                  : isDark
                                   ? Theme.of(context).colorScheme.onSecondary
                                         .withValues(alpha: 0.5)
                                   : Theme.of(context)
@@ -1418,11 +1460,6 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                                       (immediateMediaItem!.id == path ||
                                           immediateMediaItem.extras?['data'] ==
                                               path));
-                                  final isAmoledTheme =
-                                      colorSchemeNotifier.value ==
-                                      AppColorScheme.amoled;
-
-                                  // Determinar el borderRadius según la posición
                                   final bool isFirst = index == 0;
                                   final bool isLast =
                                       index == songsToShow.length - 1;
@@ -1461,7 +1498,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                                               song,
                                               isCurrent,
                                               playing,
-                                              isAmoledTheme,
+                                              isAmoled,
                                               borderRadius: borderRadius,
                                             );
                                           },
@@ -1472,7 +1509,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                                       song,
                                       isCurrent,
                                       false,
-                                      isAmoledTheme,
+                                      isAmoled,
                                       borderRadius: borderRadius,
                                     );
                                   }
