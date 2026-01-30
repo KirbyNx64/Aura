@@ -290,11 +290,12 @@ const Map<String, String> appLocalizationsEs = {
   'home': 'Inicio',
   'nav_search': 'Buscar',
   'nav_favorites': 'Me gusta',
-  'folders': 'Carpetas',
+  'nav_library': 'Biblioteca',
   'nav_downloads': 'Descargas',
 
   // Folders screen
   'folders_title': 'Carpetas',
+  'all_songs': 'Todas',
   'reload': 'Recargar',
   'more': 'Más opciones',
   'select': 'Seleccionar',

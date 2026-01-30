@@ -48,14 +48,14 @@ Future<void> performIndexingIfNeeded() async {
     // Verificar si realmente necesita indexación
     final songsIndexDB = SongsIndexDB();
     final needsIndex = await songsIndexDB.needsIndexing();
-    
+
     if (!needsIndex) {
       // print('🎵 La app ya está indexada, no se necesita indexación');
       return;
     }
 
     // print('🎵 Primera vez abriendo la app - Iniciando indexación...');
-    
+
     // Obtener el total de canciones
     final OnAudioQuery audioQuery = OnAudioQuery();
     final allSongs = await audioQuery.querySongs();
@@ -65,11 +65,11 @@ Future<void> performIndexingIfNeeded() async {
     await songsIndexDB.indexAllSongs();
 
     // print('🎵 Indexando artistas...');
-    
+
     // Indexar artistas
     final artistsDB = ArtistsDB();
     await artistsDB.indexArtists(allSongs);
-    
+
     // print('🎵 Indexación completada exitosamente - La app está lista');
   } catch (e) {
     // print('❌ Error durante la indexación: $e');
@@ -124,7 +124,7 @@ Future<AudioHandler?> initializeAudioServiceSafely() async {
     _audioHandlerInitialized = false;
     audioHandler = null;
     audioServiceReady.value = false; // Resetear el estado
-    
+
     // Intentar reinicializar como último recurso
     try {
       await reinitializeAudioHandler();
@@ -135,7 +135,7 @@ Future<AudioHandler?> initializeAudioServiceSafely() async {
     } catch (e2) {
       // Error silencioso - la app puede funcionar sin audio service
     }
-    
+
     return null;
   } finally {
     _audioHandlerInitializing = false;
@@ -175,7 +175,7 @@ class _MainNavRootState extends State<MainNavRoot> {
   final ValueNotifier<int> selectedTabIndex = ValueNotifier<int>(0);
   final GlobalKey ytScreenKey = GlobalKey();
   final GlobalKey foldersScreenKey = GlobalKey();
-  
+
   StreamSubscription? _sharingSubscription;
 
   @override
@@ -203,7 +203,9 @@ class _MainNavRootState extends State<MainNavRoot> {
     );
 
     // Procesar enlaces compartidos iniciales (cuando la app se abre desde un enlace)
-    SharingHandler.getInitialSharingMedia().then((List<SharedFile> sharedFiles) {
+    SharingHandler.getInitialSharingMedia().then((
+      List<SharedFile> sharedFiles,
+    ) {
       if (sharedFiles.isNotEmpty) {
         _handleSharedLinks(sharedFiles);
       }
@@ -213,12 +215,14 @@ class _MainNavRootState extends State<MainNavRoot> {
   /// Maneja los enlaces compartidos de YouTube
   Future<void> _handleSharedLinks(List<SharedFile> sharedFiles) async {
     try {
-      final youtubeResults = await SharingHandler.processSharedLinks(sharedFiles);
-      
+      final youtubeResults = await SharingHandler.processSharedLinks(
+        sharedFiles,
+      );
+
       if (youtubeResults.isNotEmpty) {
         // Cambiar a la pestaña de YouTube (índice 1)
         selectedTabIndex.value = 1;
-        
+
         // Abrir el YtPreviewPlayer con los resultados
         if (mounted) {
           _openYtPreviewPlayer(youtubeResults);
@@ -237,7 +241,9 @@ class _MainNavRootState extends State<MainNavRoot> {
       if (mounted) {
         _showErrorDialog(
           LocaleProvider.tr('error'),
-          LocaleProvider.tr('youtube_processing_error').replaceAll('@error', e.toString()),
+          LocaleProvider.tr(
+            'youtube_processing_error',
+          ).replaceAll('@error', e.toString()),
         );
       }
     }
@@ -258,10 +264,10 @@ class _MainNavRootState extends State<MainNavRoot> {
       );
       return;
     }
-    
+
     // Navegar a la pestaña de YouTube primero
     selectedTabIndex.value = 1;
-    
+
     // Obtener el contexto de la aplicación
     final context = homeScreenKey.currentContext ?? ytScreenKey.currentContext;
     if (context != null) {
@@ -274,7 +280,9 @@ class _MainNavRootState extends State<MainNavRoot> {
           } catch (e) {
             _showErrorDialog(
               LocaleProvider.tr('error'),
-              LocaleProvider.tr('youtube_modal_error').replaceAll('@error', e.toString()),
+              LocaleProvider.tr(
+                'youtube_modal_error',
+              ).replaceAll('@error', e.toString()),
             );
           }
         }
@@ -313,7 +321,7 @@ class _MainNavRootState extends State<MainNavRoot> {
       canPop: false, // Siempre bloquear pop inicialmente
       onPopInvokedWithResult: (didPop, result) {
         final tab = selectedTabIndex.value;
-        
+
         // Verificar navegación interna primero
         if (tab == 1) {
           // YT
@@ -337,7 +345,7 @@ class _MainNavRootState extends State<MainNavRoot> {
             return;
           }
         }
-        
+
         // Bloquear completamente el cierre de la aplicación
         // Solo permitir navegación interna, nunca salir de la app
       },
@@ -385,7 +393,7 @@ void main() async {
       systemNavigationBarDividerColor: Colors.transparent,
     ),
   );
-  
+
   // Para Android 15+, asegurar que el contenido no se superponga con la barra de navegación
   // sin cambiar los colores
   SystemChrome.setEnabledSystemUIMode(
@@ -403,10 +411,7 @@ void main() async {
           GlobalWidgetsLocalizations.delegate,
           GlobalCupertinoLocalizations.delegate,
         ],
-        supportedLocales: const [
-          Locale('es', ''),
-          Locale('en', ''),
-        ],
+        supportedLocales: const [Locale('es', ''), Locale('en', '')],
         locale: Locale(languageNotifier.value, ''),
         theme: ThemeData(
           useMaterial3: true,
@@ -441,7 +446,8 @@ void main() async {
     try {
       await DownloadHistoryService().preInitialize();
       // Verificar si hay descargas no vistas
-      hasNewDownloadsNotifier.value = await DownloadHistoryService().hasUnviewedDownloads();
+      hasNewDownloadsNotifier.value = await DownloadHistoryService()
+          .hasUnviewedDownloads();
     } catch (e) {
       // Error silencioso - se inicializará cuando se necesite
     }
@@ -499,17 +505,15 @@ class _PermisosScreenState extends State<PermisosScreen>
         }
 
         if (!mounted) return;
-        
+
         // Realizar indexación solo si es la primera vez que se abre la app
         performIndexingIfNeeded();
-        
+
         // Ir directo a la app
         if (!mounted) return;
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(
-            builder: (_) => MyRootApp(),
-          ),
-        );
+        Navigator.of(
+          context,
+        ).pushReplacement(MaterialPageRoute(builder: (_) => MyRootApp()));
       }
     }
   }
@@ -582,7 +586,7 @@ class MainApp extends StatefulWidget {
 class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
   AppThemeMode _themeMode = AppThemeMode.system;
   bool _isLoading = true;
-  
+
   // Variables para mantener los colores dinámicos actuales
   ColorScheme? _currentLightDynamic;
   ColorScheme? _currentDarkDynamic;
@@ -604,8 +608,16 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
 
-    // Reconfigurar la barra de navegación cuando la app regrese
+    // Reconfigurar cuando la app regrese del segundo plano
     if (state == AppLifecycleState.resumed) {
+      // Restaurar configuración de audio (volumen, equalizer, etc.)
+      // Esto es crucial para evitar que el volumen se quede bajo después de
+      // que la app ha estado en segundo plano por mucho tiempo
+      if (audioHandler != null && audioHandler is MyAudioHandler) {
+        (audioHandler as MyAudioHandler).restoreAudioConfiguration();
+      }
+
+      // Reconfigurar la barra de navegación
       WidgetsBinding.instance.addPostFrameCallback((_) {
         // Usar los colores dinámicos guardados
         _updateSystemNavigationBar(_currentLightDynamic, _currentDarkDynamic);
@@ -614,7 +626,10 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
   }
 
   // Método para actualizar la barra de navegación del sistema
-  void _updateSystemNavigationBar([ColorScheme? lightDynamic, ColorScheme? darkDynamic]) {
+  void _updateSystemNavigationBar([
+    ColorScheme? lightDynamic,
+    ColorScheme? darkDynamic,
+  ]) {
     if (!mounted) return;
 
     try {
@@ -625,7 +640,7 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
 
       // Obtener el color correcto basado en el esquema de color actual
       Color surfaceColor;
-      
+
       if (colorSchemeNotifier.value == AppColorScheme.amoled && isDark) {
         // Para tema AMOLED, usar negro
         surfaceColor = Colors.black;
@@ -637,7 +652,9 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
           surfaceColor = lightDynamic.surface;
         } else {
           // Fallback si no hay colores dinámicos
-          surfaceColor = isDark ? const Color(0xFF121212) : const Color(0xFFF5F5F5);
+          surfaceColor = isDark
+              ? const Color(0xFF121212)
+              : const Color(0xFFF5F5F5);
         }
       } else {
         // Para otros temas, crear un tema temporal con el esquema correcto
@@ -703,14 +720,15 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
       });
       // Inicializar el notifier con el color guardado
       colorSchemeNotifier.value = savedColorScheme;
-      
+
       // Inicializar la configuración de animación hero
       final prefs = await SharedPreferences.getInstance();
       final useHero = prefs.getBool('use_hero_animation') ?? true;
       heroAnimationNotifier.value = useHero;
-      
+
       // Inicializar la configuración del botón next en overlay
-      final nextButtonEnabled = prefs.getBool('overlay_next_button_enabled') ?? false;
+      final nextButtonEnabled =
+          prefs.getBool('overlay_next_button_enabled') ?? false;
       overlayNextButtonEnabled.value = nextButtonEnabled;
       // Configurar la barra de navegación del sistema después de cargar las preferencias
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -742,7 +760,10 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
     });
   }
 
-  ThemeData _buildTheme(Brightness brightness, [ColorScheme? dynamicColorScheme]) {
+  ThemeData _buildTheme(
+    Brightness brightness, [
+    ColorScheme? dynamicColorScheme,
+  ]) {
     final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
     if (isAmoled && brightness == Brightness.dark) {
       return ThemeData(
@@ -778,16 +799,17 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
         ),
       );
     }
-    
+
     // Si se seleccionó "Sistema" y hay colores dinámicos disponibles, usarlos
-    if (colorSchemeNotifier.value == AppColorScheme.system && dynamicColorScheme != null) {
+    if (colorSchemeNotifier.value == AppColorScheme.system &&
+        dynamicColorScheme != null) {
       return ThemeData(
         useMaterial3: true,
         colorScheme: dynamicColorScheme,
         brightness: brightness,
       );
     }
-    
+
     // Usar color personalizado
     return ThemeData(
       useMaterial3: true,
@@ -809,10 +831,7 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
           GlobalWidgetsLocalizations.delegate,
           GlobalCupertinoLocalizations.delegate,
         ],
-        supportedLocales: const [
-          Locale('es', ''),
-          Locale('en', ''),
-        ],
+        supportedLocales: const [Locale('es', ''), Locale('en', '')],
         locale: Locale(languageNotifier.value, ''),
         theme: _buildTheme(Brightness.dark),
         home: const Scaffold(body: Center(child: CircularProgressIndicator())),
@@ -824,7 +843,7 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
         // Guardar los colores dinámicos actuales
         _currentLightDynamic = lightDynamic;
         _currentDarkDynamic = darkDynamic;
-        
+
         return ValueListenableBuilder<AppColorScheme>(
           valueListenable: colorSchemeNotifier,
           builder: (context, colorScheme, child) {
@@ -841,10 +860,7 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
                 GlobalWidgetsLocalizations.delegate,
                 GlobalCupertinoLocalizations.delegate,
               ],
-              supportedLocales: const [
-                Locale('es', ''),
-                Locale('en', ''),
-              ],
+              supportedLocales: const [Locale('es', ''), Locale('en', '')],
               locale: Locale(languageNotifier.value, ''),
               themeMode: _themeMode == AppThemeMode.system
                   ? ThemeMode.system

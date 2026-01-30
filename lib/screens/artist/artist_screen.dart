@@ -916,7 +916,10 @@ class _ArtistScreenState extends State<ArtistScreen> {
             ),
             onPressed: () => Navigator.of(context).pop(),
           ),
-          title: const TranslatedText('artist'),
+          title: TranslatedText(
+            'artist',
+            style: TextStyle(fontWeight: FontWeight.w500),
+          ),
           actions: [
             if (_isSelectionMode && _selectedIndexes.isNotEmpty)
               IconButton(

@@ -1199,6 +1199,12 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     bool autoPlay = false,
     bool resetShuffle = true,
   }) async {
+    // Obtener la canción objetivo antes de filtrar para poder recalcular el índice
+    final String? targetSongPath =
+        (initialIndex >= 0 && initialIndex < songs.length)
+        ? songs[initialIndex].data
+        : null;
+
     // Filtrar canciones que ya no existen en disco para evitar ENOENT
     final List<SongModel> validSongs = [];
     for (final s in songs) {
@@ -1207,6 +1213,17 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
           validSongs.add(s);
         }
       } catch (_) {}
+    }
+
+    // Recalcular el índice inicial para apuntar a la canción correcta en validSongs
+    if (targetSongPath != null && validSongs.isNotEmpty) {
+      final newIndex = validSongs.indexWhere((s) => s.data == targetSongPath);
+      if (newIndex != -1) {
+        initialIndex = newIndex;
+      } else {
+        // La canción seleccionada no existe, usar índice 0
+        initialIndex = 0;
+      }
     }
     if (validSongs.isEmpty) {
       // Si no hay canciones válidas, limpiar estado y salir
@@ -1521,16 +1538,23 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   }
 
   /// Restaura la configuración de audio después de una interrupción
+  /// También disponible como método público para restaurar desde fuera del handler
   void _restoreAudioConfiguration() {
     try {
-      // Re-aplicar volume boost
+      // Re-aplicar volume boost si está habilitado
       if (_loudnessEnhancer != null && _volumeBoost > 1.0) {
         final gainInDb = ((_volumeBoost - 1.0) * 10).clamp(0.0, 20.0);
         _loudnessEnhancer!.setEnabled(true);
         _loudnessEnhancer!.setTargetGain(gainInDb);
+      } else if (_loudnessEnhancer != null) {
+        // Asegurar que el enhancer esté en estado correcto aunque no haya boost
+        _loudnessEnhancer!.setEnabled(true);
+        _loudnessEnhancer!.setTargetGain(0.0);
       }
 
-      // Re-aplicar volumen del player
+      // Re-aplicar volumen del player a 1.0 (nivel máximo del sistema)
+      // Esto es crucial después de estar en segundo plano por mucho tiempo
+      // ya que Android puede haber reducido el volumen del audio stream
       unawaited(_player.setVolume(1.0));
 
       // Re-aplicar equalizer si está activo
@@ -1541,6 +1565,12 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     } catch (e) {
       // Error silencioso - continuar reproducción
     }
+  }
+
+  /// Método público para restaurar la configuración de audio
+  /// Debe llamarse cuando la app vuelve del segundo plano
+  void restoreAudioConfiguration() {
+    _restoreAudioConfiguration();
   }
 
   // Finalizar el AudioPlayer con AndroidLoudnessEnhancer

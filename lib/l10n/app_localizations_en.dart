@@ -281,11 +281,12 @@ const Map<String, String> appLocalizationsEn = {
   'home': 'Home',
   'nav_search': 'Search',
   'nav_favorites': 'Favorites',
-  'folders': 'Folders',
+  'nav_library': 'Library',
   'nav_downloads': 'Downloads',
 
   // Folders screen
   'folders_title': 'Folders',
+  'all_songs': 'All',
   'reload': 'Reload',
   'more': 'More options',
   'no_folders': 'No folders',

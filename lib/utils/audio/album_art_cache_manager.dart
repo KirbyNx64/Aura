@@ -105,6 +105,7 @@ class AlbumArtCacheManager {
     // Cargar en paralelo con límite de concurrencia
     final semaphore = Completer<void>();
     int active = 0;
+    bool isCompleted = false;
 
     for (final song in songsToLoad) {
       while (active >= maxConcurrent) {
@@ -119,7 +120,8 @@ class AlbumArtCacheManager {
           await getAlbumArt(songId, songPath);
         } finally {
           active--;
-          if (active == 0) {
+          if (active == 0 && !isCompleted) {
+            isCompleted = true;
             semaphore.complete();
           }
         }

@@ -599,7 +599,10 @@ class _DownloadHistoryScreenState extends State<DownloadHistoryScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
       appBar: AppBar(
-        title: Text(LocaleProvider.tr('download_history')),
+        title: TranslatedText(
+          'download_history',
+          style: TextStyle(fontWeight: FontWeight.w500),
+        ),
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         surfaceTintColor: Colors.transparent,
         elevation: 0,

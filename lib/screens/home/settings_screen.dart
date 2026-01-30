@@ -3886,7 +3886,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         scrolledUnderElevation: 0,
-        title: TranslatedText('settings'),
+        title: TranslatedText(
+          'settings',
+          style: TextStyle(fontWeight: FontWeight.w500),
+        ),
         leading: IconButton(
           constraints: const BoxConstraints(
             minWidth: 40,

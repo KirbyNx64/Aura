@@ -1177,13 +1177,9 @@ class _FavoritesScreenState extends State<FavoritesScreen>
             ? Text(
                 '${_selectedSongIds.length} ${LocaleProvider.tr('selected')}',
               )
-            : Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Symbols.favorite_rounded, weight: 600, size: 28),
-                  const SizedBox(width: 8),
-                  TranslatedText('favorites'),
-                ],
+            : TranslatedText(
+                'favorites',
+                style: TextStyle(fontWeight: FontWeight.w500),
               ),
         actions: _isSelecting
             ? [

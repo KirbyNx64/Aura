@@ -1662,12 +1662,9 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
               ? Text(
                   '${_selectedIndexes.length} ${LocaleProvider.tr('selected')}',
                 )
-              : Row(
-                  children: [
-                    Icon(Icons.search, size: 28),
-                    const SizedBox(width: 8),
-                    TranslatedText('search'),
-                  ],
+              : TranslatedText(
+                  'search',
+                  style: TextStyle(fontWeight: FontWeight.w500),
                 ),
           leading: _isSelectionMode
               ? IconButton(

@@ -430,7 +430,10 @@ class _EqualizerScreenState extends State<EqualizerScreen> {
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         scrolledUnderElevation: 0,
-        title: Text(LocaleProvider.tr('equalizer')),
+        title: TranslatedText(
+          'equalizer',
+          style: TextStyle(fontWeight: FontWeight.w500),
+        ),
         leading: IconButton(
           constraints: const BoxConstraints(
             minWidth: 40,

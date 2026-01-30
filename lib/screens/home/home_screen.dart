@@ -3134,6 +3134,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       'recent',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontWeight: FontWeight.w500),
                     )
                   : _showingPlaylistSongs
                   ? (_isSelectingPlaylistSongs

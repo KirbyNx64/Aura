@@ -403,7 +403,10 @@ class _EditMetadataScreenState extends State<EditMetadataScreen> {
           ),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        title: TranslatedText('edit_song_info'),
+        title: TranslatedText(
+          'edit_song_info',
+          style: TextStyle(fontWeight: FontWeight.w500),
+        ),
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         surfaceTintColor: Colors.transparent,
         elevation: 0,

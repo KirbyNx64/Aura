@@ -594,7 +594,10 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         scrolledUnderElevation: 0,
-        title: Text(LocaleProvider.tr('search_lyrics_title')),
+        title: TranslatedText(
+          'search_lyrics_title',
+          style: TextStyle(fontWeight: FontWeight.w500),
+        ),
         leading: IconButton(
           constraints: const BoxConstraints(
             minWidth: 40,

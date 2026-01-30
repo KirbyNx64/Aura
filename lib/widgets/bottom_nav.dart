@@ -63,12 +63,19 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
   List<NavigationDestination> _getNavBarItems(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final iconColor = isDark ? null : theme.colorScheme.onPrimaryContainer.withValues(alpha: 0.75);
-    
+    final iconColor = isDark
+        ? null
+        : theme.colorScheme.onPrimaryContainer.withValues(alpha: 0.75);
+
     return [
       NavigationDestination(
         icon: Icon(Symbols.home, weight: 600),
-        selectedIcon: Icon(Symbols.home, fill: 1, weight: 600, color: iconColor),
+        selectedIcon: Icon(
+          Symbols.home,
+          fill: 1,
+          weight: 600,
+          color: iconColor,
+        ),
         label: LocaleProvider.tr('home'),
       ),
       NavigationDestination(
@@ -78,13 +85,18 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
       ),
       NavigationDestination(
         icon: Icon(Symbols.favorite_rounded, weight: 600),
-        selectedIcon: Icon(Symbols.favorite_rounded, weight: 600, fill: 1, color: iconColor),
+        selectedIcon: Icon(
+          Symbols.favorite_rounded,
+          weight: 600,
+          fill: 1,
+          color: iconColor,
+        ),
         label: LocaleProvider.tr('nav_favorites'),
       ),
       NavigationDestination(
-        icon: Icon(Icons.folder_outlined),
-        selectedIcon: Icon(Icons.folder, color: iconColor),
-        label: LocaleProvider.tr('folders'),
+        icon: Icon(Icons.library_music_outlined),
+        selectedIcon: Icon(Icons.library_music, color: iconColor),
+        label: LocaleProvider.tr('nav_library'),
       ),
     ];
   }
@@ -166,7 +178,7 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
             builder: (context, colorScheme, child) {
               final isAmoled = colorScheme == AppColorScheme.amoled;
               final isDark = Theme.of(context).brightness == Brightness.dark;
-              
+
               return NavigationBar(
                 backgroundColor: Theme.of(context).colorScheme.surface,
                 animationDuration: const Duration(milliseconds: 400),
@@ -174,22 +186,29 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
                 onDestinationSelected: _onItemTapped,
                 destinations: _getNavBarItems(context),
                 // Personalizar el color del indicador seleccionado para tema amoled
-                indicatorColor: isAmoled && isDark 
-                    ? Colors.white// Color más sutil para amoled
+                indicatorColor: isAmoled && isDark
+                    ? Colors
+                          .white // Color más sutil para amoled
                     : null, // Usar el color por defecto para otros temas
-                labelTextStyle: WidgetStateProperty.resolveWith<TextStyle?>(
-                  (Set<WidgetState> states) {
-                    final isSelected = states.contains(WidgetState.selected);
-                    return Theme.of(context).textTheme.labelSmall?.copyWith(
-                      overflow: TextOverflow.ellipsis,
-                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                      fontSize: 12,
-                      color: isSelected 
-                          ? (isAmoled && isDark ? Colors.white : Theme.of(context).colorScheme.onPrimaryContainer)
-                          : null,
-                    );
-                  },
-                ),
+                labelTextStyle: WidgetStateProperty.resolveWith<TextStyle?>((
+                  Set<WidgetState> states,
+                ) {
+                  final isSelected = states.contains(WidgetState.selected);
+                  return Theme.of(context).textTheme.labelSmall?.copyWith(
+                    overflow: TextOverflow.ellipsis,
+                    fontWeight: isSelected
+                        ? FontWeight.bold
+                        : FontWeight.normal,
+                    fontSize: 12,
+                    color: isSelected
+                        ? (isAmoled && isDark
+                              ? Colors.white
+                              : Theme.of(
+                                  context,
+                                ).colorScheme.onPrimaryContainer)
+                        : null,
+                  );
+                }),
               );
             },
           );

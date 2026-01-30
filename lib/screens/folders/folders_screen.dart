@@ -68,6 +68,9 @@ class _FoldersScreenState extends State<FoldersScreen>
       []; // Canciones que se muestran en la UI (filtradas por búsqueda)
   List<SongModel> _originalSongs = []; // Lista original para restaurar orden
 
+  // Variable para controlar si se muestran todas las canciones vs carpetas
+  bool _showAllSongs = false;
+
   Timer? _debounce;
   Timer? _playingDebounce;
   Timer? _mediaItemDebounce;
@@ -197,9 +200,12 @@ class _FoldersScreenState extends State<FoldersScreen>
     }
   }
 
-  /// Función específica para refrescar el contenido de la carpeta actual
+  /// Función específica para refrescar el contenido de la carpeta actual o todas las canciones
   Future<void> _refreshCurrentFolder() async {
-    if (carpetaSeleccionada != null) {
+    if (_showAllSongs) {
+      // Recargar todas las canciones
+      await _loadAllSongs();
+    } else if (carpetaSeleccionada != null) {
       // Sincronizar el índice de carpetas
       await _sincronizarMapaCarpetas();
 
@@ -1012,8 +1018,13 @@ class _FoldersScreenState extends State<FoldersScreen>
       final prefs = await SharedPreferences.getInstance();
       String origen;
       if (carpetaSeleccionada != null) {
-        final parts = carpetaSeleccionada!.split(RegExp(r'[\\/]'));
-        origen = parts.isNotEmpty ? parts.last : carpetaSeleccionada!;
+        if (carpetaSeleccionada == '__ALL_SONGS__') {
+          // Usar la traducción para "Todas las canciones"
+          origen = LocaleProvider.tr('all_songs');
+        } else {
+          final parts = carpetaSeleccionada!.split(RegExp(r'[\\/]'));
+          origen = parts.isNotEmpty ? parts.last : carpetaSeleccionada!;
+        }
       } else {
         origen = "Carpeta";
       }
@@ -2688,13 +2699,32 @@ class _FoldersScreenState extends State<FoldersScreen>
           surfaceTintColor: Colors.transparent,
           elevation: 0,
           scrolledUnderElevation: 0,
-          title: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.folder_outlined, size: 28),
-              const SizedBox(width: 8),
-              TranslatedText('folders_title'),
-            ],
+          title: GestureDetector(
+            onTap: () => _showViewSelectorModal(),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TranslatedText(
+                  'folders_title',
+                  style: TextStyle(fontWeight: FontWeight.w500),
+                ),
+                const SizedBox(width: 4),
+                Container(
+                  padding: const EdgeInsets.all(2),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.primary.withValues(alpha: 0.1),
+                  ),
+                  child: Icon(
+                    Icons.keyboard_arrow_down,
+                    color: Theme.of(context).colorScheme.onSurface,
+                    size: 18,
+                  ),
+                ),
+              ],
+            ),
           ),
           actions: [
             IconButton(
@@ -2966,11 +2996,9 @@ class _FoldersScreenState extends State<FoldersScreen>
                                       context,
                                     ).textTheme.titleMedium,
                                   ),
-                                  subtitle: ignored && canciones.isEmpty
-                                      ? null
-                                      : Text(
-                                          '${canciones.length} ${LocaleProvider.tr('songs')}',
-                                        ),
+                                  subtitle: Text(
+                                    '${canciones.length} ${LocaleProvider.tr('songs')}',
+                                  ),
                                   onTap: ignored
                                       ? null
                                       : () async {
@@ -3075,6 +3103,8 @@ class _FoldersScreenState extends State<FoldersScreen>
                     });
                   },
                 )
+              : _showAllSongs
+              ? null // No back button when showing all songs
               : IconButton(
                   constraints: const BoxConstraints(
                     minWidth: 40,
@@ -3100,6 +3130,7 @@ class _FoldersScreenState extends State<FoldersScreen>
                   onPressed: () async {
                     setState(() {
                       carpetaSeleccionada = null;
+                      _showAllSongs = false;
                       _searchController.clear();
                       _filteredSongs.clear();
                       _displaySongs.clear();
@@ -3114,6 +3145,34 @@ class _FoldersScreenState extends State<FoldersScreen>
           title: _isSelecting
               ? Text(
                   '${_selectedSongPaths.length} ${LocaleProvider.tr('selected')}',
+                )
+              : _showAllSongs
+              ? GestureDetector(
+                  onTap: () => _showViewSelectorModal(),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        LocaleProvider.tr('all_songs'),
+                        style: TextStyle(fontWeight: FontWeight.w500),
+                      ),
+                      const SizedBox(width: 4),
+                      Container(
+                        padding: const EdgeInsets.all(2),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.primary.withValues(alpha: 0.1),
+                        ),
+                        child: Icon(
+                          Icons.keyboard_arrow_down,
+                          color: Theme.of(context).colorScheme.onSurface,
+                          size: 18,
+                        ),
+                      ),
+                    ],
+                  ),
                 )
               : Text(
                   folderDisplayNames[carpetaSeleccionada] ??
@@ -4723,8 +4782,184 @@ class _FoldersScreenState extends State<FoldersScreen>
     });
   }
 
+  /// Cargar todas las canciones de todas las carpetas
+  Future<void> _loadAllSongs() async {
+    if (!mounted) return;
+    setState(() {
+      carpetaSeleccionada =
+          '__ALL_SONGS__'; // Marcador especial para indicar que estamos mostrando todas las canciones
+      _showAllSongs = true;
+      _searchController.clear();
+      _isSelecting = false;
+      _selectedSongPaths.clear();
+      _originalSongs = [];
+      _filteredSongs = [];
+      _displaySongs = [];
+      _isLoading = true;
+    });
+
+    // Sincronizar mapa de carpetas antes de cargar
+    await _sincronizarMapaCarpetas();
+
+    // Actualizar los notifiers con los valores actuales del audioHandler
+    if (audioHandler?.mediaItem.valueOrNull != null) {
+      _immediateMediaItemDebounce?.cancel();
+      _mediaItemDebounce?.cancel();
+      _immediateMediaItemNotifier.value = audioHandler!.mediaItem.valueOrNull;
+      _currentMediaItemNotifier.value = audioHandler!.mediaItem.valueOrNull;
+    }
+    if (audioHandler?.playbackState.valueOrNull != null) {
+      _isPlayingNotifier.value =
+          audioHandler!.playbackState.valueOrNull!.playing;
+    }
+
+    // Obtener todas las rutas de canciones de todas las carpetas (no ignoradas)
+    final allPaths = <String>[];
+    for (final entry in songPathsByFolder.entries) {
+      if (!_ignoredFoldersCache.contains(entry.key)) {
+        allPaths.addAll(entry.value);
+      }
+    }
+
+    // Cargar los objetos SongModel completos
+    final allSongs = await _audioQuery.querySongs();
+    final songsToShow = allSongs
+        .where((s) => allPaths.contains(s.data))
+        .toList();
+    if (!mounted) return;
+    setState(() {
+      _originalSongs = songsToShow;
+    });
+    await _ordenarCanciones();
+    // Precargar carátulas
+    unawaited(_preloadArtworksForSongs(songsToShow));
+    if (!mounted) return;
+    setState(() {
+      _isLoading = false;
+    });
+  }
+
+  /// Mostrar el modal de selección de vista (Carpetas o Todas)
+  void _showViewSelectorModal() {
+    final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: isAmoled && isDark
+          ? Colors.black
+          : Theme.of(context).scaffoldBackgroundColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Indicador de arrastre
+                Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: isAmoled && isDark
+                        ? Colors.white.withValues(alpha: 0.3)
+                        : Theme.of(
+                            context,
+                          ).colorScheme.onSurface.withValues(alpha: 0.3),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                // Opción: Carpetas
+                ListTile(
+                  leading: Icon(
+                    Icons.folder_outlined,
+                    color: !_showAllSongs
+                        ? Theme.of(context).colorScheme.primary
+                        : null,
+                  ),
+                  title: TranslatedText(
+                    'folders_title',
+                    style: TextStyle(
+                      fontWeight: !_showAllSongs
+                          ? FontWeight.w600
+                          : FontWeight.normal,
+                      color: !_showAllSongs
+                          ? Theme.of(context).colorScheme.primary
+                          : null,
+                    ),
+                  ),
+                  trailing: !_showAllSongs
+                      ? Icon(
+                          Icons.check,
+                          color: Theme.of(context).colorScheme.primary,
+                        )
+                      : null,
+                  onTap: () async {
+                    Navigator.pop(context);
+                    if (_showAllSongs) {
+                      setState(() {
+                        _showAllSongs = false;
+                        carpetaSeleccionada = null;
+                        _searchController.clear();
+                        _filteredSongs.clear();
+                        _displaySongs.clear();
+                        _isSelecting = false;
+                        _selectedSongPaths.clear();
+                      });
+                      // Recargar las carpetas para mostrar las ignoradas también
+                      await cargarCanciones(forceIndex: false);
+                    }
+                  },
+                ),
+                // Opción: Todas
+                ListTile(
+                  leading: Icon(
+                    Icons.library_music_outlined,
+                    color: _showAllSongs
+                        ? Theme.of(context).colorScheme.primary
+                        : null,
+                  ),
+                  title: TranslatedText(
+                    'all_songs',
+                    style: TextStyle(
+                      fontWeight: _showAllSongs
+                          ? FontWeight.w600
+                          : FontWeight.normal,
+                      color: _showAllSongs
+                          ? Theme.of(context).colorScheme.primary
+                          : null,
+                    ),
+                  ),
+                  trailing: _showAllSongs
+                      ? Icon(
+                          Icons.check,
+                          color: Theme.of(context).colorScheme.primary,
+                        )
+                      : null,
+                  onTap: () async {
+                    Navigator.pop(context);
+                    if (!_showAllSongs) {
+                      await _loadAllSongs();
+                    }
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   // Soporte para pop interno desde el handler global
   bool canPopInternally() {
+    // Si estamos mostrando todas las canciones, no hay pop interno
+    // (el botón back del sistema debe salir de la pantalla, no volver a carpetas)
+    if (_showAllSongs) return false;
     return carpetaSeleccionada != null;
   }
 
@@ -4732,6 +4967,7 @@ class _FoldersScreenState extends State<FoldersScreen>
     if (!mounted) return;
     setState(() {
       carpetaSeleccionada = null;
+      _showAllSongs = false;
     });
     // Recargar la lista de carpetas para mostrar el estado actual
     cargarCanciones(forceIndex: false);

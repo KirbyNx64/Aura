@@ -386,7 +386,10 @@ class _UpdateScreenState extends State<UpdateScreen> {
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         scrolledUnderElevation: 0,
-        title: Text(LocaleProvider.tr('update')),
+        title: TranslatedText(
+          'update',
+          style: TextStyle(fontWeight: FontWeight.w500),
+        ),
         leading: _isDownloading
             ? Container()
             : IconButton(
