@@ -25,7 +25,6 @@ import 'package:music/widgets/hero_cached.dart';
 import 'package:music/utils/db/playlist_model.dart' as hive_model;
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:material_symbols_icons/symbols.dart';
 import 'package:media_scanner/media_scanner.dart';
 import 'package:music/widgets/song_info_dialog.dart';
 import 'package:device_info_plus/device_info_plus.dart';
@@ -682,7 +681,7 @@ class _FoldersScreenState extends State<FoldersScreen>
                     leading: Icon(
                       isFavorite
                           ? Icons.delete_outline
-                          : Symbols.favorite_rounded,
+                          : Icons.favorite_outline_rounded,
                       weight: isFavorite ? null : 600,
                     ),
                     title: TranslatedText(
@@ -3548,7 +3547,7 @@ class _FoldersScreenState extends State<FoldersScreen>
                     enabled: _selectedSongPaths.isNotEmpty,
                     child: Row(
                       children: [
-                        const Icon(Symbols.favorite_rounded, weight: 600),
+                        const Icon(Icons.favorite_outline_rounded, weight: 600),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(LocaleProvider.tr('add_to_favorites')),
@@ -3620,11 +3619,7 @@ class _FoldersScreenState extends State<FoldersScreen>
                   onPressed: () => _showAddSongsToPlaylistDialog(),
                 ),
               IconButton(
-                icon: const Icon(
-                  Symbols.shuffle_rounded,
-                  size: 28,
-                  weight: 600,
-                ),
+                icon: const Icon(Icons.shuffle_rounded, size: 28, weight: 600),
                 tooltip: LocaleProvider.tr('shuffle'),
                 onPressed: () {
                   if (_displaySongs.isNotEmpty) {
@@ -4059,9 +4054,9 @@ class _FoldersScreenState extends State<FoldersScreen>
                 icon: Icon(
                   isCurrent
                       ? (playing
-                            ? Symbols.pause_rounded
-                            : Symbols.play_arrow_rounded)
-                      : Symbols.play_arrow_rounded,
+                            ? Icons.pause_rounded
+                            : Icons.play_arrow_rounded)
+                      : Icons.play_arrow_rounded,
                   fill: 1,
                   grade: 200,
                   color: isCurrent

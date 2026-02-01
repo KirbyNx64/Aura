@@ -7,7 +7,6 @@ import 'package:music/l10n/locale_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:music/utils/theme_preferences.dart';
 import 'package:music/utils/notifiers.dart';
-import 'package:material_symbols_icons/symbols.dart';
 
 class UpdateScreen extends StatefulWidget {
   const UpdateScreen({super.key});
@@ -234,7 +233,7 @@ class _UpdateScreenState extends State<UpdateScreen> {
                                 color: Colors.transparent,
                               ),
                               child: Icon(
-                                Symbols.open_in_browser_rounded,
+                                Icons.open_in_browser_rounded,
                                 grade: 300,
                                 size: 30,
                                 color: isAmoled && isDark
@@ -505,7 +504,7 @@ class _UpdateScreenState extends State<UpdateScreen> {
                                       .withValues(alpha: 0.5),
                           ),
                           child: Icon(
-                            Symbols.update_rounded,
+                            Icons.update_rounded,
                             grade: 300,
                             size: 80,
                             color:
@@ -626,7 +625,7 @@ class _UpdateScreenState extends State<UpdateScreen> {
                                   .withValues(alpha: 0.5),
                       ),
                       child: Icon(
-                        Symbols.check_circle_outline_rounded,
+                        Icons.check_circle_outline_rounded,
                         grade: 300,
                         size: 80,
                         color: Theme.of(context).brightness == Brightness.light

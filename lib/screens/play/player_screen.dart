@@ -24,7 +24,6 @@ import 'package:scroll_to_index/scroll_to_index.dart';
 import 'package:music/l10n/locale_provider.dart';
 import 'package:music/utils/theme_preferences.dart';
 import 'package:music/widgets/song_info_dialog.dart';
-import 'package:material_symbols_icons/symbols.dart';
 import 'dart:io';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:music/utils/gesture_preferences.dart';
@@ -922,7 +921,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
               ),
               ListTile(
                 leading: Icon(
-                  isFav ? Icons.delete_outline : Symbols.favorite_rounded,
+                  isFav ? Icons.delete_outline : Icons.favorite_outline_rounded,
                   weight: isFav ? null : 600,
                 ),
                 title: Text(
@@ -2345,8 +2344,8 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                           likeBuilder: (bool isLiked) {
                                             return Icon(
                                               isLiked
-                                                  ? Symbols.favorite_rounded
-                                                  : Symbols
+                                                  ? Icons.favorite_rounded
+                                                  : Icons
                                                         .favorite_border_rounded,
                                               grade: 200,
                                               fill: isLiked ? 1 : 0,
@@ -2672,19 +2671,19 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                               Color repeatColor;
                               switch (repeatMode) {
                                 case AudioServiceRepeatMode.one:
-                                  repeatIcon = Symbols.repeat_one_rounded;
+                                  repeatIcon = Icons.repeat_one_rounded;
                                   repeatColor = Theme.of(
                                     context,
                                   ).colorScheme.primary;
                                   break;
                                 case AudioServiceRepeatMode.all:
-                                  repeatIcon = Symbols.repeat_rounded;
+                                  repeatIcon = Icons.repeat_rounded;
                                   repeatColor = Theme.of(
                                     context,
                                   ).colorScheme.primary;
                                   break;
                                 default:
-                                  repeatIcon = Symbols.repeat_rounded;
+                                  repeatIcon = Icons.repeat_rounded;
                                   repeatColor =
                                       Theme.of(context).brightness ==
                                           Brightness.light
@@ -2777,7 +2776,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                                 ),
                                                                 child: IconButton(
                                                                   icon: const Icon(
-                                                                    Symbols
+                                                                    Icons
                                                                         .shuffle_rounded,
                                                                     weight: 600,
                                                                   ),
@@ -2803,7 +2802,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                               )
                                                             : IconButton(
                                                                 icon: const Icon(
-                                                                  Symbols
+                                                                  Icons
                                                                       .shuffle_rounded,
                                                                   grade: 200,
                                                                 ),
@@ -2851,7 +2850,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                               ),
                                                         IconButton(
                                                           icon: const Icon(
-                                                            Symbols
+                                                            Icons
                                                                 .skip_previous_rounded,
                                                             grade: 200,
                                                             fill: 1,
@@ -2989,8 +2988,8 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                                         )
                                                                       : Icon(
                                                                           isPlaying
-                                                                              ? Symbols.pause_rounded
-                                                                              : Symbols.play_arrow_rounded,
+                                                                              ? Icons.pause_rounded
+                                                                              : Icons.play_arrow_rounded,
                                                                           size:
                                                                               playIconSize,
                                                                           grade:
@@ -3018,7 +3017,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                         ),
                                                         IconButton(
                                                           icon: const Icon(
-                                                            Symbols
+                                                            Icons
                                                                 .skip_next_rounded,
                                                             grade: 200,
                                                             fill: 1,
@@ -3979,8 +3978,8 @@ class _LyricsModalContentState extends State<_LyricsModalContent> {
                                       },
                                       icon: Icon(
                                         isPlaying
-                                            ? Symbols.pause_rounded
-                                            : Symbols.play_arrow_rounded,
+                                            ? Icons.pause_rounded
+                                            : Icons.play_arrow_rounded,
                                         size: 34,
                                         grade: 200,
                                         fill: 1,
@@ -4190,7 +4189,7 @@ class _LyricsModalContentState extends State<_LyricsModalContent> {
                 ),
               );
             },
-            icon: Icon(Symbols.search_rounded),
+            icon: Icon(Icons.search_rounded),
             label: Text(LocaleProvider.tr('search_lyrics')),
             style: ElevatedButton.styleFrom(
               backgroundColor: Theme.of(context).colorScheme.primary,
@@ -5497,7 +5496,7 @@ class _PlaylistListViewState extends State<_PlaylistListView>
                         child: Container(
                           padding: const EdgeInsets.all(8),
                           child: Icon(
-                            Symbols.shuffle_rounded,
+                            Icons.shuffle_rounded,
                             size: 32,
                             color: Theme.of(context).colorScheme.onSurface,
                             weight: 600,

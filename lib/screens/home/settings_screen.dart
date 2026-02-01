@@ -25,8 +25,6 @@ import 'package:device_info_plus/device_info_plus.dart';
 import 'dart:convert';
 import 'package:music/utils/db/playlist_model.dart' as hive_model;
 import 'package:url_launcher/url_launcher.dart';
-import 'package:icons_plus/icons_plus.dart' as icons_plus;
-import 'package:material_symbols_icons/symbols.dart';
 import 'package:music/widgets/gesture_settings_dialog.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
@@ -1076,7 +1074,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                     : Colors.transparent,
                               ),
                               child: Icon(
-                                Symbols.brightness_auto_rounded,
+                                Icons.brightness_auto_rounded,
                                 weight: 500,
                                 grade: 200,
                                 size: 30,
@@ -1363,7 +1361,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                     : Colors.transparent,
                               ),
                               child: Icon(
-                                Symbols.dark_mode_rounded,
+                                Icons.dark_mode_rounded,
                                 fill: 1,
                                 size: 30,
                                 color:
@@ -3964,8 +3962,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ListTile(
                     leading: Icon(
                       Theme.of(context).brightness == Brightness.dark
-                          ? Symbols.dark_mode_rounded
-                          : Symbols.light_mode_rounded,
+                          ? Icons.dark_mode_rounded
+                          : Icons.light_mode_rounded,
                       fill: 1,
                       color: Theme.of(
                         context,
@@ -4430,7 +4428,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 children: [
                   ListTile(
                     leading: Icon(
-                      Symbols.add_photo_alternate,
+                      Icons.add_photo_alternate,
                       weight: 600,
                       color: Theme.of(
                         context,
@@ -4769,7 +4767,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           ),
                         ),
                         secondary: Icon(
-                          Symbols.slab_serif,
+                          Icons.font_download_outlined,
                           weight: 600,
                           color: Theme.of(
                             context,
@@ -5015,7 +5013,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           ),
                         ),
                         secondary: Icon(
-                          Symbols.skip_next_rounded,
+                          Icons.skip_next_rounded,
                           grade: 200,
                           fill: 1,
                           size: 28,
@@ -5443,7 +5441,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 children: [
                   ListTile(
                     leading: Icon(
-                      Symbols.system_update_alt_rounded,
+                      Icons.system_update_alt_rounded,
                       weight: 500,
                       grade: 200,
                       color: Theme.of(
@@ -5646,10 +5644,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                       );
                                     }
                                   },
-                                  icon: Icon(
-                                    icons_plus.Bootstrap.github,
-                                    size: 44,
-                                  ),
+                                  icon: Icon(Icons.code, size: 44),
                                   tooltip: LocaleProvider.tr('view_on_github'),
                                 ),
                               ),

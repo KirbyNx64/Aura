@@ -5,7 +5,6 @@ import 'package:music/utils/audio/synced_lyrics_service.dart';
 import 'package:music/l10n/locale_provider.dart';
 import 'package:music/utils/notifiers.dart';
 import 'package:music/utils/theme_preferences.dart';
-import 'package:material_symbols_icons/symbols.dart';
 
 class LyricsSearchResult {
   final String title;
@@ -242,7 +241,7 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
                                           .withValues(alpha: 0.1),
                               ),
                               child: Icon(
-                                Symbols.check_rounded,
+                                Icons.check_rounded,
                                 size: 30,
                                 color: isAmoled && isDark
                                     ? Colors.white
@@ -455,7 +454,7 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
                                   ).colorScheme.primary.withValues(alpha: 0.1),
                           ),
                           child: Icon(
-                            Symbols.check_rounded,
+                            Icons.check_rounded,
                             size: 30,
                             color: isAmoled && isDark
                                 ? Colors.white
@@ -680,7 +679,7 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
                         prefixIcon: const Icon(Icons.search),
                         suffixIcon: _searchController.text.isNotEmpty
                             ? IconButton(
-                                icon: const Icon(Symbols.clear_rounded),
+                                icon: const Icon(Icons.clear_rounded),
                                 onPressed: () {
                                   _searchController.clear();
                                   if (mounted) {
@@ -734,7 +733,7 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
-              Symbols.search_rounded,
+              Icons.search_rounded,
               size: 64,
               color: Theme.of(
                 context,
@@ -901,7 +900,7 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
                         borderRadius: BorderRadius.circular(16),
                       ),
                     ),
-                    child: const Icon(Symbols.check_rounded, size: 28),
+                    child: const Icon(Icons.check_rounded, size: 28),
                   ),
                 ),
               ],

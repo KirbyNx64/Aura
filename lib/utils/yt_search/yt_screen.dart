@@ -13,7 +13,6 @@ import 'package:device_info_plus/device_info_plus.dart';
 import 'package:music/utils/notifiers.dart';
 import 'package:music/utils/theme_preferences.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:material_symbols_icons/symbols.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
@@ -4146,7 +4145,10 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                     context,
                                                   ).brightness ==
                                                   Brightness.dark;
-                                              final cardColor = isAmoled && isDark ? Colors.white.withAlpha(20) : isDark
+                                              final cardColor =
+                                                  isAmoled && isDark
+                                                  ? Colors.white.withAlpha(20)
+                                                  : isDark
                                                   ? Theme.of(context)
                                                         .colorScheme
                                                         .onSecondary
@@ -5108,7 +5110,12 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                         context,
                                                       ).brightness ==
                                                       Brightness.dark;
-                                                  final cardColor = isAmoled && isDark ? Colors.white.withAlpha(20) : isDark
+                                                  final cardColor =
+                                                      isAmoled && isDark
+                                                      ? Colors.white.withAlpha(
+                                                          20,
+                                                        )
+                                                      : isDark
                                                       ? Theme.of(context)
                                                             .colorScheme
                                                             .onSecondary
@@ -5467,7 +5474,12 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                         context,
                                                       ).brightness ==
                                                       Brightness.dark;
-                                                  final cardColor = isAmoled && isDark ? Colors.white.withAlpha(20) : isDark
+                                                  final cardColor =
+                                                      isAmoled && isDark
+                                                      ? Colors.white.withAlpha(
+                                                          20,
+                                                        )
+                                                      : isDark
                                                       ? Theme.of(context)
                                                             .colorScheme
                                                             .onSecondary
@@ -6955,8 +6967,8 @@ class YtPreviewPlayerState extends State<YtPreviewPlayer>
                               )
                             : Icon(
                                 _playing
-                                    ? Symbols.pause_rounded
-                                    : Symbols.play_arrow_rounded,
+                                    ? Icons.pause_rounded
+                                    : Icons.play_arrow_rounded,
                                 grade: 200,
                                 size: 24,
                                 fill: 1,
@@ -6993,7 +7005,7 @@ class YtPreviewPlayerState extends State<YtPreviewPlayer>
                 // Botón anterior
                 IconButton(
                   icon: const Icon(
-                    Symbols.skip_previous_rounded,
+                    Icons.skip_previous_rounded,
                     grade: 200,
                     fill: 1,
                   ),
@@ -7004,7 +7016,7 @@ class YtPreviewPlayerState extends State<YtPreviewPlayer>
                 // Botón siguiente
                 IconButton(
                   icon: const Icon(
-                    Symbols.skip_next_rounded,
+                    Icons.skip_next_rounded,
                     grade: 200,
                     fill: 1,
                   ),

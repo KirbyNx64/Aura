@@ -28,7 +28,6 @@ import 'package:music/screens/play/player_screen.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:music/utils/song_info_dialog.dart';
-import 'package:material_symbols_icons/symbols.dart';
 import 'package:music/screens/artist/artist_screen.dart';
 import 'dart:async';
 
@@ -1709,7 +1708,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     leading: Icon(
                       isFavorite
                           ? Icons.delete_outline
-                          : Symbols.favorite_rounded,
+                          : Icons.favorite_outline_rounded,
                       weight: isFavorite ? null : 600,
                     ),
                     title: TranslatedText(
@@ -2498,7 +2497,9 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               ),
               ListTile(
                 leading: Icon(
-                  isFavorite ? Icons.delete_outline : Symbols.favorite_rounded,
+                  isFavorite
+                      ? Icons.delete_outline
+                      : Icons.favorite_outline_rounded,
                   weight: isFavorite ? null : 600,
                 ),
                 title: TranslatedText(
@@ -3249,7 +3250,10 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         : _removeFromPlaylistMassive,
                   ),
                   IconButton(
-                    icon: const Icon(Symbols.favorite_rounded, weight: 600),
+                    icon: const Icon(
+                      Icons.favorite_outline_rounded,
+                      weight: 600,
+                    ),
                     tooltip: LocaleProvider.tr('add_to_favorites'),
                     onPressed: _selectedPlaylistSongIds.isEmpty
                         ? null
@@ -3283,7 +3287,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 ] else ...[
                   IconButton(
                     icon: const Icon(
-                      Symbols.shuffle_rounded,
+                      Icons.shuffle_rounded,
                       size: 28,
                       weight: 600,
                     ),
@@ -3631,8 +3635,8 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                       trailing: IconButton(
                                         icon: Icon(
                                           isCurrent && playing
-                                              ? Symbols.pause_rounded
-                                              : Symbols.play_arrow_rounded,
+                                              ? Icons.pause_rounded
+                                              : Icons.play_arrow_rounded,
                                           grade: 200,
                                           fill: 1,
                                         ),
@@ -4114,7 +4118,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                   ),
                                   trailing: IconButton(
                                     icon: const Icon(
-                                      Symbols.play_arrow_rounded,
+                                      Icons.play_arrow_rounded,
                                       grade: 200,
                                       fill: 1,
                                     ),
@@ -5209,8 +5213,8 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                         trailing: IconButton(
                                           icon: Icon(
                                             isCurrent && playing
-                                                ? Symbols.pause_rounded
-                                                : Symbols.play_arrow_rounded,
+                                                ? Icons.pause_rounded
+                                                : Icons.play_arrow_rounded,
                                             grade: 200,
                                             fill: 1,
                                           ),
@@ -5497,8 +5501,8 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                     leading: Icon(
                                                       isFav
                                                           ? Icons.delete_outline
-                                                          : Symbols
-                                                                .favorite_rounded,
+                                                          : Icons
+                                                                .favorite_outline_rounded,
                                                       weight: isFav
                                                           ? null
                                                           : 600,
@@ -5824,8 +5828,8 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                     trailing: IconButton(
                                       icon: Icon(
                                         isCurrent && playing
-                                            ? Symbols.pause_rounded
-                                            : Symbols.play_arrow_rounded,
+                                            ? Icons.pause_rounded
+                                            : Icons.play_arrow_rounded,
                                         grade: 200,
                                         fill: 1,
                                       ),

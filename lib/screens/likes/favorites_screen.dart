@@ -18,7 +18,6 @@ import 'package:music/screens/play/player_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:music/widgets/song_info_dialog.dart';
 import 'package:music/widgets/hero_cached.dart';
-import 'package:material_symbols_icons/symbols.dart';
 import 'package:music/screens/artist/artist_screen.dart';
 
 enum OrdenFavoritos { normal, alfabetico, invertido, ultimoAgregado }
@@ -1158,9 +1157,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
       ),
       trailing: IconButton(
         icon: Icon(
-          isCurrent && playing
-              ? Symbols.pause_rounded
-              : Symbols.play_arrow_rounded,
+          isCurrent && playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
           grade: 200,
           fill: 1,
         ),
@@ -1259,7 +1256,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
             : [
                 IconButton(
                   icon: const Icon(
-                    Symbols.shuffle_rounded,
+                    Icons.shuffle_rounded,
                     size: 28,
                     weight: 600,
                   ),
@@ -1397,7 +1394,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Icon(
-                              Symbols.favorite_rounded,
+                              Icons.favorite_outline_rounded,
                               weight: 600,
                               size: 48,
                               color: Theme.of(
