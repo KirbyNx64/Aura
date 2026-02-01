@@ -5109,7 +5109,10 @@ class _PlaylistListViewState extends State<_PlaylistListView>
   /// Construye un tile placeholder para mostrar mientras se carga la lista
   Widget _buildPlaceholderTile(BuildContext context, int index) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final cardColor = isDark
+    final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
+    final cardColor = isAmoled
+        ? Colors.white.withAlpha(20)
+        : isDark
         ? Theme.of(context).colorScheme.onSecondary.withValues(alpha: 0.5)
         : Theme.of(
             context,
@@ -5251,7 +5254,9 @@ class _PlaylistListViewState extends State<_PlaylistListView>
                   // Variables para diseño Material3
                   final isDark =
                       Theme.of(context).brightness == Brightness.dark;
-                  final cardColor = isDark
+                  final cardColor = isAmoledTheme
+                      ? Colors.white.withAlpha(20)
+                      : isDark
                       ? Theme.of(
                           context,
                         ).colorScheme.onSecondary.withValues(alpha: 0.5)
@@ -5298,7 +5303,7 @@ class _PlaylistListViewState extends State<_PlaylistListView>
                     child: Card(
                       color: isCurrent
                           ? (isAmoledTheme
-                                ? Colors.white.withValues(alpha: 0.15)
+                                ? cardColor
                                 : Theme.of(context).colorScheme.primaryContainer
                                       .withValues(alpha: 0.8))
                           : cardColor,

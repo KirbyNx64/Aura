@@ -1,9 +1,9 @@
 {
-  "version": "1.7.1",
+  "version": "1.7.2",
   "apk_urls": {
-    "arm64-v8a": "https://github.com/KirbyNx64/Aura/releases/download/v1.7.1/AuraMusic-v1.7.1-arm64-v8a.apk",
-    "armeabi-v7a": "https://github.com/KirbyNx64/Aura/releases/download/v1.7.1/AuraMusic-v1.7.1-armeabi-v7a.apk",
-    "x86_64": "https://github.com/KirbyNx64/Aura/releases/download/v1.7.1/AuraMusic-v1.7.1-x86_64.apk"
+    "arm64-v8a": "https://github.com/KirbyNx64/Aura/releases/download/v1.7.2/AuraMusic-v1.7.2-arm64-v8a.apk",
+    "armeabi-v7a": "https://github.com/KirbyNx64/Aura/releases/download/v1.7.2/AuraMusic-v1.7.2-armeabi-v7a.apk",
+    "x86_64": "https://github.com/KirbyNx64/Aura/releases/download/v1.7.2/AuraMusic-v1.7.2-x86_64.apk"
   },
-  "changelog": "• Se aplicaron mejoras visuales generales en la aplicación.\n\n• Se agregaron botones tipo tab en la parte superior para acceder más rápido a las categorías (canciones, videos, listas de reproducción, etc.) durante las búsquedas.\n\n• Se actualizaron varias dependencias.\n\n• Se corrigieron algunos errores."
+  "changelog": "• Se reemplazó la antigua sección Carpetas de la barra de navegación por Biblioteca, ofreciendo una organización más clara.\n\n• Las listas de reproducción ahora se encuentran dentro de la sección Biblioteca.\n\n• Se añadió una nueva opción llamada “Todas” dentro de Biblioteca, que permite ver todas las canciones almacenadas en el dispositivo.\n\n• Ahora puedes añadir cualquier canción a Favoritos / Me gusta desde la opción “Añadir”, no solo las canciones recientes como antes.\n\n• Se realizaron mejoras visuales generales en toda la interfaz de la aplicación.\n\n• Se redujo el tamaño de la app en aproximadamente 4 MB, mejorando su rendimiento y almacenamiento.\n\n• Se actualizaron varias dependencias internas.\n\n• Se corrigieron errores menores y se optimizó la estabilidad general."
 }
