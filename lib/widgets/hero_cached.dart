@@ -38,17 +38,18 @@ class _ArtworkHeroCachedState extends State<ArtworkHeroCached> {
   Uri? _previousArtUri;
   Timer? _fallbackTimer;
   bool _hasFallback = false;
-  
+
   // Lista estática para rastrear todas las instancias activas
-  static final Set<_ArtworkHeroCachedState> _activeInstances = <_ArtworkHeroCachedState>{};
-  
+  static final Set<_ArtworkHeroCachedState> _activeInstances =
+      <_ArtworkHeroCachedState>{};
+
   // Método estático para limpiar todos los fallbacks
   static void _clearAllFallbacks() {
     for (final instance in _activeInstances) {
       instance._clearFallback();
     }
   }
-  
+
   // Método para limpiar el fallback de esta instancia específica
   void _clearFallback() {
     _fallbackTimer?.cancel();
@@ -63,16 +64,16 @@ class _ArtworkHeroCachedState extends State<ArtworkHeroCached> {
   @override
   void didUpdateWidget(ArtworkHeroCached oldWidget) {
     super.didUpdateWidget(oldWidget);
-    
+
     // Si cambió la carátula
     if (widget.artUri != oldWidget.artUri) {
       _fallbackTimer?.cancel();
-      
+
       // Si teníamos carátula y ahora es null, mantener la anterior temporalmente
       if (oldWidget.artUri != null && widget.artUri == null) {
         _previousArtUri = oldWidget.artUri;
         _hasFallback = true;
-        
+
         // Limpiar fallback después de un tiempo corto
         _fallbackTimer = Timer(const Duration(milliseconds: 300), () {
           _clearFallback();
@@ -184,7 +185,11 @@ class _ArtworkHeroCachedState extends State<ArtworkHeroCached> {
     return Container(
       width: widget.size,
       height: widget.size,
-      color: isSystem ? Theme.of(context).colorScheme.secondaryContainer.withValues(alpha: 0.5) : Theme.of(context).colorScheme.surfaceContainer,
+      color: isSystem
+          ? Theme.of(
+              context,
+            ).colorScheme.secondaryContainer.withValues(alpha: 0.5)
+          : Theme.of(context).colorScheme.surfaceContainer,
       child: widget.showPlaceholderIcon
           ? Icon(Icons.music_note, size: widget.size * 0.6)
           : null,

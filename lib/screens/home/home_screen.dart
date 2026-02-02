@@ -910,7 +910,10 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         PageRouteBuilder(
                           pageBuilder:
                               (context, animation, secondaryAnimation) =>
-                                  ArtistScreen(artistName: artistName),
+                                  ArtistScreen(
+                                    artistName: artistName,
+                                    browseId: artistInfo?['browseId'],
+                                  ),
                           transitionsBuilder:
                               (context, animation, secondaryAnimation, child) {
                                 const begin = Offset(1.0, 0.0);
@@ -1253,11 +1256,11 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
+            SizedBox(
               width: 80,
               height: 80,
-              decoration: const BoxDecoration(shape: BoxShape.circle),
-              child: ClipOval(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
                 child: artist['thumbUrl'] != null
                     ? Image.network(
                         artist['thumbUrl'],
@@ -1275,6 +1278,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                         .colorScheme
                                         .secondaryContainer
                                         .withValues(alpha: 0.8),
+                              borderRadius: BorderRadius.circular(16),
                             ),
                             child: Center(child: Icon(Icons.person, size: 40)),
                           );
@@ -1291,6 +1295,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                         .colorScheme
                                         .secondaryContainer
                                         .withValues(alpha: 0.8),
+                              borderRadius: BorderRadius.circular(16),
                             ),
                             child: Center(
                               child: CircularProgressIndicator(
@@ -1312,6 +1317,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                               ? Colors.white.withValues(alpha: 0.1)
                               : Theme.of(context).colorScheme.secondaryContainer
                                     .withValues(alpha: 0.8),
+                          borderRadius: BorderRadius.circular(16),
                         ),
                         child: Center(child: Icon(Icons.person, size: 40)),
                       ),

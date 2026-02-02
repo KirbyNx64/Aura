@@ -56,6 +56,34 @@ dynamic _findObjectByKey(dynamic node, String key) {
   return null;
 }
 
+// Helper para buscar texto dentro de 'runs' usando palabras clave
+String? _findTextInRuns(
+  dynamic container,
+  List<List<String>> paths,
+  List<String> keywords,
+) {
+  for (var path in paths) {
+    // Construimos la ruta completa a 'runs'
+    var fullPath = [...path, 'runs'];
+    final runs = nav(container, fullPath);
+
+    if (runs is List) {
+      for (var run in runs) {
+        final text = run['text']?.toString();
+        if (text != null) {
+          // Verificar si contiene alguna de las palabras clave
+          for (var keyword in keywords) {
+            if (text.toLowerCase().contains(keyword.toLowerCase())) {
+              return text;
+            }
+          }
+        }
+      }
+    }
+  }
+  return null;
+}
+
 // Obtiene información detallada de un artista usando su browseId
 Future<Map<String, dynamic>?> getArtistDetails(String browseId) async {
   String normalizedId = browseId;
@@ -64,11 +92,9 @@ Future<Map<String, dynamic>?> getArtistDetails(String browseId) async {
   }
 
   final data = {...ytServiceContext, 'browseId': normalizedId};
-  // Configurar idioma según la configuración de la app
   try {
     final ctx = (data['context'] as Map);
     final client = (ctx['client'] as Map);
-    // Usar español si está disponible, sino inglés como fallback
     final locale = languageNotifier.value;
     client['hl'] = locale.startsWith('es') ? 'es' : 'en';
   } catch (_) {}
@@ -76,16 +102,103 @@ Future<Map<String, dynamic>?> getArtistDetails(String browseId) async {
   try {
     final response = (await sendRequest("browse", data)).data;
 
-    // Header de artista
-    final header =
+    // Buscar header
+    var header =
         nav(response, ['header', 'musicImmersiveHeaderRenderer']) ??
-        nav(response, ['header', 'musicVisualHeaderRenderer']);
+        nav(response, ['header', 'musicVisualHeaderRenderer']) ??
+        nav(response, ['header', 'musicResponsiveHeaderRenderer']);
 
-    String? name = header != null
-        ? nav(header, ['title', 'runs', 0, 'text'])
-        : null;
+    header ??= nav(response, [
+      'contents',
+      'singleColumnBrowseResultsRenderer',
+      'tabs',
+      0,
+      'tabRenderer',
+      'content',
+      'sectionListRenderer',
+      'contents',
+      0,
+      'musicResponsiveHeaderRenderer',
+    ]);
 
-    // results: pestaña single column
+    String? name;
+    String? subscribers;
+    String? thumbUrl;
+    String? monthlyListeners;
+
+    if (header != null) {
+      name = nav(header, ['title', 'runs', 0, 'text']);
+
+      // 1. OBTENER SUSCRIPTORES
+      // Intento directo desde el botón
+      subscribers = nav(header, [
+        'subscriptionButton',
+        'subscribeButtonRenderer',
+        'subscriberCountText',
+        'runs',
+        0,
+        'text',
+      ]);
+
+      // Si falla, buscar textualmente en los campos de texto del header
+      subscribers ??= _findTextInRuns(
+        header,
+        [
+          ['subtitle'],
+          ['secondSubtitle'],
+          ['straplineTextOne'],
+        ],
+        ['subscri', 'suscri'], // Keywords para suscriptores
+      );
+
+      // 2. OBTENER OYENTES MENSUALES (Público mensual)
+      // Buscar en los mismos campos pero con keywords de audiencia
+      monthlyListeners = _findTextInRuns(
+        header,
+        [
+          ['straplineTextOne'],
+          ['subtitle'],
+          ['secondSubtitle'],
+        ],
+        [
+          'oyentes',
+          'listeners',
+          'publico',
+          'público',
+          'audiencia',
+          'viewers',
+          'vistas',
+        ],
+      );
+
+      // Thumbnail
+      var thumbnails =
+          nav(header, [
+            'thumbnail',
+            'musicThumbnailRenderer',
+            'thumbnail',
+            'thumbnails',
+          ]) ??
+          nav(header, [
+            'thumbnail',
+            'croppedSquareThumbnailRenderer',
+            'thumbnail',
+            'thumbnails',
+          ]);
+
+      if (thumbnails == null && header is Map) {
+        final possibleThumb = _findObjectByKey(header, 'thumbnails');
+        if (possibleThumb is List) thumbnails = possibleThumb;
+      }
+
+      if (thumbnails is List && thumbnails.isNotEmpty) {
+        thumbUrl = thumbnails.last['url'];
+        if (thumbUrl != null) thumbUrl = _cleanThumbnailUrl(thumbUrl);
+      }
+    }
+
+    // Descripción
+    String? description;
     final results = nav(response, [
       'contents',
       'singleColumnBrowseResultsRenderer',
@@ -97,7 +210,6 @@ Future<Map<String, dynamic>?> getArtistDetails(String browseId) async {
       'contents',
     ]);
 
-    String? description;
     if (results != null) {
       final descRenderer = _findObjectByKey(
         results,
@@ -111,83 +223,11 @@ Future<Map<String, dynamic>?> getArtistDetails(String browseId) async {
       }
     }
 
-    // Suscriptores
-    String? subscribers = header != null
-        ? nav(header, [
-            'subscriptionButton',
-            'subscribeButtonRenderer',
-            'subscriberCountText',
-            'runs',
-            0,
-            'text',
-          ])
-        : null;
-
-    // Thumbnail - buscar en múltiples ubicaciones para obtener la mejor imagen
-    String? thumbUrl;
-    if (header != null) {
-      // Primera opción: musicThumbnailRenderer (imagen completa)
-      var thumbnails = nav(header, [
-        'thumbnail',
-        'musicThumbnailRenderer',
-        'thumbnail',
-        'thumbnails',
-      ]);
-
-      // Segunda opción: croppedSquareThumbnailRenderer (imagen cuadrada recortada)
-      thumbnails ??= nav(header, [
-        'thumbnail',
-        'croppedSquareThumbnailRenderer',
-        'thumbnail',
-        'thumbnails',
-      ]);
-
-      // Tercera opción: buscar en cualquier estructura de thumbnail
-      if (thumbnails == null) {
-        final thumbnail = nav(header, ['thumbnail']);
-        if (thumbnail is Map) {
-          for (var key in thumbnail.keys) {
-            final subThumb = thumbnail[key];
-            if (subThumb is Map && subThumb.containsKey('thumbnails')) {
-              thumbnails = subThumb['thumbnails'];
-              break;
-            }
-          }
-        }
-      }
-
-      if (thumbnails is List && thumbnails.isNotEmpty) {
-        // Usar la imagen de mayor resolución disponible
-        thumbUrl = thumbnails.last['url'];
-
-        // Si la URL contiene parámetros de recorte, intentar obtener una sin recortar
-        if (thumbUrl != null && thumbUrl.contains('w120-h120')) {
-          // Intentar obtener una imagen de mayor tamaño
-          for (var i = thumbnails.length - 1; i >= 0; i--) {
-            final url = thumbnails[i]['url'];
-            if (url != null && !url.contains('w120-h120')) {
-              thumbUrl = url;
-              break;
-            }
-          }
-        }
-
-        // Limpiar parámetros de recorte de la URL si es necesario
-        if (thumbUrl != null) {
-          thumbUrl = _cleanThumbnailUrl(thumbUrl);
-        }
-      }
-    }
-
-    // Debug prints
     /*
-    if (description != null && description.trim().isNotEmpty) {
-      print('👻 YT Artist description ($normalizedId): '
-          '${description.substring(0, description.length.clamp(0, 400))}'
-          '${description.length > 400 ? '…' : ''}');
-    } else {
-      print('👻 YT Artist description not found for $normalizedId');
-    }
+    print("Nombre: $name");
+    print("Thumbnail: $thumbUrl");
+    print("Suscriptores: $subscribers");
+    print("Oyentes Mensuales: $monthlyListeners");
     */
 
     return {
@@ -195,6 +235,7 @@ Future<Map<String, dynamic>?> getArtistDetails(String browseId) async {
       'description': description,
       'thumbUrl': thumbUrl,
       'subscribers': subscribers,
+      'monthlyListeners': monthlyListeners,
       'browseId': normalizedId,
     };
   } catch (_) {
@@ -218,6 +259,20 @@ Future<Map<String, dynamic>?> getArtistInfoByName(String name) async {
 
 // Helper: limpia parámetros de recorte de URLs de thumbnails
 String _cleanThumbnailUrl(String url) {
+  if (url.isEmpty) return url;
+
+  // Si es una URL de Google User Content (usada por YTM para artistas)
+  if (url.contains('googleusercontent.com') || url.contains('ggpht.com')) {
+    // Estas URLs suelen terminar en =sNNN or =wNNN-hNNN
+    // Queremos forzar una resolución alta para que no se vea pixeleada
+    if (url.contains('=')) {
+      final baseUrl = url.split('=')[0];
+      // s1200 proporciona una excelente calidad para imágenes de fondo
+      return '$baseUrl=s1200';
+    }
+  }
+
+  // Fallback para otros casos de YouTube (vía parámetros ? o &)
   // Remover parámetros de recorte comunes
   url = url.replaceAll(RegExp(r'[?&]w\d+-h\d+'), '');
   url = url.replaceAll(RegExp(r'[?&]crop=\d+'), '');
@@ -530,6 +585,7 @@ void parseSongs(List items, List<YtMusicResult> results) {
             renderer['thumbnail']?['musicThumbnailRenderer']?['thumbnail']?['thumbnails'];
         if (thumbnails is List && thumbnails.isNotEmpty) {
           thumbUrl = thumbnails.last['url'];
+          if (thumbUrl != null) thumbUrl = _cleanThumbnailUrl(thumbUrl);
         }
 
         final videoId =
@@ -1362,7 +1418,7 @@ Map<String, String>? _parseAlbumItem(Map<String, dynamic> renderer) {
     'thumbnails',
   ]);
   if (thumbnails is List && thumbnails.isNotEmpty) {
-    thumbUrl = thumbnails.last['url'];
+    thumbUrl = thumbnails.last['url']; if (thumbUrl != null) thumbUrl = _cleanThumbnailUrl(thumbUrl);
   }
 
   return {
@@ -2777,6 +2833,7 @@ Map<String, dynamic>? _parseArtistItem(Map<String, dynamic> item) {
   if (thumbnails is List && thumbnails.isNotEmpty) {
     // Usar la imagen de mayor resolución disponible
     thumbUrl = thumbnails.last['url'];
+    if (thumbUrl != null) thumbUrl = _cleanThumbnailUrl(thumbUrl);
     // ('✅ Thumbnail encontrado: $thumbUrl');
   } else {
     // print('❌ No se encontraron thumbnails para $title');
