@@ -730,6 +730,16 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
       final nextButtonEnabled =
           prefs.getBool('overlay_next_button_enabled') ?? false;
       overlayNextButtonEnabled.value = nextButtonEnabled;
+
+      // Inicializar la configuración de fondo con carátula
+      final useArtworkOverlay =
+          prefs.getBool('use_artwork_background_overlay') ?? true;
+      useArtworkAsBackgroundOverlayNotifier.value = useArtworkOverlay;
+
+      final useArtworkPlayer =
+          prefs.getBool('use_artwork_background_player') ?? true;
+      useArtworkAsBackgroundPlayerNotifier.value = useArtworkPlayer;
+
       // Configurar la barra de navegación del sistema después de cargar las preferencias
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _updateSystemNavigationBar();

@@ -12,6 +12,8 @@ const Map<String, String> appLocalizationsEs = {
   'no': 'No',
   'error': 'Error',
   'success': 'Éxito',
+  'player': 'Reproductor',
+  'overlay': 'Overlay',
 
   // Preferences
   'preferences': 'Preferencias',
@@ -192,6 +194,11 @@ const Map<String, String> appLocalizationsEs = {
   'overlay_next_button': 'Botón siguiente en overlay',
   'overlay_next_button_desc':
       'Muestra el botón de siguiente canción en el overlay de reproducción.',
+  'use_artwork_as_background': 'Usar carátula como fondo',
+  'use_artwork_as_background_desc':
+      'Usa la carátula de la canción como fondo del reproductor (Solo en tema oscuro AMOLED)',
+  'use_artwork_as_background_desc_select':
+      'Selecciona dónde usar la carátula como fondo',
   'artwork_quality_description':
       'Selecciona la calidad de las carátulas al reproducir música',
   '100_percent_maximum': '100% (Máximo)',

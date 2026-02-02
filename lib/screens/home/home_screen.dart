@@ -2208,10 +2208,6 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     String? queueSource,
   }) async {
     // Obtener la carátula para la pantalla del reproductor
-    final songId = song.id;
-    final songPath = song.data;
-    final artUri = await getOrCacheArtwork(songId, songPath);
-
     // Crear el MediaItem para la pantalla del reproductor
     final mediaItem = MediaItem(
       id: song.data,
@@ -2220,9 +2216,14 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       duration: (song.duration != null && song.duration! > 0)
           ? Duration(milliseconds: song.duration!)
           : null,
-      artUri: artUri,
+      artUri: null, // No bloqueamos esperando la URI
       extras: {'songId': song.id, 'albumId': song.albumId, 'data': song.data},
     );
+
+    // Precargar la carátula en segundo plano
+    final songId = song.id;
+    final songPath = song.data;
+    unawaited(getOrCacheArtwork(songId, songPath));
 
     // Navegar a la pantalla del reproductor primero
     if (!mounted) return;
@@ -2242,7 +2243,8 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             child: child,
           );
         },
-        transitionDuration: const Duration(milliseconds: 350),
+        transitionDuration: const Duration(milliseconds: 200),
+        reverseTransitionDuration: const Duration(milliseconds: 300),
       ),
     );
 

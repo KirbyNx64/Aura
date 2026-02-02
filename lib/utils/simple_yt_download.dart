@@ -110,10 +110,7 @@ class DownloadQueue {
         await Future.delayed(const Duration(milliseconds: 500));
       } catch (e) {
         // Manejar errores individuales sin detener la cola
-        _onErrorCallback?.call(
-          LocaleProvider.tr('download_failed_title'),
-          e.toString(),
-        );
+        _onErrorCallback?.call(task.title, e.toString());
       } finally {
         _currentTask = null;
       }

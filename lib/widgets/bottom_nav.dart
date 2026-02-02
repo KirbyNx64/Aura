@@ -9,6 +9,72 @@ import 'package:music/utils/theme_preferences.dart';
 typedef PageBuilderWithTabChange =
     Widget Function(BuildContext context, void Function(int) onTabChange);
 
+// Widget para animar los iconos con efecto de rebote
+class AnimatedNavIcon extends StatefulWidget {
+  final Widget icon;
+  final bool isSelected;
+
+  const AnimatedNavIcon({
+    super.key,
+    required this.icon,
+    required this.isSelected,
+  });
+
+  @override
+  State<AnimatedNavIcon> createState() => _AnimatedNavIconState();
+}
+
+class _AnimatedNavIconState extends State<AnimatedNavIcon>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _scaleAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 400),
+      vsync: this,
+    );
+
+    _scaleAnimation = TweenSequence<double>([
+      TweenSequenceItem(
+        tween: Tween<double>(
+          begin: 1.0,
+          end: 1.15,
+        ).chain(CurveTween(curve: Curves.easeOut)),
+        weight: 50,
+      ),
+      TweenSequenceItem(
+        tween: Tween<double>(
+          begin: 1.15,
+          end: 1.0,
+        ).chain(CurveTween(curve: Curves.easeInOut)),
+        weight: 50,
+      ),
+    ]).animate(_controller);
+  }
+
+  @override
+  void didUpdateWidget(AnimatedNavIcon oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isSelected && !oldWidget.isSelected) {
+      _controller.forward(from: 0.0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ScaleTransition(scale: _scaleAnimation, child: widget.icon);
+  }
+}
+
 class Material3BottomNav extends StatefulWidget {
   final List<PageBuilderWithTabChange> pageBuilders;
   final int initialIndex;
@@ -68,33 +134,52 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
 
     return [
       NavigationDestination(
-        icon: Icon(Icons.home_filled, weight: 600),
-        selectedIcon: Icon(
-          Icons.home_filled,
-          fill: 1,
-          weight: 600,
-          color: iconColor,
+        icon: AnimatedNavIcon(
+          icon: Icon(Icons.home_filled, weight: 600),
+          isSelected: _selectedIndex == 0,
+        ),
+        selectedIcon: AnimatedNavIcon(
+          icon: Icon(Icons.home_filled, fill: 1, weight: 600, color: iconColor),
+          isSelected: _selectedIndex == 0,
         ),
         label: LocaleProvider.tr('home'),
       ),
       NavigationDestination(
-        icon: Icon(Icons.search, weight: 600),
-        selectedIcon: Icon(Icons.saved_search, weight: 600, color: iconColor),
+        icon: AnimatedNavIcon(
+          icon: Icon(Icons.search, weight: 600),
+          isSelected: _selectedIndex == 1,
+        ),
+        selectedIcon: AnimatedNavIcon(
+          icon: Icon(Icons.saved_search, weight: 600, color: iconColor),
+          isSelected: _selectedIndex == 1,
+        ),
         label: LocaleProvider.tr('nav_search'),
       ),
       NavigationDestination(
-        icon: Icon(Icons.favorite_outline_rounded, weight: 600),
-        selectedIcon: Icon(
-          Icons.favorite_rounded,
-          weight: 600,
-          fill: 1,
-          color: iconColor,
+        icon: AnimatedNavIcon(
+          icon: Icon(Icons.favorite_outline_rounded, weight: 600),
+          isSelected: _selectedIndex == 2,
+        ),
+        selectedIcon: AnimatedNavIcon(
+          icon: Icon(
+            Icons.favorite_rounded,
+            weight: 600,
+            fill: 1,
+            color: iconColor,
+          ),
+          isSelected: _selectedIndex == 2,
         ),
         label: LocaleProvider.tr('nav_favorites'),
       ),
       NavigationDestination(
-        icon: Icon(Icons.library_music_outlined),
-        selectedIcon: Icon(Icons.library_music, color: iconColor),
+        icon: AnimatedNavIcon(
+          icon: Icon(Icons.library_music_outlined),
+          isSelected: _selectedIndex == 3,
+        ),
+        selectedIcon: AnimatedNavIcon(
+          icon: Icon(Icons.library_music, color: iconColor),
+          isSelected: _selectedIndex == 3,
+        ),
         label: LocaleProvider.tr('nav_library'),
       ),
     ];

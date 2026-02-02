@@ -46,10 +46,22 @@ final ValueNotifier<bool> overlayPlayerNavigationEnabled = ValueNotifier(true);
 final ValueNotifier<bool> gesturePreferencesChanged = ValueNotifier(false);
 
 // Notifier para notificar cuando se actualiza una letra
-final ValueNotifier<String?> lyricsUpdatedNotifier = ValueNotifier<String?>(null);
+final ValueNotifier<String?> lyricsUpdatedNotifier = ValueNotifier<String?>(
+  null,
+);
 
 // Notifier para el idioma de traducción
-final ValueNotifier<String> translationLanguageNotifier = ValueNotifier<String>('auto');
+final ValueNotifier<String> translationLanguageNotifier = ValueNotifier<String>(
+  'auto',
+);
 
 // Notifier para el badge de descargas nuevas
 final ValueNotifier<bool> hasNewDownloadsNotifier = ValueNotifier<bool>(false);
+
+// Notifier para usar la carátula como fondo en el reproductor
+final ValueNotifier<bool> useArtworkAsBackgroundPlayerNotifier =
+    ValueNotifier<bool>(true);
+
+// Notifier para usar la carátula como fondo en el overlay
+final ValueNotifier<bool> useArtworkAsBackgroundOverlayNotifier =
+    ValueNotifier<bool>(true);

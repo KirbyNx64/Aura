@@ -65,6 +65,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _initHeroAnimationSetting();
     _loadOverlayNextButtonSetting();
     _loadTranslationLanguageSetting();
+    _loadArtworkBackgroundSetting();
   }
 
   Future<void> _initHeroAnimationSetting() async {
@@ -84,6 +85,86 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final prefs = await SharedPreferences.getInstance();
     final language = prefs.getString('translation_language') ?? 'auto';
     translationLanguageNotifier.value = language;
+  }
+
+  Future<void> _loadArtworkBackgroundSetting() async {
+    final prefs = await SharedPreferences.getInstance();
+    final usePlayer = prefs.getBool('use_artwork_background_player') ?? true;
+    final useOverlay = prefs.getBool('use_artwork_background_overlay') ?? true;
+    useArtworkAsBackgroundPlayerNotifier.value = usePlayer;
+    useArtworkAsBackgroundOverlayNotifier.value = useOverlay;
+  }
+
+  Future<void> _setArtworkBackgroundPlayer(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('use_artwork_background_player', value);
+    useArtworkAsBackgroundPlayerNotifier.value = value;
+    setState(() {});
+  }
+
+  Future<void> _setArtworkBackgroundOverlay(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('use_artwork_background_overlay', value);
+    useArtworkAsBackgroundOverlayNotifier.value = value;
+    setState(() {});
+  }
+
+  void _showArtworkBackgroundDialog() {
+    final isAmoled = _currentColorScheme == AppColorScheme.amoled;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: isAmoled && isDark
+                ? const BorderSide(color: Colors.white, width: 1)
+                : BorderSide.none,
+          ),
+          backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
+          surfaceTintColor: Colors.transparent,
+          title: Center(
+            child: TranslatedText(
+              'use_artwork_as_background',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ValueListenableBuilder<bool>(
+                valueListenable: useArtworkAsBackgroundPlayerNotifier,
+                builder: (context, value, _) {
+                  return SwitchListTile(
+                    title: TranslatedText('player'),
+                    value: value,
+                    onChanged: (v) => _setArtworkBackgroundPlayer(v),
+                  );
+                },
+              ),
+              ValueListenableBuilder<bool>(
+                valueListenable: useArtworkAsBackgroundOverlayNotifier,
+                builder: (context, value, _) {
+                  return SwitchListTile(
+                    title: TranslatedText('overlay'),
+                    value: value,
+                    onChanged: (v) => _setArtworkBackgroundOverlay(v),
+                  );
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(LocaleProvider.tr('ok')),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   Future<void> _loadArtworkQuality() async {
@@ -4046,6 +4127,45 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     onTap: () => _showColorSelectionDialog(context),
                   ),
                 ],
+              ),
+            ),
+            const SizedBox(height: 4),
+            Card(
+              color: cardColor,
+              margin: EdgeInsets.zero,
+              elevation: 0,
+              shape: const RoundedRectangleBorder(
+                borderRadius: BorderRadius.all(Radius.circular(4)),
+              ),
+              child: ListTile(
+                onTap: _showArtworkBackgroundDialog,
+                title: TranslatedText(
+                  'use_artwork_as_background',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withValues(alpha: 0.95),
+                  ),
+                ),
+                subtitle: TranslatedText(
+                  'use_artwork_as_background_desc',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withValues(alpha: 0.8),
+                  ),
+                ),
+                leading: Icon(
+                  Icons.image_outlined,
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withValues(alpha: 0.95),
+                ),
+                shape: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.all(Radius.circular(4)),
+                ),
               ),
             ),
             const SizedBox(height: 4),

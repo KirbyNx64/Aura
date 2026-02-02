@@ -976,7 +976,6 @@ class _FoldersScreenState extends State<FoldersScreen>
       // Obtener la carátula para la pantalla del reproductor
       final songId = song.id;
       final songPath = song.data;
-      final artUri = await getOrCacheArtwork(songId, songPath);
 
       // Crear el MediaItem para la pantalla del reproductor
       final mediaItem = MediaItem(
@@ -986,9 +985,12 @@ class _FoldersScreenState extends State<FoldersScreen>
         duration: (song.duration != null && song.duration! > 0)
             ? Duration(milliseconds: song.duration!)
             : null,
-        artUri: artUri,
+        artUri: null,
         extras: {'songId': song.id, 'albumId': song.albumId, 'data': song.data},
       );
+
+      // Cargar carátula en background
+      unawaited(getOrCacheArtwork(songId, songPath));
 
       // Navegar a la pantalla del reproductor primero
       if (!mounted) return;
@@ -1011,7 +1013,8 @@ class _FoldersScreenState extends State<FoldersScreen>
               child: child,
             );
           },
-          transitionDuration: const Duration(milliseconds: 350),
+          transitionDuration: const Duration(milliseconds: 200),
+          reverseTransitionDuration: const Duration(milliseconds: 300),
         ),
       );
 

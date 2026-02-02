@@ -12,6 +12,8 @@ const Map<String, String> appLocalizationsEn = {
   'no': 'No',
   'error': 'Error',
   'success': 'Success',
+  'player': 'Player',
+  'overlay': 'Overlay',
 
   // Preferences
   'preferences': 'Preferences',
@@ -188,6 +190,11 @@ const Map<String, String> appLocalizationsEn = {
   'overlay_next_button': 'Next button in overlay',
   'overlay_next_button_desc':
       'Shows the next song button in the playback overlay.',
+  'use_artwork_as_background': 'Use artwork as background',
+  'use_artwork_as_background_desc':
+      'Use the song art as the player background (Only in AMOLED dark theme)',
+  'use_artwork_as_background_desc_select':
+      'Select where to use the song art as background',
   '100_percent_maximum': '100% (Maximum)',
   '80_percent_recommended': '80% (Recommended)',
   '60_percent_performance': '60% (Performance)',

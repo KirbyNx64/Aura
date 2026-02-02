@@ -175,12 +175,11 @@ class DownloadManager {
       }
     } catch (e) {
       if (e is VideoUnplayableException) {
-        final suffix = (songTitle != null && songTitle.trim().isNotEmpty)
-            ? '\n\n${songTitle.trim()}'
-            : '';
         onError?.call(
-          LocaleProvider.tr('download_failed_title'),
-          '${LocaleProvider.tr('download_failed_desc_2')}$suffix',
+          (songTitle != null && songTitle.trim().isNotEmpty)
+              ? songTitle.trim()
+              : LocaleProvider.tr('download_failed_title'),
+          LocaleProvider.tr('download_failed_desc_2'),
         );
       }
     } finally {
