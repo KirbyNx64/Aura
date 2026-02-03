@@ -473,6 +473,17 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
     _showSuggestions = true;
 
     _focusNode.addListener(_handleFocusChange);
+    focusYtSearchNotifier.addListener(_handleFocusYtSearchRequest);
+
+    // Si llegamos a esta pantalla con el notifier ya en true (ej. desde barra de home)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && focusYtSearchNotifier.value) {
+        focusYtSearchNotifier.value = false;
+        Future.delayed(const Duration(milliseconds: 200), () {
+          if (mounted) _focusNode.requestFocus();
+        });
+      }
+    });
 
     _songScrollController.addListener(() {
       if (_expandedCategory == 'songs' &&
@@ -510,8 +521,17 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
     }
   }
 
+  void _handleFocusYtSearchRequest() {
+    if (!focusYtSearchNotifier.value) return;
+    focusYtSearchNotifier.value = false;
+    Future.delayed(const Duration(milliseconds: 200), () {
+      if (mounted) _focusNode.requestFocus();
+    });
+  }
+
   @override
   void dispose() {
+    focusYtSearchNotifier.removeListener(_handleFocusYtSearchRequest);
     WidgetsBinding.instance.removeObserver(this);
     _tabController.removeListener(_handleTabSelection);
     _tabController.dispose();

@@ -65,3 +65,6 @@ final ValueNotifier<bool> useArtworkAsBackgroundPlayerNotifier =
 // Notifier para usar la carátula como fondo en el overlay
 final ValueNotifier<bool> useArtworkAsBackgroundOverlayNotifier =
     ValueNotifier<bool>(true);
+
+// Notifier para enfocar la búsqueda YT al cambiar de tab desde la barra de home
+final ValueNotifier<bool> focusYtSearchNotifier = ValueNotifier<bool>(false);

@@ -1099,10 +1099,6 @@ class _ArtistScreenState extends State<ArtistScreen> {
                       alignment: Alignment.bottomLeft,
                       children: [
                         ClipRRect(
-                          borderRadius: const BorderRadius.only(
-                            bottomLeft: Radius.circular(32),
-                            bottomRight: Radius.circular(32),
-                          ),
                           child: Stack(
                             children: [
                               _buildSafeNetworkImage(

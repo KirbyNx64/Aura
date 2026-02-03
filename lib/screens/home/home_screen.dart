@@ -29,6 +29,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:music/utils/song_info_dialog.dart';
 import 'package:music/screens/artist/artist_screen.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'dart:async';
 
 enum OrdenCancionesPlaylist { normal, alfabetico, invertido, ultimoAgregado }
@@ -67,6 +68,11 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   final PageController _quickPickPageController = PageController(
     viewportFraction: 0.90,
   );
+  final ScrollController _homeScrollController = ScrollController();
+  final ValueNotifier<double> _gradientAlphaNotifier = ValueNotifier(1.0);
+  static const int _gradientThrottleMs = 80;
+  int _lastGradientAlphaUpdateMs = 0;
+  Timer? _gradientSyncTimer;
   // List<Map<String, dynamic>> _playlists = [];
 
   final TextEditingController _searchRecentsController =
@@ -255,6 +261,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     shortcutsShouldReload.addListener(_onShortcutsShouldReload);
     mostPlayedShouldReload.addListener(_onMostPlayedShouldReload);
     colorSchemeNotifier.addListener(_onThemeChanged);
+    _homeScrollController.addListener(_onHomeScroll);
     _buscarActualizacion();
 
     // Inicializar con el valor actual si ya hay algo reproduciéndose
@@ -821,12 +828,12 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     decoration: const BoxDecoration(shape: BoxShape.circle),
                     child: ClipOval(
                       child: artistInfo?['thumbUrl'] != null
-                          ? Image.network(
-                              artistInfo!['thumbUrl'],
+                          ? CachedNetworkImage(
+                              imageUrl: artistInfo!['thumbUrl'] as String,
                               width: 60,
                               height: 60,
                               fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) {
+                              errorWidget: (context, url, error) {
                                 return Container(
                                   decoration: BoxDecoration(
                                     color: Theme.of(context).colorScheme.primary
@@ -841,32 +848,20 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                   ),
                                 );
                               },
-                              loadingBuilder:
-                                  (context, child, loadingProgress) {
-                                    if (loadingProgress == null) return child;
-                                    return Container(
-                                      decoration: BoxDecoration(
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .primary
-                                            .withValues(alpha: 0.1),
-                                      ),
-                                      child: Center(
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          value:
-                                              loadingProgress
-                                                      .expectedTotalBytes !=
-                                                  null
-                                              ? loadingProgress
-                                                        .cumulativeBytesLoaded /
-                                                    loadingProgress
-                                                        .expectedTotalBytes!
-                                              : null,
-                                        ),
-                                      ),
-                                    );
-                                  },
+                              placeholder: (context, url) => Container(
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .primary
+                                      .withValues(alpha: 0.1),
+                                ),
+                                child: Center(
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Theme.of(context).colorScheme.primary,
+                                  ),
+                                ),
+                              ),
                             )
                           : QueryArtworkWidget(
                               id: songs.isNotEmpty ? songs.first.id : -1,
@@ -1262,12 +1257,12 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(16),
                 child: artist['thumbUrl'] != null
-                    ? Image.network(
-                        artist['thumbUrl'],
+                    ? CachedNetworkImage(
+                        imageUrl: artist['thumbUrl'] as String,
                         width: 80,
                         height: 80,
                         fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) {
+                        errorWidget: (context, url, error) {
                           return Container(
                             decoration: BoxDecoration(
                               color:
@@ -1283,32 +1278,25 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                             child: Center(child: Icon(Icons.person, size: 40)),
                           );
                         },
-                        loadingBuilder: (context, child, loadingProgress) {
-                          if (loadingProgress == null) return child;
-                          return Container(
-                            decoration: BoxDecoration(
-                              color:
-                                  colorSchemeNotifier.value ==
-                                      AppColorScheme.amoled
-                                  ? Colors.white.withValues(alpha: 0.1)
-                                  : Theme.of(context)
-                                        .colorScheme
-                                        .secondaryContainer
-                                        .withValues(alpha: 0.8),
-                              borderRadius: BorderRadius.circular(16),
+                        placeholder: (context, url) => Container(
+                          decoration: BoxDecoration(
+                            color:
+                                colorSchemeNotifier.value ==
+                                    AppColorScheme.amoled
+                                ? Colors.white.withValues(alpha: 0.1)
+                                : Theme.of(context)
+                                      .colorScheme
+                                      .secondaryContainer
+                                      .withValues(alpha: 0.8),
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Center(
+                            child: CircularProgressIndicator(
+                              strokeWidth: 3,
+                              color: Theme.of(context).colorScheme.primary,
                             ),
-                            child: Center(
-                              child: CircularProgressIndicator(
-                                strokeWidth: 3,
-                                value:
-                                    loadingProgress.expectedTotalBytes != null
-                                    ? loadingProgress.cumulativeBytesLoaded /
-                                          loadingProgress.expectedTotalBytes!
-                                    : null,
-                              ),
-                            ),
-                          );
-                        },
+                          ),
+                        ),
                       )
                     : Container(
                         decoration: BoxDecoration(
@@ -2011,6 +1999,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       _selectedPlaylist = playlist;
       _showingPlaylistSongs = true;
       _showingRecents = false;
+      _gradientAlphaNotifier.value = 1.0;
     });
     _ordenarCancionesPlaylist();
 
@@ -2073,6 +2062,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       setState(() {
         _recentSongs = recents;
         _showingRecents = true;
+        _gradientAlphaNotifier.value = 1.0;
       });
 
       // Precargar carátulas de canciones recientes
@@ -2081,6 +2071,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       setState(() {
         _recentSongs = [];
         _showingRecents = true;
+        _gradientAlphaNotifier.value = 1.0;
       });
     }
   }
@@ -2165,6 +2156,24 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
+  void _onHomeScroll() {
+    if (!mounted) return;
+    final o = _homeScrollController.offset;
+    final newAlpha = (1.0 - (o / 180.0).clamp(0.0, 1.0));
+    final now = DateTime.now().millisecondsSinceEpoch;
+    if (now - _lastGradientAlphaUpdateMs > _gradientThrottleMs) {
+      _gradientAlphaNotifier.value = newAlpha;
+      _lastGradientAlphaUpdateMs = now;
+    }
+    _gradientSyncTimer?.cancel();
+    _gradientSyncTimer = Timer(const Duration(milliseconds: 100), () {
+      if (!mounted) return;
+      final finalAlpha =
+          (1.0 - (_homeScrollController.offset / 180.0).clamp(0.0, 1.0));
+      _gradientAlphaNotifier.value = finalAlpha;
+    });
+  }
+
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
@@ -2173,6 +2182,10 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     mostPlayedShouldReload.removeListener(_onMostPlayedShouldReload);
     colorSchemeNotifier.removeListener(_onThemeChanged);
     _pageController.dispose();
+    _quickPickPageController.dispose();
+    _gradientSyncTimer?.cancel();
+    _homeScrollController.dispose();
+    _gradientAlphaNotifier.dispose();
     _searchRecentsController.dispose();
     _searchRecentsFocus.dispose();
     _searchPlaylistController.dispose();
@@ -3021,62 +3034,84 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    // final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
+    final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    // Gradiente de arriba a abajo - Solo para AMOLED
+    final scaffoldBgColor = Theme.of(context).scaffoldBackgroundColor;
+    final alpha = isDark ? 0.2 : 0.1;
+
+    final gradientDecoration = BoxDecoration(
+      gradient: LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [
+          Colors.blue.withValues(alpha: alpha),
+          Colors.purple.withValues(alpha: alpha * 0.6),
+          Colors.black.withValues(alpha: alpha * 1.2),
+          scaffoldBgColor,
+        ],
+        stops: const [0.0, 0.3, 0.5, 0.6],
+      ),
+    );
 
     // Mostrar pantalla de carga mientras se cargan las bases de datos
     if (_isLoading) {
-      return Scaffold(
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              // Icono de música con animación
-              TweenAnimationBuilder<double>(
-                duration: const Duration(seconds: 2),
-                tween: Tween(begin: 0.0, end: 1.0),
-                builder: (context, value, child) {
-                  return Transform.scale(
-                    scale: 0.8 + (0.2 * value),
-                    child: Opacity(
-                      opacity: value,
-                      child: Container(
-                        width: 120,
-                        height: 120,
-                        decoration: BoxDecoration(
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.primary.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(60),
-                        ),
-                        child: Icon(
-                          Icons.music_note,
-                          size: 60,
-                          color: Theme.of(context).colorScheme.primary,
+      return Container(
+        decoration: isAmoled ? gradientDecoration : null,
+        child: Scaffold(
+          backgroundColor: isAmoled ? Colors.transparent : null,
+          body: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // Icono de música con animación
+                TweenAnimationBuilder<double>(
+                  duration: const Duration(seconds: 2),
+                  tween: Tween(begin: 0.0, end: 1.0),
+                  builder: (context, value, child) {
+                    return Transform.scale(
+                      scale: 0.8 + (0.2 * value),
+                      child: Opacity(
+                        opacity: value,
+                        child: Container(
+                          width: 120,
+                          height: 120,
+                          decoration: BoxDecoration(
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.primary.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(60),
+                          ),
+                          child: Icon(
+                            Icons.music_note,
+                            size: 60,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
                         ),
                       ),
+                    );
+                  },
+                ),
+
+                const SizedBox(height: 32),
+
+                // Indicador de progreso
+                SizedBox(
+                  width: 200,
+                  child: LinearProgressIndicator(
+                    minHeight: 6,
+                    borderRadius: BorderRadius.circular(8),
+                    backgroundColor: Theme.of(
+                      context,
+                    ).colorScheme.primary.withValues(alpha: 0.3),
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      Theme.of(context).colorScheme.primary,
                     ),
-                  );
-                },
-              ),
-
-              const SizedBox(height: 32),
-
-              // Indicador de progreso
-              SizedBox(
-                width: 200,
-                child: LinearProgressIndicator(
-                  minHeight: 6,
-                  borderRadius: BorderRadius.circular(8),
-                  backgroundColor: Theme.of(
-                    context,
-                  ).colorScheme.primary.withValues(alpha: 0.3),
-                  valueColor: AlwaysStoppedAnimation<Color>(
-                    Theme.of(context).colorScheme.primary,
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       );
@@ -3090,1477 +3125,393 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         ? 0
         : (limitedQuickPick.length / quickPickSongsPerPage).ceil();
 
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        leading: (_showingRecents || _showingPlaylistSongs)
-            ? (_isSelectingPlaylistSongs
-                  ? IconButton(
-                      icon: const Icon(Icons.close),
-                      tooltip: LocaleProvider.tr('cancel_selection'),
-                      onPressed: () {
-                        setState(() {
-                          _isSelectingPlaylistSongs = false;
-                          _selectedPlaylistSongIds.clear();
-                        });
-                      },
-                    )
-                  : IconButton(
-                      constraints: const BoxConstraints(
-                        minWidth: 40,
-                        minHeight: 40,
-                        maxWidth: 40,
-                        maxHeight: 40,
-                      ),
-                      padding: EdgeInsets.zero,
-                      icon: Container(
-                        width: 40,
-                        height: 40,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: isDark
-                              ? Theme.of(
-                                  context,
-                                ).colorScheme.onSecondary.withValues(alpha: 0.5)
-                              : Theme.of(context).colorScheme.secondaryContainer
-                                    .withValues(alpha: 0.5),
-                        ),
-                        child: const Icon(Icons.arrow_back, size: 24),
-                      ),
-                      onPressed: () {
-                        // Limpiar cache de artistas para forzar reconstrucción con contexto correcto
-                        _artistWidgetCache.clear();
-                        setState(() {
-                          _showingRecents = false;
-                          _showingPlaylistSongs = false;
-                        });
-                      },
-                    ))
-            : null,
-        title: Row(
-          children: [
-            Expanded(
-              child: _showingRecents
-                  ? TranslatedText(
-                      'recent',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontWeight: FontWeight.w500),
-                    )
-                  : _showingPlaylistSongs
-                  ? (_isSelectingPlaylistSongs
-                        ? Text(
-                            '${_selectedPlaylistSongIds.length} ${LocaleProvider.tr('selected')}',
-                          )
-                        : ((_selectedPlaylist?['name'] ?? '').isNotEmpty
-                              ? Text(
-                                  (_selectedPlaylist?['name'] ?? '').length > 15
-                                      ? (_selectedPlaylist?['name'] ?? '')
-                                                .substring(0, 15) +
-                                            '...'
-                                      : (_selectedPlaylist?['name'] ?? ''),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .onSurface
-                                        .withValues(alpha: 0.9),
-                                  ),
-                                )
-                              : TranslatedText(
-                                  'playlists',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                )))
-                  : Row(
-                      children: [
-                        SvgPicture.asset(
-                          'assets/icon/icon_foreground.svg',
-                          width: 32,
-                          height: 32,
-                          colorFilter: ColorFilter.mode(
-                            Theme.of(context).colorScheme.inverseSurface,
-                            BlendMode.srcIn,
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          "Aura",
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          "Music",
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: Theme.of(context).colorScheme.primary,
-                          ),
-                        ),
-                      ],
-                    ),
-            ),
-          ],
-        ),
-        actions: (!_showingRecents && !_showingPlaylistSongs)
-            ? [
-                IconButton(
-                  icon: const Icon(Icons.history, size: 28),
-                  tooltip: LocaleProvider.tr('recent_songs'),
-                  onPressed: _loadRecents,
-                ),
-                IconButton(
-                  icon: const Icon(Icons.settings_outlined, size: 28),
-                  tooltip: LocaleProvider.tr('settings'),
-                  onPressed: () {
-                    Navigator.of(context).push(
-                      PageRouteBuilder(
-                        pageBuilder: (context, animation, secondaryAnimation) =>
-                            SettingsScreen(
-                              setThemeMode: widget.setThemeMode,
-                              setColorScheme: widget.setColorScheme,
-                            ),
-                        transitionsBuilder:
-                            (context, animation, secondaryAnimation, child) {
-                              const begin = Offset(1.0, 0.0);
-                              const end = Offset.zero;
-                              const curve = Curves.ease;
-                              final tween = Tween(
-                                begin: begin,
-                                end: end,
-                              ).chain(CurveTween(curve: curve));
-                              return SlideTransition(
-                                position: animation.drive(tween),
-                                child: child,
-                              );
-                            },
-                      ),
-                    );
-                  },
-                ),
-              ]
-            : _showingPlaylistSongs
-            ? [
-                if (_isSelectingPlaylistSongs) ...[
-                  IconButton(
-                    icon: const Icon(Icons.delete_outline),
-                    tooltip: LocaleProvider.tr('remove_from_playlist'),
-                    onPressed: _selectedPlaylistSongIds.isEmpty
-                        ? null
-                        : _removeFromPlaylistMassive,
-                  ),
-                  IconButton(
-                    icon: const Icon(
-                      Icons.favorite_outline_rounded,
-                      weight: 600,
-                    ),
-                    tooltip: LocaleProvider.tr('add_to_favorites'),
-                    onPressed: _selectedPlaylistSongIds.isEmpty
-                        ? null
-                        : _addToFavoritesMassive,
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.select_all),
-                    tooltip: LocaleProvider.tr('select_all'),
-                    onPressed: () {
-                      final songsToShow =
-                          _searchPlaylistController.text.isNotEmpty
-                          ? _filteredPlaylistSongs
-                          : _playlistSongs;
-                      setState(() {
-                        if (_selectedPlaylistSongIds.length ==
-                            songsToShow.length) {
-                          // Si todos están seleccionados, deseleccionar todos
-                          _selectedPlaylistSongIds.clear();
-                          if (_selectedPlaylistSongIds.isEmpty) {
+    final scaffold = Scaffold(
+        backgroundColor: isAmoled ? Colors.transparent : null,
+        appBar: AppBar(
+          backgroundColor: isAmoled
+              ? Colors.transparent
+              : Theme.of(context).scaffoldBackgroundColor,
+          surfaceTintColor: Colors.transparent,
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          leading: (_showingRecents || _showingPlaylistSongs)
+              ? (_isSelectingPlaylistSongs
+                    ? IconButton(
+                        icon: const Icon(Icons.close),
+                        tooltip: LocaleProvider.tr('cancel_selection'),
+                        onPressed: () {
+                          setState(() {
                             _isSelectingPlaylistSongs = false;
-                          }
-                        } else {
-                          // Seleccionar todos
-                          _selectedPlaylistSongIds.addAll(
-                            songsToShow.map((s) => s.id),
-                          );
-                        }
-                      });
-                    },
-                  ),
-                ] else ...[
-                  IconButton(
-                    icon: const Icon(
-                      Icons.shuffle_rounded,
-                      size: 28,
-                      weight: 600,
-                    ),
-                    tooltip: LocaleProvider.tr('shuffle'),
-                    onPressed: () {
-                      final List<SongModel> songsToShow =
-                          _searchPlaylistController.text.isNotEmpty
-                          ? _filteredPlaylistSongs
-                          : _playlistSongs;
-                      if (songsToShow.isNotEmpty) {
-                        final random = (songsToShow.toList()..shuffle()).first;
-                        // Precargar la carátula antes de reproducir
-                        unawaited(_preloadArtworkForSong(random));
-                        _playSongAndOpenPlayer(
-                          random,
-                          songsToShow,
-                          queueSource: _selectedPlaylist?['name'] ?? '',
-                        );
-                      }
-                    },
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.add, size: 28),
-                    tooltip: LocaleProvider.tr('add_from_recents'),
-                    onPressed: _showAddFromRecentsToCurrentPlaylistDialog,
-                  ),
-                  PopupMenuButton<OrdenCancionesPlaylist>(
-                    icon: const Icon(Icons.sort, size: 28),
-                    tooltip: LocaleProvider.tr('filters'),
-                    onSelected: (orden) {
-                      setState(() {
-                        _ordenCancionesPlaylist = orden;
-                        _ordenarCancionesPlaylist();
-                      });
-                    },
-                    itemBuilder: (context) => [
-                      PopupMenuItem(
-                        value: OrdenCancionesPlaylist.normal,
-                        child: TranslatedText('last_added'),
-                      ),
-                      PopupMenuItem(
-                        value: OrdenCancionesPlaylist.ultimoAgregado,
-                        child: TranslatedText('invert_order'),
-                      ),
-                      PopupMenuItem(
-                        value: OrdenCancionesPlaylist.alfabetico,
-                        child: TranslatedText('alphabetical_az'),
-                      ),
-                      PopupMenuItem(
-                        value: OrdenCancionesPlaylist.invertido,
-                        child: TranslatedText('alphabetical_za'),
-                      ),
-                    ],
-                  ),
-                ],
-              ]
-            : null,
-        bottom: (_showingRecents || _showingPlaylistSongs)
-            ? PreferredSize(
-                preferredSize: const Size.fromHeight(56),
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                  child: Builder(
-                    builder: (context) {
-                      final colorScheme = colorSchemeNotifier.value;
-                      final isAmoled = colorScheme == AppColorScheme.amoled;
-                      final isDark =
-                          Theme.of(context).brightness == Brightness.dark;
-                      final barColor = isAmoled
-                          ? Colors.white.withAlpha(20)
-                          : isDark
-                          ? Theme.of(
-                              context,
-                            ).colorScheme.onSecondary.withValues(alpha: 0.5)
-                          : Theme.of(context).colorScheme.secondaryContainer
-                                .withValues(alpha: 0.5);
-
-                      return TextField(
-                        controller: _showingRecents
-                            ? _searchRecentsController
-                            : _searchPlaylistController,
-                        focusNode: _showingRecents
-                            ? _searchRecentsFocus
-                            : _searchPlaylistFocus,
-                        onChanged: (_) => _showingRecents
-                            ? _onSearchRecentsChanged()
-                            : _onSearchPlaylistChanged(),
-                        cursorColor: Theme.of(context).colorScheme.primary,
-                        decoration: InputDecoration(
-                          hintText: LocaleProvider.tr(
-                            'search_by_title_or_artist',
-                          ),
-                          hintStyle: TextStyle(
-                            color: isAmoled
-                                ? Colors.white.withAlpha(160)
-                                : Theme.of(
-                                    context,
-                                  ).colorScheme.onSurfaceVariant,
-                            fontSize: 15,
-                          ),
-                          prefixIcon: const Icon(Icons.search),
-                          suffixIcon:
-                              (_showingRecents
-                                  ? _searchRecentsController.text.isNotEmpty
-                                  : _searchPlaylistController.text.isNotEmpty)
-                              ? IconButton(
-                                  icon: const Icon(Icons.close),
-                                  onPressed: () {
-                                    if (_showingRecents) {
-                                      _searchRecentsController.clear();
-                                      _onSearchRecentsChanged();
-                                      setState(() {});
-                                    } else {
-                                      _searchPlaylistController.clear();
-                                      _onSearchPlaylistChanged();
-                                      setState(() {});
-                                    }
-                                  },
-                                )
-                              : null,
-                          filled: true,
-                          fillColor: barColor,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(28),
-                            borderSide: BorderSide.none,
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(28),
-                            borderSide: BorderSide.none,
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(28),
-                            borderSide: BorderSide.none,
-                          ),
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 20,
-                            vertical: 12,
-                          ),
+                            _selectedPlaylistSongIds.clear();
+                          });
+                        },
+                      )
+                    : IconButton(
+                        constraints: const BoxConstraints(
+                          minWidth: 40,
+                          minHeight: 40,
+                          maxWidth: 40,
+                          maxHeight: 40,
                         ),
-                      );
-                    },
-                  ),
-                ),
-              )
-            : null,
-      ),
-      body: ValueListenableBuilder<MediaItem?>(
-        valueListenable: _currentMediaItemNotifier,
-        builder: (context, debouncedMediaItem, child) {
-          final space = debouncedMediaItem != null ? 100.0 : 0.0;
-
-          return Padding(
-            padding: EdgeInsets.only(bottom: space),
-            child: _showingRecents
-                ? Builder(
-                    builder: (context) {
-                      final List<SongModel> songsToShow =
-                          _searchRecentsController.text.isNotEmpty
-                          ? _filteredRecents
-                          : _recentSongs;
-                      if (songsToShow.isEmpty) {
-                        return Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                Icons.history,
-                                size: 48,
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.onSurface.withValues(alpha: 0.6),
-                              ),
-                              const SizedBox(height: 16),
-                              TranslatedText(
-                                'no_recent_songs',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: Theme.of(context).colorScheme.onSurface
-                                      .withValues(alpha: 0.6),
-                                ),
-                              ),
-                            ],
+                        padding: EdgeInsets.zero,
+                        icon: Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: isDark
+                                ? Theme.of(context).colorScheme.onSecondary
+                                      .withValues(alpha: 0.5)
+                                : Theme.of(context)
+                                      .colorScheme
+                                      .secondaryContainer
+                                      .withValues(alpha: 0.5),
                           ),
-                        );
-                      }
-                      return ValueListenableBuilder<MediaItem?>(
-                        valueListenable: _immediateMediaItemNotifier,
-                        builder: (context, immediateMediaItem, child) {
-                          final colorScheme = colorSchemeNotifier.value;
-                          final isAmoled = colorScheme == AppColorScheme.amoled;
-                          final isDark =
-                              Theme.of(context).brightness == Brightness.dark;
-                          final cardColor = isAmoled && isDark
-                              ? Colors.white.withAlpha(20)
-                              : isDark
-                              ? Theme.of(
-                                  context,
-                                ).colorScheme.onSecondary.withValues(alpha: 0.5)
-                              : Theme.of(context).colorScheme.secondaryContainer
-                                    .withValues(alpha: 0.5);
-
-                          return ListView.builder(
-                            padding: const EdgeInsets.only(
-                              left: 16.0,
-                              right: 16.0,
-                              top: 8.0,
-                            ),
-                            itemCount: songsToShow.length,
-                            itemBuilder: (context, index) {
-                              final song = songsToShow[index];
-                              final path = song.data;
-                              final isCurrent =
-                                  (immediateMediaItem?.id != null &&
-                                  path.isNotEmpty &&
-                                  (immediateMediaItem!.id == path ||
-                                      immediateMediaItem.extras?['data'] ==
-                                          path));
-                              final isAmoledTheme =
-                                  colorSchemeNotifier.value ==
-                                  AppColorScheme.amoled;
-                              final isSystem =
-                                  colorSchemeNotifier.value ==
-                                  AppColorScheme.system;
-
-                              // Determinar el borderRadius según la posición
-                              final bool isFirst = index == 0;
-                              final bool isLast =
-                                  index == songsToShow.length - 1;
-                              final bool isOnly = songsToShow.length == 1;
-
-                              BorderRadius borderRadius;
-                              if (isOnly) {
-                                borderRadius = BorderRadius.circular(16);
-                              } else if (isFirst) {
-                                borderRadius = const BorderRadius.only(
-                                  topLeft: Radius.circular(16),
-                                  topRight: Radius.circular(16),
-                                  bottomLeft: Radius.circular(4),
-                                  bottomRight: Radius.circular(4),
-                                );
-                              } else if (isLast) {
-                                borderRadius = const BorderRadius.only(
-                                  topLeft: Radius.circular(4),
-                                  topRight: Radius.circular(4),
-                                  bottomLeft: Radius.circular(16),
-                                  bottomRight: Radius.circular(16),
-                                );
-                              } else {
-                                borderRadius = BorderRadius.circular(4);
-                              }
-
-                              Widget listTileWidget;
-
-                              // Solo usar ValueListenableBuilder para la canción actual
-                              if (isCurrent) {
-                                listTileWidget = ValueListenableBuilder<bool>(
-                                  valueListenable: _isPlayingNotifier,
-                                  builder: (context, playing, child) {
-                                    return ListTile(
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: borderRadius,
-                                      ),
-                                      leading: ClipRRect(
-                                        borderRadius: BorderRadius.circular(8),
-                                        child: QueryArtworkWidget(
-                                          id: song.id,
-                                          type: ArtworkType.AUDIO,
-                                          artworkBorder: BorderRadius.circular(
-                                            8,
-                                          ),
-                                          artworkHeight: 50,
-                                          artworkWidth: 50,
-                                          keepOldArtwork: true,
-                                          nullArtworkWidget: Container(
-                                            color: isSystem
-                                                ? Theme.of(context)
-                                                      .colorScheme
-                                                      .secondaryContainer
-                                                      .withValues(alpha: 0.5)
-                                                : Theme.of(context)
-                                                      .colorScheme
-                                                      .surfaceContainer,
-                                            width: 50,
-                                            height: 50,
-                                            child: Icon(
-                                              Icons.music_note,
-                                              color: Theme.of(
-                                                context,
-                                              ).colorScheme.onSurface,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                      title: Row(
-                                        children: [
-                                          if (isCurrent)
-                                            Padding(
-                                              padding: const EdgeInsets.only(
-                                                right: 8.0,
-                                              ),
-                                              child: MiniMusicVisualizer(
-                                                color: isAmoledTheme
-                                                    ? Colors.white
-                                                    : Theme.of(
-                                                        context,
-                                                      ).colorScheme.primary,
-                                                width: 4,
-                                                height: 15,
-                                                radius: 4,
-                                                animate: playing ? true : false,
-                                              ),
-                                            ),
-                                          Expanded(
-                                            child: Text(
-                                              song.title,
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: isCurrent
-                                                  ? Theme.of(context)
-                                                        .textTheme
-                                                        .titleMedium
-                                                        ?.copyWith(
-                                                          fontWeight:
-                                                              FontWeight.bold,
-                                                          color: isAmoledTheme
-                                                              ? Colors.white
-                                                              : Theme.of(
-                                                                      context,
-                                                                    )
-                                                                    .colorScheme
-                                                                    .primary,
-                                                        )
-                                                  : Theme.of(
-                                                      context,
-                                                    ).textTheme.titleMedium,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      subtitle: Text(
-                                        _formatArtistWithDuration(song),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      trailing: IconButton(
-                                        icon: Icon(
-                                          isCurrent && playing
-                                              ? Icons.pause_rounded
-                                              : Icons.play_arrow_rounded,
-                                          grade: 200,
-                                          fill: 1,
-                                        ),
-                                        onPressed: () {
-                                          if (isCurrent) {
-                                            playing
-                                                ? (audioHandler
-                                                          as MyAudioHandler)
-                                                      .pause()
-                                                : (audioHandler
-                                                          as MyAudioHandler)
-                                                      .play();
-                                          } else {
-                                            // Precargar la carátula antes de reproducir
-                                            unawaited(
-                                              _preloadArtworkForSong(song),
-                                            );
-                                            _playSongAndOpenPlayer(
-                                              song,
-                                              songsToShow,
-                                            );
-                                          }
-                                        },
-                                      ),
-                                      selected: isCurrent,
-                                      selectedTileColor: isCurrent
-                                          ? (isAmoledTheme
-                                                ? Colors.transparent
-                                                : Theme.of(context)
-                                                      .colorScheme
-                                                      .primaryContainer
-                                                      .withValues(alpha: 0.8))
-                                          : null,
-                                      onTap: () async {
-                                        // Precargar la carátula antes de reproducir
-                                        unawaited(_preloadArtworkForSong(song));
-                                        if (!mounted) return;
-                                        await _playSongAndOpenPlayer(
-                                          song,
-                                          songsToShow,
-                                        );
-                                      },
-                                      onLongPress: () {
-                                        showModalBottomSheet(
-                                          context: context,
-                                          isScrollControlled: true,
-                                          builder: (context) => SafeArea(
-                                            child: SingleChildScrollView(
-                                              child: FutureBuilder<bool>(
-                                                future: FavoritesDB()
-                                                    .isFavorite(song.data),
-                                                builder: (context, snapshot) {
-                                                  final isFav =
-                                                      snapshot.data ?? false;
-                                                  return Column(
-                                                    mainAxisSize:
-                                                        MainAxisSize.min,
-                                                    children: [
-                                                      // Encabezado con información de la canción
-                                                      Container(
-                                                        padding:
-                                                            const EdgeInsets.all(
-                                                              16,
-                                                            ),
-                                                        child: Row(
-                                                          children: [
-                                                            // Carátula de la canción
-                                                            ClipRRect(
-                                                              borderRadius:
-                                                                  BorderRadius.circular(
-                                                                    8,
-                                                                  ),
-                                                              child: SizedBox(
-                                                                width: 60,
-                                                                height: 60,
-                                                                child:
-                                                                    _buildModalArtwork(
-                                                                      song,
-                                                                    ),
-                                                              ),
-                                                            ),
-                                                            const SizedBox(
-                                                              width: 16,
-                                                            ),
-                                                            // Título y artista
-                                                            Expanded(
-                                                              child: Column(
-                                                                crossAxisAlignment:
-                                                                    CrossAxisAlignment
-                                                                        .start,
-                                                                mainAxisSize:
-                                                                    MainAxisSize
-                                                                        .min,
-                                                                children: [
-                                                                  Text(
-                                                                    song.title,
-                                                                    maxLines: 1,
-                                                                    style: Theme.of(
-                                                                      context,
-                                                                    ).textTheme.titleMedium,
-                                                                    overflow:
-                                                                        TextOverflow
-                                                                            .ellipsis,
-                                                                  ),
-                                                                  const SizedBox(
-                                                                    height: 4,
-                                                                  ),
-                                                                  Text(
-                                                                    song.artist ??
-                                                                        LocaleProvider.tr(
-                                                                          'unknown_artist',
-                                                                        ),
-                                                                    style: TextStyle(
-                                                                      fontSize:
-                                                                          14,
-                                                                    ),
-                                                                    maxLines: 1,
-                                                                    overflow:
-                                                                        TextOverflow
-                                                                            .ellipsis,
-                                                                  ),
-                                                                ],
-                                                              ),
-                                                            ),
-                                                            const SizedBox(
-                                                              width: 8,
-                                                            ),
-                                                            // Botón de búsqueda para abrir opciones
-                                                            InkWell(
-                                                              onTap: () async {
-                                                                Navigator.of(
-                                                                  context,
-                                                                ).pop();
-                                                                await _showSearchOptions(
-                                                                  song,
-                                                                );
-                                                              },
-                                                              borderRadius:
-                                                                  BorderRadius.circular(
-                                                                    12,
-                                                                  ),
-                                                              child: Container(
-                                                                padding:
-                                                                    const EdgeInsets.symmetric(
-                                                                      horizontal:
-                                                                          16,
-                                                                      vertical:
-                                                                          8,
-                                                                    ),
-                                                                decoration: BoxDecoration(
-                                                                  color:
-                                                                      Theme.of(
-                                                                            context,
-                                                                          ).brightness ==
-                                                                          Brightness
-                                                                              .dark
-                                                                      ? Theme.of(
-                                                                          context,
-                                                                        ).colorScheme.primary
-                                                                      : Theme.of(
-                                                                          context,
-                                                                        ).colorScheme.onPrimaryContainer.withValues(
-                                                                          alpha:
-                                                                              0.7,
-                                                                        ),
-                                                                  borderRadius:
-                                                                      BorderRadius.circular(
-                                                                        12,
-                                                                      ),
-                                                                ),
-                                                                child: Row(
-                                                                  mainAxisSize:
-                                                                      MainAxisSize
-                                                                          .min,
-                                                                  children: [
-                                                                    Icon(
-                                                                      Icons
-                                                                          .search,
-                                                                      size: 20,
-                                                                      color:
-                                                                          Theme.of(
-                                                                                context,
-                                                                              ).brightness ==
-                                                                              Brightness.dark
-                                                                          ? Theme.of(
-                                                                              context,
-                                                                            ).colorScheme.onPrimary
-                                                                          : Theme.of(
-                                                                              context,
-                                                                            ).colorScheme.surfaceContainer,
-                                                                    ),
-                                                                    const SizedBox(
-                                                                      width: 8,
-                                                                    ),
-                                                                    TranslatedText(
-                                                                      'search',
-                                                                      style: TextStyle(
-                                                                        fontWeight:
-                                                                            FontWeight.w600,
-                                                                        fontSize:
-                                                                            14,
-                                                                        color:
-                                                                            Theme.of(
-                                                                                  context,
-                                                                                ).brightness ==
-                                                                                Brightness.dark
-                                                                            ? Theme.of(
-                                                                                context,
-                                                                              ).colorScheme.onPrimary
-                                                                            : Theme.of(
-                                                                                context,
-                                                                              ).colorScheme.surfaceContainer,
-                                                                      ),
-                                                                    ),
-                                                                  ],
-                                                                ),
-                                                              ),
-                                                            ),
-                                                          ],
-                                                        ),
-                                                      ),
-                                                      ListTile(
-                                                        leading: const Icon(
-                                                          Icons.queue_music,
-                                                        ),
-                                                        title: TranslatedText(
-                                                          'add_to_queue',
-                                                        ),
-                                                        onTap: () async {
-                                                          Navigator.of(
-                                                            context,
-                                                          ).pop();
-                                                          await (audioHandler
-                                                                  as MyAudioHandler)
-                                                              .addSongsToQueueEnd(
-                                                                [song],
-                                                              );
-                                                        },
-                                                      ),
-                                                      ListTile(
-                                                        leading: Icon(
-                                                          isFav
-                                                              ? Icons
-                                                                    .delete_outline
-                                                              : Icons
-                                                                    .favorite_border,
-                                                        ),
-                                                        title: TranslatedText(
-                                                          isFav
-                                                              ? 'remove_from_favorites'
-                                                              : 'add_to_favorites',
-                                                        ),
-                                                        onTap: () async {
-                                                          Navigator.of(
-                                                            context,
-                                                          ).pop();
-                                                          if (isFav) {
-                                                            await FavoritesDB()
-                                                                .removeFavorite(
-                                                                  song.data,
-                                                                );
-                                                            favoritesShouldReload
-                                                                    .value =
-                                                                !favoritesShouldReload
-                                                                    .value;
-                                                          } else {
-                                                            await _addToFavorites(
-                                                              song,
-                                                            );
-                                                          }
-                                                        },
-                                                      ),
-                                                      ListTile(
-                                                        leading: const Icon(
-                                                          Icons.delete_outline,
-                                                        ),
-                                                        title: TranslatedText(
-                                                          'remove_from_recents',
-                                                        ),
-                                                        onTap: () async {
-                                                          Navigator.of(
-                                                            context,
-                                                          ).pop();
-                                                          await RecentsDB()
-                                                              .removeRecent(
-                                                                song.data,
-                                                              );
-                                                          await _loadRecents();
-                                                        },
-                                                      ),
-                                                      if ((song.artist ?? '')
-                                                          .trim()
-                                                          .isNotEmpty)
-                                                        ListTile(
-                                                          leading: const Icon(
-                                                            Icons
-                                                                .person_outline,
-                                                          ),
-                                                          title:
-                                                              const TranslatedText(
-                                                                'go_to_artist',
-                                                              ),
-                                                          onTap: () {
-                                                            Navigator.of(
-                                                              context,
-                                                            ).pop();
-                                                            final name =
-                                                                (song.artist ??
-                                                                        '')
-                                                                    .trim();
-                                                            if (name.isEmpty) {
-                                                              return;
-                                                            }
-                                                            Navigator.of(
-                                                              context,
-                                                            ).push(
-                                                              PageRouteBuilder(
-                                                                pageBuilder:
-                                                                    (
-                                                                      context,
-                                                                      animation,
-                                                                      secondaryAnimation,
-                                                                    ) => ArtistScreen(
-                                                                      artistName:
-                                                                          name,
-                                                                    ),
-                                                                transitionsBuilder:
-                                                                    (
-                                                                      context,
-                                                                      animation,
-                                                                      secondaryAnimation,
-                                                                      child,
-                                                                    ) {
-                                                                      const begin =
-                                                                          Offset(
-                                                                            1.0,
-                                                                            0.0,
-                                                                          );
-                                                                      const end =
-                                                                          Offset
-                                                                              .zero;
-                                                                      const curve =
-                                                                          Curves
-                                                                              .ease;
-                                                                      final tween =
-                                                                          Tween(
-                                                                            begin:
-                                                                                begin,
-                                                                            end:
-                                                                                end,
-                                                                          ).chain(
-                                                                            CurveTween(
-                                                                              curve: curve,
-                                                                            ),
-                                                                          );
-                                                                      return SlideTransition(
-                                                                        position:
-                                                                            animation.drive(
-                                                                              tween,
-                                                                            ),
-                                                                        child:
-                                                                            child,
-                                                                      );
-                                                                    },
-                                                              ),
-                                                            );
-                                                          },
-                                                        ),
-                                                      ListTile(
-                                                        leading: const Icon(
-                                                          Icons.info_outline,
-                                                        ),
-                                                        title: TranslatedText(
-                                                          'song_info',
-                                                        ),
-                                                        onTap: () async {
-                                                          Navigator.of(
-                                                            context,
-                                                          ).pop();
-                                                          await SongInfoDialog.showFromSong(
-                                                            context,
-                                                            song,
-                                                            colorSchemeNotifier,
-                                                          );
-                                                        },
-                                                      ),
-                                                    ],
-                                                  );
-                                                },
-                                              ),
-                                            ),
-                                          ),
-                                        );
-                                      },
-                                    );
-                                  },
-                                );
-                              } else {
-                                // Para canciones que no están reproduciéndose, no usar StreamBuilder
-                                listTileWidget = ListTile(
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: borderRadius,
-                                  ),
-                                  leading: ClipRRect(
-                                    borderRadius: BorderRadius.circular(8),
-                                    child: QueryArtworkWidget(
-                                      id: song.id,
-                                      type: ArtworkType.AUDIO,
-                                      artworkBorder: BorderRadius.circular(8),
-                                      artworkHeight: 50,
-                                      artworkWidth: 50,
-                                      keepOldArtwork: true,
-                                      nullArtworkWidget: Container(
-                                        color: isSystem
-                                            ? Theme.of(context)
-                                                  .colorScheme
-                                                  .secondaryContainer
-                                                  .withValues(alpha: 0.5)
-                                            : Theme.of(
-                                                context,
-                                              ).colorScheme.surfaceContainer,
-                                        width: 50,
-                                        height: 50,
-                                        child: Icon(
-                                          Icons.music_note,
-                                          color: Theme.of(
-                                            context,
-                                          ).colorScheme.onSurface,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                  title: Row(
-                                    children: [
-                                      if (isCurrent)
-                                        Padding(
-                                          padding: const EdgeInsets.only(
-                                            right: 8.0,
-                                          ),
-                                          child: MiniMusicVisualizer(
-                                            color: Theme.of(
-                                              context,
-                                            ).colorScheme.primary,
-                                            width: 4,
-                                            height: 15,
-                                            radius: 4,
-                                            animate: false, // No playing
-                                          ),
-                                        ),
-                                      Expanded(
-                                        child: Text(
-                                          song.title,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: isCurrent
-                                              ? Theme.of(context)
-                                                    .textTheme
-                                                    .titleMedium
-                                                    ?.copyWith(
-                                                      fontWeight:
-                                                          FontWeight.bold,
-                                                      color: isAmoledTheme
-                                                          ? Colors.white
-                                                          : Theme.of(context)
-                                                                .colorScheme
-                                                                .primary,
-                                                    )
-                                              : Theme.of(
-                                                  context,
-                                                ).textTheme.titleMedium,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  subtitle: Text(
-                                    _formatArtistWithDuration(song),
+                          child: const Icon(Icons.arrow_back, size: 24),
+                        ),
+                        onPressed: () {
+                          // Limpiar cache de artistas para forzar reconstrucción con contexto correcto
+                          _artistWidgetCache.clear();
+                          setState(() {
+                            _showingRecents = false;
+                            _showingPlaylistSongs = false;
+                          });
+                        },
+                      ))
+              : null,
+          title: Row(
+            children: [
+              Expanded(
+                child: _showingRecents
+                    ? TranslatedText(
+                        'recent',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontWeight: FontWeight.w500),
+                      )
+                    : _showingPlaylistSongs
+                    ? (_isSelectingPlaylistSongs
+                          ? Text(
+                              '${_selectedPlaylistSongIds.length} ${LocaleProvider.tr('selected')}',
+                            )
+                          : ((_selectedPlaylist?['name'] ?? '').isNotEmpty
+                                ? Text(
+                                    (_selectedPlaylist?['name'] ?? '').length >
+                                            15
+                                        ? (_selectedPlaylist?['name'] ?? '')
+                                                  .substring(0, 15) +
+                                              '...'
+                                        : (_selectedPlaylist?['name'] ?? ''),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
-                                  ),
-                                  trailing: IconButton(
-                                    icon: const Icon(
-                                      Icons.play_arrow_rounded,
-                                      grade: 200,
-                                      fill: 1,
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurface
+                                          .withValues(alpha: 0.9),
                                     ),
-                                    onPressed: () {
-                                      // Precargar la carátula antes de reproducir
-                                      unawaited(_preloadArtworkForSong(song));
-                                      _playSongAndOpenPlayer(song, songsToShow);
-                                    },
+                                  )
+                                : TranslatedText(
+                                    'playlists',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  )))
+                    : Row(
+                        children: [
+                          SvgPicture.asset(
+                            'assets/icon/icon_foreground.svg',
+                            width: 32,
+                            height: 32,
+                            colorFilter: ColorFilter.mode(
+                              Theme.of(context).colorScheme.inverseSurface,
+                              BlendMode.srcIn,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            "Aura",
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            "Music",
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                          ),
+                        ],
+                      ),
+              ),
+            ],
+          ),
+          actions: (!_showingRecents && !_showingPlaylistSongs)
+              ? [
+                  IconButton(
+                    icon: const Icon(Icons.history, size: 28),
+                    tooltip: LocaleProvider.tr('recent_songs'),
+                    onPressed: _loadRecents,
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.settings_outlined, size: 28),
+                    tooltip: LocaleProvider.tr('settings'),
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        PageRouteBuilder(
+                          pageBuilder:
+                              (context, animation, secondaryAnimation) =>
+                                  SettingsScreen(
+                                    setThemeMode: widget.setThemeMode,
+                                    setColorScheme: widget.setColorScheme,
                                   ),
-                                  selected: isCurrent,
-                                  selectedTileColor: isAmoledTheme
-                                      ? Colors.white.withValues(alpha: 0.1)
-                                      : Theme.of(
-                                          context,
-                                        ).colorScheme.primaryContainer,
-                                  onTap: () async {
-                                    // Precargar la carátula antes de reproducir
-                                    unawaited(_preloadArtworkForSong(song));
-                                    if (!mounted) return;
-                                    await _playSongAndOpenPlayer(
-                                      song,
-                                      songsToShow,
-                                    );
-                                  },
-                                  onLongPress: () {
-                                    showModalBottomSheet(
-                                      context: context,
-                                      isScrollControlled: true,
-                                      builder: (context) => SafeArea(
-                                        child: SingleChildScrollView(
-                                          child: FutureBuilder<bool>(
-                                            future: FavoritesDB().isFavorite(
-                                              song.data,
-                                            ),
-                                            builder: (context, snapshot) {
-                                              final isFav =
-                                                  snapshot.data ?? false;
-                                              return Column(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  // Encabezado con información de la canción
-                                                  Container(
-                                                    padding:
-                                                        const EdgeInsets.all(
-                                                          16,
-                                                        ),
-                                                    child: Row(
-                                                      children: [
-                                                        // Carátula de la canción
-                                                        ClipRRect(
-                                                          borderRadius:
-                                                              BorderRadius.circular(
-                                                                8,
-                                                              ),
-                                                          child: SizedBox(
-                                                            width: 60,
-                                                            height: 60,
-                                                            child:
-                                                                _buildModalArtwork(
-                                                                  song,
-                                                                ),
-                                                          ),
-                                                        ),
-                                                        const SizedBox(
-                                                          width: 16,
-                                                        ),
-                                                        // Título y artista
-                                                        Expanded(
-                                                          child: Column(
-                                                            crossAxisAlignment:
-                                                                CrossAxisAlignment
-                                                                    .start,
-                                                            mainAxisSize:
-                                                                MainAxisSize
-                                                                    .min,
-                                                            children: [
-                                                              Text(
-                                                                song.title,
-                                                                maxLines: 1,
-                                                                style: Theme.of(
-                                                                  context,
-                                                                ).textTheme.titleMedium,
-                                                                overflow:
-                                                                    TextOverflow
-                                                                        .ellipsis,
-                                                              ),
-                                                              const SizedBox(
-                                                                height: 4,
-                                                              ),
-                                                              Text(
-                                                                song.artist ??
-                                                                    LocaleProvider.tr(
-                                                                      'unknown_artist',
-                                                                    ),
-                                                                style:
-                                                                    TextStyle(
-                                                                      fontSize:
-                                                                          14,
-                                                                    ),
-                                                                maxLines: 1,
-                                                                overflow:
-                                                                    TextOverflow
-                                                                        .ellipsis,
-                                                              ),
-                                                            ],
-                                                          ),
-                                                        ),
-                                                        const SizedBox(
-                                                          width: 8,
-                                                        ),
-                                                        // Botón de búsqueda para abrir opciones
-                                                        InkWell(
-                                                          onTap: () async {
-                                                            Navigator.of(
-                                                              context,
-                                                            ).pop();
-                                                            await _showSearchOptions(
-                                                              song,
-                                                            );
-                                                          },
-                                                          borderRadius:
-                                                              BorderRadius.circular(
-                                                                12,
-                                                              ),
-                                                          child: Container(
-                                                            padding:
-                                                                const EdgeInsets.symmetric(
-                                                                  horizontal:
-                                                                      16,
-                                                                  vertical: 8,
-                                                                ),
-                                                            decoration: BoxDecoration(
-                                                              color:
-                                                                  Theme.of(
-                                                                        context,
-                                                                      ).brightness ==
-                                                                      Brightness
-                                                                          .dark
-                                                                  ? Theme.of(
-                                                                          context,
-                                                                        )
-                                                                        .colorScheme
-                                                                        .primary
-                                                                  : Theme.of(
-                                                                          context,
-                                                                        )
-                                                                        .colorScheme
-                                                                        .onPrimaryContainer
-                                                                        .withValues(
-                                                                          alpha:
-                                                                              0.7,
-                                                                        ),
-                                                              borderRadius:
-                                                                  BorderRadius.circular(
-                                                                    12,
-                                                                  ),
-                                                            ),
-                                                            child: Row(
-                                                              mainAxisSize:
-                                                                  MainAxisSize
-                                                                      .min,
-                                                              children: [
-                                                                Icon(
-                                                                  Icons.search,
-                                                                  size: 20,
-                                                                  color:
-                                                                      Theme.of(
-                                                                            context,
-                                                                          ).brightness ==
-                                                                          Brightness
-                                                                              .dark
-                                                                      ? Theme.of(
-                                                                          context,
-                                                                        ).colorScheme.onPrimary
-                                                                      : Theme.of(
-                                                                          context,
-                                                                        ).colorScheme.surfaceContainer,
-                                                                ),
-                                                                const SizedBox(
-                                                                  width: 8,
-                                                                ),
-                                                                TranslatedText(
-                                                                  'search',
-                                                                  style: TextStyle(
-                                                                    fontWeight:
-                                                                        FontWeight
-                                                                            .w600,
-                                                                    fontSize:
-                                                                        14,
-                                                                    color:
-                                                                        Theme.of(
-                                                                              context,
-                                                                            ).brightness ==
-                                                                            Brightness.dark
-                                                                        ? Theme.of(
-                                                                            context,
-                                                                          ).colorScheme.onPrimary
-                                                                        : Theme.of(
-                                                                            context,
-                                                                          ).colorScheme.surfaceContainer,
-                                                                  ),
-                                                                ),
-                                                              ],
-                                                            ),
-                                                          ),
-                                                        ),
-                                                      ],
-                                                    ),
-                                                  ),
-                                                  ListTile(
-                                                    leading: const Icon(
-                                                      Icons.queue_music,
-                                                    ),
-                                                    title: TranslatedText(
-                                                      'add_to_queue',
-                                                    ),
-                                                    onTap: () async {
-                                                      Navigator.of(
-                                                        context,
-                                                      ).pop();
-                                                      await (audioHandler
-                                                              as MyAudioHandler)
-                                                          .addSongsToQueueEnd([
-                                                            song,
-                                                          ]);
-                                                    },
-                                                  ),
-                                                  ListTile(
-                                                    leading: Icon(
-                                                      isFav
-                                                          ? Icons.delete_outline
-                                                          : Icons
-                                                                .favorite_border,
-                                                    ),
-                                                    title: TranslatedText(
-                                                      isFav
-                                                          ? 'remove_from_favorites'
-                                                          : 'add_to_favorites',
-                                                    ),
-                                                    onTap: () async {
-                                                      Navigator.of(
-                                                        context,
-                                                      ).pop();
-                                                      if (isFav) {
-                                                        await FavoritesDB()
-                                                            .removeFavorite(
-                                                              song.data,
-                                                            );
-                                                        favoritesShouldReload
-                                                                .value =
-                                                            !favoritesShouldReload
-                                                                .value;
-                                                      } else {
-                                                        await _addToFavorites(
-                                                          song,
-                                                        );
-                                                      }
-                                                    },
-                                                  ),
-                                                  ListTile(
-                                                    leading: const Icon(
-                                                      Icons.delete_outline,
-                                                    ),
-                                                    title: TranslatedText(
-                                                      'remove_from_recents',
-                                                    ),
-                                                    onTap: () async {
-                                                      Navigator.of(
-                                                        context,
-                                                      ).pop();
-                                                      await RecentsDB()
-                                                          .removeRecent(
-                                                            song.data,
-                                                          );
-                                                      await _loadRecents();
-                                                    },
-                                                  ),
-                                                  if ((song.artist ?? '')
-                                                      .trim()
-                                                      .isNotEmpty)
-                                                    ListTile(
-                                                      leading: const Icon(
-                                                        Icons.person_outline,
-                                                      ),
-                                                      title:
-                                                          const TranslatedText(
-                                                            'go_to_artist',
-                                                          ),
-                                                      onTap: () {
-                                                        Navigator.of(
-                                                          context,
-                                                        ).pop();
-                                                        final name =
-                                                            (song.artist ?? '')
-                                                                .trim();
-                                                        if (name.isEmpty) {
-                                                          return;
-                                                        }
-                                                        Navigator.of(
-                                                          context,
-                                                        ).push(
-                                                          PageRouteBuilder(
-                                                            pageBuilder:
-                                                                (
-                                                                  context,
-                                                                  animation,
-                                                                  secondaryAnimation,
-                                                                ) => ArtistScreen(
-                                                                  artistName:
-                                                                      name,
-                                                                ),
-                                                            transitionsBuilder:
-                                                                (
-                                                                  context,
-                                                                  animation,
-                                                                  secondaryAnimation,
-                                                                  child,
-                                                                ) {
-                                                                  const begin =
-                                                                      Offset(
-                                                                        1.0,
-                                                                        0.0,
-                                                                      );
-                                                                  const end =
-                                                                      Offset
-                                                                          .zero;
-                                                                  const curve =
-                                                                      Curves
-                                                                          .ease;
-                                                                  final tween =
-                                                                      Tween(
-                                                                        begin:
-                                                                            begin,
-                                                                        end:
-                                                                            end,
-                                                                      ).chain(
-                                                                        CurveTween(
-                                                                          curve:
-                                                                              curve,
-                                                                        ),
-                                                                      );
-                                                                  return SlideTransition(
-                                                                    position: animation
-                                                                        .drive(
-                                                                          tween,
-                                                                        ),
-                                                                    child:
-                                                                        child,
-                                                                  );
-                                                                },
-                                                          ),
-                                                        );
-                                                      },
-                                                    ),
-                                                  ListTile(
-                                                    leading: const Icon(
-                                                      Icons.info_outline,
-                                                    ),
-                                                    title: TranslatedText(
-                                                      'song_info',
-                                                    ),
-                                                    onTap: () async {
-                                                      Navigator.of(
-                                                        context,
-                                                      ).pop();
-                                                      await SongInfoDialog.showFromSong(
-                                                        context,
-                                                        song,
-                                                        colorSchemeNotifier,
-                                                      );
-                                                    },
-                                                  ),
-                                                ],
-                                              );
-                                            },
-                                          ),
-                                        ),
-                                      ),
-                                    );
-                                  },
+                          transitionsBuilder:
+                              (context, animation, secondaryAnimation, child) {
+                                const begin = Offset(1.0, 0.0);
+                                const end = Offset.zero;
+                                const curve = Curves.ease;
+                                final tween = Tween(
+                                  begin: begin,
+                                  end: end,
+                                ).chain(CurveTween(curve: curve));
+                                return SlideTransition(
+                                  position: animation.drive(tween),
+                                  child: child,
                                 );
-                              }
-
-                              // Determinar si es el último para el padding
-                              final bool isLastItem =
-                                  index == songsToShow.length - 1;
-
-                              return Padding(
-                                padding: EdgeInsets.only(
-                                  bottom: isLastItem ? 0 : 4,
-                                ),
-                                child: Card(
-                                  color: cardColor,
-                                  margin: EdgeInsets.zero,
-                                  elevation: 0,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: borderRadius,
-                                  ),
-                                  child: ClipRRect(
-                                    borderRadius: borderRadius,
-                                    child: listTileWidget,
-                                  ),
-                                ),
-                              );
-                            },
-                          );
-                        },
+                              },
+                        ),
                       );
                     },
-                  )
-                : _showingPlaylistSongs
-                ? RefreshIndicator(
-                    onRefresh: _refreshPlaylistSongs,
-                    child: Builder(
-                      builder: (context) {
+                  ),
+                ]
+              : _showingPlaylistSongs
+              ? [
+                  if (_isSelectingPlaylistSongs) ...[
+                    IconButton(
+                      icon: const Icon(Icons.delete_outline),
+                      tooltip: LocaleProvider.tr('remove_from_playlist'),
+                      onPressed: _selectedPlaylistSongIds.isEmpty
+                          ? null
+                          : _removeFromPlaylistMassive,
+                    ),
+                    IconButton(
+                      icon: const Icon(
+                        Icons.favorite_outline_rounded,
+                        weight: 600,
+                      ),
+                      tooltip: LocaleProvider.tr('add_to_favorites'),
+                      onPressed: _selectedPlaylistSongIds.isEmpty
+                          ? null
+                          : _addToFavoritesMassive,
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.select_all),
+                      tooltip: LocaleProvider.tr('select_all'),
+                      onPressed: () {
+                        final songsToShow =
+                            _searchPlaylistController.text.isNotEmpty
+                            ? _filteredPlaylistSongs
+                            : _playlistSongs;
+                        setState(() {
+                          if (_selectedPlaylistSongIds.length ==
+                              songsToShow.length) {
+                            // Si todos están seleccionados, deseleccionar todos
+                            _selectedPlaylistSongIds.clear();
+                            if (_selectedPlaylistSongIds.isEmpty) {
+                              _isSelectingPlaylistSongs = false;
+                            }
+                          } else {
+                            // Seleccionar todos
+                            _selectedPlaylistSongIds.addAll(
+                              songsToShow.map((s) => s.id),
+                            );
+                          }
+                        });
+                      },
+                    ),
+                  ] else ...[
+                    IconButton(
+                      icon: const Icon(
+                        Icons.shuffle_rounded,
+                        size: 28,
+                        weight: 600,
+                      ),
+                      tooltip: LocaleProvider.tr('shuffle'),
+                      onPressed: () {
                         final List<SongModel> songsToShow =
                             _searchPlaylistController.text.isNotEmpty
                             ? _filteredPlaylistSongs
                             : _playlistSongs;
+                        if (songsToShow.isNotEmpty) {
+                          final random =
+                              (songsToShow.toList()..shuffle()).first;
+                          // Precargar la carátula antes de reproducir
+                          unawaited(_preloadArtworkForSong(random));
+                          _playSongAndOpenPlayer(
+                            random,
+                            songsToShow,
+                            queueSource: _selectedPlaylist?['name'] ?? '',
+                          );
+                        }
+                      },
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.add, size: 28),
+                      tooltip: LocaleProvider.tr('add_from_recents'),
+                      onPressed: _showAddFromRecentsToCurrentPlaylistDialog,
+                    ),
+                    PopupMenuButton<OrdenCancionesPlaylist>(
+                      icon: const Icon(Icons.sort, size: 28),
+                      tooltip: LocaleProvider.tr('filters'),
+                      onSelected: (orden) {
+                        setState(() {
+                          _ordenCancionesPlaylist = orden;
+                          _ordenarCancionesPlaylist();
+                        });
+                      },
+                      itemBuilder: (context) => [
+                        PopupMenuItem(
+                          value: OrdenCancionesPlaylist.normal,
+                          child: TranslatedText('last_added'),
+                        ),
+                        PopupMenuItem(
+                          value: OrdenCancionesPlaylist.ultimoAgregado,
+                          child: TranslatedText('invert_order'),
+                        ),
+                        PopupMenuItem(
+                          value: OrdenCancionesPlaylist.alfabetico,
+                          child: TranslatedText('alphabetical_az'),
+                        ),
+                        PopupMenuItem(
+                          value: OrdenCancionesPlaylist.invertido,
+                          child: TranslatedText('alphabetical_za'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ]
+              : null,
+          bottom: (_showingRecents || _showingPlaylistSongs)
+              ? PreferredSize(
+                  preferredSize: const Size.fromHeight(56),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                    child: Builder(
+                      builder: (context) {
+                        final colorScheme = colorSchemeNotifier.value;
+                        final isAmoled = colorScheme == AppColorScheme.amoled;
+                        final isDark =
+                            Theme.of(context).brightness == Brightness.dark;
+                        final barColor = isAmoled
+                            ? Colors.white.withAlpha(20)
+                            : isDark
+                            ? Theme.of(
+                                context,
+                              ).colorScheme.onSecondary.withValues(alpha: 0.5)
+                            : Theme.of(context).colorScheme.secondaryContainer
+                                  .withValues(alpha: 0.5);
+
+                        return TextField(
+                          controller: _showingRecents
+                              ? _searchRecentsController
+                              : _searchPlaylistController,
+                          focusNode: _showingRecents
+                              ? _searchRecentsFocus
+                              : _searchPlaylistFocus,
+                          onChanged: (_) => _showingRecents
+                              ? _onSearchRecentsChanged()
+                              : _onSearchPlaylistChanged(),
+                          cursorColor: Theme.of(context).colorScheme.primary,
+                          decoration: InputDecoration(
+                            hintText: LocaleProvider.tr(
+                              'search_by_title_or_artist',
+                            ),
+                            hintStyle: TextStyle(
+                              color: isAmoled
+                                  ? Colors.white.withAlpha(160)
+                                  : Theme.of(
+                                      context,
+                                    ).colorScheme.onSurfaceVariant,
+                              fontSize: 15,
+                            ),
+                            prefixIcon: const Icon(Icons.search),
+                            suffixIcon:
+                                (_showingRecents
+                                    ? _searchRecentsController.text.isNotEmpty
+                                    : _searchPlaylistController.text.isNotEmpty)
+                                ? IconButton(
+                                    icon: const Icon(Icons.close),
+                                    onPressed: () {
+                                      if (_showingRecents) {
+                                        _searchRecentsController.clear();
+                                        _onSearchRecentsChanged();
+                                        setState(() {});
+                                      } else {
+                                        _searchPlaylistController.clear();
+                                        _onSearchPlaylistChanged();
+                                        setState(() {});
+                                      }
+                                    },
+                                  )
+                                : null,
+                            filled: true,
+                            fillColor: barColor,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(28),
+                              borderSide: BorderSide.none,
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(28),
+                              borderSide: BorderSide.none,
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(28),
+                              borderSide: BorderSide.none,
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 20,
+                              vertical: 12,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                )
+              : null,
+        ),
+        body: ValueListenableBuilder<MediaItem?>(
+          valueListenable: _currentMediaItemNotifier,
+          builder: (context, debouncedMediaItem, child) {
+            final space = debouncedMediaItem != null ? 100.0 : 0.0;
+
+            return Padding(
+              padding: EdgeInsets.only(bottom: space),
+              child: _showingRecents
+                  ? Builder(
+                      builder: (context) {
+                        final List<SongModel> songsToShow =
+                            _searchRecentsController.text.isNotEmpty
+                            ? _filteredRecents
+                            : _recentSongs;
                         if (songsToShow.isEmpty) {
                           return Center(
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
                                 Icon(
-                                  Icons.playlist_remove_outlined,
+                                  Icons.history,
                                   size: 48,
                                   color: Theme.of(context).colorScheme.onSurface
                                       .withValues(alpha: 0.6),
                                 ),
                                 const SizedBox(height: 16),
                                 TranslatedText(
-                                  'no_songs_in_playlist',
-                                  textAlign: TextAlign.center,
+                                  'no_recent_songs',
                                   style: TextStyle(
                                     fontSize: 14,
                                     color: Theme.of(context)
@@ -4642,6 +3593,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                 }
 
                                 Widget listTileWidget;
+
                                 // Solo usar ValueListenableBuilder para la canción actual
                                 if (isCurrent) {
                                   listTileWidget = ValueListenableBuilder<bool>(
@@ -4651,521 +3603,37 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                         shape: RoundedRectangleBorder(
                                           borderRadius: borderRadius,
                                         ),
-                                        onTap: () async {
-                                          if (_isSelectingPlaylistSongs) {
-                                            _onPlaylistSongSelected(song);
-                                          } else {
-                                            if (!mounted) return;
-                                            await _playSongAndOpenPlayer(
-                                              song,
-                                              songsToShow,
-                                            );
-                                          }
-                                        },
-                                        onLongPress: () async {
-                                          if (_isSelectingPlaylistSongs) {
-                                            setState(() {
-                                              if (_selectedPlaylistSongIds
-                                                  .contains(song.id)) {
-                                                _selectedPlaylistSongIds.remove(
-                                                  song.id,
-                                                );
-                                                if (_selectedPlaylistSongIds
-                                                    .isEmpty) {
-                                                  _isSelectingPlaylistSongs =
-                                                      false;
-                                                }
-                                              } else {
-                                                _selectedPlaylistSongIds.add(
-                                                  song.id,
-                                                );
-                                              }
-                                            });
-                                          } else {
-                                            final isPinned = await ShortcutsDB()
-                                                .isShortcut(song.data);
-                                            final isFav = await FavoritesDB()
-                                                .isFavorite(song.data);
-                                            if (!context.mounted) return;
-                                            showModalBottomSheet(
-                                              context: context,
-                                              isScrollControlled: true,
-                                              builder: (context) => SafeArea(
-                                                child: SingleChildScrollView(
-                                                  child: Column(
-                                                    mainAxisSize:
-                                                        MainAxisSize.min,
-                                                    children: [
-                                                      // Encabezado con información de la canción
-                                                      Container(
-                                                        padding:
-                                                            const EdgeInsets.all(
-                                                              16,
-                                                            ),
-                                                        child: Row(
-                                                          children: [
-                                                            // Carátula de la canción
-                                                            ClipRRect(
-                                                              borderRadius:
-                                                                  BorderRadius.circular(
-                                                                    8,
-                                                                  ),
-                                                              child: SizedBox(
-                                                                width: 60,
-                                                                height: 60,
-                                                                child:
-                                                                    _buildModalArtwork(
-                                                                      song,
-                                                                    ),
-                                                              ),
-                                                            ),
-                                                            const SizedBox(
-                                                              width: 16,
-                                                            ),
-                                                            // Título y artista
-                                                            Expanded(
-                                                              child: Column(
-                                                                crossAxisAlignment:
-                                                                    CrossAxisAlignment
-                                                                        .start,
-                                                                mainAxisSize:
-                                                                    MainAxisSize
-                                                                        .min,
-                                                                children: [
-                                                                  Text(
-                                                                    song.title,
-                                                                    maxLines: 1,
-                                                                    style: Theme.of(
-                                                                      context,
-                                                                    ).textTheme.titleMedium,
-                                                                    overflow:
-                                                                        TextOverflow
-                                                                            .ellipsis,
-                                                                  ),
-                                                                  const SizedBox(
-                                                                    height: 4,
-                                                                  ),
-                                                                  Text(
-                                                                    song.artist ??
-                                                                        LocaleProvider.tr(
-                                                                          'unknown_artist',
-                                                                        ),
-                                                                    style: TextStyle(
-                                                                      fontSize:
-                                                                          14,
-                                                                    ),
-                                                                    maxLines: 1,
-                                                                    overflow:
-                                                                        TextOverflow
-                                                                            .ellipsis,
-                                                                  ),
-                                                                ],
-                                                              ),
-                                                            ),
-                                                            const SizedBox(
-                                                              width: 8,
-                                                            ),
-                                                            // Botón de búsqueda para abrir opciones
-                                                            InkWell(
-                                                              onTap: () async {
-                                                                Navigator.of(
-                                                                  context,
-                                                                ).pop();
-                                                                await _showSearchOptions(
-                                                                  song,
-                                                                );
-                                                              },
-                                                              borderRadius:
-                                                                  BorderRadius.circular(
-                                                                    12,
-                                                                  ),
-                                                              child: Container(
-                                                                padding:
-                                                                    const EdgeInsets.symmetric(
-                                                                      horizontal:
-                                                                          16,
-                                                                      vertical:
-                                                                          8,
-                                                                    ),
-                                                                decoration: BoxDecoration(
-                                                                  color:
-                                                                      Theme.of(
-                                                                            context,
-                                                                          ).brightness ==
-                                                                          Brightness
-                                                                              .dark
-                                                                      ? Theme.of(
-                                                                          context,
-                                                                        ).colorScheme.primary
-                                                                      : Theme.of(
-                                                                          context,
-                                                                        ).colorScheme.onPrimaryContainer.withValues(
-                                                                          alpha:
-                                                                              0.7,
-                                                                        ),
-                                                                  borderRadius:
-                                                                      BorderRadius.circular(
-                                                                        12,
-                                                                      ),
-                                                                ),
-                                                                child: Row(
-                                                                  mainAxisSize:
-                                                                      MainAxisSize
-                                                                          .min,
-                                                                  children: [
-                                                                    Icon(
-                                                                      Icons
-                                                                          .search,
-                                                                      size: 20,
-                                                                      color:
-                                                                          Theme.of(
-                                                                                context,
-                                                                              ).brightness ==
-                                                                              Brightness.dark
-                                                                          ? Theme.of(
-                                                                              context,
-                                                                            ).colorScheme.onPrimary
-                                                                          : Theme.of(
-                                                                              context,
-                                                                            ).colorScheme.surfaceContainer,
-                                                                    ),
-                                                                    const SizedBox(
-                                                                      width: 8,
-                                                                    ),
-                                                                    TranslatedText(
-                                                                      'search',
-                                                                      style: TextStyle(
-                                                                        fontWeight:
-                                                                            FontWeight.w600,
-                                                                        fontSize:
-                                                                            14,
-                                                                        color:
-                                                                            Theme.of(
-                                                                                  context,
-                                                                                ).brightness ==
-                                                                                Brightness.dark
-                                                                            ? Theme.of(
-                                                                                context,
-                                                                              ).colorScheme.onPrimary
-                                                                            : Theme.of(
-                                                                                context,
-                                                                              ).colorScheme.surfaceContainer,
-                                                                      ),
-                                                                    ),
-                                                                  ],
-                                                                ),
-                                                              ),
-                                                            ),
-                                                          ],
-                                                        ),
-                                                      ),
-                                                      ListTile(
-                                                        leading: const Icon(
-                                                          Icons.queue_music,
-                                                        ),
-                                                        title: TranslatedText(
-                                                          'add_to_queue',
-                                                        ),
-                                                        onTap: () async {
-                                                          if (!context
-                                                              .mounted) {
-                                                            return;
-                                                          }
-                                                          Navigator.of(
-                                                            context,
-                                                          ).pop();
-                                                          await (audioHandler
-                                                                  as MyAudioHandler)
-                                                              .addSongsToQueueEnd(
-                                                                [song],
-                                                              );
-                                                        },
-                                                      ),
-                                                      ListTile(
-                                                        leading: Icon(
-                                                          isFav
-                                                              ? Icons
-                                                                    .delete_outline
-                                                              : Icons
-                                                                    .favorite_border,
-                                                        ),
-                                                        title: TranslatedText(
-                                                          isFav
-                                                              ? 'remove_from_favorites'
-                                                              : 'add_to_favorites',
-                                                        ),
-                                                        onTap: () async {
-                                                          if (!context
-                                                              .mounted) {
-                                                            return;
-                                                          }
-                                                          Navigator.of(
-                                                            context,
-                                                          ).pop();
-                                                          if (isFav) {
-                                                            await FavoritesDB()
-                                                                .removeFavorite(
-                                                                  song.data,
-                                                                );
-                                                            favoritesShouldReload
-                                                                    .value =
-                                                                !favoritesShouldReload
-                                                                    .value;
-                                                          } else {
-                                                            await FavoritesDB()
-                                                                .addFavorite(
-                                                                  song,
-                                                                );
-                                                            favoritesShouldReload
-                                                                    .value =
-                                                                !favoritesShouldReload
-                                                                    .value;
-                                                          }
-                                                        },
-                                                      ),
-                                                      ListTile(
-                                                        leading: const Icon(
-                                                          Icons.playlist_remove,
-                                                        ),
-                                                        title: TranslatedText(
-                                                          'remove_from_playlist',
-                                                        ),
-                                                        onTap: () async {
-                                                          if (!context
-                                                              .mounted) {
-                                                            return;
-                                                          }
-                                                          Navigator.of(
-                                                            context,
-                                                          ).pop();
-                                                          await PlaylistsDB()
-                                                              .removeSongFromPlaylist(
-                                                                _selectedPlaylist!['id'],
-                                                                song.data,
-                                                              );
-                                                          await _loadPlaylistSongs(
-                                                            _selectedPlaylist!,
-                                                          );
-                                                        },
-                                                      ),
-                                                      if ((song.artist ?? '')
-                                                          .trim()
-                                                          .isNotEmpty)
-                                                        ListTile(
-                                                          leading: const Icon(
-                                                            Icons
-                                                                .person_outline,
-                                                          ),
-                                                          title:
-                                                              const TranslatedText(
-                                                                'go_to_artist',
-                                                              ),
-                                                          onTap: () {
-                                                            Navigator.of(
-                                                              context,
-                                                            ).pop();
-                                                            final name =
-                                                                (song.artist ??
-                                                                        '')
-                                                                    .trim();
-                                                            if (name.isEmpty) {
-                                                              return;
-                                                            }
-                                                            Navigator.of(
-                                                              context,
-                                                            ).push(
-                                                              PageRouteBuilder(
-                                                                pageBuilder:
-                                                                    (
-                                                                      context,
-                                                                      animation,
-                                                                      secondaryAnimation,
-                                                                    ) => ArtistScreen(
-                                                                      artistName:
-                                                                          name,
-                                                                    ),
-                                                                transitionsBuilder:
-                                                                    (
-                                                                      context,
-                                                                      animation,
-                                                                      secondaryAnimation,
-                                                                      child,
-                                                                    ) {
-                                                                      const begin =
-                                                                          Offset(
-                                                                            1.0,
-                                                                            0.0,
-                                                                          );
-                                                                      const end =
-                                                                          Offset
-                                                                              .zero;
-                                                                      const curve =
-                                                                          Curves
-                                                                              .ease;
-                                                                      final tween =
-                                                                          Tween(
-                                                                            begin:
-                                                                                begin,
-                                                                            end:
-                                                                                end,
-                                                                          ).chain(
-                                                                            CurveTween(
-                                                                              curve: curve,
-                                                                            ),
-                                                                          );
-                                                                      return SlideTransition(
-                                                                        position:
-                                                                            animation.drive(
-                                                                              tween,
-                                                                            ),
-                                                                        child:
-                                                                            child,
-                                                                      );
-                                                                    },
-                                                              ),
-                                                            );
-                                                          },
-                                                        ),
-                                                      ListTile(
-                                                        leading: Icon(
-                                                          isPinned
-                                                              ? Icons.push_pin
-                                                              : Icons
-                                                                    .push_pin_outlined,
-                                                        ),
-                                                        title: TranslatedText(
-                                                          isPinned
-                                                              ? 'unpin_shortcut'
-                                                              : 'pin_shortcut',
-                                                        ),
-                                                        onTap: () async {
-                                                          if (!context
-                                                              .mounted) {
-                                                            return;
-                                                          }
-                                                          Navigator.of(
-                                                            context,
-                                                          ).pop();
-                                                          if (isPinned) {
-                                                            await ShortcutsDB()
-                                                                .removeShortcut(
-                                                                  song.data,
-                                                                );
-                                                          } else {
-                                                            await ShortcutsDB()
-                                                                .addShortcut(
-                                                                  song.data,
-                                                                );
-                                                          }
-                                                          shortcutsShouldReload
-                                                                  .value =
-                                                              !shortcutsShouldReload
-                                                                  .value;
-                                                        },
-                                                      ),
-                                                      ListTile(
-                                                        leading: const Icon(
-                                                          Icons
-                                                              .check_box_outlined,
-                                                        ),
-                                                        title: TranslatedText(
-                                                          'select',
-                                                        ),
-                                                        onTap: () {
-                                                          Navigator.of(
-                                                            context,
-                                                          ).pop();
-                                                          setState(() {
-                                                            _isSelectingPlaylistSongs =
-                                                                true;
-                                                            _selectedPlaylistSongIds
-                                                                .add(song.id);
-                                                          });
-                                                        },
-                                                      ),
-                                                      ListTile(
-                                                        leading: const Icon(
-                                                          Icons.info_outline,
-                                                        ),
-                                                        title: TranslatedText(
-                                                          'song_info',
-                                                        ),
-                                                        onTap: () async {
-                                                          Navigator.of(
-                                                            context,
-                                                          ).pop();
-                                                          await SongInfoDialog.showFromSong(
-                                                            context,
-                                                            song,
-                                                            colorSchemeNotifier,
-                                                          );
-                                                        },
-                                                      ),
-                                                    ],
-                                                  ),
-                                                ),
-                                              ),
-                                            );
-                                          }
-                                        },
-                                        leading: Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            if (_isSelectingPlaylistSongs)
-                                              Checkbox(
-                                                value: _selectedPlaylistSongIds
-                                                    .contains(song.id),
-                                                onChanged: (checked) {
-                                                  setState(() {
-                                                    if (checked == true) {
-                                                      _selectedPlaylistSongIds
-                                                          .add(song.id);
-                                                    } else {
-                                                      _selectedPlaylistSongIds
-                                                          .remove(song.id);
-                                                      if (_selectedPlaylistSongIds
-                                                          .isEmpty) {
-                                                        _isSelectingPlaylistSongs =
-                                                            false;
-                                                      }
-                                                    }
-                                                  });
-                                                },
-                                              ),
-                                            ClipRRect(
-                                              borderRadius:
-                                                  BorderRadius.circular(8),
-                                              child: QueryArtworkWidget(
-                                                id: song.id,
-                                                type: ArtworkType.AUDIO,
-                                                artworkBorder:
-                                                    BorderRadius.circular(8),
-                                                artworkHeight: 50,
-                                                artworkWidth: 50,
-                                                keepOldArtwork: true,
-                                                nullArtworkWidget: Container(
-                                                  color: isSystem
-                                                      ? Theme.of(context)
-                                                            .colorScheme
-                                                            .secondaryContainer
-                                                            .withValues(
-                                                              alpha: 0.5,
-                                                            )
-                                                      : Theme.of(context)
-                                                            .colorScheme
-                                                            .surfaceContainer,
-                                                  width: 50,
-                                                  height: 50,
-                                                  child: Icon(
-                                                    Icons.music_note,
-                                                    color: Theme.of(
-                                                      context,
-                                                    ).colorScheme.onSurface,
-                                                  ),
-                                                ),
+                                        leading: ClipRRect(
+                                          borderRadius: BorderRadius.circular(
+                                            8,
+                                          ),
+                                          child: QueryArtworkWidget(
+                                            id: song.id,
+                                            type: ArtworkType.AUDIO,
+                                            artworkBorder:
+                                                BorderRadius.circular(8),
+                                            artworkHeight: 50,
+                                            artworkWidth: 50,
+                                            keepOldArtwork: true,
+                                            nullArtworkWidget: Container(
+                                              color: isSystem
+                                                  ? Theme.of(context)
+                                                        .colorScheme
+                                                        .secondaryContainer
+                                                        .withValues(alpha: 0.5)
+                                                  : Theme.of(context)
+                                                        .colorScheme
+                                                        .surfaceContainer,
+                                              width: 50,
+                                              height: 50,
+                                              child: Icon(
+                                                Icons.music_note,
+                                                color: Theme.of(
+                                                  context,
+                                                ).colorScheme.onSurface,
                                               ),
                                             ),
-                                          ],
+                                          ),
                                         ),
                                         title: Row(
                                           children: [
@@ -5175,9 +3643,11 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                   right: 8.0,
                                                 ),
                                                 child: MiniMusicVisualizer(
-                                                  color: Theme.of(
-                                                    context,
-                                                  ).colorScheme.primary,
+                                                  color: isAmoledTheme
+                                                      ? Colors.white
+                                                      : Theme.of(
+                                                          context,
+                                                        ).colorScheme.primary,
                                                   width: 4,
                                                   height: 15,
                                                   radius: 4,
@@ -5256,214 +3726,127 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                         .primaryContainer
                                                         .withValues(alpha: 0.8))
                                             : null,
-                                      );
-                                    },
-                                  );
-                                } else {
-                                  // Para canciones que no están reproduciéndose, no usar StreamBuilder
-                                  final playing =
-                                      audioHandler
-                                          ?.playbackState
-                                          .value
-                                          .playing ??
-                                      false;
-                                  listTileWidget = ListTile(
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: borderRadius,
-                                    ),
-                                    onTap: () async {
-                                      if (_isSelectingPlaylistSongs) {
-                                        _onPlaylistSongSelected(song);
-                                      } else {
-                                        if (!mounted) return;
-                                        await _playSongAndOpenPlayer(
-                                          song,
-                                          songsToShow,
-                                        );
-                                      }
-                                    },
-                                    onLongPress: () async {
-                                      if (_isSelectingPlaylistSongs) {
-                                        setState(() {
-                                          if (_selectedPlaylistSongIds.contains(
-                                            song.id,
-                                          )) {
-                                            _selectedPlaylistSongIds.remove(
-                                              song.id,
-                                            );
-                                            if (_selectedPlaylistSongIds
-                                                .isEmpty) {
-                                              _isSelectingPlaylistSongs = false;
-                                            }
-                                          } else {
-                                            _selectedPlaylistSongIds.add(
-                                              song.id,
-                                            );
-                                          }
-                                        });
-                                      } else {
-                                        final isPinned = await ShortcutsDB()
-                                            .isShortcut(song.data);
-                                        final isFav = await FavoritesDB()
-                                            .isFavorite(song.data);
-                                        if (!context.mounted) return;
-                                        showModalBottomSheet(
-                                          context: context,
-                                          isScrollControlled: true,
-                                          builder: (context) => SafeArea(
-                                            child: SingleChildScrollView(
-                                              child: Column(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  // Encabezado con información de la canción
-                                                  Container(
-                                                    padding:
-                                                        const EdgeInsets.all(
-                                                          16,
-                                                        ),
-                                                    child: Row(
+                                        onTap: () async {
+                                          // Precargar la carátula antes de reproducir
+                                          unawaited(
+                                            _preloadArtworkForSong(song),
+                                          );
+                                          if (!mounted) return;
+                                          await _playSongAndOpenPlayer(
+                                            song,
+                                            songsToShow,
+                                          );
+                                        },
+                                        onLongPress: () {
+                                          showModalBottomSheet(
+                                            context: context,
+                                            isScrollControlled: true,
+                                            builder: (context) => SafeArea(
+                                              child: SingleChildScrollView(
+                                                child: FutureBuilder<bool>(
+                                                  future: FavoritesDB()
+                                                      .isFavorite(song.data),
+                                                  builder: (context, snapshot) {
+                                                    final isFav =
+                                                        snapshot.data ?? false;
+                                                    return Column(
+                                                      mainAxisSize:
+                                                          MainAxisSize.min,
                                                       children: [
-                                                        // Carátula de la canción
-                                                        ClipRRect(
-                                                          borderRadius:
-                                                              BorderRadius.circular(
-                                                                8,
+                                                        // Encabezado con información de la canción
+                                                        Container(
+                                                          padding:
+                                                              const EdgeInsets.all(
+                                                                16,
                                                               ),
-                                                          child: SizedBox(
-                                                            width: 60,
-                                                            height: 60,
-                                                            child:
-                                                                _buildModalArtwork(
-                                                                  song,
-                                                                ),
-                                                          ),
-                                                        ),
-                                                        const SizedBox(
-                                                          width: 16,
-                                                        ),
-                                                        // Título y artista
-                                                        Expanded(
-                                                          child: Column(
-                                                            crossAxisAlignment:
-                                                                CrossAxisAlignment
-                                                                    .start,
-                                                            mainAxisSize:
-                                                                MainAxisSize
-                                                                    .min,
+                                                          child: Row(
                                                             children: [
-                                                              Text(
-                                                                song.title,
-                                                                maxLines: 1,
-                                                                style: Theme.of(
-                                                                  context,
-                                                                ).textTheme.titleMedium,
-                                                                overflow:
-                                                                    TextOverflow
-                                                                        .ellipsis,
+                                                              // Carátula de la canción
+                                                              ClipRRect(
+                                                                borderRadius:
+                                                                    BorderRadius.circular(
+                                                                      8,
+                                                                    ),
+                                                                child: SizedBox(
+                                                                  width: 60,
+                                                                  height: 60,
+                                                                  child:
+                                                                      _buildModalArtwork(
+                                                                        song,
+                                                                      ),
+                                                                ),
                                                               ),
                                                               const SizedBox(
-                                                                height: 4,
+                                                                width: 16,
                                                               ),
-                                                              Text(
-                                                                song.artist ??
-                                                                    LocaleProvider.tr(
-                                                                      'unknown_artist',
-                                                                    ),
-                                                                style:
-                                                                    TextStyle(
-                                                                      fontSize:
-                                                                          14,
-                                                                    ),
-                                                                maxLines: 1,
-                                                                overflow:
-                                                                    TextOverflow
-                                                                        .ellipsis,
-                                                              ),
-                                                            ],
-                                                          ),
-                                                        ),
-                                                        const SizedBox(
-                                                          width: 8,
-                                                        ),
-                                                        // Botón de búsqueda para abrir opciones
-                                                        InkWell(
-                                                          onTap: () async {
-                                                            Navigator.of(
-                                                              context,
-                                                            ).pop();
-                                                            await _showSearchOptions(
-                                                              song,
-                                                            );
-                                                          },
-                                                          borderRadius:
-                                                              BorderRadius.circular(
-                                                                12,
-                                                              ),
-                                                          child: Container(
-                                                            padding:
-                                                                const EdgeInsets.symmetric(
-                                                                  horizontal:
-                                                                      16,
-                                                                  vertical: 8,
-                                                                ),
-                                                            decoration: BoxDecoration(
-                                                              color:
-                                                                  Theme.of(
+                                                              // Título y artista
+                                                              Expanded(
+                                                                child: Column(
+                                                                  crossAxisAlignment:
+                                                                      CrossAxisAlignment
+                                                                          .start,
+                                                                  mainAxisSize:
+                                                                      MainAxisSize
+                                                                          .min,
+                                                                  children: [
+                                                                    Text(
+                                                                      song.title,
+                                                                      maxLines:
+                                                                          1,
+                                                                      style: Theme.of(
                                                                         context,
-                                                                      ).brightness ==
-                                                                      Brightness
-                                                                          .dark
-                                                                  ? Theme.of(
-                                                                          context,
-                                                                        )
-                                                                        .colorScheme
-                                                                        .primary
-                                                                  : Theme.of(
-                                                                          context,
-                                                                        )
-                                                                        .colorScheme
-                                                                        .onPrimaryContainer
-                                                                        .withValues(
-                                                                          alpha:
-                                                                              0.7,
-                                                                        ),
-                                                              borderRadius:
-                                                                  BorderRadius.circular(
-                                                                    12,
-                                                                  ),
-                                                            ),
-                                                            child: Row(
-                                                              mainAxisSize:
-                                                                  MainAxisSize
-                                                                      .min,
-                                                              children: [
-                                                                Icon(
-                                                                  Icons.search,
-                                                                  size: 20,
-                                                                  color:
-                                                                      Theme.of(
-                                                                            context,
-                                                                          ).brightness ==
-                                                                          Brightness
-                                                                              .dark
-                                                                      ? Theme.of(
-                                                                          context,
-                                                                        ).colorScheme.onPrimary
-                                                                      : Theme.of(
-                                                                          context,
-                                                                        ).colorScheme.surfaceContainer,
+                                                                      ).textTheme.titleMedium,
+                                                                      overflow:
+                                                                          TextOverflow
+                                                                              .ellipsis,
+                                                                    ),
+                                                                    const SizedBox(
+                                                                      height: 4,
+                                                                    ),
+                                                                    Text(
+                                                                      song.artist ??
+                                                                          LocaleProvider.tr(
+                                                                            'unknown_artist',
+                                                                          ),
+                                                                      style: TextStyle(
+                                                                        fontSize:
+                                                                            14,
+                                                                      ),
+                                                                      maxLines:
+                                                                          1,
+                                                                      overflow:
+                                                                          TextOverflow
+                                                                              .ellipsis,
+                                                                    ),
+                                                                  ],
                                                                 ),
-                                                                const SizedBox(
-                                                                  width: 8,
-                                                                ),
-                                                                TranslatedText(
-                                                                  'search',
-                                                                  style: TextStyle(
-                                                                    fontWeight:
-                                                                        FontWeight
-                                                                            .w600,
-                                                                    fontSize:
-                                                                        14,
+                                                              ),
+                                                              const SizedBox(
+                                                                width: 8,
+                                                              ),
+                                                              // Botón de búsqueda para abrir opciones
+                                                              InkWell(
+                                                                onTap: () async {
+                                                                  Navigator.of(
+                                                                    context,
+                                                                  ).pop();
+                                                                  await _showSearchOptions(
+                                                                    song,
+                                                                  );
+                                                                },
+                                                                borderRadius:
+                                                                    BorderRadius.circular(
+                                                                      12,
+                                                                    ),
+                                                                child: Container(
+                                                                  padding:
+                                                                      const EdgeInsets.symmetric(
+                                                                        horizontal:
+                                                                            16,
+                                                                        vertical:
+                                                                            8,
+                                                                      ),
+                                                                  decoration: BoxDecoration(
                                                                     color:
                                                                         Theme.of(
                                                                               context,
@@ -5471,320 +3854,278 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                                             Brightness.dark
                                                                         ? Theme.of(
                                                                             context,
-                                                                          ).colorScheme.onPrimary
+                                                                          ).colorScheme.primary
                                                                         : Theme.of(
                                                                             context,
-                                                                          ).colorScheme.surfaceContainer,
+                                                                          ).colorScheme.onPrimaryContainer.withValues(
+                                                                            alpha:
+                                                                                0.7,
+                                                                          ),
+                                                                    borderRadius:
+                                                                        BorderRadius.circular(
+                                                                          12,
+                                                                        ),
+                                                                  ),
+                                                                  child: Row(
+                                                                    mainAxisSize:
+                                                                        MainAxisSize
+                                                                            .min,
+                                                                    children: [
+                                                                      Icon(
+                                                                        Icons
+                                                                            .search,
+                                                                        size:
+                                                                            20,
+                                                                        color:
+                                                                            Theme.of(
+                                                                                  context,
+                                                                                ).brightness ==
+                                                                                Brightness.dark
+                                                                            ? Theme.of(
+                                                                                context,
+                                                                              ).colorScheme.onPrimary
+                                                                            : Theme.of(
+                                                                                context,
+                                                                              ).colorScheme.surfaceContainer,
+                                                                      ),
+                                                                      const SizedBox(
+                                                                        width:
+                                                                            8,
+                                                                      ),
+                                                                      TranslatedText(
+                                                                        'search',
+                                                                        style: TextStyle(
+                                                                          fontWeight:
+                                                                              FontWeight.w600,
+                                                                          fontSize:
+                                                                              14,
+                                                                          color:
+                                                                              Theme.of(
+                                                                                    context,
+                                                                                  ).brightness ==
+                                                                                  Brightness.dark
+                                                                              ? Theme.of(
+                                                                                  context,
+                                                                                ).colorScheme.onPrimary
+                                                                              : Theme.of(
+                                                                                  context,
+                                                                                ).colorScheme.surfaceContainer,
+                                                                        ),
+                                                                      ),
+                                                                    ],
                                                                   ),
                                                                 ),
-                                                              ],
-                                                            ),
+                                                              ),
+                                                            ],
                                                           ),
                                                         ),
-                                                      ],
-                                                    ),
-                                                  ),
-                                                  ListTile(
-                                                    leading: const Icon(
-                                                      Icons.queue_music,
-                                                    ),
-                                                    title: TranslatedText(
-                                                      'add_to_queue',
-                                                    ),
-                                                    onTap: () async {
-                                                      if (!context.mounted) {
-                                                        return;
-                                                      }
-                                                      Navigator.of(
-                                                        context,
-                                                      ).pop();
-                                                      await (audioHandler
-                                                              as MyAudioHandler)
-                                                          .addSongsToQueueEnd([
-                                                            song,
-                                                          ]);
-                                                    },
-                                                  ),
-                                                  ListTile(
-                                                    leading: Icon(
-                                                      isFav
-                                                          ? Icons.delete_outline
-                                                          : Icons
-                                                                .favorite_outline_rounded,
-                                                      weight: isFav
-                                                          ? null
-                                                          : 600,
-                                                    ),
-                                                    title: TranslatedText(
-                                                      isFav
-                                                          ? 'remove_from_favorites'
-                                                          : 'add_to_favorites',
-                                                    ),
-                                                    onTap: () async {
-                                                      if (!context.mounted) {
-                                                        return;
-                                                      }
-                                                      Navigator.of(
-                                                        context,
-                                                      ).pop();
-                                                      if (isFav) {
-                                                        await FavoritesDB()
-                                                            .removeFavorite(
-                                                              song.data,
-                                                            );
-                                                        favoritesShouldReload
-                                                                .value =
-                                                            !favoritesShouldReload
-                                                                .value;
-                                                      } else {
-                                                        await FavoritesDB()
-                                                            .addFavorite(song);
-                                                        favoritesShouldReload
-                                                                .value =
-                                                            !favoritesShouldReload
-                                                                .value;
-                                                      }
-                                                    },
-                                                  ),
-                                                  ListTile(
-                                                    leading: const Icon(
-                                                      Icons.playlist_remove,
-                                                    ),
-                                                    title: TranslatedText(
-                                                      'remove_from_playlist',
-                                                    ),
-                                                    onTap: () async {
-                                                      if (!context.mounted) {
-                                                        return;
-                                                      }
-                                                      Navigator.of(
-                                                        context,
-                                                      ).pop();
-                                                      await PlaylistsDB()
-                                                          .removeSongFromPlaylist(
-                                                            _selectedPlaylist!['id'],
-                                                            song.data,
-                                                          );
-                                                      await _loadPlaylistSongs(
-                                                        _selectedPlaylist!,
-                                                      );
-                                                    },
-                                                  ),
-                                                  ListTile(
-                                                    leading: Icon(
-                                                      isPinned
-                                                          ? Icons.push_pin
-                                                          : Icons
-                                                                .push_pin_outlined,
-                                                    ),
-                                                    title: TranslatedText(
-                                                      isPinned
-                                                          ? 'unpin_shortcut'
-                                                          : 'pin_shortcut',
-                                                    ),
-                                                    onTap: () async {
-                                                      if (!context.mounted) {
-                                                        return;
-                                                      }
-                                                      Navigator.of(
-                                                        context,
-                                                      ).pop();
-                                                      if (isPinned) {
-                                                        await ShortcutsDB()
-                                                            .removeShortcut(
-                                                              song.data,
-                                                            );
-                                                      } else {
-                                                        await ShortcutsDB()
-                                                            .addShortcut(
-                                                              song.data,
-                                                            );
-                                                      }
-                                                      shortcutsShouldReload
-                                                              .value =
-                                                          !shortcutsShouldReload
-                                                              .value;
-                                                    },
-                                                  ),
-                                                  if ((song.artist ?? '')
-                                                      .trim()
-                                                      .isNotEmpty)
-                                                    ListTile(
-                                                      leading: const Icon(
-                                                        Icons.person_outline,
-                                                      ),
-                                                      title:
-                                                          const TranslatedText(
-                                                            'go_to_artist',
+                                                        ListTile(
+                                                          leading: const Icon(
+                                                            Icons.queue_music,
                                                           ),
-                                                      onTap: () {
-                                                        Navigator.of(
-                                                          context,
-                                                        ).pop();
-                                                        final name =
-                                                            (song.artist ?? '')
-                                                                .trim();
-                                                        if (name.isEmpty) {
-                                                          return;
-                                                        }
-                                                        Navigator.of(
-                                                          context,
-                                                        ).push(
-                                                          PageRouteBuilder(
-                                                            pageBuilder:
-                                                                (
-                                                                  context,
-                                                                  animation,
-                                                                  secondaryAnimation,
-                                                                ) => ArtistScreen(
-                                                                  artistName:
-                                                                      name,
-                                                                ),
-                                                            transitionsBuilder:
-                                                                (
-                                                                  context,
-                                                                  animation,
-                                                                  secondaryAnimation,
-                                                                  child,
-                                                                ) {
-                                                                  const begin =
-                                                                      Offset(
-                                                                        1.0,
-                                                                        0.0,
-                                                                      );
-                                                                  const end =
-                                                                      Offset
-                                                                          .zero;
-                                                                  const curve =
-                                                                      Curves
-                                                                          .ease;
-                                                                  final tween =
-                                                                      Tween(
-                                                                        begin:
-                                                                            begin,
-                                                                        end:
-                                                                            end,
-                                                                      ).chain(
-                                                                        CurveTween(
-                                                                          curve:
-                                                                              curve,
-                                                                        ),
-                                                                      );
-                                                                  return SlideTransition(
-                                                                    position: animation
-                                                                        .drive(
-                                                                          tween,
-                                                                        ),
-                                                                    child:
-                                                                        child,
+                                                          title: TranslatedText(
+                                                            'add_to_queue',
+                                                          ),
+                                                          onTap: () async {
+                                                            Navigator.of(
+                                                              context,
+                                                            ).pop();
+                                                            await (audioHandler
+                                                                    as MyAudioHandler)
+                                                                .addSongsToQueueEnd(
+                                                                  [song],
+                                                                );
+                                                          },
+                                                        ),
+                                                        ListTile(
+                                                          leading: Icon(
+                                                            isFav
+                                                                ? Icons
+                                                                      .delete_outline
+                                                                : Icons
+                                                                      .favorite_border,
+                                                          ),
+                                                          title: TranslatedText(
+                                                            isFav
+                                                                ? 'remove_from_favorites'
+                                                                : 'add_to_favorites',
+                                                          ),
+                                                          onTap: () async {
+                                                            Navigator.of(
+                                                              context,
+                                                            ).pop();
+                                                            if (isFav) {
+                                                              await FavoritesDB()
+                                                                  .removeFavorite(
+                                                                    song.data,
                                                                   );
-                                                                },
+                                                              favoritesShouldReload
+                                                                      .value =
+                                                                  !favoritesShouldReload
+                                                                      .value;
+                                                            } else {
+                                                              await _addToFavorites(
+                                                                song,
+                                                              );
+                                                            }
+                                                          },
+                                                        ),
+                                                        ListTile(
+                                                          leading: const Icon(
+                                                            Icons
+                                                                .delete_outline,
                                                           ),
-                                                        );
-                                                      },
-                                                    ),
-                                                  ListTile(
-                                                    leading: const Icon(
-                                                      Icons.check_box_outlined,
-                                                    ),
-                                                    title: TranslatedText(
-                                                      'select',
-                                                    ),
-                                                    onTap: () {
-                                                      Navigator.of(
-                                                        context,
-                                                      ).pop();
-                                                      setState(() {
-                                                        _isSelectingPlaylistSongs =
-                                                            true;
-                                                        _selectedPlaylistSongIds
-                                                            .add(song.id);
-                                                      });
-                                                    },
-                                                  ),
-                                                  ListTile(
-                                                    leading: const Icon(
-                                                      Icons.info_outline,
-                                                    ),
-                                                    title: TranslatedText(
-                                                      'song_info',
-                                                    ),
-                                                    onTap: () async {
-                                                      Navigator.of(
-                                                        context,
-                                                      ).pop();
-                                                      await SongInfoDialog.showFromSong(
-                                                        context,
-                                                        song,
-                                                        colorSchemeNotifier,
-                                                      );
-                                                    },
-                                                  ),
-                                                ],
+                                                          title: TranslatedText(
+                                                            'remove_from_recents',
+                                                          ),
+                                                          onTap: () async {
+                                                            Navigator.of(
+                                                              context,
+                                                            ).pop();
+                                                            await RecentsDB()
+                                                                .removeRecent(
+                                                                  song.data,
+                                                                );
+                                                            await _loadRecents();
+                                                          },
+                                                        ),
+                                                        if ((song.artist ?? '')
+                                                            .trim()
+                                                            .isNotEmpty)
+                                                          ListTile(
+                                                            leading: const Icon(
+                                                              Icons
+                                                                  .person_outline,
+                                                            ),
+                                                            title:
+                                                                const TranslatedText(
+                                                                  'go_to_artist',
+                                                                ),
+                                                            onTap: () {
+                                                              Navigator.of(
+                                                                context,
+                                                              ).pop();
+                                                              final name =
+                                                                  (song.artist ??
+                                                                          '')
+                                                                      .trim();
+                                                              if (name
+                                                                  .isEmpty) {
+                                                                return;
+                                                              }
+                                                              Navigator.of(
+                                                                context,
+                                                              ).push(
+                                                                PageRouteBuilder(
+                                                                  pageBuilder:
+                                                                      (
+                                                                        context,
+                                                                        animation,
+                                                                        secondaryAnimation,
+                                                                      ) => ArtistScreen(
+                                                                        artistName:
+                                                                            name,
+                                                                      ),
+                                                                  transitionsBuilder:
+                                                                      (
+                                                                        context,
+                                                                        animation,
+                                                                        secondaryAnimation,
+                                                                        child,
+                                                                      ) {
+                                                                        const begin =
+                                                                            Offset(
+                                                                              1.0,
+                                                                              0.0,
+                                                                            );
+                                                                        const end =
+                                                                            Offset.zero;
+                                                                        const curve =
+                                                                            Curves.ease;
+                                                                        final tween =
+                                                                            Tween(
+                                                                              begin: begin,
+                                                                              end: end,
+                                                                            ).chain(
+                                                                              CurveTween(
+                                                                                curve: curve,
+                                                                              ),
+                                                                            );
+                                                                        return SlideTransition(
+                                                                          position: animation.drive(
+                                                                            tween,
+                                                                          ),
+                                                                          child:
+                                                                              child,
+                                                                        );
+                                                                      },
+                                                                ),
+                                                              );
+                                                            },
+                                                          ),
+                                                        ListTile(
+                                                          leading: const Icon(
+                                                            Icons.info_outline,
+                                                          ),
+                                                          title: TranslatedText(
+                                                            'song_info',
+                                                          ),
+                                                          onTap: () async {
+                                                            Navigator.of(
+                                                              context,
+                                                            ).pop();
+                                                            await SongInfoDialog.showFromSong(
+                                                              context,
+                                                              song,
+                                                              colorSchemeNotifier,
+                                                            );
+                                                          },
+                                                        ),
+                                                      ],
+                                                    );
+                                                  },
+                                                ),
                                               ),
                                             ),
-                                          ),
-                                        );
-                                      }
+                                          );
+                                        },
+                                      );
                                     },
-                                    leading: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        if (_isSelectingPlaylistSongs)
-                                          Checkbox(
-                                            value: _selectedPlaylistSongIds
-                                                .contains(song.id),
-                                            onChanged: (checked) {
-                                              setState(() {
-                                                if (checked == true) {
-                                                  _selectedPlaylistSongIds.add(
-                                                    song.id,
-                                                  );
-                                                } else {
-                                                  _selectedPlaylistSongIds
-                                                      .remove(song.id);
-                                                  if (_selectedPlaylistSongIds
-                                                      .isEmpty) {
-                                                    _isSelectingPlaylistSongs =
-                                                        false;
-                                                  }
-                                                }
-                                              });
-                                            },
-                                          ),
-                                        ClipRRect(
-                                          borderRadius: BorderRadius.circular(
-                                            8,
-                                          ),
-                                          child: QueryArtworkWidget(
-                                            id: song.id,
-                                            type: ArtworkType.AUDIO,
-                                            artworkBorder:
-                                                BorderRadius.circular(8),
-                                            artworkHeight: 50,
-                                            artworkWidth: 50,
-                                            keepOldArtwork: true,
-                                            nullArtworkWidget: Container(
-                                              color: isSystem
-                                                  ? Theme.of(context)
-                                                        .colorScheme
-                                                        .secondaryContainer
-                                                        .withValues(alpha: 0.5)
-                                                  : Theme.of(context)
-                                                        .colorScheme
-                                                        .surfaceContainer,
-                                              width: 50,
-                                              height: 50,
-                                              child: Icon(
-                                                Icons.music_note,
-                                                color: Theme.of(
+                                  );
+                                } else {
+                                  // Para canciones que no están reproduciéndose, no usar StreamBuilder
+                                  listTileWidget = ListTile(
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: borderRadius,
+                                    ),
+                                    leading: ClipRRect(
+                                      borderRadius: BorderRadius.circular(8),
+                                      child: QueryArtworkWidget(
+                                        id: song.id,
+                                        type: ArtworkType.AUDIO,
+                                        artworkBorder: BorderRadius.circular(8),
+                                        artworkHeight: 50,
+                                        artworkWidth: 50,
+                                        keepOldArtwork: true,
+                                        nullArtworkWidget: Container(
+                                          color: isSystem
+                                              ? Theme.of(context)
+                                                    .colorScheme
+                                                    .secondaryContainer
+                                                    .withValues(alpha: 0.5)
+                                              : Theme.of(
                                                   context,
-                                                ).colorScheme.onSurface,
-                                              ),
-                                            ),
+                                                ).colorScheme.surfaceContainer,
+                                          width: 50,
+                                          height: 50,
+                                          child: Icon(
+                                            Icons.music_note,
+                                            color: Theme.of(
+                                              context,
+                                            ).colorScheme.onSurface,
                                           ),
                                         ),
-                                      ],
+                                      ),
                                     ),
                                     title: Row(
                                       children: [
@@ -5834,43 +4175,389 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                       overflow: TextOverflow.ellipsis,
                                     ),
                                     trailing: IconButton(
-                                      icon: Icon(
-                                        isCurrent && playing
-                                            ? Icons.pause_rounded
-                                            : Icons.play_arrow_rounded,
+                                      icon: const Icon(
+                                        Icons.play_arrow_rounded,
                                         grade: 200,
                                         fill: 1,
                                       ),
                                       onPressed: () {
-                                        if (isCurrent) {
-                                          playing
-                                              ? (audioHandler as MyAudioHandler)
-                                                    .pause()
-                                              : (audioHandler as MyAudioHandler)
-                                                    .play();
-                                        } else {
-                                          // Precargar la carátula antes de reproducir
-                                          unawaited(
-                                            _preloadArtworkForSong(song),
-                                          );
-                                          _playSongAndOpenPlayer(
-                                            song,
-                                            songsToShow,
-                                          );
-                                        }
+                                        // Precargar la carátula antes de reproducir
+                                        unawaited(_preloadArtworkForSong(song));
+                                        _playSongAndOpenPlayer(
+                                          song,
+                                          songsToShow,
+                                        );
                                       },
                                     ),
                                     selected: isCurrent,
-                                    selectedTileColor: isCurrent
-                                        ? (isAmoledTheme
-                                              ? Colors.white.withValues(
-                                                  alpha: 0.15,
-                                                )
-                                              : Theme.of(context)
-                                                    .colorScheme
-                                                    .primaryContainer
-                                                    .withValues(alpha: 0.8))
-                                        : null,
+                                    selectedTileColor: isAmoledTheme
+                                        ? Colors.white.withValues(alpha: 0.1)
+                                        : Theme.of(
+                                            context,
+                                          ).colorScheme.primaryContainer,
+                                    onTap: () async {
+                                      // Precargar la carátula antes de reproducir
+                                      unawaited(_preloadArtworkForSong(song));
+                                      if (!mounted) return;
+                                      await _playSongAndOpenPlayer(
+                                        song,
+                                        songsToShow,
+                                      );
+                                    },
+                                    onLongPress: () {
+                                      showModalBottomSheet(
+                                        context: context,
+                                        isScrollControlled: true,
+                                        builder: (context) => SafeArea(
+                                          child: SingleChildScrollView(
+                                            child: FutureBuilder<bool>(
+                                              future: FavoritesDB().isFavorite(
+                                                song.data,
+                                              ),
+                                              builder: (context, snapshot) {
+                                                final isFav =
+                                                    snapshot.data ?? false;
+                                                return Column(
+                                                  mainAxisSize:
+                                                      MainAxisSize.min,
+                                                  children: [
+                                                    // Encabezado con información de la canción
+                                                    Container(
+                                                      padding:
+                                                          const EdgeInsets.all(
+                                                            16,
+                                                          ),
+                                                      child: Row(
+                                                        children: [
+                                                          // Carátula de la canción
+                                                          ClipRRect(
+                                                            borderRadius:
+                                                                BorderRadius.circular(
+                                                                  8,
+                                                                ),
+                                                            child: SizedBox(
+                                                              width: 60,
+                                                              height: 60,
+                                                              child:
+                                                                  _buildModalArtwork(
+                                                                    song,
+                                                                  ),
+                                                            ),
+                                                          ),
+                                                          const SizedBox(
+                                                            width: 16,
+                                                          ),
+                                                          // Título y artista
+                                                          Expanded(
+                                                            child: Column(
+                                                              crossAxisAlignment:
+                                                                  CrossAxisAlignment
+                                                                      .start,
+                                                              mainAxisSize:
+                                                                  MainAxisSize
+                                                                      .min,
+                                                              children: [
+                                                                Text(
+                                                                  song.title,
+                                                                  maxLines: 1,
+                                                                  style: Theme.of(
+                                                                    context,
+                                                                  ).textTheme.titleMedium,
+                                                                  overflow:
+                                                                      TextOverflow
+                                                                          .ellipsis,
+                                                                ),
+                                                                const SizedBox(
+                                                                  height: 4,
+                                                                ),
+                                                                Text(
+                                                                  song.artist ??
+                                                                      LocaleProvider.tr(
+                                                                        'unknown_artist',
+                                                                      ),
+                                                                  style:
+                                                                      TextStyle(
+                                                                        fontSize:
+                                                                            14,
+                                                                      ),
+                                                                  maxLines: 1,
+                                                                  overflow:
+                                                                      TextOverflow
+                                                                          .ellipsis,
+                                                                ),
+                                                              ],
+                                                            ),
+                                                          ),
+                                                          const SizedBox(
+                                                            width: 8,
+                                                          ),
+                                                          // Botón de búsqueda para abrir opciones
+                                                          InkWell(
+                                                            onTap: () async {
+                                                              Navigator.of(
+                                                                context,
+                                                              ).pop();
+                                                              await _showSearchOptions(
+                                                                song,
+                                                              );
+                                                            },
+                                                            borderRadius:
+                                                                BorderRadius.circular(
+                                                                  12,
+                                                                ),
+                                                            child: Container(
+                                                              padding:
+                                                                  const EdgeInsets.symmetric(
+                                                                    horizontal:
+                                                                        16,
+                                                                    vertical: 8,
+                                                                  ),
+                                                              decoration: BoxDecoration(
+                                                                color:
+                                                                    Theme.of(
+                                                                          context,
+                                                                        ).brightness ==
+                                                                        Brightness
+                                                                            .dark
+                                                                    ? Theme.of(
+                                                                        context,
+                                                                      ).colorScheme.primary
+                                                                    : Theme.of(
+                                                                        context,
+                                                                      ).colorScheme.onPrimaryContainer.withValues(
+                                                                        alpha:
+                                                                            0.7,
+                                                                      ),
+                                                                borderRadius:
+                                                                    BorderRadius.circular(
+                                                                      12,
+                                                                    ),
+                                                              ),
+                                                              child: Row(
+                                                                mainAxisSize:
+                                                                    MainAxisSize
+                                                                        .min,
+                                                                children: [
+                                                                  Icon(
+                                                                    Icons
+                                                                        .search,
+                                                                    size: 20,
+                                                                    color:
+                                                                        Theme.of(
+                                                                              context,
+                                                                            ).brightness ==
+                                                                            Brightness.dark
+                                                                        ? Theme.of(
+                                                                            context,
+                                                                          ).colorScheme.onPrimary
+                                                                        : Theme.of(
+                                                                            context,
+                                                                          ).colorScheme.surfaceContainer,
+                                                                  ),
+                                                                  const SizedBox(
+                                                                    width: 8,
+                                                                  ),
+                                                                  TranslatedText(
+                                                                    'search',
+                                                                    style: TextStyle(
+                                                                      fontWeight:
+                                                                          FontWeight
+                                                                              .w600,
+                                                                      fontSize:
+                                                                          14,
+                                                                      color:
+                                                                          Theme.of(
+                                                                                context,
+                                                                              ).brightness ==
+                                                                              Brightness.dark
+                                                                          ? Theme.of(
+                                                                              context,
+                                                                            ).colorScheme.onPrimary
+                                                                          : Theme.of(
+                                                                              context,
+                                                                            ).colorScheme.surfaceContainer,
+                                                                    ),
+                                                                  ),
+                                                                ],
+                                                              ),
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                    ListTile(
+                                                      leading: const Icon(
+                                                        Icons.queue_music,
+                                                      ),
+                                                      title: TranslatedText(
+                                                        'add_to_queue',
+                                                      ),
+                                                      onTap: () async {
+                                                        Navigator.of(
+                                                          context,
+                                                        ).pop();
+                                                        await (audioHandler
+                                                                as MyAudioHandler)
+                                                            .addSongsToQueueEnd(
+                                                              [song],
+                                                            );
+                                                      },
+                                                    ),
+                                                    ListTile(
+                                                      leading: Icon(
+                                                        isFav
+                                                            ? Icons
+                                                                  .delete_outline
+                                                            : Icons
+                                                                  .favorite_border,
+                                                      ),
+                                                      title: TranslatedText(
+                                                        isFav
+                                                            ? 'remove_from_favorites'
+                                                            : 'add_to_favorites',
+                                                      ),
+                                                      onTap: () async {
+                                                        Navigator.of(
+                                                          context,
+                                                        ).pop();
+                                                        if (isFav) {
+                                                          await FavoritesDB()
+                                                              .removeFavorite(
+                                                                song.data,
+                                                              );
+                                                          favoritesShouldReload
+                                                                  .value =
+                                                              !favoritesShouldReload
+                                                                  .value;
+                                                        } else {
+                                                          await _addToFavorites(
+                                                            song,
+                                                          );
+                                                        }
+                                                      },
+                                                    ),
+                                                    ListTile(
+                                                      leading: const Icon(
+                                                        Icons.delete_outline,
+                                                      ),
+                                                      title: TranslatedText(
+                                                        'remove_from_recents',
+                                                      ),
+                                                      onTap: () async {
+                                                        Navigator.of(
+                                                          context,
+                                                        ).pop();
+                                                        await RecentsDB()
+                                                            .removeRecent(
+                                                              song.data,
+                                                            );
+                                                        await _loadRecents();
+                                                      },
+                                                    ),
+                                                    if ((song.artist ?? '')
+                                                        .trim()
+                                                        .isNotEmpty)
+                                                      ListTile(
+                                                        leading: const Icon(
+                                                          Icons.person_outline,
+                                                        ),
+                                                        title:
+                                                            const TranslatedText(
+                                                              'go_to_artist',
+                                                            ),
+                                                        onTap: () {
+                                                          Navigator.of(
+                                                            context,
+                                                          ).pop();
+                                                          final name =
+                                                              (song.artist ??
+                                                                      '')
+                                                                  .trim();
+                                                          if (name.isEmpty) {
+                                                            return;
+                                                          }
+                                                          Navigator.of(
+                                                            context,
+                                                          ).push(
+                                                            PageRouteBuilder(
+                                                              pageBuilder:
+                                                                  (
+                                                                    context,
+                                                                    animation,
+                                                                    secondaryAnimation,
+                                                                  ) => ArtistScreen(
+                                                                    artistName:
+                                                                        name,
+                                                                  ),
+                                                              transitionsBuilder:
+                                                                  (
+                                                                    context,
+                                                                    animation,
+                                                                    secondaryAnimation,
+                                                                    child,
+                                                                  ) {
+                                                                    const begin =
+                                                                        Offset(
+                                                                          1.0,
+                                                                          0.0,
+                                                                        );
+                                                                    const end =
+                                                                        Offset
+                                                                            .zero;
+                                                                    const curve =
+                                                                        Curves
+                                                                            .ease;
+                                                                    final tween =
+                                                                        Tween(
+                                                                          begin:
+                                                                              begin,
+                                                                          end:
+                                                                              end,
+                                                                        ).chain(
+                                                                          CurveTween(
+                                                                            curve:
+                                                                                curve,
+                                                                          ),
+                                                                        );
+                                                                    return SlideTransition(
+                                                                      position: animation
+                                                                          .drive(
+                                                                            tween,
+                                                                          ),
+                                                                      child:
+                                                                          child,
+                                                                    );
+                                                                  },
+                                                            ),
+                                                          );
+                                                        },
+                                                      ),
+                                                    ListTile(
+                                                      leading: const Icon(
+                                                        Icons.info_outline,
+                                                      ),
+                                                      title: TranslatedText(
+                                                        'song_info',
+                                                      ),
+                                                      onTap: () async {
+                                                        Navigator.of(
+                                                          context,
+                                                        ).pop();
+                                                        await SongInfoDialog.showFromSong(
+                                                          context,
+                                                          song,
+                                                          colorSchemeNotifier,
+                                                        );
+                                                      },
+                                                    ),
+                                                  ],
+                                                );
+                                              },
+                                            ),
+                                          ),
+                                        ),
+                                      );
+                                    },
                                   );
                                 }
 
@@ -5900,325 +4587,1605 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           },
                         );
                       },
-                    ),
-                  )
-                : RefreshIndicator(
-                    onRefresh: () async {
-                      // print('🔄 Iniciando refresh completo...');
-                      // Actualizar accesos directos y selección rápida
-                      await _loadAllSongs();
-                      await _loadMostPlayed();
-                      await _loadShortcuts();
-                      await _loadArtists(
-                        forceRefresh: true,
-                      ); // Forzar reindexación de artistas
-                      await _fillQuickPickWithRandomSongs(forceReload: true);
-                      _initQuickPickPages();
-                      // Limpiar cache para forzar reconstrucción
-                      _shortcutWidgetCache.clear();
-                      _quickPickWidgetCache.clear();
-                      // print('🔄 Refresh completado');
-                      _artistWidgetCache.clear();
-                      setState(() {});
-                    },
-                    child: SingleChildScrollView(
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      padding: EdgeInsets.zero,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (_updateVersion != null &&
-                              _updateVersion!.isNotEmpty &&
-                              _updateApkUrl != null) ...[
-                            const SizedBox(height: 16),
-                            Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 20,
-                                vertical: 4,
-                              ),
-                              child: Material(
-                                color:
-                                    colorSchemeNotifier.value ==
-                                        AppColorScheme.amoled
-                                    ? Colors.white.withValues(alpha: 0.1)
-                                    : Theme.of(context)
-                                          .colorScheme
-                                          .secondaryContainer
-                                          .withValues(alpha: 0.4),
-                                borderRadius: BorderRadius.circular(12),
-                                child: ListTile(
-                                  leading: Icon(
-                                    Icons.system_update,
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.onSurface,
-                                  ),
-                                  title: ValueListenableBuilder<String>(
-                                    valueListenable: languageNotifier,
-                                    builder: (context, lang, child) {
-                                      return Text(
-                                        '${LocaleProvider.tr('new_version_available')} $_updateVersion ${LocaleProvider.tr('available')}',
-                                        style: TextStyle(
-                                          color: Theme.of(
-                                            context,
-                                          ).colorScheme.onSurface,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      );
-                                    },
-                                  ),
-                                  trailing: TextButton(
-                                    style: TextButton.styleFrom(
-                                      foregroundColor: Theme.of(
-                                        context,
-                                      ).colorScheme.onPrimary,
-                                      backgroundColor: Theme.of(
-                                        context,
-                                      ).colorScheme.primaryContainer,
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                    ),
-                                    child: Text(
-                                      LocaleProvider.tr('update'),
-                                      style: TextStyle(
-                                        color:
-                                            colorSchemeNotifier.value ==
-                                                AppColorScheme.amoled
-                                            ? Theme.of(
-                                                context,
-                                              ).colorScheme.onPrimary
-                                            : Theme.of(
-                                                context,
-                                              ).colorScheme.onSurface,
-                                      ),
-                                    ),
-                                    onPressed: () {
-                                      Navigator.of(context).push(
-                                        PageRouteBuilder(
-                                          pageBuilder:
-                                              (
-                                                context,
-                                                animation,
-                                                secondaryAnimation,
-                                              ) => const UpdateScreen(),
-                                          transitionsBuilder:
-                                              (
-                                                context,
-                                                animation,
-                                                secondaryAnimation,
-                                                child,
-                                              ) {
-                                                const begin = Offset(1.0, 0.0);
-                                                const end = Offset.zero;
-                                                const curve = Curves.ease;
-                                                final tween =
-                                                    Tween(
-                                                      begin: begin,
-                                                      end: end,
-                                                    ).chain(
-                                                      CurveTween(curve: curve),
-                                                    );
-                                                return SlideTransition(
-                                                  position: animation.drive(
-                                                    tween,
-                                                  ),
-                                                  child: child,
-                                                );
-                                              },
-                                        ),
-                                      );
-                                    },
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                          const SizedBox(height: 16),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 20),
-                            child: Row(
-                              children: [
-                                TranslatedText(
-                                  'quick_access',
-                                  style: const TextStyle(
-                                    fontSize: 26,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                const Spacer(),
-                                IconButton(
-                                  icon: Icon(
-                                    Icons.play_circle_outline,
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.onSurface,
-                                  ),
-                                  tooltip: LocaleProvider.tr('play_all'),
-                                  onPressed: () {
-                                    _playSongAndOpenPlayer(
-                                      _accessDirectSongs.first,
-                                      _accessDirectSongs,
-                                      queueSource: LocaleProvider.tr(
-                                        'quick_access_songs',
-                                      ),
-                                    );
-                                  },
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 0),
-                            child: LayoutBuilder(
-                              builder: (context, constraints) {
-                                // Calcular el ancho disponible para cada elemento
-                                final availableWidth =
-                                    constraints.maxWidth -
-                                    16; // Padding horizontal
-                                final itemWidth =
-                                    (availableWidth - 24) /
-                                    3; // 3 columnas con spacing
-                                final itemHeight =
-                                    itemWidth; // Mantener aspecto cuadrado
-                                final gridHeight =
-                                    (itemHeight * 2) +
-                                    12 +
-                                    16; // 2 filas + spacing + padding
-
-                                return SizedBox(
-                                  height: gridHeight,
-                                  child: PageView(
-                                    controller: _pageController,
-                                    onPageChanged: (_) {},
-                                    children: List.generate(3, (pageIndex) {
-                                      final items = _accessDirectSongs
-                                          .skip(pageIndex * 6)
-                                          .take(6)
-                                          .toList();
-                                      return Padding(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 8,
-                                        ),
-                                        child: GridView.builder(
-                                          padding: const EdgeInsets.only(
-                                            top: 8,
-                                            bottom: 8,
-                                          ),
-                                          shrinkWrap: true,
-                                          physics:
-                                              const NeverScrollableScrollPhysics(),
-                                          itemCount: 6,
-                                          gridDelegate:
-                                              SliverGridDelegateWithFixedCrossAxisCount(
-                                                crossAxisCount: 3,
-                                                mainAxisSpacing: 12,
-                                                crossAxisSpacing: 10,
-                                                childAspectRatio:
-                                                    itemWidth / itemHeight,
-                                              ),
-                                          itemBuilder: (context, index) {
-                                            if (index < items.length) {
-                                              final song = items[index];
-                                              // Usar el método optimizado que cachea los widgets
-                                              return _buildShortcutWidget(
-                                                song,
-                                                context,
-                                              );
-                                            } else {
-                                              return Container(
-                                                decoration: BoxDecoration(
-                                                  color: Theme.of(context)
-                                                      .colorScheme
-                                                      .surfaceContainer,
-                                                  borderRadius:
-                                                      BorderRadius.circular(12),
-                                                ),
-                                                child: Icon(
-                                                  Icons.music_note,
-                                                  color: Theme.of(context)
-                                                      .colorScheme
-                                                      .onSurface
-                                                      .withValues(alpha: 0.6),
-                                                  size:
-                                                      itemWidth *
-                                                      0.3, // Tamaño del ícono adaptativo
-                                                ),
-                                              );
-                                            }
-                                          },
-                                        ),
-                                      );
-                                    }),
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          Center(
-                            child: SmoothPageIndicator(
-                              controller: _pageController,
-                              count: 3,
-                              effect: WormEffect(
-                                dotHeight: 8,
-                                dotWidth: 8,
-                                activeDotColor: Theme.of(
-                                  context,
-                                ).colorScheme.primary,
-                                dotColor: Theme.of(
-                                  context,
-                                ).colorScheme.onSurface.withValues(alpha: 0.24),
-                              ),
-                            ),
-                          ),
-                          // Sección de Artistas
-                          const SizedBox(height: 32),
-
-                          // Solo mostrar la sección de artistas si hay artistas disponibles
-                          if (_artists.isNotEmpty) ...[
-                            Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 20,
-                              ),
-                              child: Row(
+                    )
+                  : _showingPlaylistSongs
+                  ? RefreshIndicator(
+                      onRefresh: _refreshPlaylistSongs,
+                      child: Builder(
+                        builder: (context) {
+                          final List<SongModel> songsToShow =
+                              _searchPlaylistController.text.isNotEmpty
+                              ? _filteredPlaylistSongs
+                              : _playlistSongs;
+                          if (songsToShow.isEmpty) {
+                            return Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  const TranslatedText(
-                                    'artists',
+                                  Icon(
+                                    Icons.playlist_remove_outlined,
+                                    size: 48,
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurface
+                                        .withValues(alpha: 0.6),
+                                  ),
+                                  const SizedBox(height: 16),
+                                  TranslatedText(
+                                    'no_songs_in_playlist',
+                                    textAlign: TextAlign.center,
                                     style: TextStyle(
-                                      fontSize: 20,
-                                      fontWeight: FontWeight.w600,
+                                      fontSize: 14,
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurface
+                                          .withValues(alpha: 0.6),
                                     ),
                                   ),
                                 ],
                               ),
-                            ),
-                            const SizedBox(height: 16),
-                            SizedBox(
-                              height: 120,
-                              child: ListView.builder(
-                                scrollDirection: Axis.horizontal,
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
+                            );
+                          }
+                          return ValueListenableBuilder<MediaItem?>(
+                            valueListenable: _immediateMediaItemNotifier,
+                            builder: (context, immediateMediaItem, child) {
+                              final colorScheme = colorSchemeNotifier.value;
+                              final isAmoled =
+                                  colorScheme == AppColorScheme.amoled;
+                              final isDark =
+                                  Theme.of(context).brightness ==
+                                  Brightness.dark;
+                              final cardColor = isAmoled && isDark
+                                  ? Colors.white.withAlpha(20)
+                                  : isDark
+                                  ? Theme.of(context).colorScheme.onSecondary
+                                        .withValues(alpha: 0.5)
+                                  : Theme.of(context)
+                                        .colorScheme
+                                        .secondaryContainer
+                                        .withValues(alpha: 0.5);
+
+                              return ListView.builder(
+                                padding: const EdgeInsets.only(
+                                  left: 16.0,
+                                  right: 16.0,
+                                  top: 8.0,
                                 ),
-                                itemCount: _artists.length,
+                                itemCount: songsToShow.length,
                                 itemBuilder: (context, index) {
-                                  final artist = _artists[index];
+                                  final song = songsToShow[index];
+                                  final path = song.data;
+                                  final isCurrent =
+                                      (immediateMediaItem?.id != null &&
+                                      path.isNotEmpty &&
+                                      (immediateMediaItem!.id == path ||
+                                          immediateMediaItem.extras?['data'] ==
+                                              path));
+                                  final isAmoledTheme =
+                                      colorSchemeNotifier.value ==
+                                      AppColorScheme.amoled;
+                                  final isSystem =
+                                      colorSchemeNotifier.value ==
+                                      AppColorScheme.system;
+
+                                  // Determinar el borderRadius según la posición
+                                  final bool isFirst = index == 0;
+                                  final bool isLast =
+                                      index == songsToShow.length - 1;
+                                  final bool isOnly = songsToShow.length == 1;
+
+                                  BorderRadius borderRadius;
+                                  if (isOnly) {
+                                    borderRadius = BorderRadius.circular(16);
+                                  } else if (isFirst) {
+                                    borderRadius = const BorderRadius.only(
+                                      topLeft: Radius.circular(16),
+                                      topRight: Radius.circular(16),
+                                      bottomLeft: Radius.circular(4),
+                                      bottomRight: Radius.circular(4),
+                                    );
+                                  } else if (isLast) {
+                                    borderRadius = const BorderRadius.only(
+                                      topLeft: Radius.circular(4),
+                                      topRight: Radius.circular(4),
+                                      bottomLeft: Radius.circular(16),
+                                      bottomRight: Radius.circular(16),
+                                    );
+                                  } else {
+                                    borderRadius = BorderRadius.circular(4);
+                                  }
+
+                                  Widget listTileWidget;
+                                  // Solo usar ValueListenableBuilder para la canción actual
+                                  if (isCurrent) {
+                                    listTileWidget = ValueListenableBuilder<bool>(
+                                      valueListenable: _isPlayingNotifier,
+                                      builder: (context, playing, child) {
+                                        return ListTile(
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: borderRadius,
+                                          ),
+                                          onTap: () async {
+                                            if (_isSelectingPlaylistSongs) {
+                                              _onPlaylistSongSelected(song);
+                                            } else {
+                                              if (!mounted) return;
+                                              await _playSongAndOpenPlayer(
+                                                song,
+                                                songsToShow,
+                                              );
+                                            }
+                                          },
+                                          onLongPress: () async {
+                                            if (_isSelectingPlaylistSongs) {
+                                              setState(() {
+                                                if (_selectedPlaylistSongIds
+                                                    .contains(song.id)) {
+                                                  _selectedPlaylistSongIds
+                                                      .remove(song.id);
+                                                  if (_selectedPlaylistSongIds
+                                                      .isEmpty) {
+                                                    _isSelectingPlaylistSongs =
+                                                        false;
+                                                  }
+                                                } else {
+                                                  _selectedPlaylistSongIds.add(
+                                                    song.id,
+                                                  );
+                                                }
+                                              });
+                                            } else {
+                                              final isPinned =
+                                                  await ShortcutsDB()
+                                                      .isShortcut(song.data);
+                                              final isFav = await FavoritesDB()
+                                                  .isFavorite(song.data);
+                                              if (!context.mounted) return;
+                                              showModalBottomSheet(
+                                                context: context,
+                                                isScrollControlled: true,
+                                                builder: (context) => SafeArea(
+                                                  child: SingleChildScrollView(
+                                                    child: Column(
+                                                      mainAxisSize:
+                                                          MainAxisSize.min,
+                                                      children: [
+                                                        // Encabezado con información de la canción
+                                                        Container(
+                                                          padding:
+                                                              const EdgeInsets.all(
+                                                                16,
+                                                              ),
+                                                          child: Row(
+                                                            children: [
+                                                              // Carátula de la canción
+                                                              ClipRRect(
+                                                                borderRadius:
+                                                                    BorderRadius.circular(
+                                                                      8,
+                                                                    ),
+                                                                child: SizedBox(
+                                                                  width: 60,
+                                                                  height: 60,
+                                                                  child:
+                                                                      _buildModalArtwork(
+                                                                        song,
+                                                                      ),
+                                                                ),
+                                                              ),
+                                                              const SizedBox(
+                                                                width: 16,
+                                                              ),
+                                                              // Título y artista
+                                                              Expanded(
+                                                                child: Column(
+                                                                  crossAxisAlignment:
+                                                                      CrossAxisAlignment
+                                                                          .start,
+                                                                  mainAxisSize:
+                                                                      MainAxisSize
+                                                                          .min,
+                                                                  children: [
+                                                                    Text(
+                                                                      song.title,
+                                                                      maxLines:
+                                                                          1,
+                                                                      style: Theme.of(
+                                                                        context,
+                                                                      ).textTheme.titleMedium,
+                                                                      overflow:
+                                                                          TextOverflow
+                                                                              .ellipsis,
+                                                                    ),
+                                                                    const SizedBox(
+                                                                      height: 4,
+                                                                    ),
+                                                                    Text(
+                                                                      song.artist ??
+                                                                          LocaleProvider.tr(
+                                                                            'unknown_artist',
+                                                                          ),
+                                                                      style: TextStyle(
+                                                                        fontSize:
+                                                                            14,
+                                                                      ),
+                                                                      maxLines:
+                                                                          1,
+                                                                      overflow:
+                                                                          TextOverflow
+                                                                              .ellipsis,
+                                                                    ),
+                                                                  ],
+                                                                ),
+                                                              ),
+                                                              const SizedBox(
+                                                                width: 8,
+                                                              ),
+                                                              // Botón de búsqueda para abrir opciones
+                                                              InkWell(
+                                                                onTap: () async {
+                                                                  Navigator.of(
+                                                                    context,
+                                                                  ).pop();
+                                                                  await _showSearchOptions(
+                                                                    song,
+                                                                  );
+                                                                },
+                                                                borderRadius:
+                                                                    BorderRadius.circular(
+                                                                      12,
+                                                                    ),
+                                                                child: Container(
+                                                                  padding:
+                                                                      const EdgeInsets.symmetric(
+                                                                        horizontal:
+                                                                            16,
+                                                                        vertical:
+                                                                            8,
+                                                                      ),
+                                                                  decoration: BoxDecoration(
+                                                                    color:
+                                                                        Theme.of(
+                                                                              context,
+                                                                            ).brightness ==
+                                                                            Brightness.dark
+                                                                        ? Theme.of(
+                                                                            context,
+                                                                          ).colorScheme.primary
+                                                                        : Theme.of(
+                                                                            context,
+                                                                          ).colorScheme.onPrimaryContainer.withValues(
+                                                                            alpha:
+                                                                                0.7,
+                                                                          ),
+                                                                    borderRadius:
+                                                                        BorderRadius.circular(
+                                                                          12,
+                                                                        ),
+                                                                  ),
+                                                                  child: Row(
+                                                                    mainAxisSize:
+                                                                        MainAxisSize
+                                                                            .min,
+                                                                    children: [
+                                                                      Icon(
+                                                                        Icons
+                                                                            .search,
+                                                                        size:
+                                                                            20,
+                                                                        color:
+                                                                            Theme.of(
+                                                                                  context,
+                                                                                ).brightness ==
+                                                                                Brightness.dark
+                                                                            ? Theme.of(
+                                                                                context,
+                                                                              ).colorScheme.onPrimary
+                                                                            : Theme.of(
+                                                                                context,
+                                                                              ).colorScheme.surfaceContainer,
+                                                                      ),
+                                                                      const SizedBox(
+                                                                        width:
+                                                                            8,
+                                                                      ),
+                                                                      TranslatedText(
+                                                                        'search',
+                                                                        style: TextStyle(
+                                                                          fontWeight:
+                                                                              FontWeight.w600,
+                                                                          fontSize:
+                                                                              14,
+                                                                          color:
+                                                                              Theme.of(
+                                                                                    context,
+                                                                                  ).brightness ==
+                                                                                  Brightness.dark
+                                                                              ? Theme.of(
+                                                                                  context,
+                                                                                ).colorScheme.onPrimary
+                                                                              : Theme.of(
+                                                                                  context,
+                                                                                ).colorScheme.surfaceContainer,
+                                                                        ),
+                                                                      ),
+                                                                    ],
+                                                                  ),
+                                                                ),
+                                                              ),
+                                                            ],
+                                                          ),
+                                                        ),
+                                                        ListTile(
+                                                          leading: const Icon(
+                                                            Icons.queue_music,
+                                                          ),
+                                                          title: TranslatedText(
+                                                            'add_to_queue',
+                                                          ),
+                                                          onTap: () async {
+                                                            if (!context
+                                                                .mounted) {
+                                                              return;
+                                                            }
+                                                            Navigator.of(
+                                                              context,
+                                                            ).pop();
+                                                            await (audioHandler
+                                                                    as MyAudioHandler)
+                                                                .addSongsToQueueEnd(
+                                                                  [song],
+                                                                );
+                                                          },
+                                                        ),
+                                                        ListTile(
+                                                          leading: Icon(
+                                                            isFav
+                                                                ? Icons
+                                                                      .delete_outline
+                                                                : Icons
+                                                                      .favorite_border,
+                                                          ),
+                                                          title: TranslatedText(
+                                                            isFav
+                                                                ? 'remove_from_favorites'
+                                                                : 'add_to_favorites',
+                                                          ),
+                                                          onTap: () async {
+                                                            if (!context
+                                                                .mounted) {
+                                                              return;
+                                                            }
+                                                            Navigator.of(
+                                                              context,
+                                                            ).pop();
+                                                            if (isFav) {
+                                                              await FavoritesDB()
+                                                                  .removeFavorite(
+                                                                    song.data,
+                                                                  );
+                                                              favoritesShouldReload
+                                                                      .value =
+                                                                  !favoritesShouldReload
+                                                                      .value;
+                                                            } else {
+                                                              await FavoritesDB()
+                                                                  .addFavorite(
+                                                                    song,
+                                                                  );
+                                                              favoritesShouldReload
+                                                                      .value =
+                                                                  !favoritesShouldReload
+                                                                      .value;
+                                                            }
+                                                          },
+                                                        ),
+                                                        ListTile(
+                                                          leading: const Icon(
+                                                            Icons
+                                                                .playlist_remove,
+                                                          ),
+                                                          title: TranslatedText(
+                                                            'remove_from_playlist',
+                                                          ),
+                                                          onTap: () async {
+                                                            if (!context
+                                                                .mounted) {
+                                                              return;
+                                                            }
+                                                            Navigator.of(
+                                                              context,
+                                                            ).pop();
+                                                            await PlaylistsDB()
+                                                                .removeSongFromPlaylist(
+                                                                  _selectedPlaylist!['id'],
+                                                                  song.data,
+                                                                );
+                                                            await _loadPlaylistSongs(
+                                                              _selectedPlaylist!,
+                                                            );
+                                                          },
+                                                        ),
+                                                        if ((song.artist ?? '')
+                                                            .trim()
+                                                            .isNotEmpty)
+                                                          ListTile(
+                                                            leading: const Icon(
+                                                              Icons
+                                                                  .person_outline,
+                                                            ),
+                                                            title:
+                                                                const TranslatedText(
+                                                                  'go_to_artist',
+                                                                ),
+                                                            onTap: () {
+                                                              Navigator.of(
+                                                                context,
+                                                              ).pop();
+                                                              final name =
+                                                                  (song.artist ??
+                                                                          '')
+                                                                      .trim();
+                                                              if (name
+                                                                  .isEmpty) {
+                                                                return;
+                                                              }
+                                                              Navigator.of(
+                                                                context,
+                                                              ).push(
+                                                                PageRouteBuilder(
+                                                                  pageBuilder:
+                                                                      (
+                                                                        context,
+                                                                        animation,
+                                                                        secondaryAnimation,
+                                                                      ) => ArtistScreen(
+                                                                        artistName:
+                                                                            name,
+                                                                      ),
+                                                                  transitionsBuilder:
+                                                                      (
+                                                                        context,
+                                                                        animation,
+                                                                        secondaryAnimation,
+                                                                        child,
+                                                                      ) {
+                                                                        const begin =
+                                                                            Offset(
+                                                                              1.0,
+                                                                              0.0,
+                                                                            );
+                                                                        const end =
+                                                                            Offset.zero;
+                                                                        const curve =
+                                                                            Curves.ease;
+                                                                        final tween =
+                                                                            Tween(
+                                                                              begin: begin,
+                                                                              end: end,
+                                                                            ).chain(
+                                                                              CurveTween(
+                                                                                curve: curve,
+                                                                              ),
+                                                                            );
+                                                                        return SlideTransition(
+                                                                          position: animation.drive(
+                                                                            tween,
+                                                                          ),
+                                                                          child:
+                                                                              child,
+                                                                        );
+                                                                      },
+                                                                ),
+                                                              );
+                                                            },
+                                                          ),
+                                                        ListTile(
+                                                          leading: Icon(
+                                                            isPinned
+                                                                ? Icons.push_pin
+                                                                : Icons
+                                                                      .push_pin_outlined,
+                                                          ),
+                                                          title: TranslatedText(
+                                                            isPinned
+                                                                ? 'unpin_shortcut'
+                                                                : 'pin_shortcut',
+                                                          ),
+                                                          onTap: () async {
+                                                            if (!context
+                                                                .mounted) {
+                                                              return;
+                                                            }
+                                                            Navigator.of(
+                                                              context,
+                                                            ).pop();
+                                                            if (isPinned) {
+                                                              await ShortcutsDB()
+                                                                  .removeShortcut(
+                                                                    song.data,
+                                                                  );
+                                                            } else {
+                                                              await ShortcutsDB()
+                                                                  .addShortcut(
+                                                                    song.data,
+                                                                  );
+                                                            }
+                                                            shortcutsShouldReload
+                                                                    .value =
+                                                                !shortcutsShouldReload
+                                                                    .value;
+                                                          },
+                                                        ),
+                                                        ListTile(
+                                                          leading: const Icon(
+                                                            Icons
+                                                                .check_box_outlined,
+                                                          ),
+                                                          title: TranslatedText(
+                                                            'select',
+                                                          ),
+                                                          onTap: () {
+                                                            Navigator.of(
+                                                              context,
+                                                            ).pop();
+                                                            setState(() {
+                                                              _isSelectingPlaylistSongs =
+                                                                  true;
+                                                              _selectedPlaylistSongIds
+                                                                  .add(song.id);
+                                                            });
+                                                          },
+                                                        ),
+                                                        ListTile(
+                                                          leading: const Icon(
+                                                            Icons.info_outline,
+                                                          ),
+                                                          title: TranslatedText(
+                                                            'song_info',
+                                                          ),
+                                                          onTap: () async {
+                                                            Navigator.of(
+                                                              context,
+                                                            ).pop();
+                                                            await SongInfoDialog.showFromSong(
+                                                              context,
+                                                              song,
+                                                              colorSchemeNotifier,
+                                                            );
+                                                          },
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                ),
+                                              );
+                                            }
+                                          },
+                                          leading: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              if (_isSelectingPlaylistSongs)
+                                                Checkbox(
+                                                  value:
+                                                      _selectedPlaylistSongIds
+                                                          .contains(song.id),
+                                                  onChanged: (checked) {
+                                                    setState(() {
+                                                      if (checked == true) {
+                                                        _selectedPlaylistSongIds
+                                                            .add(song.id);
+                                                      } else {
+                                                        _selectedPlaylistSongIds
+                                                            .remove(song.id);
+                                                        if (_selectedPlaylistSongIds
+                                                            .isEmpty) {
+                                                          _isSelectingPlaylistSongs =
+                                                              false;
+                                                        }
+                                                      }
+                                                    });
+                                                  },
+                                                ),
+                                              ClipRRect(
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
+                                                child: QueryArtworkWidget(
+                                                  id: song.id,
+                                                  type: ArtworkType.AUDIO,
+                                                  artworkBorder:
+                                                      BorderRadius.circular(8),
+                                                  artworkHeight: 50,
+                                                  artworkWidth: 50,
+                                                  keepOldArtwork: true,
+                                                  nullArtworkWidget: Container(
+                                                    color: isSystem
+                                                        ? Theme.of(context)
+                                                              .colorScheme
+                                                              .secondaryContainer
+                                                              .withValues(
+                                                                alpha: 0.5,
+                                                              )
+                                                        : Theme.of(context)
+                                                              .colorScheme
+                                                              .surfaceContainer,
+                                                    width: 50,
+                                                    height: 50,
+                                                    child: Icon(
+                                                      Icons.music_note,
+                                                      color: Theme.of(
+                                                        context,
+                                                      ).colorScheme.onSurface,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          title: Row(
+                                            children: [
+                                              if (isCurrent)
+                                                Padding(
+                                                  padding:
+                                                      const EdgeInsets.only(
+                                                        right: 8.0,
+                                                      ),
+                                                  child: MiniMusicVisualizer(
+                                                    color: Theme.of(
+                                                      context,
+                                                    ).colorScheme.primary,
+                                                    width: 4,
+                                                    height: 15,
+                                                    radius: 4,
+                                                    animate: playing
+                                                        ? true
+                                                        : false,
+                                                  ),
+                                                ),
+                                              Expanded(
+                                                child: Text(
+                                                  song.title,
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  style: isCurrent
+                                                      ? Theme.of(context)
+                                                            .textTheme
+                                                            .titleMedium
+                                                            ?.copyWith(
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .bold,
+                                                              color:
+                                                                  isAmoledTheme
+                                                                  ? Colors.white
+                                                                  : Theme.of(
+                                                                          context,
+                                                                        )
+                                                                        .colorScheme
+                                                                        .primary,
+                                                            )
+                                                      : Theme.of(
+                                                          context,
+                                                        ).textTheme.titleMedium,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          subtitle: Text(
+                                            _formatArtistWithDuration(song),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                          trailing: IconButton(
+                                            icon: Icon(
+                                              isCurrent && playing
+                                                  ? Icons.pause_rounded
+                                                  : Icons.play_arrow_rounded,
+                                              grade: 200,
+                                              fill: 1,
+                                            ),
+                                            onPressed: () {
+                                              if (isCurrent) {
+                                                playing
+                                                    ? (audioHandler
+                                                              as MyAudioHandler)
+                                                          .pause()
+                                                    : (audioHandler
+                                                              as MyAudioHandler)
+                                                          .play();
+                                              } else {
+                                                // Precargar la carátula antes de reproducir
+                                                unawaited(
+                                                  _preloadArtworkForSong(song),
+                                                );
+                                                _playSongAndOpenPlayer(
+                                                  song,
+                                                  songsToShow,
+                                                );
+                                              }
+                                            },
+                                          ),
+                                          selected: isCurrent,
+                                          selectedTileColor: isCurrent
+                                              ? (isAmoledTheme
+                                                    ? Colors.transparent
+                                                    : Theme.of(context)
+                                                          .colorScheme
+                                                          .primaryContainer
+                                                          .withValues(
+                                                            alpha: 0.8,
+                                                          ))
+                                              : null,
+                                        );
+                                      },
+                                    );
+                                  } else {
+                                    // Para canciones que no están reproduciéndose, no usar StreamBuilder
+                                    final playing =
+                                        audioHandler
+                                            ?.playbackState
+                                            .value
+                                            .playing ??
+                                        false;
+                                    listTileWidget = ListTile(
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: borderRadius,
+                                      ),
+                                      onTap: () async {
+                                        if (_isSelectingPlaylistSongs) {
+                                          _onPlaylistSongSelected(song);
+                                        } else {
+                                          if (!mounted) return;
+                                          await _playSongAndOpenPlayer(
+                                            song,
+                                            songsToShow,
+                                          );
+                                        }
+                                      },
+                                      onLongPress: () async {
+                                        if (_isSelectingPlaylistSongs) {
+                                          setState(() {
+                                            if (_selectedPlaylistSongIds
+                                                .contains(song.id)) {
+                                              _selectedPlaylistSongIds.remove(
+                                                song.id,
+                                              );
+                                              if (_selectedPlaylistSongIds
+                                                  .isEmpty) {
+                                                _isSelectingPlaylistSongs =
+                                                    false;
+                                              }
+                                            } else {
+                                              _selectedPlaylistSongIds.add(
+                                                song.id,
+                                              );
+                                            }
+                                          });
+                                        } else {
+                                          final isPinned = await ShortcutsDB()
+                                              .isShortcut(song.data);
+                                          final isFav = await FavoritesDB()
+                                              .isFavorite(song.data);
+                                          if (!context.mounted) return;
+                                          showModalBottomSheet(
+                                            context: context,
+                                            isScrollControlled: true,
+                                            builder: (context) => SafeArea(
+                                              child: SingleChildScrollView(
+                                                child: Column(
+                                                  mainAxisSize:
+                                                      MainAxisSize.min,
+                                                  children: [
+                                                    // Encabezado con información de la canción
+                                                    Container(
+                                                      padding:
+                                                          const EdgeInsets.all(
+                                                            16,
+                                                          ),
+                                                      child: Row(
+                                                        children: [
+                                                          // Carátula de la canción
+                                                          ClipRRect(
+                                                            borderRadius:
+                                                                BorderRadius.circular(
+                                                                  8,
+                                                                ),
+                                                            child: SizedBox(
+                                                              width: 60,
+                                                              height: 60,
+                                                              child:
+                                                                  _buildModalArtwork(
+                                                                    song,
+                                                                  ),
+                                                            ),
+                                                          ),
+                                                          const SizedBox(
+                                                            width: 16,
+                                                          ),
+                                                          // Título y artista
+                                                          Expanded(
+                                                            child: Column(
+                                                              crossAxisAlignment:
+                                                                  CrossAxisAlignment
+                                                                      .start,
+                                                              mainAxisSize:
+                                                                  MainAxisSize
+                                                                      .min,
+                                                              children: [
+                                                                Text(
+                                                                  song.title,
+                                                                  maxLines: 1,
+                                                                  style: Theme.of(
+                                                                    context,
+                                                                  ).textTheme.titleMedium,
+                                                                  overflow:
+                                                                      TextOverflow
+                                                                          .ellipsis,
+                                                                ),
+                                                                const SizedBox(
+                                                                  height: 4,
+                                                                ),
+                                                                Text(
+                                                                  song.artist ??
+                                                                      LocaleProvider.tr(
+                                                                        'unknown_artist',
+                                                                      ),
+                                                                  style:
+                                                                      TextStyle(
+                                                                        fontSize:
+                                                                            14,
+                                                                      ),
+                                                                  maxLines: 1,
+                                                                  overflow:
+                                                                      TextOverflow
+                                                                          .ellipsis,
+                                                                ),
+                                                              ],
+                                                            ),
+                                                          ),
+                                                          const SizedBox(
+                                                            width: 8,
+                                                          ),
+                                                          // Botón de búsqueda para abrir opciones
+                                                          InkWell(
+                                                            onTap: () async {
+                                                              Navigator.of(
+                                                                context,
+                                                              ).pop();
+                                                              await _showSearchOptions(
+                                                                song,
+                                                              );
+                                                            },
+                                                            borderRadius:
+                                                                BorderRadius.circular(
+                                                                  12,
+                                                                ),
+                                                            child: Container(
+                                                              padding:
+                                                                  const EdgeInsets.symmetric(
+                                                                    horizontal:
+                                                                        16,
+                                                                    vertical: 8,
+                                                                  ),
+                                                              decoration: BoxDecoration(
+                                                                color:
+                                                                    Theme.of(
+                                                                          context,
+                                                                        ).brightness ==
+                                                                        Brightness
+                                                                            .dark
+                                                                    ? Theme.of(
+                                                                        context,
+                                                                      ).colorScheme.primary
+                                                                    : Theme.of(
+                                                                        context,
+                                                                      ).colorScheme.onPrimaryContainer.withValues(
+                                                                        alpha:
+                                                                            0.7,
+                                                                      ),
+                                                                borderRadius:
+                                                                    BorderRadius.circular(
+                                                                      12,
+                                                                    ),
+                                                              ),
+                                                              child: Row(
+                                                                mainAxisSize:
+                                                                    MainAxisSize
+                                                                        .min,
+                                                                children: [
+                                                                  Icon(
+                                                                    Icons
+                                                                        .search,
+                                                                    size: 20,
+                                                                    color:
+                                                                        Theme.of(
+                                                                              context,
+                                                                            ).brightness ==
+                                                                            Brightness.dark
+                                                                        ? Theme.of(
+                                                                            context,
+                                                                          ).colorScheme.onPrimary
+                                                                        : Theme.of(
+                                                                            context,
+                                                                          ).colorScheme.surfaceContainer,
+                                                                  ),
+                                                                  const SizedBox(
+                                                                    width: 8,
+                                                                  ),
+                                                                  TranslatedText(
+                                                                    'search',
+                                                                    style: TextStyle(
+                                                                      fontWeight:
+                                                                          FontWeight
+                                                                              .w600,
+                                                                      fontSize:
+                                                                          14,
+                                                                      color:
+                                                                          Theme.of(
+                                                                                context,
+                                                                              ).brightness ==
+                                                                              Brightness.dark
+                                                                          ? Theme.of(
+                                                                              context,
+                                                                            ).colorScheme.onPrimary
+                                                                          : Theme.of(
+                                                                              context,
+                                                                            ).colorScheme.surfaceContainer,
+                                                                    ),
+                                                                  ),
+                                                                ],
+                                                              ),
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                    ListTile(
+                                                      leading: const Icon(
+                                                        Icons.queue_music,
+                                                      ),
+                                                      title: TranslatedText(
+                                                        'add_to_queue',
+                                                      ),
+                                                      onTap: () async {
+                                                        if (!context.mounted) {
+                                                          return;
+                                                        }
+                                                        Navigator.of(
+                                                          context,
+                                                        ).pop();
+                                                        await (audioHandler
+                                                                as MyAudioHandler)
+                                                            .addSongsToQueueEnd(
+                                                              [song],
+                                                            );
+                                                      },
+                                                    ),
+                                                    ListTile(
+                                                      leading: Icon(
+                                                        isFav
+                                                            ? Icons
+                                                                  .delete_outline
+                                                            : Icons
+                                                                  .favorite_outline_rounded,
+                                                        weight: isFav
+                                                            ? null
+                                                            : 600,
+                                                      ),
+                                                      title: TranslatedText(
+                                                        isFav
+                                                            ? 'remove_from_favorites'
+                                                            : 'add_to_favorites',
+                                                      ),
+                                                      onTap: () async {
+                                                        if (!context.mounted) {
+                                                          return;
+                                                        }
+                                                        Navigator.of(
+                                                          context,
+                                                        ).pop();
+                                                        if (isFav) {
+                                                          await FavoritesDB()
+                                                              .removeFavorite(
+                                                                song.data,
+                                                              );
+                                                          favoritesShouldReload
+                                                                  .value =
+                                                              !favoritesShouldReload
+                                                                  .value;
+                                                        } else {
+                                                          await FavoritesDB()
+                                                              .addFavorite(
+                                                                song,
+                                                              );
+                                                          favoritesShouldReload
+                                                                  .value =
+                                                              !favoritesShouldReload
+                                                                  .value;
+                                                        }
+                                                      },
+                                                    ),
+                                                    ListTile(
+                                                      leading: const Icon(
+                                                        Icons.playlist_remove,
+                                                      ),
+                                                      title: TranslatedText(
+                                                        'remove_from_playlist',
+                                                      ),
+                                                      onTap: () async {
+                                                        if (!context.mounted) {
+                                                          return;
+                                                        }
+                                                        Navigator.of(
+                                                          context,
+                                                        ).pop();
+                                                        await PlaylistsDB()
+                                                            .removeSongFromPlaylist(
+                                                              _selectedPlaylist!['id'],
+                                                              song.data,
+                                                            );
+                                                        await _loadPlaylistSongs(
+                                                          _selectedPlaylist!,
+                                                        );
+                                                      },
+                                                    ),
+                                                    ListTile(
+                                                      leading: Icon(
+                                                        isPinned
+                                                            ? Icons.push_pin
+                                                            : Icons
+                                                                  .push_pin_outlined,
+                                                      ),
+                                                      title: TranslatedText(
+                                                        isPinned
+                                                            ? 'unpin_shortcut'
+                                                            : 'pin_shortcut',
+                                                      ),
+                                                      onTap: () async {
+                                                        if (!context.mounted) {
+                                                          return;
+                                                        }
+                                                        Navigator.of(
+                                                          context,
+                                                        ).pop();
+                                                        if (isPinned) {
+                                                          await ShortcutsDB()
+                                                              .removeShortcut(
+                                                                song.data,
+                                                              );
+                                                        } else {
+                                                          await ShortcutsDB()
+                                                              .addShortcut(
+                                                                song.data,
+                                                              );
+                                                        }
+                                                        shortcutsShouldReload
+                                                                .value =
+                                                            !shortcutsShouldReload
+                                                                .value;
+                                                      },
+                                                    ),
+                                                    if ((song.artist ?? '')
+                                                        .trim()
+                                                        .isNotEmpty)
+                                                      ListTile(
+                                                        leading: const Icon(
+                                                          Icons.person_outline,
+                                                        ),
+                                                        title:
+                                                            const TranslatedText(
+                                                              'go_to_artist',
+                                                            ),
+                                                        onTap: () {
+                                                          Navigator.of(
+                                                            context,
+                                                          ).pop();
+                                                          final name =
+                                                              (song.artist ??
+                                                                      '')
+                                                                  .trim();
+                                                          if (name.isEmpty) {
+                                                            return;
+                                                          }
+                                                          Navigator.of(
+                                                            context,
+                                                          ).push(
+                                                            PageRouteBuilder(
+                                                              pageBuilder:
+                                                                  (
+                                                                    context,
+                                                                    animation,
+                                                                    secondaryAnimation,
+                                                                  ) => ArtistScreen(
+                                                                    artistName:
+                                                                        name,
+                                                                  ),
+                                                              transitionsBuilder:
+                                                                  (
+                                                                    context,
+                                                                    animation,
+                                                                    secondaryAnimation,
+                                                                    child,
+                                                                  ) {
+                                                                    const begin =
+                                                                        Offset(
+                                                                          1.0,
+                                                                          0.0,
+                                                                        );
+                                                                    const end =
+                                                                        Offset
+                                                                            .zero;
+                                                                    const curve =
+                                                                        Curves
+                                                                            .ease;
+                                                                    final tween =
+                                                                        Tween(
+                                                                          begin:
+                                                                              begin,
+                                                                          end:
+                                                                              end,
+                                                                        ).chain(
+                                                                          CurveTween(
+                                                                            curve:
+                                                                                curve,
+                                                                          ),
+                                                                        );
+                                                                    return SlideTransition(
+                                                                      position: animation
+                                                                          .drive(
+                                                                            tween,
+                                                                          ),
+                                                                      child:
+                                                                          child,
+                                                                    );
+                                                                  },
+                                                            ),
+                                                          );
+                                                        },
+                                                      ),
+                                                    ListTile(
+                                                      leading: const Icon(
+                                                        Icons
+                                                            .check_box_outlined,
+                                                      ),
+                                                      title: TranslatedText(
+                                                        'select',
+                                                      ),
+                                                      onTap: () {
+                                                        Navigator.of(
+                                                          context,
+                                                        ).pop();
+                                                        setState(() {
+                                                          _isSelectingPlaylistSongs =
+                                                              true;
+                                                          _selectedPlaylistSongIds
+                                                              .add(song.id);
+                                                        });
+                                                      },
+                                                    ),
+                                                    ListTile(
+                                                      leading: const Icon(
+                                                        Icons.info_outline,
+                                                      ),
+                                                      title: TranslatedText(
+                                                        'song_info',
+                                                      ),
+                                                      onTap: () async {
+                                                        Navigator.of(
+                                                          context,
+                                                        ).pop();
+                                                        await SongInfoDialog.showFromSong(
+                                                          context,
+                                                          song,
+                                                          colorSchemeNotifier,
+                                                        );
+                                                      },
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ),
+                                          );
+                                        }
+                                      },
+                                      leading: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          if (_isSelectingPlaylistSongs)
+                                            Checkbox(
+                                              value: _selectedPlaylistSongIds
+                                                  .contains(song.id),
+                                              onChanged: (checked) {
+                                                setState(() {
+                                                  if (checked == true) {
+                                                    _selectedPlaylistSongIds
+                                                        .add(song.id);
+                                                  } else {
+                                                    _selectedPlaylistSongIds
+                                                        .remove(song.id);
+                                                    if (_selectedPlaylistSongIds
+                                                        .isEmpty) {
+                                                      _isSelectingPlaylistSongs =
+                                                          false;
+                                                    }
+                                                  }
+                                                });
+                                              },
+                                            ),
+                                          ClipRRect(
+                                            borderRadius: BorderRadius.circular(
+                                              8,
+                                            ),
+                                            child: QueryArtworkWidget(
+                                              id: song.id,
+                                              type: ArtworkType.AUDIO,
+                                              artworkBorder:
+                                                  BorderRadius.circular(8),
+                                              artworkHeight: 50,
+                                              artworkWidth: 50,
+                                              keepOldArtwork: true,
+                                              nullArtworkWidget: Container(
+                                                color: isSystem
+                                                    ? Theme.of(context)
+                                                          .colorScheme
+                                                          .secondaryContainer
+                                                          .withValues(
+                                                            alpha: 0.5,
+                                                          )
+                                                    : Theme.of(context)
+                                                          .colorScheme
+                                                          .surfaceContainer,
+                                                width: 50,
+                                                height: 50,
+                                                child: Icon(
+                                                  Icons.music_note,
+                                                  color: Theme.of(
+                                                    context,
+                                                  ).colorScheme.onSurface,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      title: Row(
+                                        children: [
+                                          if (isCurrent)
+                                            Padding(
+                                              padding: const EdgeInsets.only(
+                                                right: 8.0,
+                                              ),
+                                              child: MiniMusicVisualizer(
+                                                color: Theme.of(
+                                                  context,
+                                                ).colorScheme.primary,
+                                                width: 4,
+                                                height: 15,
+                                                radius: 4,
+                                                animate: false, // No playing
+                                              ),
+                                            ),
+                                          Expanded(
+                                            child: Text(
+                                              song.title,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: isCurrent
+                                                  ? Theme.of(context)
+                                                        .textTheme
+                                                        .titleMedium
+                                                        ?.copyWith(
+                                                          fontWeight:
+                                                              FontWeight.bold,
+                                                          color: isAmoledTheme
+                                                              ? Colors.white
+                                                              : Theme.of(
+                                                                      context,
+                                                                    )
+                                                                    .colorScheme
+                                                                    .primary,
+                                                        )
+                                                  : Theme.of(
+                                                      context,
+                                                    ).textTheme.titleMedium,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      subtitle: Text(
+                                        _formatArtistWithDuration(song),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      trailing: IconButton(
+                                        icon: Icon(
+                                          isCurrent && playing
+                                              ? Icons.pause_rounded
+                                              : Icons.play_arrow_rounded,
+                                          grade: 200,
+                                          fill: 1,
+                                        ),
+                                        onPressed: () {
+                                          if (isCurrent) {
+                                            playing
+                                                ? (audioHandler
+                                                          as MyAudioHandler)
+                                                      .pause()
+                                                : (audioHandler
+                                                          as MyAudioHandler)
+                                                      .play();
+                                          } else {
+                                            // Precargar la carátula antes de reproducir
+                                            unawaited(
+                                              _preloadArtworkForSong(song),
+                                            );
+                                            _playSongAndOpenPlayer(
+                                              song,
+                                              songsToShow,
+                                            );
+                                          }
+                                        },
+                                      ),
+                                      selected: isCurrent,
+                                      selectedTileColor: isCurrent
+                                          ? (isAmoledTheme
+                                                ? Colors.white.withValues(
+                                                    alpha: 0.15,
+                                                  )
+                                                : Theme.of(context)
+                                                      .colorScheme
+                                                      .primaryContainer
+                                                      .withValues(alpha: 0.8))
+                                          : null,
+                                    );
+                                  }
+
+                                  // Determinar si es el último para el padding
+                                  final bool isLastItem =
+                                      index == songsToShow.length - 1;
+
                                   return Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 10,
+                                    padding: EdgeInsets.only(
+                                      bottom: isLastItem ? 0 : 4,
                                     ),
-                                    child: _buildArtistWidget(artist, context),
+                                    child: Card(
+                                      color: cardColor,
+                                      margin: EdgeInsets.zero,
+                                      elevation: 0,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: borderRadius,
+                                      ),
+                                      child: ClipRRect(
+                                        borderRadius: borderRadius,
+                                        child: listTileWidget,
+                                      ),
+                                    ),
+                                  );
+                                },
+                              );
+                            },
+                          );
+                        },
+                      ),
+                    )
+                  : RefreshIndicator(
+                      onRefresh: () async {
+                        // print('🔄 Iniciando refresh completo...');
+                        // Actualizar accesos directos y selección rápida
+                        await _loadAllSongs();
+                        await _loadMostPlayed();
+                        await _loadShortcuts();
+                        await _loadArtists(
+                          forceRefresh: true,
+                        ); // Forzar reindexación de artistas
+                        await _fillQuickPickWithRandomSongs(forceReload: true);
+                        _initQuickPickPages();
+                        // Limpiar cache para forzar reconstrucción
+                        _shortcutWidgetCache.clear();
+                        _quickPickWidgetCache.clear();
+                        // print('🔄 Refresh completado');
+                        _artistWidgetCache.clear();
+                        setState(() {});
+                      },
+                      child: SingleChildScrollView(
+                        controller: _homeScrollController,
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        padding: EdgeInsets.zero,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (_updateVersion != null &&
+                                _updateVersion!.isNotEmpty &&
+                                _updateApkUrl != null) ...[
+                              const SizedBox(height: 16),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 20,
+                                  vertical: 4,
+                                ),
+                                child: Material(
+                                  color:
+                                      colorSchemeNotifier.value ==
+                                          AppColorScheme.amoled
+                                      ? Colors.white.withValues(alpha: 0.1)
+                                      : Theme.of(context)
+                                            .colorScheme
+                                            .secondaryContainer
+                                            .withValues(alpha: 0.4),
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: ListTile(
+                                    leading: Icon(
+                                      Icons.system_update,
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.onSurface,
+                                    ),
+                                    title: ValueListenableBuilder<String>(
+                                      valueListenable: languageNotifier,
+                                      builder: (context, lang, child) {
+                                        return Text(
+                                          '${LocaleProvider.tr('new_version_available')} $_updateVersion ${LocaleProvider.tr('available')}',
+                                          style: TextStyle(
+                                            color: Theme.of(
+                                              context,
+                                            ).colorScheme.onSurface,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                    trailing: TextButton(
+                                      style: TextButton.styleFrom(
+                                        foregroundColor: Theme.of(
+                                          context,
+                                        ).colorScheme.onPrimary,
+                                        backgroundColor: Theme.of(
+                                          context,
+                                        ).colorScheme.primaryContainer,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            8,
+                                          ),
+                                        ),
+                                      ),
+                                      child: Text(
+                                        LocaleProvider.tr('update'),
+                                        style: TextStyle(
+                                          color:
+                                              colorSchemeNotifier.value ==
+                                                  AppColorScheme.amoled
+                                              ? Theme.of(
+                                                  context,
+                                                ).colorScheme.onPrimary
+                                              : Theme.of(
+                                                  context,
+                                                ).colorScheme.onSurface,
+                                        ),
+                                      ),
+                                      onPressed: () {
+                                        Navigator.of(context).push(
+                                          PageRouteBuilder(
+                                            pageBuilder:
+                                                (
+                                                  context,
+                                                  animation,
+                                                  secondaryAnimation,
+                                                ) => const UpdateScreen(),
+                                            transitionsBuilder:
+                                                (
+                                                  context,
+                                                  animation,
+                                                  secondaryAnimation,
+                                                  child,
+                                                ) {
+                                                  const begin = Offset(
+                                                    1.0,
+                                                    0.0,
+                                                  );
+                                                  const end = Offset.zero;
+                                                  const curve = Curves.ease;
+                                                  final tween =
+                                                      Tween(
+                                                        begin: begin,
+                                                        end: end,
+                                                      ).chain(
+                                                        CurveTween(
+                                                          curve: curve,
+                                                        ),
+                                                      );
+                                                  return SlideTransition(
+                                                    position: animation.drive(
+                                                      tween,
+                                                    ),
+                                                    child: child,
+                                                  );
+                                                },
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                              child: ValueListenableBuilder<AppColorScheme>(
+                                valueListenable: colorSchemeNotifier,
+                                builder: (context, colorScheme, _) {
+                                  final isDark = Theme.of(context).brightness ==
+                                      Brightness.dark;
+                                  final isAmoled =
+                                      colorScheme == AppColorScheme.amoled;
+                                  final barColor = isAmoled
+                                      ? Colors.white.withAlpha(20)
+                                      : isDark
+                                          ? Theme.of(context)
+                                              .colorScheme
+                                              .onSecondary
+                                              .withValues(alpha: 0.5)
+                                          : Theme.of(context)
+                                              .colorScheme
+                                              .secondaryContainer
+                                              .withValues(alpha: 0.5);
+                                  return Material(
+                                    color: Colors.transparent,
+                                    child: InkWell(
+                                      onTap: () {
+                                        widget.onTabChange?.call(1);
+                                        WidgetsBinding.instance
+                                            .addPostFrameCallback((_) {
+                                          focusYtSearchNotifier.value = true;
+                                        });
+                                      },
+                                      borderRadius: BorderRadius.circular(28),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 20,
+                                          vertical: 12,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: barColor,
+                                          borderRadius:
+                                              BorderRadius.circular(28),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            Icon(
+                                              Icons.search,
+                                              size: 24,
+                                              color: isAmoled
+                                                  ? Colors.white
+                                                      .withAlpha(160)
+                                                  : Theme.of(context)
+                                                      .colorScheme
+                                                      .onSurfaceVariant,
+                                            ),
+                                            const SizedBox(width: 12),
+                                            Text(
+                                              LocaleProvider.tr(
+                                                'search_in_youtube_music',
+                                              ),
+                                              style: TextStyle(
+                                                fontSize: 15,
+                                                color: isAmoled
+                                                    ? Colors.white
+                                                        .withAlpha(160)
+                                                    : Theme.of(context)
+                                                        .colorScheme
+                                                        .onSurfaceVariant,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
                                   );
                                 },
                               ),
                             ),
-                          ],
-                          // Solo mostrar la sección de selección rápida si hay canciones disponibles
-                          if (limitedQuickPick.isNotEmpty) ...[
-                            const SizedBox(height: 32),
-
+                            const SizedBox(height: 16),
                             Padding(
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 20,
@@ -6226,9 +6193,9 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                               child: Row(
                                 children: [
                                   TranslatedText(
-                                    'quick_pick',
+                                    'quick_access',
                                     style: const TextStyle(
-                                      fontSize: 20,
+                                      fontSize: 26,
                                       fontWeight: FontWeight.w600,
                                     ),
                                   ),
@@ -6243,10 +6210,10 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                     tooltip: LocaleProvider.tr('play_all'),
                                     onPressed: () {
                                       _playSongAndOpenPlayer(
-                                        limitedQuickPick.first,
-                                        extendedQuickPick,
+                                        _accessDirectSongs.first,
+                                        _accessDirectSongs,
                                         queueSource: LocaleProvider.tr(
-                                          'quick_pick_songs',
+                                          'quick_access_songs',
                                         ),
                                       );
                                     },
@@ -6255,73 +6222,268 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                               ),
                             ),
                             const SizedBox(height: 12),
-                            Column(
-                              children: [
-                                SizedBox(
-                                  height: 320,
-                                  child: PageView.builder(
-                                    controller: _quickPickPageController,
-                                    itemCount: quickPickPageCount,
-                                    itemBuilder: (context, pageIndex) {
-                                      final songs = limitedQuickPick
-                                          .skip(
-                                            pageIndex * quickPickSongsPerPage,
-                                          )
-                                          .take(quickPickSongsPerPage)
-                                          .toList();
-                                      return Padding(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 0,
-                                        ),
-                                        child: ListView.builder(
-                                          shrinkWrap: true,
-                                          physics:
-                                              const NeverScrollableScrollPhysics(),
-                                          itemCount: songs.length,
-                                          itemBuilder: (context, index) {
-                                            final song = songs[index];
-                                            return Padding(
-                                              padding: EdgeInsets.only(
-                                                bottom: index < songs.length - 1
-                                                    ? 8.0
-                                                    : 0,
-                                              ),
-                                              // Usar el método optimizado que cachea los widgets
-                                              child: _buildQuickPickWidget(
-                                                song,
-                                                context,
-                                                songs,
-                                              ),
-                                            );
-                                          },
-                                        ),
-                                      );
-                                    },
-                                  ),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 0,
+                              ),
+                              child: LayoutBuilder(
+                                builder: (context, constraints) {
+                                  // Calcular el ancho disponible para cada elemento
+                                  final availableWidth =
+                                      constraints.maxWidth -
+                                      16; // Padding horizontal
+                                  final itemWidth =
+                                      (availableWidth - 24) /
+                                      3; // 3 columnas con spacing
+                                  final itemHeight =
+                                      itemWidth; // Mantener aspecto cuadrado
+                                  final gridHeight =
+                                      (itemHeight * 2) +
+                                      12 +
+                                      16; // 2 filas + spacing + padding
+
+                                  return SizedBox(
+                                    height: gridHeight,
+                                    child: PageView(
+                                      controller: _pageController,
+                                      onPageChanged: (_) {},
+                                      children: List.generate(3, (pageIndex) {
+                                        final items = _accessDirectSongs
+                                            .skip(pageIndex * 6)
+                                            .take(6)
+                                            .toList();
+                                        return Padding(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 8,
+                                          ),
+                                          child: GridView.builder(
+                                            padding: const EdgeInsets.only(
+                                              top: 8,
+                                              bottom: 8,
+                                            ),
+                                            shrinkWrap: true,
+                                            physics:
+                                                const NeverScrollableScrollPhysics(),
+                                            itemCount: 6,
+                                            gridDelegate:
+                                                SliverGridDelegateWithFixedCrossAxisCount(
+                                                  crossAxisCount: 3,
+                                                  mainAxisSpacing: 12,
+                                                  crossAxisSpacing: 10,
+                                                  childAspectRatio:
+                                                      itemWidth / itemHeight,
+                                                ),
+                                            itemBuilder: (context, index) {
+                                              if (index < items.length) {
+                                                final song = items[index];
+                                                // Usar el método optimizado que cachea los widgets
+                                                return _buildShortcutWidget(
+                                                  song,
+                                                  context,
+                                                );
+                                              } else {
+                                                return Container(
+                                                  decoration: BoxDecoration(
+                                                    color: Theme.of(context)
+                                                        .colorScheme
+                                                        .surfaceContainer,
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          12,
+                                                        ),
+                                                  ),
+                                                  child: Icon(
+                                                    Icons.music_note,
+                                                    color: Theme.of(context)
+                                                        .colorScheme
+                                                        .onSurface
+                                                        .withValues(alpha: 0.6),
+                                                    size:
+                                                        itemWidth *
+                                                        0.3, // Tamaño del ícono adaptativo
+                                                  ),
+                                                );
+                                              }
+                                            },
+                                          ),
+                                        );
+                                      }),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            Center(
+                              child: SmoothPageIndicator(
+                                controller: _pageController,
+                                count: 3,
+                                effect: WormEffect(
+                                  dotHeight: 8,
+                                  dotWidth: 8,
+                                  activeDotColor: Theme.of(
+                                    context,
+                                  ).colorScheme.primary,
+                                  dotColor: Theme.of(context)
+                                      .colorScheme
+                                      .onSurface
+                                      .withValues(alpha: 0.24),
                                 ),
-                                const SizedBox(height: 12),
-                                // Solo mostrar el indicador si hay más de una página
-                                if (quickPickPageCount > 1)
-                                  SmoothPageIndicator(
-                                    controller: _quickPickPageController,
-                                    count: quickPickPageCount,
-                                    effect: WormEffect(
-                                      dotHeight: 8,
-                                      dotWidth: 8,
-                                      activeDotColor: Theme.of(
+                              ),
+                            ),
+                            // Sección de Artistas
+                            const SizedBox(height: 32),
+
+                            // Solo mostrar la sección de artistas si hay artistas disponibles
+                            if (_artists.isNotEmpty) ...[
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 20,
+                                ),
+                                child: Row(
+                                  children: [
+                                    const TranslatedText(
+                                      'artists',
+                                      style: TextStyle(
+                                        fontSize: 20,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              SizedBox(
+                                height: 120,
+                                child: ListView.builder(
+                                  scrollDirection: Axis.horizontal,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                  ),
+                                  itemCount: _artists.length,
+                                  itemBuilder: (context, index) {
+                                    final artist = _artists[index];
+                                    return Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 10,
+                                      ),
+                                      child: _buildArtistWidget(
+                                        artist,
                                         context,
-                                      ).colorScheme.primary,
-                                      dotColor: Theme.of(context)
-                                          .colorScheme
-                                          .onSurface
-                                          .withValues(alpha: 0.24),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                            ],
+                            // Solo mostrar la sección de selección rápida si hay canciones disponibles
+                            if (limitedQuickPick.isNotEmpty) ...[
+                              const SizedBox(height: 32),
+
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 20,
+                                ),
+                                child: Row(
+                                  children: [
+                                    TranslatedText(
+                                      'quick_pick',
+                                      style: const TextStyle(
+                                        fontSize: 20,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    const Spacer(),
+                                    IconButton(
+                                      icon: Icon(
+                                        Icons.play_circle_outline,
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.onSurface,
+                                      ),
+                                      tooltip: LocaleProvider.tr('play_all'),
+                                      onPressed: () {
+                                        _playSongAndOpenPlayer(
+                                          limitedQuickPick.first,
+                                          extendedQuickPick,
+                                          queueSource: LocaleProvider.tr(
+                                            'quick_pick_songs',
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              Column(
+                                children: [
+                                  SizedBox(
+                                    height: 320,
+                                    child: PageView.builder(
+                                      controller: _quickPickPageController,
+                                      itemCount: quickPickPageCount,
+                                      itemBuilder: (context, pageIndex) {
+                                        final songs = limitedQuickPick
+                                            .skip(
+                                              pageIndex * quickPickSongsPerPage,
+                                            )
+                                            .take(quickPickSongsPerPage)
+                                            .toList();
+                                        return Padding(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 0,
+                                          ),
+                                          child: ListView.builder(
+                                            shrinkWrap: true,
+                                            physics:
+                                                const NeverScrollableScrollPhysics(),
+                                            itemCount: songs.length,
+                                            itemBuilder: (context, index) {
+                                              final song = songs[index];
+                                              return Padding(
+                                                padding: EdgeInsets.only(
+                                                  bottom:
+                                                      index < songs.length - 1
+                                                      ? 8.0
+                                                      : 0,
+                                                ),
+                                                // Usar el método optimizado que cachea los widgets
+                                                child: _buildQuickPickWidget(
+                                                  song,
+                                                  context,
+                                                  songs,
+                                                ),
+                                              );
+                                            },
+                                          ),
+                                        );
+                                      },
                                     ),
                                   ),
-                              ],
-                            ),
-                          ],
-                          const SizedBox(height: 24),
-                          /*
+                                  const SizedBox(height: 12),
+                                  // Solo mostrar el indicador si hay más de una página
+                                  if (quickPickPageCount > 1)
+                                    SmoothPageIndicator(
+                                      controller: _quickPickPageController,
+                                      count: quickPickPageCount,
+                                      effect: WormEffect(
+                                        dotHeight: 8,
+                                        dotWidth: 8,
+                                        activeDotColor: Theme.of(
+                                          context,
+                                        ).colorScheme.primary,
+                                        dotColor: Theme.of(context)
+                                            .colorScheme
+                                            .onSurface
+                                            .withValues(alpha: 0.24),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ],
+                            const SizedBox(height: 24),
+                            /*
                           const SizedBox(height: 32),
                           Padding(
                             padding: const EdgeInsets.symmetric(
@@ -6659,13 +6821,31 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                 },
                               ),
                           */
-                        ],
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-          );
-        },
-      ),
+            );
+          },
+        ),
+    );
+    if (!isAmoled || _showingRecents) return scaffold;
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Positioned.fill(
+          child: IgnorePointer(
+            child: CustomPaint(
+              painter: _GradientScrollPainter(
+                alphaNotifier: _gradientAlphaNotifier,
+                scaffoldBgColor: scaffoldBgColor,
+                baseAlpha: alpha,
+              ),
+            ),
+          ),
+        ),
+        scaffold,
+      ],
     );
   }
 
@@ -7197,4 +7377,40 @@ class _AnimatedTapButtonState extends State<AnimatedTapButton> {
       ),
     );
   }
+}
+
+/// Pinta el gradiente AMOLED. Al pasar [repaint] al super, solo se repinta
+/// (paint) cuando cambia el scroll — sin setState ni rebuild.
+class _GradientScrollPainter extends CustomPainter {
+  _GradientScrollPainter({
+    required this.alphaNotifier,
+    required this.scaffoldBgColor,
+    required this.baseAlpha,
+  }) : super(repaint: alphaNotifier);
+
+  final ValueNotifier<double> alphaNotifier;
+  final Color scaffoldBgColor;
+  final double baseAlpha;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final a = baseAlpha * alphaNotifier.value;
+    if (a <= 0) return;
+    final gradient = LinearGradient(
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+      colors: [
+        Colors.blue.withValues(alpha: a),
+        Colors.purple.withValues(alpha: a * 0.6),
+        Colors.black.withValues(alpha: a * 1.2),
+        scaffoldBgColor,
+      ],
+      stops: const [0.0, 0.3, 0.5, 0.6],
+    );
+    final rect = Offset.zero & size;
+    canvas.drawRect(rect, Paint()..shader = gradient.createShader(rect));
+  }
+
+  @override
+  bool shouldRepaint(covariant _GradientScrollPainter oldDelegate) => false;
 }
