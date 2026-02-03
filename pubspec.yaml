@@ -1,7 +1,7 @@
 name: music
 description: "A new Flutter project."
 publish_to: 'none'
-version: 1.7.2+4007
+version: 1.7.3+4008
 
 environment:
   sdk: ^3.8.1
