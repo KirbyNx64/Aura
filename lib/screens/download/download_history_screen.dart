@@ -9,6 +9,7 @@ import '../../utils/notifiers.dart';
 import '../../widgets/song_info_dialog.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:media_scanner/media_scanner.dart';
+import 'package:material_loading_indicator/loading_indicator.dart';
 
 class DownloadHistoryScreen extends StatefulWidget {
   const DownloadHistoryScreen({super.key});
@@ -489,8 +490,8 @@ class _DownloadHistoryScreenState extends State<DownloadHistoryScreen> {
             id: snapshot.data!,
             type: ArtworkType.AUDIO,
             artworkBorder: BorderRadius.circular(8),
-            artworkHeight: 48,
-            artworkWidth: 48,
+            artworkHeight: 50,
+            artworkWidth: 50,
             keepOldArtwork: true,
             nullArtworkWidget: _buildFallbackIcon(),
           );
@@ -528,8 +529,8 @@ class _DownloadHistoryScreenState extends State<DownloadHistoryScreen> {
   Widget _buildFallbackIcon() {
     final isSystem = colorSchemeNotifier.value == AppColorScheme.system;
     return Container(
-      width: 48,
-      height: 48,
+      width: 50,
+      height: 50,
       decoration: BoxDecoration(
         color: isSystem
             ? Theme.of(
@@ -634,7 +635,7 @@ class _DownloadHistoryScreenState extends State<DownloadHistoryScreen> {
         ),
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? Center(child: LoadingIndicator())
           : _downloadRecords.isEmpty
           ? Center(
               child: Column(
@@ -660,90 +661,155 @@ class _DownloadHistoryScreenState extends State<DownloadHistoryScreen> {
                 ],
               ),
             )
-          : ListView.builder(
-              itemCount: _downloadRecords.length,
-              padding: EdgeInsets.only(
-                bottom: MediaQuery.of(context).padding.bottom,
-              ),
-              itemBuilder: (context, index) {
-                final record = _downloadRecords[index];
-                final fileSize = _formatFileSize(record.fileSize);
+          : ValueListenableBuilder<AppColorScheme>(
+              valueListenable: colorSchemeNotifier,
+              builder: (context, colorScheme, child) {
+                final isAmoled = colorScheme == AppColorScheme.amoled;
+                final isDark = Theme.of(context).brightness == Brightness.dark;
 
-                return FutureBuilder<bool>(
-                  future: File(record.filePath).exists(),
-                  builder: (context, snapshot) {
-                    final fileExists = snapshot.data ?? true;
-                    final opacity = fileExists ? 1.0 : 0.4;
+                final cardColor = isAmoled && isDark
+                    ? Colors.white.withAlpha(20)
+                    : isDark
+                    ? Theme.of(
+                        context,
+                      ).colorScheme.onSecondary.withValues(alpha: 0.5)
+                    : Theme.of(
+                        context,
+                      ).colorScheme.secondaryContainer.withValues(alpha: 0.5);
 
-                    return Material(
-                      color: Colors.transparent,
-                      child: InkWell(
-                        onLongPress: fileExists
-                            ? () => _showOptionsModal(context, record)
-                            : null,
-                        child: Opacity(
-                          opacity: opacity,
-                          child: ListTile(
-                            leading: fileExists
-                                ? ClipRRect(
-                                    borderRadius: BorderRadius.circular(8),
-                                    child: _buildAudioArtwork(
-                                      record.filePath.replaceFirst(
-                                        '/storage/emulated/0',
-                                        '',
-                                      ),
-                                    ),
-                                  )
-                                : Container(
-                                    width: 48,
-                                    height: 48,
-                                    decoration: BoxDecoration(
-                                      color: Theme.of(
-                                        context,
-                                      ).colorScheme.secondaryContainer,
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: Icon(
-                                      Icons.delete_outline,
-                                      color: Theme.of(
-                                        context,
-                                      ).colorScheme.onSecondaryContainer,
-                                      size: 24,
-                                    ),
-                                  ),
-                            title: Text(
-                              record.title,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w500,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
+                return ListView.builder(
+                  itemCount: _downloadRecords.length,
+                  padding: EdgeInsets.only(
+                    left: 16.0,
+                    right: 16.0,
+                    top: 8.0,
+                    bottom: MediaQuery.of(context).padding.bottom + 16,
+                  ),
+                  itemBuilder: (context, index) {
+                    final record = _downloadRecords[index];
+                    final fileSize = _formatFileSize(record.fileSize);
+
+                    final bool isFirst = index == 0;
+                    final bool isLast = index == _downloadRecords.length - 1;
+                    final bool isOnly = _downloadRecords.length == 1;
+
+                    BorderRadius borderRadius;
+                    if (isOnly) {
+                      borderRadius = BorderRadius.circular(16);
+                    } else if (isFirst) {
+                      borderRadius = const BorderRadius.only(
+                        topLeft: Radius.circular(16),
+                        topRight: Radius.circular(16),
+                        bottomLeft: Radius.circular(4),
+                        bottomRight: Radius.circular(4),
+                      );
+                    } else if (isLast) {
+                      borderRadius = const BorderRadius.only(
+                        topLeft: Radius.circular(4),
+                        topRight: Radius.circular(4),
+                        bottomLeft: Radius.circular(16),
+                        bottomRight: Radius.circular(16),
+                      );
+                    } else {
+                      borderRadius = BorderRadius.circular(4);
+                    }
+
+                    return FutureBuilder<bool>(
+                      future: File(record.filePath).exists(),
+                      builder: (context, snapshot) {
+                        final fileExists = snapshot.data ?? true;
+                        final opacity = fileExists ? 1.0 : 0.4;
+
+                        return Padding(
+                          padding: EdgeInsets.only(bottom: isLast ? 0 : 4),
+                          child: Card(
+                            color: cardColor,
+                            margin: EdgeInsets.zero,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: borderRadius,
                             ),
-                            subtitle: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(fileSize),
-                                const SizedBox(height: 4),
-                                Text(
-                                  record.filePath.replaceFirst(
-                                    '/storage/emulated/0',
-                                    '',
-                                  ),
-                                  style: Theme.of(context).textTheme.bodySmall
-                                      ?.copyWith(
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .onSurface
-                                            .withValues(alpha: 0.7),
+                            child: ClipRRect(
+                              borderRadius: borderRadius,
+                              child: Material(
+                                color: Colors.transparent,
+                                child: InkWell(
+                                  onLongPress: fileExists
+                                      ? () => _showOptionsModal(context, record)
+                                      : null,
+                                  child: Opacity(
+                                    opacity: opacity,
+                                    child: ListTile(
+                                      leading: fileExists
+                                          ? ClipRRect(
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                              child: _buildAudioArtwork(
+                                                record.filePath.replaceFirst(
+                                                  '/storage/emulated/0',
+                                                  '',
+                                                ),
+                                              ),
+                                            )
+                                          : Container(
+                                              width: 50,
+                                              height: 50,
+                                              decoration: BoxDecoration(
+                                                color: Theme.of(context)
+                                                    .colorScheme
+                                                    .secondaryContainer,
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
+                                              ),
+                                              child: Icon(
+                                                Icons.delete_outline,
+                                                color: Theme.of(context)
+                                                    .colorScheme
+                                                    .onSecondaryContainer,
+                                                size: 24,
+                                              ),
+                                            ),
+                                      title: Text(
+                                        record.title,
+                                        style: Theme.of(
+                                          context,
+                                        ).textTheme.titleMedium,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
                                       ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
+                                      subtitle: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(fileSize),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            record.filePath.replaceFirst(
+                                              '/storage/emulated/0',
+                                              '',
+                                            ),
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .bodySmall
+                                                ?.copyWith(
+                                                  color: Theme.of(context)
+                                                      .colorScheme
+                                                      .onSurface
+                                                      .withValues(alpha: 0.7),
+                                                ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
                                 ),
-                              ],
+                              ),
                             ),
                           ),
-                        ),
-                      ),
+                        );
+                      },
                     );
                   },
                 );

@@ -28,6 +28,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:media_scanner/media_scanner.dart';
 import 'package:music/widgets/song_info_dialog.dart';
 import 'package:device_info_plus/device_info_plus.dart';
+import 'package:material_loading_indicator/loading_indicator.dart';
 
 enum OrdenCarpetas {
   normal,
@@ -2672,7 +2673,7 @@ class _FoldersScreenState extends State<FoldersScreen>
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     if (_isLoading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return Scaffold(body: Center(child: LoadingIndicator()));
     }
     if (songPathsByFolder.isEmpty &&
         !_showAllSongs &&
@@ -2848,7 +2849,7 @@ class _FoldersScreenState extends State<FoldersScreen>
           ),
         ),
         body: _isLoading
-            ? const Center(child: CircularProgressIndicator())
+            ? Center(child: LoadingIndicator())
             : _filteredPlaylists.isEmpty
             ? Center(
                 child: Column(
@@ -4688,7 +4689,7 @@ class _FoldersScreenState extends State<FoldersScreen>
                 content: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const CircularProgressIndicator(),
+                    LoadingIndicator(),
                     const SizedBox(height: 24),
                     Text(
                       isMove
@@ -6098,7 +6099,7 @@ class _FoldersScreenState extends State<FoldersScreen>
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const CircularProgressIndicator(),
+                LoadingIndicator(),
                 const SizedBox(height: 24),
                 Text(
                   LocaleProvider.tr('moving_song'),
@@ -6248,7 +6249,7 @@ class _FoldersScreenState extends State<FoldersScreen>
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const CircularProgressIndicator(),
+                LoadingIndicator(),
                 const SizedBox(height: 24),
                 Text(
                   LocaleProvider.tr('copying_song'),

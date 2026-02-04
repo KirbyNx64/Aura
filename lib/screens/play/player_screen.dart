@@ -32,6 +32,7 @@ import 'package:music/screens/artist/artist_screen.dart';
 import 'package:music/screens/play/lyrics_search_screen.dart';
 import 'package:music/screens/home/equalizer_screen.dart';
 import 'package:like_button/like_button.dart';
+import 'package:material_loading_indicator/loading_indicator.dart';
 
 final OnAudioQuery _audioQuery = OnAudioQuery();
 
@@ -185,10 +186,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                     width: size,
                     height: size,
                     alignment: Alignment.center,
-                    child: const CircularProgressIndicator(
-                      // ignore: deprecated_member_use
-                      year2023: false,
-                    ),
+                    child: LoadingIndicator(),
                   ),
             // Optimización: Cache de imagen
             cacheWidth: (size * MediaQuery.of(context).devicePixelRatio)
@@ -281,7 +279,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                   width: 60,
                   height: 60,
                   alignment: Alignment.center,
-                  child: const CircularProgressIndicator(),
+                  child: LoadingIndicator(),
                 ),
         );
       }
@@ -2373,12 +2371,11 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                           18,
                                                         ),
                                                     child: _loadingLyrics
-                                                        ? const Center(
-                                                            child:
-                                                                CircularProgressIndicator(
-                                                                  color: Colors
-                                                                      .white,
-                                                                ),
+                                                        ? Center(
+                                                            child: LoadingIndicator(
+                                                              activeIndicatorColor:
+                                                                  Colors.white,
+                                                            ),
                                                           )
                                                         : _lyricLines.isEmpty
                                                         ? _noConnection
@@ -4349,13 +4346,7 @@ class _LyricsModalContentState extends State<_LyricsModalContent> {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            CircularProgressIndicator(
-              valueColor: AlwaysStoppedAnimation<Color>(
-                Theme.of(context).colorScheme.primary,
-              ),
-            ),
-          ],
+          children: [LoadingIndicator()],
         ),
       );
     }

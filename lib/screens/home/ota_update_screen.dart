@@ -7,6 +7,7 @@ import 'package:music/l10n/locale_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:music/utils/theme_preferences.dart';
 import 'package:music/utils/notifiers.dart';
+import 'package:material_loading_indicator/loading_indicator.dart';
 
 class UpdateScreen extends StatefulWidget {
   const UpdateScreen({super.key});
@@ -375,117 +376,250 @@ class _UpdateScreenState extends State<UpdateScreen> {
 
     // Para 16:9 (≈1.77)
     // final is16by9 = (aspectRatio < 1.85);
-    // final isSystem = colorSchemeNotifier.value == AppColorScheme.system;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final isLight = Theme.of(context).brightness == Brightness.light;
 
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        title: TranslatedText(
-          'update',
-          style: TextStyle(fontWeight: FontWeight.w500),
-        ),
-        leading: _isDownloading
-            ? Container()
-            : IconButton(
-                constraints: const BoxConstraints(
-                  minWidth: 40,
-                  minHeight: 40,
-                  maxWidth: 40,
-                  maxHeight: 40,
-                ),
-                padding: EdgeInsets.zero,
-                icon: Container(
-                  width: 40,
-                  height: 40,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: isDark
-                        ? Theme.of(
-                            context,
-                          ).colorScheme.onSecondary.withValues(alpha: 0.5)
-                        : Theme.of(context).colorScheme.secondaryContainer
-                              .withValues(alpha: 0.5),
-                  ),
-                  child: const Icon(Icons.arrow_back, size: 24),
-                ),
-                onPressed: () => Navigator.of(context).pop(),
-              ),
-      ),
-      body: Padding(
-        padding: EdgeInsets.fromLTRB(
-          16,
-          16,
-          16,
-          16 + MediaQuery.of(context).padding.bottom,
-        ),
-        child: _isDownloading
-            ? Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    LocaleProvider.tr('downloading_update'),
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
+    return ValueListenableBuilder<AppColorScheme>(
+      valueListenable: colorSchemeNotifier,
+      builder: (context, colorScheme, _) {
+        final isAmoled = colorScheme == AppColorScheme.amoled;
+        return Scaffold(
+          appBar: AppBar(
+            backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+            surfaceTintColor: Colors.transparent,
+            elevation: 0,
+            scrolledUnderElevation: 0,
+            title: TranslatedText(
+              'update',
+              style: TextStyle(fontWeight: FontWeight.w500),
+            ),
+            leading: _isDownloading
+                ? Container()
+                : IconButton(
+                    constraints: const BoxConstraints(
+                      minWidth: 40,
+                      minHeight: 40,
+                      maxWidth: 40,
+                      maxHeight: 40,
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    '${LocaleProvider.tr('version')}: $_version',
-                    style: const TextStyle(fontSize: 16),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    LocaleProvider.tr('changes'),
-                    style:
-                        Theme.of(context).textTheme.titleMedium ??
-                        const TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.w600,
-                        ),
-                  ),
-                  const SizedBox(height: 8),
-                  Expanded(
-                    child: Container(
-                      padding: const EdgeInsets.all(12),
-                      margin: const EdgeInsets.only(bottom: 16),
+                    padding: EdgeInsets.zero,
+                    icon: Container(
+                      width: 40,
+                      height: 40,
+                      alignment: Alignment.center,
                       decoration: BoxDecoration(
-                        color: isLight
-                            ? Theme.of(context).colorScheme.secondaryContainer
-                            : Theme.of(context).colorScheme.onSecondaryFixed,
-                        borderRadius: BorderRadius.circular(12),
+                        shape: BoxShape.circle,
+                        color: isDark
+                            ? Theme.of(
+                                context,
+                              ).colorScheme.onSecondary.withValues(alpha: 0.5)
+                            : Theme.of(context).colorScheme.secondaryContainer
+                                  .withValues(alpha: 0.5),
                       ),
-                      child: SingleChildScrollView(
-                        child: Text(
-                          _changelog,
-                          style: Theme.of(context).textTheme.bodyLarge,
+                      child: const Icon(Icons.arrow_back, size: 24),
+                    ),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+          ),
+          body: Padding(
+            padding: EdgeInsets.fromLTRB(
+              16,
+              16,
+              16,
+              16 + MediaQuery.of(context).padding.bottom,
+            ),
+            child: _isDownloading
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        LocaleProvider.tr('downloading_update'),
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
+                      const SizedBox(height: 8),
+                      Text(
+                        '${LocaleProvider.tr('version')}: $_version',
+                        style: const TextStyle(fontSize: 16),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        LocaleProvider.tr('changes'),
+                        style:
+                            Theme.of(context).textTheme.titleMedium ??
+                            const TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.w600,
+                            ),
+                      ),
+                      const SizedBox(height: 8),
+                      Expanded(
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          margin: const EdgeInsets.only(bottom: 16),
+                          decoration: BoxDecoration(
+                            color: isAmoled && isDark
+                                ? Colors.white.withAlpha(20)
+                                : isLight
+                                ? Theme.of(
+                                    context,
+                                  ).colorScheme.secondaryContainer
+                                : Theme.of(
+                                    context,
+                                  ).colorScheme.onSecondaryFixed,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: SingleChildScrollView(
+                            child: Text(
+                              _changelog,
+                              style: Theme.of(context).textTheme.bodyLarge,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(LocaleProvider.tr('dont_exit_app')),
+                      const SizedBox(height: 8),
+                      LinearProgressIndicator(
+                        value: _progress,
+                        borderRadius: BorderRadius.circular(8),
+                        minHeight: 8,
+                        backgroundColor: Theme.of(
+                          context,
+                        ).colorScheme.primary.withValues(alpha: 0.3),
+                      ),
+                    ],
+                  )
+                : _version.isEmpty && !_hasChecked
+                ? Stack(
+                    children: [
+                      Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 120,
+                              height: 120,
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: isDark
+                                    ? Theme.of(context).colorScheme.onSecondary
+                                          .withValues(alpha: 0.5)
+                                    : Theme.of(context)
+                                          .colorScheme
+                                          .secondaryContainer
+                                          .withValues(alpha: 0.5),
+                              ),
+                              child: Icon(
+                                Icons.update_rounded,
+                                grade: 300,
+                                size: 80,
+                                color:
+                                    Theme.of(context).brightness ==
+                                        Brightness.light
+                                    ? Theme.of(context).colorScheme.onSurface
+                                          .withValues(alpha: 0.7)
+                                    : Theme.of(context).colorScheme.onSurface,
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              LocaleProvider.tr('press_button_to_check'),
+                              style: const TextStyle(fontSize: 18),
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
+                        ),
+                      ),
+                      Positioned(
+                        bottom: 32,
+                        left: 0,
+                        right: 0,
+                        child: Center(
+                          child: ElevatedButton.icon(
+                            onPressed: _checkUpdate,
+                            icon: Container(
+                              width: 24,
+                              height: 24,
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Colors.white.withValues(alpha: 0.2),
+                              ),
+                              child: Icon(
+                                Icons.search,
+                                size: 16,
+                                color: Theme.of(context).colorScheme.onPrimary,
+                              ),
+                            ),
+                            label: Text(LocaleProvider.tr('check_for_update')),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Theme.of(
+                                context,
+                              ).colorScheme.primary,
+                              foregroundColor: Theme.of(
+                                context,
+                              ).colorScheme.onPrimary,
+                              shadowColor: Colors.transparent,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 24,
+                                vertical: 12,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(24),
+                              ),
+                              elevation: 4,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  )
+                : _version.isEmpty && _hasChecked && _isChecking
+                ? Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 120,
+                          height: 120,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: isDark
+                                ? Theme.of(context).colorScheme.onSecondary
+                                      .withValues(alpha: 0.5)
+                                : Theme.of(context)
+                                      .colorScheme
+                                      .secondaryContainer
+                                      .withValues(alpha: 0.5),
+                          ),
+                          child: LoadingIndicator(
+                            activeIndicatorColor: isDark
+                                ? Theme.of(context).colorScheme.onSurface
+                                : Theme.of(
+                                    context,
+                                  ).colorScheme.onSurface.withAlpha(180),
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        Text(
+                          _status,
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w500,
+                            color: Theme.of(context).colorScheme.onSurface,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(LocaleProvider.tr('dont_exit_app')),
-                  const SizedBox(height: 8),
-                  LinearProgressIndicator(
-                    value: _progress,
-                    borderRadius: BorderRadius.circular(8),
-                    minHeight: 8,
-                    backgroundColor: Theme.of(
-                      context,
-                    ).colorScheme.primary.withValues(alpha: 0.3),
-                  ),
-                ],
-              )
-            : _version.isEmpty && !_hasChecked
-            ? Stack(
-                children: [
-                  Center(
+                  )
+                : _version.isEmpty && _hasChecked && !_isChecking
+                ? Center(
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -504,7 +638,7 @@ class _UpdateScreenState extends State<UpdateScreen> {
                                       .withValues(alpha: 0.5),
                           ),
                           child: Icon(
-                            Icons.update_rounded,
+                            Icons.check_circle_outline_rounded,
                             grade: 300,
                             size: 80,
                             color:
@@ -515,271 +649,161 @@ class _UpdateScreenState extends State<UpdateScreen> {
                                 : Theme.of(context).colorScheme.onSurface,
                           ),
                         ),
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 24),
                         Text(
-                          LocaleProvider.tr('press_button_to_check'),
-                          style: const TextStyle(fontSize: 18),
+                          _status,
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w500,
+                            color: Theme.of(context).colorScheme.onSurface,
+                          ),
                           textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 26),
+                        ElevatedButton.icon(
+                          onPressed: _checkUpdate,
+                          icon: Container(
+                            width: 24,
+                            height: 24,
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: Colors.white.withValues(alpha: 0.2),
+                            ),
+                            child: Icon(
+                              Icons.refresh,
+                              size: 16,
+                              color: Theme.of(context).colorScheme.onPrimary,
+                            ),
+                          ),
+                          label: Text(LocaleProvider.tr('check_again')),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Theme.of(
+                              context,
+                            ).colorScheme.primary,
+                            foregroundColor: Theme.of(
+                              context,
+                            ).colorScheme.onPrimary,
+                            shadowColor: Colors.transparent,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 24,
+                              vertical: 12,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(24),
+                            ),
+                            elevation: 4,
+                          ),
                         ),
                       ],
                     ),
-                  ),
-                  Positioned(
-                    bottom: 32,
-                    left: 0,
-                    right: 0,
-                    child: Center(
-                      child: ElevatedButton.icon(
-                        onPressed: _checkUpdate,
-                        icon: Container(
-                          width: 24,
-                          height: 24,
-                          alignment: Alignment.center,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: Colors.white.withValues(alpha: 0.2),
-                          ),
-                          child: Icon(
-                            Icons.search,
-                            size: 16,
-                            color: Theme.of(context).colorScheme.onPrimary,
-                          ),
-                        ),
-                        label: Text(LocaleProvider.tr('check_for_update')),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Theme.of(
-                            context,
-                          ).colorScheme.primary,
-                          foregroundColor: Theme.of(
-                            context,
-                          ).colorScheme.onPrimary,
-                          shadowColor: Colors.transparent,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 24,
-                            vertical: 12,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(24),
-                          ),
-                          elevation: 4,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              )
-            : _version.isEmpty && _hasChecked && _isChecking
-            ? Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 120,
-                      height: 120,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: isDark
-                            ? Theme.of(
-                                context,
-                              ).colorScheme.onSecondary.withValues(alpha: 0.5)
-                            : Theme.of(context).colorScheme.secondaryContainer
-                                  .withValues(alpha: 0.5),
-                      ),
-                      child: CircularProgressIndicator(
-                        strokeWidth: 4,
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          Theme.of(context).colorScheme.primary,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    Text(
-                      _status,
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w500,
-                        color: Theme.of(context).colorScheme.onSurface,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
-                ),
-              )
-            : _version.isEmpty && _hasChecked && !_isChecking
-            ? Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 120,
-                      height: 120,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: isDark
-                            ? Theme.of(
-                                context,
-                              ).colorScheme.onSecondary.withValues(alpha: 0.5)
-                            : Theme.of(context).colorScheme.secondaryContainer
-                                  .withValues(alpha: 0.5),
-                      ),
-                      child: Icon(
-                        Icons.check_circle_outline_rounded,
-                        grade: 300,
-                        size: 80,
-                        color: Theme.of(context).brightness == Brightness.light
-                            ? Theme.of(
-                                context,
-                              ).colorScheme.onSurface.withValues(alpha: 0.7)
-                            : Theme.of(context).colorScheme.onSurface,
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    Text(
-                      _status,
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w500,
-                        color: Theme.of(context).colorScheme.onSurface,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 26),
-                    ElevatedButton.icon(
-                      onPressed: _checkUpdate,
-                      icon: Container(
-                        width: 24,
-                        height: 24,
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Colors.white.withValues(alpha: 0.2),
-                        ),
-                        child: Icon(
-                          Icons.refresh,
-                          size: 16,
-                          color: Theme.of(context).colorScheme.onPrimary,
-                        ),
-                      ),
-                      label: Text(LocaleProvider.tr('check_again')),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Theme.of(context).colorScheme.primary,
-                        foregroundColor: Theme.of(
-                          context,
-                        ).colorScheme.onPrimary,
-                        shadowColor: Colors.transparent,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 24,
-                          vertical: 12,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(24),
-                        ),
-                        elevation: 4,
-                      ),
-                    ),
-                  ],
-                ),
-              )
-            : Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    LocaleProvider.tr('new_update_available'),
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    '${LocaleProvider.tr('version')}: $_version',
-                    style: const TextStyle(fontSize: 16),
-                  ),
-                  const SizedBox(height: 42),
-                  Text(
-                    LocaleProvider.tr('changes'),
-                    style:
-                        Theme.of(context).textTheme.titleMedium ??
-                        const TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.w600,
-                        ),
-                  ),
-                  const SizedBox(height: 8),
-                  Expanded(
-                    child: Container(
-                      padding: const EdgeInsets.all(12),
-                      margin: const EdgeInsets.only(bottom: 16),
-                      decoration: BoxDecoration(
-                        color: isLight
-                            ? Theme.of(context).colorScheme.secondaryContainer
-                            : Theme.of(context).colorScheme.onSecondaryFixed,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: SingleChildScrollView(
-                        child: Text(
-                          _changelog,
-                          style: Theme.of(context).textTheme.bodyLarge,
-                        ),
-                      ),
-                    ),
-                  ),
-                  Text('${LocaleProvider.tr('status')}: $_status'),
-                  const SizedBox(height: 16),
-                  LinearProgressIndicator(
-                    value: _progress,
-                    borderRadius: BorderRadius.circular(8),
-                    minHeight: 8,
-                    backgroundColor: Theme.of(
-                      context,
-                    ).colorScheme.primary.withValues(alpha: 0.3),
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
+                  )
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      ElevatedButton.icon(
-                        onPressed: _showDownloadDialog,
-                        icon: Container(
-                          width: 24,
-                          height: 24,
-                          alignment: Alignment.center,
+                      Text(
+                        LocaleProvider.tr('new_update_available'),
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        '${LocaleProvider.tr('version')}: $_version',
+                        style: const TextStyle(fontSize: 16),
+                      ),
+                      const SizedBox(height: 42),
+                      Text(
+                        LocaleProvider.tr('changes'),
+                        style:
+                            Theme.of(context).textTheme.titleMedium ??
+                            const TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.w600,
+                            ),
+                      ),
+                      const SizedBox(height: 8),
+                      Expanded(
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          margin: const EdgeInsets.only(bottom: 16),
                           decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: Colors.white.withValues(alpha: 0.2),
+                            color: isAmoled && isDark
+                                ? Colors.white.withAlpha(20)
+                                : isLight
+                                ? Theme.of(
+                                    context,
+                                  ).colorScheme.secondaryContainer
+                                : Theme.of(
+                                    context,
+                                  ).colorScheme.onSecondaryFixed,
+                            borderRadius: BorderRadius.circular(12),
                           ),
-                          child: Icon(
-                            Icons.download,
-                            size: 16,
-                            color: Theme.of(context).colorScheme.onPrimary,
+                          child: SingleChildScrollView(
+                            child: Text(
+                              _changelog,
+                              style: Theme.of(context).textTheme.bodyLarge,
+                            ),
                           ),
                         ),
-                        label: Text(LocaleProvider.tr('update')),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Theme.of(
-                            context,
-                          ).colorScheme.primary,
-                          foregroundColor: Theme.of(
-                            context,
-                          ).colorScheme.onPrimary,
-                          shadowColor: Colors.transparent,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 24,
-                            vertical: 12,
+                      ),
+                      Text('${LocaleProvider.tr('status')}: $_status'),
+                      const SizedBox(height: 16),
+                      LinearProgressIndicator(
+                        value: _progress,
+                        borderRadius: BorderRadius.circular(8),
+                        minHeight: 8,
+                        backgroundColor: Theme.of(
+                          context,
+                        ).colorScheme.primary.withValues(alpha: 0.3),
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          ElevatedButton.icon(
+                            onPressed: _showDownloadDialog,
+                            icon: Container(
+                              width: 24,
+                              height: 24,
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Colors.white.withValues(alpha: 0.2),
+                              ),
+                              child: Icon(
+                                Icons.download,
+                                size: 16,
+                                color: Theme.of(context).colorScheme.onPrimary,
+                              ),
+                            ),
+                            label: Text(LocaleProvider.tr('update')),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Theme.of(
+                                context,
+                              ).colorScheme.primary,
+                              foregroundColor: Theme.of(
+                                context,
+                              ).colorScheme.onPrimary,
+                              shadowColor: Colors.transparent,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 24,
+                                vertical: 12,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(24),
+                              ),
+                              elevation: 4,
+                            ),
                           ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(24),
-                          ),
-                          elevation: 4,
-                        ),
+                        ],
                       ),
                     ],
                   ),
-                ],
-              ),
-      ),
+          ),
+        );
+      },
     );
   }
 }

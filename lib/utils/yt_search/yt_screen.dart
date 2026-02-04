@@ -28,6 +28,7 @@ import 'package:music/screens/artist/artist_screen.dart';
 import 'package:music/screens/download/download_history_screen.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import 'package:buttons_tabbar/buttons_tabbar.dart';
+import 'package:material_loading_indicator/loading_indicator.dart';
 
 // Top-level function para usar con compute
 Uint8List? decodeAndCropImage(Uint8List bytes) {
@@ -1002,12 +1003,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                             SizedBox(
                               width: 16,
                               height: 16,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                valueColor: AlwaysStoppedAnimation<Color>(
-                                  Theme.of(context).colorScheme.primary,
-                                ),
-                              ),
+                              child: LoadingIndicator(),
                             ),
                             const SizedBox(width: 8),
                             Text(
@@ -2066,9 +2062,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                             style: const TextStyle(color: Colors.red),
                           )
                         else if (_isUrlSearch && _loadingUrlVideo)
-                          const Expanded(
-                            child: Center(child: CircularProgressIndicator()),
-                          )
+                          Expanded(child: Center(child: LoadingIndicator()))
                         else if (_isUrlSearch && _urlVideoError != null)
                           Expanded(
                             child: Padding(
@@ -2112,9 +2106,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                             ),
                           )
                         else if (_isUrlPlaylistSearch && _loadingUrlPlaylist)
-                          const Expanded(
-                            child: Center(child: CircularProgressIndicator()),
-                          )
+                          Expanded(child: Center(child: LoadingIndicator()))
                         else if (_isUrlPlaylistSearch &&
                             _urlPlaylistError != null)
                           Expanded(
@@ -2146,9 +2138,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                             _urlPlaylistVideos.isNotEmpty)
                           Expanded(child: _buildUrlPlaylistResult())
                         else if (_loading)
-                          const Expanded(
-                            child: Center(child: CircularProgressIndicator()),
-                          )
+                          Expanded(child: Center(child: LoadingIndicator()))
                         else if (_noInternet)
                           Expanded(
                             child: Center(
@@ -2293,13 +2283,11 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                         MainAxisAlignment
                                                             .center,
                                                     children: [
-                                                      const SizedBox(
+                                                      SizedBox(
                                                         width: 20,
                                                         height: 20,
                                                         child:
-                                                            CircularProgressIndicator(
-                                                              strokeWidth: 2,
-                                                            ),
+                                                            LoadingIndicator(),
                                                       ),
                                                       const SizedBox(width: 12),
                                                       TranslatedText(
@@ -2614,13 +2602,11 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                         MainAxisAlignment
                                                             .center,
                                                     children: [
-                                                      const SizedBox(
+                                                      SizedBox(
                                                         width: 20,
                                                         height: 20,
                                                         child:
-                                                            CircularProgressIndicator(
-                                                              strokeWidth: 2,
-                                                            ),
+                                                            LoadingIndicator(),
                                                       ),
                                                       const SizedBox(width: 12),
                                                       TranslatedText(
@@ -3249,10 +3235,9 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                         ),
                                         const SizedBox(height: 8),
                                         if (_loadingAlbumSongs)
-                                          const Expanded(
+                                          Expanded(
                                             child: Center(
-                                              child:
-                                                  CircularProgressIndicator(),
+                                              child: LoadingIndicator(),
                                             ),
                                           )
                                         else if (_albumSongs.isEmpty)
@@ -3748,10 +3733,9 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                         ),
                                         const SizedBox(height: 8),
                                         if (_loadingPlaylistSongs)
-                                          const Expanded(
+                                          Expanded(
                                             child: Center(
-                                              child:
-                                                  CircularProgressIndicator(),
+                                              child: LoadingIndicator(),
                                             ),
                                           )
                                         else if (_playlistSongs.isEmpty)
@@ -4138,13 +4122,11 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                         MainAxisAlignment
                                                             .center,
                                                     children: [
-                                                      const SizedBox(
+                                                      SizedBox(
                                                         width: 20,
                                                         height: 20,
                                                         child:
-                                                            CircularProgressIndicator(
-                                                              strokeWidth: 2,
-                                                            ),
+                                                            LoadingIndicator(),
                                                       ),
                                                       const SizedBox(width: 12),
                                                       TranslatedText(
@@ -6236,7 +6218,7 @@ class YtPreviewPlayerState extends State<YtPreviewPlayer>
             borderRadius: BorderRadius.circular(8),
           ),
           child: Center(
-            child: CircularProgressIndicator(
+            child: LoadingIndicator(
               color: Colors.transparent,
               value: loadingProgress.expectedTotalBytes != null
                   ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
@@ -6288,9 +6270,7 @@ class YtPreviewPlayerState extends State<YtPreviewPlayer>
               color: Theme.of(context).colorScheme.surfaceContainer,
               borderRadius: BorderRadius.circular(8),
             ),
-            child: const Center(
-              child: CircularProgressIndicator(strokeWidth: 3),
-            ),
+            child: Center(child: LoadingIndicator()),
           );
         }
 
@@ -6804,12 +6784,7 @@ class YtPreviewPlayerState extends State<YtPreviewPlayer>
                                           ? SizedBox(
                                               width: 20,
                                               height: 20,
-                                              child: CircularProgressIndicator(
-                                                strokeWidth: 2.5,
-                                                color: Theme.of(context)
-                                                    .colorScheme
-                                                    .onSecondaryContainer,
-                                              ),
+                                              child: LoadingIndicator(),
                                             )
                                           : Tooltip(
                                               message: LocaleProvider.tr(

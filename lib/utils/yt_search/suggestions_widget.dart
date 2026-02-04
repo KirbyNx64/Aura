@@ -17,7 +17,8 @@ class SearchSuggestionsWidget extends StatefulWidget {
   });
 
   @override
-  State<SearchSuggestionsWidget> createState() => _SearchSuggestionsWidgetState();
+  State<SearchSuggestionsWidget> createState() =>
+      _SearchSuggestionsWidgetState();
 }
 
 class _SearchSuggestionsWidgetState extends State<SearchSuggestionsWidget> {
@@ -59,11 +60,12 @@ class _SearchSuggestionsWidgetState extends State<SearchSuggestionsWidget> {
     try {
       // Solo cargar sugerencias de YouTube Music cuando hay texto
       final ytSuggestions = await getSearchSuggestion(widget.query);
-      
+
       if (mounted) {
         setState(() {
           _suggestions = ytSuggestions;
-          _historySuggestions = []; // No mostrar historial cuando hay sugerencias
+          _historySuggestions =
+              []; // No mostrar historial cuando hay sugerencias
         });
       }
     } catch (e) {
@@ -100,11 +102,15 @@ class _SearchSuggestionsWidgetState extends State<SearchSuggestionsWidget> {
             LocaleProvider.tr('suggestions'),
             Icons.search,
           ),
-          ..._suggestions.take(5).map((suggestion) => _buildSuggestionTile(
-            context,
-            suggestion,
-            false, // No es del historial
-          )),
+          ..._suggestions
+              .take(5)
+              .map(
+                (suggestion) => _buildSuggestionTile(
+                  context,
+                  suggestion,
+                  false, // No es del historial
+                ),
+              ),
         ],
         // Si no hay sugerencias, no mostrar nada
       ],
@@ -118,12 +124,13 @@ class _SearchSuggestionsWidgetState extends State<SearchSuggestionsWidget> {
         if (_historySuggestions.isNotEmpty) ...[
           Row(
             children: [
-              _buildSectionHeader(
-                context,
-                LocaleProvider.tr('recent_searches'),
-                Icons.history,
+              Expanded(
+                child: _buildSectionHeader(
+                  context,
+                  LocaleProvider.tr('recent_searches'),
+                  Icons.history,
+                ),
               ),
-              const Spacer(),
               TextButton.icon(
                 onPressed: () async {
                   await SearchHistory.clearHistory();
@@ -138,11 +145,15 @@ class _SearchSuggestionsWidgetState extends State<SearchSuggestionsWidget> {
               ),
             ],
           ),
-          ..._historySuggestions.take(7).map((suggestion) => _buildSuggestionTile(
-            context,
-            suggestion,
-            true, // Es del historial
-          )),
+          ..._historySuggestions
+              .take(7)
+              .map(
+                (suggestion) => _buildSuggestionTile(
+                  context,
+                  suggestion,
+                  true, // Es del historial
+                ),
+              ),
         ] else ...[
           Expanded(
             child: Center(
@@ -152,13 +163,17 @@ class _SearchSuggestionsWidgetState extends State<SearchSuggestionsWidget> {
                   Icon(
                     Icons.history,
                     size: 48,
-                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withValues(alpha: 0.6),
                   ),
                   const SizedBox(height: 8),
                   Text(
                     LocaleProvider.tr('no_recent_searches'),
                     style: TextStyle(
-                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurface.withValues(alpha: 0.6),
                       fontSize: 14,
                     ),
                   ),
@@ -171,24 +186,27 @@ class _SearchSuggestionsWidgetState extends State<SearchSuggestionsWidget> {
     );
   }
 
-  Widget _buildSectionHeader(BuildContext context, String title, IconData icon) {
+  Widget _buildSectionHeader(
+    BuildContext context,
+    String title,
+    IconData icon,
+  ) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
       child: Row(
         children: [
-          Icon(
-            icon,
-            size: 16,
-            color: Theme.of(context).colorScheme.primary,
-          ),
+          Icon(icon, size: 16, color: Theme.of(context).colorScheme.primary),
           const SizedBox(width: 8),
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: Theme.of(context).colorScheme.primary,
-              letterSpacing: 0.5,
+          Flexible(
+            child: Text(
+              title,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: Theme.of(context).colorScheme.primary,
+                letterSpacing: 0.5,
+              ),
+              overflow: TextOverflow.ellipsis,
             ),
           ),
         ],
@@ -196,7 +214,11 @@ class _SearchSuggestionsWidgetState extends State<SearchSuggestionsWidget> {
     );
   }
 
-  Widget _buildSuggestionTile(BuildContext context, String suggestion, bool isFromHistory) {
+  Widget _buildSuggestionTile(
+    BuildContext context,
+    String suggestion,
+    bool isFromHistory,
+  ) {
     return ListTile(
       dense: true,
       leading: Icon(
@@ -231,4 +253,4 @@ class _SearchSuggestionsWidgetState extends State<SearchSuggestionsWidget> {
   void dispose() {
     super.dispose();
   }
-} 
+}

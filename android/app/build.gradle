@@ -66,6 +66,7 @@ android {
             shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
             signingConfig signingConfigs.release
+            signingConfig signingConfigs.release
             
             // Deshabilitar logs en producción
             buildConfigField("boolean", "ENABLE_LOGGING", "false")
@@ -153,6 +154,7 @@ android {
 }
 
 dependencies {
+    implementation 'androidx.multidex:multidex:2.0.1'
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 }
 

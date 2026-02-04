@@ -646,6 +646,9 @@ const Map<String, String> appLocalizationsEs = {
   'song_album': 'Álbum',
   'song_cover': 'Carátula',
   'save_changes': 'Guardar cambios',
+  'saving': 'Guardando...',
+  'error_selecting_image': 'No se pudo seleccionar la imagen',
+  'file_not_found': 'El archivo no existe',
   'changes_saved': 'Cambios guardados',
   'changes_saved_desc':
       'Los metadatos se han actualizado correctamente, pero es probable que el reproductor no los actualice inmediatamente.',

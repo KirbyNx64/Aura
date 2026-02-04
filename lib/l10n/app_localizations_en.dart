@@ -618,6 +618,9 @@ const Map<String, String> appLocalizationsEn = {
   'song_album': 'Album',
   'song_cover': 'Cover',
   'save_changes': 'Save changes',
+  'saving': 'Saving...',
+  'error_selecting_image': 'Could not select image',
+  'file_not_found': 'File not found',
   'changes_saved': 'Changes saved',
   'changes_saved_desc':
       'The metadata has been updated successfully, but it is likely that the player will not update them immediately.',

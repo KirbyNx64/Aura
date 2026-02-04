@@ -26,6 +26,7 @@ import 'package:flutter_sharing_intent/model/sharing_file.dart';
 import 'package:music/utils/sharing_handler.dart';
 import 'package:music/utils/yt_preview_modal.dart';
 import 'package:music/services/download_history_service.dart';
+import 'package:material_loading_indicator/loading_indicator.dart';
 import 'dart:async';
 
 // Cambiar de late final a nullable para mejor manejo de errores
@@ -858,7 +859,7 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
         supportedLocales: const [Locale('es', ''), Locale('en', '')],
         locale: Locale(languageNotifier.value, ''),
         theme: _buildTheme(Brightness.dark),
-        home: const Scaffold(body: Center(child: CircularProgressIndicator())),
+        home: Scaffold(body: Center(child: LoadingIndicator())),
       );
     }
 

@@ -7,6 +7,7 @@ import 'package:music/l10n/locale_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:music/utils/notifiers.dart';
 import 'package:music/utils/theme_preferences.dart';
+import 'package:material_loading_indicator/loading_indicator.dart';
 
 class EqualizerScreen extends StatefulWidget {
   const EqualizerScreen({super.key});
@@ -477,7 +478,7 @@ class _EqualizerScreenState extends State<EqualizerScreen> {
     final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return Center(child: LoadingIndicator());
     }
 
     if (!Platform.isAndroid) {
@@ -556,16 +557,16 @@ class _EqualizerScreenState extends State<EqualizerScreen> {
         children: [
           // Switch para habilitar/deshabilitar
           Card(
-            color: (isSystem || isAmoled) && isDark
-                ? Theme.of(context).colorScheme.onSecondaryFixed
-                : Theme.of(context).colorScheme.secondaryContainer,
+            color: isAmoled && isDark
+                ? Colors.white.withAlpha(20)
+                : (isSystem && isDark
+                      ? Theme.of(context).colorScheme.onSecondaryFixed
+                      : Theme.of(context).colorScheme.secondaryContainer),
             margin: EdgeInsets.zero,
             elevation: 0,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
-              side: isAmoled && isDark
-                  ? const BorderSide(color: Colors.white, width: 1)
-                  : BorderSide.none,
+              side: BorderSide.none,
             ),
             child: SwitchListTile(
               title: Text(
@@ -592,18 +593,20 @@ class _EqualizerScreenState extends State<EqualizerScreen> {
             const SizedBox(height: 24),
 
             Card(
-              color: (isSystem || isAmoled) && isDark
-                  ? Theme.of(
-                      context,
-                    ).colorScheme.onSecondary.withValues(alpha: 0.5)
-                  : theme.colorScheme.secondaryContainer.withValues(alpha: 0.5),
+              color: isAmoled && isDark
+                  ? Colors.white.withAlpha(20)
+                  : (isSystem && isDark
+                        ? Theme.of(
+                            context,
+                          ).colorScheme.onSecondary.withValues(alpha: 0.5)
+                        : theme.colorScheme.secondaryContainer.withValues(
+                            alpha: 0.5,
+                          )),
               margin: EdgeInsets.zero,
               elevation: 0,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
-                side: isAmoled && isDark
-                    ? const BorderSide(color: Colors.white, width: 1)
-                    : BorderSide.none,
+                side: BorderSide.none,
               ),
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
@@ -709,18 +712,20 @@ class _EqualizerScreenState extends State<EqualizerScreen> {
             // Volume Boost
             const SizedBox(height: 16),
             Card(
-              color: (isSystem || isAmoled) && isDark
-                  ? Theme.of(
-                      context,
-                    ).colorScheme.onSecondary.withValues(alpha: 0.5)
-                  : theme.colorScheme.secondaryContainer.withValues(alpha: 0.5),
+              color: isAmoled && isDark
+                  ? Colors.white.withAlpha(20)
+                  : (isSystem && isDark
+                        ? Theme.of(
+                            context,
+                          ).colorScheme.onSecondary.withValues(alpha: 0.5)
+                        : theme.colorScheme.secondaryContainer.withValues(
+                            alpha: 0.5,
+                          )),
               margin: EdgeInsets.zero,
               elevation: 0,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
-                side: isAmoled && isDark
-                    ? const BorderSide(color: Colors.white, width: 1)
-                    : BorderSide.none,
+                side: BorderSide.none,
               ),
               child: Padding(
                 padding: const EdgeInsets.all(16.0),

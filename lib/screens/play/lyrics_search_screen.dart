@@ -5,6 +5,7 @@ import 'package:music/utils/audio/synced_lyrics_service.dart';
 import 'package:music/l10n/locale_provider.dart';
 import 'package:music/utils/notifiers.dart';
 import 'package:music/utils/theme_preferences.dart';
+import 'package:material_loading_indicator/loading_indicator.dart';
 
 class LyricsSearchResult {
   final String title;
@@ -755,10 +756,10 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
     }
 
     if (_isSearching) {
-      return const Center(
+      return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
-          children: [CircularProgressIndicator()],
+          children: [LoadingIndicator()],
         ),
       );
     }

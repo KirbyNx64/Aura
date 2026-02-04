@@ -56,4 +56,4 @@ class TranslatedText extends StatelessWidget {
       },
     );
   }
-} 
+}

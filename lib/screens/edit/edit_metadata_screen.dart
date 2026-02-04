@@ -10,6 +10,7 @@ import 'package:media_scanner/media_scanner.dart';
 import 'package:music/main.dart' show audioHandler;
 import 'package:music/utils/audio/background_audio_handler.dart';
 import 'package:music/utils/theme_preferences.dart';
+import 'package:material_loading_indicator/loading_indicator.dart';
 
 class EditMetadataScreen extends StatefulWidget {
   final MediaItem song;
@@ -139,7 +140,10 @@ class _EditMetadataScreenState extends State<EditMetadataScreen> {
         });
       }
     } catch (e) {
-      _showErrorDialog('Error', 'No se pudo seleccionar la imagen');
+      _showErrorDialog(
+        LocaleProvider.tr('error'),
+        LocaleProvider.tr('error_selecting_image'),
+      );
     }
   }
 
@@ -154,7 +158,9 @@ class _EditMetadataScreenState extends State<EditMetadataScreen> {
       // Verificar que el archivo existe
       final file = File(widget.song.id);
       if (!await file.exists()) {
-        throw Exception('El archivo no existe: ${widget.song.id}');
+        throw Exception(
+          '${LocaleProvider.tr('file_not_found')}: ${widget.song.id}',
+        );
       }
 
       // print('Guardando metadatos en: ${widget.song.id}');
@@ -571,21 +577,29 @@ class _EditMetadataScreenState extends State<EditMetadataScreen> {
                           vertical: 16,
                         ),
                         child: _isLoading
-                            ? const Row(
+                            ? Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   SizedBox(
                                     width: 20,
                                     height: 20,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      valueColor: AlwaysStoppedAnimation<Color>(
-                                        Colors.white,
-                                      ),
+                                    child: LoadingIndicator(),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    LocaleProvider.tr('saving'),
+                                    style: TextStyle(
+                                      color: _hasChanges && !_isLoading
+                                          ? Theme.of(
+                                              context,
+                                            ).colorScheme.onPrimaryContainer
+                                          : Theme.of(context)
+                                                .colorScheme
+                                                .onSurface
+                                                .withValues(alpha: 0.5),
+                                      fontWeight: FontWeight.w600,
                                     ),
                                   ),
-                                  SizedBox(width: 8),
-                                  Text('Guardando...'),
                                 ],
                               )
                             : Row(

@@ -11,6 +11,7 @@ import 'package:music/utils/notification_service.dart';
 import 'package:music/utils/simple_yt_download.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:music/widgets/animated_tap_button.dart';
+import 'package:material_loading_indicator/loading_indicator.dart';
 
 class ArtistScreen extends StatefulWidget {
   final String artistName;
@@ -1060,7 +1061,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
           ],
         ),
         body: _loading
-            ? const Center(child: CircularProgressIndicator())
+            ? Center(child: LoadingIndicator())
             : _artist == null
             ? Center(
                 child: Column(
@@ -1496,12 +1497,10 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                           mainAxisAlignment:
                                               MainAxisAlignment.center,
                                           children: [
-                                            const SizedBox(
+                                            SizedBox(
                                               width: 20,
                                               height: 20,
-                                              child: CircularProgressIndicator(
-                                                strokeWidth: 2,
-                                              ),
+                                              child: LoadingIndicator(),
                                             ),
                                             const SizedBox(width: 12),
                                             TranslatedText(
@@ -1855,9 +1854,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                 ),
                                 const SizedBox(height: 16),
                                 if (_loadingAlbumSongs)
-                                  const Center(
-                                    child: CircularProgressIndicator(),
-                                  )
+                                  Center(child: LoadingIndicator())
                                 else if (_albumSongs.isEmpty)
                                   const Center(
                                     child: Text('No se encontraron canciones'),
@@ -2192,12 +2189,10 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                           mainAxisAlignment:
                                               MainAxisAlignment.center,
                                           children: [
-                                            const SizedBox(
+                                            SizedBox(
                                               width: 20,
                                               height: 20,
-                                              child: CircularProgressIndicator(
-                                                strokeWidth: 2,
-                                              ),
+                                              child: LoadingIndicator(),
                                             ),
                                             const SizedBox(width: 12),
                                             TranslatedText(
@@ -2972,13 +2967,10 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                             mainAxisAlignment:
                                                 MainAxisAlignment.center,
                                             children: [
-                                              const SizedBox(
+                                              SizedBox(
                                                 width: 20,
                                                 height: 20,
-                                                child:
-                                                    CircularProgressIndicator(
-                                                      strokeWidth: 2,
-                                                    ),
+                                                child: LoadingIndicator(),
                                               ),
                                               const SizedBox(width: 12),
                                               TranslatedText(
@@ -3413,13 +3405,10 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                             mainAxisAlignment:
                                                 MainAxisAlignment.center,
                                             children: [
-                                              const SizedBox(
+                                              SizedBox(
                                                 width: 20,
                                                 height: 20,
-                                                child:
-                                                    CircularProgressIndicator(
-                                                      strokeWidth: 2,
-                                                    ),
+                                                child: LoadingIndicator(),
                                               ),
                                               const SizedBox(width: 12),
                                               TranslatedText(
