@@ -1,9 +1,9 @@
 {
-  "version": "1.7.3",
+  "version": "1.7.4",
   "apk_urls": {
-    "arm64-v8a": "https://github.com/KirbyNx64/Aura/releases/download/v1.7.3/AuraMusic-v1.7.3-arm64-v8a.apk",
-    "armeabi-v7a": "https://github.com/KirbyNx64/Aura/releases/download/v1.7.3/AuraMusic-v1.7.3-armeabi-v7a.apk",
-    "x86_64": "https://github.com/KirbyNx64/Aura/releases/download/v1.7.3/AuraMusic-v1.7.3-x86_64.apk"
+    "arm64-v8a": "https://github.com/KirbyNx64/Aura/releases/download/v1.7.4/AuraMusic-v1.7.4-arm64-v8a.apk",
+    "armeabi-v7a": "https://github.com/KirbyNx64/Aura/releases/download/v1.7.4/AuraMusic-v1.7.4-armeabi-v7a.apk",
+    "x86_64": "https://github.com/KirbyNx64/Aura/releases/download/v1.7.4/AuraMusic-v1.7.4-x86_64.apk"
   },
-  "changelog": "• Se aplicaron mejoras visuales al usar el tema AMOLED, incluyendo opciones como utilizar la carátula de la canción como fondo del reproductor con efecto de desenfoque.\n\n• Se mejoró la pantalla de artistas, permitiendo una mejor visualización de la foto del artista y mostrando ahora la cantidad de suscriptores que tiene en YouTube.\n\n• Se corrigieron errores menores y se optimizó la estabilidad."
+  "changelog": "• Se aplicaron pequeñas mejoras visuales en la interfaz.\n\n• Se corrigió la compatibilidad de la aplicación con la paginación de memoria de 16 KB en Android 16+, gracias a @D4v31x.\n\n• Se corrigieron errores menores y se optimizó la estabilidad general."
 }
