@@ -145,13 +145,35 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
         label: LocaleProvider.tr('home'),
       ),
       NavigationDestination(
-        icon: AnimatedNavIcon(
-          icon: Icon(Icons.search, weight: 600),
-          isSelected: _selectedIndex == 1,
+        icon: ValueListenableBuilder<bool>(
+          valueListenable: hasNewDownloadsNotifier,
+          builder: (context, hasNew, child) {
+            return Badge(
+              isLabelVisible: hasNew,
+              backgroundColor: theme.colorScheme.primary,
+              smallSize: 10,
+              child: child!,
+            );
+          },
+          child: AnimatedNavIcon(
+            icon: Icon(Icons.search, weight: 600),
+            isSelected: _selectedIndex == 1,
+          ),
         ),
-        selectedIcon: AnimatedNavIcon(
-          icon: Icon(Icons.saved_search, weight: 600, color: iconColor),
-          isSelected: _selectedIndex == 1,
+        selectedIcon: ValueListenableBuilder<bool>(
+          valueListenable: hasNewDownloadsNotifier,
+          builder: (context, hasNew, child) {
+            return Badge(
+              isLabelVisible: hasNew,
+              backgroundColor: theme.colorScheme.primary,
+              smallSize: 10,
+              child: child!,
+            );
+          },
+          child: AnimatedNavIcon(
+            icon: Icon(Icons.saved_search, weight: 600, color: iconColor),
+            isSelected: _selectedIndex == 1,
+          ),
         ),
         label: LocaleProvider.tr('nav_search'),
       ),

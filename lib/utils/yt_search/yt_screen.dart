@@ -128,6 +128,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
   bool _isUrlPlaylistSearch = false;
   List<YtMusicResult> _urlPlaylistVideos = [];
   String? _urlPlaylistTitle;
+  String? _urlPlaylistThumb;
   bool _loadingUrlPlaylist = false;
   String? _urlPlaylistError;
 
@@ -746,6 +747,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
 
       setState(() {
         _urlPlaylistTitle = playlistInfo['title'];
+        _urlPlaylistThumb = playlistInfo['thumbUrl'];
         _urlPlaylistVideos = allSongs;
         _loadingUrlPlaylist = false;
       });
@@ -760,62 +762,100 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
   // Función para construir la UI del resultado del video
   Widget _buildUrlVideoResult() {
     final isSystem = colorSchemeNotifier.value == AppColorScheme.system;
+    final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     if (_urlVideoResult == null) return const SizedBox.shrink();
+
+    final topBorderRadius = const BorderRadius.only(
+      topLeft: Radius.circular(16),
+      topRight: Radius.circular(16),
+      bottomLeft: Radius.circular(4),
+      bottomRight: Radius.circular(4),
+    );
+
+    final bottomBorderRadius = const BorderRadius.only(
+      topLeft: Radius.circular(4),
+      topRight: Radius.circular(4),
+      bottomLeft: Radius.circular(16),
+      bottomRight: Radius.circular(16),
+    );
 
     return SingleChildScrollView(
       child: Column(
         children: [
-          // Resultado del video
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: isSystem
-                  ? Theme.of(
-                      context,
-                    ).colorScheme.secondaryContainer.withValues(alpha: 0.5)
-                  : Theme.of(context).colorScheme.surfaceContainer,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withAlpha((0.05 * 255).toInt()),
-                  blurRadius: 6,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Thumbnail y información básica
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+          // Card 1: Información (Thumbnail, Título, Artista)
+          Card(
+            color: isDark && !isAmoled
+                ? Theme.of(
+                    context,
+                  ).colorScheme.secondaryContainer.withAlpha(160)
+                : isAmoled
+                ? Colors.white.withAlpha(40)
+                : Theme.of(context).colorScheme.secondaryContainer,
+            margin: EdgeInsets.zero,
+            elevation: 0,
+            shape: RoundedRectangleBorder(borderRadius: topBorderRadius),
+            child: InkWell(
+              borderRadius: topBorderRadius,
+              onTap: () {
+                showModalBottomSheet(
+                  context: context,
+                  shape: const RoundedRectangleBorder(
+                    borderRadius: BorderRadius.vertical(
+                      top: Radius.circular(16),
+                    ),
+                  ),
+                  builder: (context) {
+                    return SafeArea(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: YtPreviewPlayer(
+                          results: [
+                            YtMusicResult(
+                              title: _urlVideoResult!.title,
+                              artist: _urlVideoResult!.author,
+                              videoId: _urlVideoResult!.id.toString(),
+                              thumbUrl:
+                                  'https://img.youtube.com/vi/${_urlVideoResult!.id}/maxresdefault.jpg',
+                            ),
+                          ],
+                          currentIndex: 0,
+                        ),
+                      ),
+                    );
+                  },
+                );
+              },
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Row(
                   children: [
-                    // Thumbnail
                     ClipRRect(
                       borderRadius: BorderRadius.circular(8),
-                      child: Image.network(
+                      child: _buildSafeNetworkImage(
                         'https://img.youtube.com/vi/${_urlVideoResult!.id}/maxresdefault.jpg',
-                        width: 120,
-                        height: 120,
+                        width: 80,
+                        height: 80,
                         fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) {
-                          return Container(
-                            width: 120,
-                            height: 120,
-                            decoration: BoxDecoration(
-                              color: Colors.grey[300],
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: const Icon(Icons.music_video, size: 40),
-                          );
-                        },
+                        fallback: Container(
+                          width: 80,
+                          height: 80,
+                          decoration: BoxDecoration(
+                            color: isSystem
+                                ? Theme.of(
+                                    context,
+                                  ).colorScheme.secondaryContainer
+                                : Theme.of(
+                                    context,
+                                  ).colorScheme.surfaceContainer,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(Icons.music_video, size: 30),
+                        ),
                       ),
                     ),
                     const SizedBox(width: 16),
-
-                    // Información del video
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -829,17 +869,11 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                           ),
-                          const SizedBox(height: 8),
+                          const SizedBox(height: 4),
                           Text(
                             _urlVideoResult!.author.replaceFirst(
                               RegExp(r' - Topic$'),
                               '',
-                            ),
-                            style: TextStyle(
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.onSurfaceVariant,
-                              fontSize: 14,
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -849,43 +883,56 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                     ),
                   ],
                 ),
-
-                const SizedBox(height: 16),
-
-                // Botón de acción
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: () async {
-                      if (_urlVideoResult != null) {
-                        // Agregar a la cola de descargas
-                        final downloadQueue = DownloadQueue();
-                        await downloadQueue.addToQueue(
-                          context: context,
-                          videoId: _urlVideoResult!.id.toString(),
-                          title: _urlVideoResult!.title,
-                          artist: _urlVideoResult!.author.replaceFirst(
-                            RegExp(r' - Topic$'),
-                            '',
-                          ),
-                        );
-
-                        // Mostrar mensaje de confirmación
-                        _showMessage(
-                          LocaleProvider.tr('success'),
-                          LocaleProvider.tr('download_started'),
-                        );
-                      }
-                    },
-                    icon: const Icon(Icons.download),
-                    label: Text(LocaleProvider.tr('download')),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Theme.of(context).colorScheme.primary,
-                      foregroundColor: Theme.of(context).colorScheme.onPrimary,
-                    ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 4),
+          // Card 2: Botón de descarga
+          Card(
+            color: Theme.of(context).colorScheme.primary,
+            margin: EdgeInsets.zero,
+            elevation: 0,
+            shape: RoundedRectangleBorder(borderRadius: bottomBorderRadius),
+            child: InkWell(
+              borderRadius: bottomBorderRadius,
+              onTap: () async {
+                final downloadQueue = DownloadQueue();
+                await downloadQueue.addToQueue(
+                  context: context,
+                  videoId: _urlVideoResult!.id.toString(),
+                  title: _urlVideoResult!.title,
+                  artist: _urlVideoResult!.author.replaceFirst(
+                    RegExp(r' - Topic$'),
+                    '',
                   ),
+                );
+                _showMessage(
+                  LocaleProvider.tr('success'),
+                  LocaleProvider.tr('download_started'),
+                );
+              },
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.download,
+                      color: Theme.of(context).colorScheme.onPrimary,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      LocaleProvider.tr('download'),
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onPrimary,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
         ],
@@ -896,6 +943,9 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
   // Función para construir la UI del resultado de la playlist
   Widget _buildUrlPlaylistResult() {
     final isSystem = colorSchemeNotifier.value == AppColorScheme.system;
+    final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
+    // Determine theme brightness
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     if (_urlPlaylistVideos.isEmpty) return const SizedBox.shrink();
 
@@ -910,194 +960,249 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
           padding: EdgeInsets.only(bottom: bottomSpace),
           child: SingleChildScrollView(
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Resultado de la playlist
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: isSystem
-                        ? Theme.of(context).colorScheme.secondaryContainer
-                              .withValues(alpha: 0.5)
-                        : Theme.of(context).colorScheme.surfaceContainer,
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withAlpha((0.05 * 255).toInt()),
-                        blurRadius: 6,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
+                // Header de la playlist
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  child: Row(
                     children: [
-                      // Título de la playlist
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.playlist_play,
-                            size: 24,
-                            color: Theme.of(context).colorScheme.primary,
+                      if (_urlPlaylistThumb != null)
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: _buildSafeNetworkImage(
+                            _urlPlaylistThumb,
+                            width: 45,
+                            height: 45,
+                            fit: BoxFit.cover,
                           ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
+                        )
+                      else
+                        Icon(
+                          Icons.playlist_play,
+                          size: 50,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
                               _urlPlaylistTitle ?? 'Playlist',
                               style: const TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 18,
                               ),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          IconButton(
-                            onPressed: () async {
-                              final downloadQueue = DownloadQueue();
-                              for (final song in _urlPlaylistVideos) {
-                                await downloadQueue.addToQueue(
-                                  context: context,
-                                  videoId: song.videoId ?? '',
-                                  title: song.title ?? 'Sin título',
-                                  artist:
-                                      song.artist?.replaceFirst(
-                                        RegExp(r' - Topic$'),
-                                        '',
-                                      ) ??
-                                      'Artista desconocido',
-                                );
-                              }
-                              _showMessage(
-                                LocaleProvider.tr('success'),
-                                '${_urlPlaylistVideos.length} ${LocaleProvider.tr('songs_added_to_queue')}',
-                              );
-                            },
-                            icon: const Icon(Icons.download),
-                            style: IconButton.styleFrom(
-                              backgroundColor: Theme.of(
-                                context,
-                              ).colorScheme.primary,
-                              foregroundColor: Theme.of(
-                                context,
-                              ).colorScheme.onPrimary,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          Text(
-                            '${_urlPlaylistVideos.length} canciones',
-                            style: TextStyle(
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.onSurfaceVariant,
-                              fontSize: 14,
-                            ),
-                          ),
-                          if (_loadingUrlPlaylist) ...[
-                            const SizedBox(width: 8),
-                            SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: LoadingIndicator(),
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              'Cargando...',
-                              style: TextStyle(
-                                color: Theme.of(context).colorScheme.primary,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-
-                      // Lista de canciones
-                      ListView.builder(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        itemCount: _urlPlaylistVideos.length,
-                        itemBuilder: (context, index) {
-                          final song = _urlPlaylistVideos[index];
-                          return ListTile(
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 0,
-                              vertical: 2,
-                            ),
-                            dense: true,
-                            leading: ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: Image.network(
-                                song.thumbUrl ??
-                                    'https://img.youtube.com/vi/${song.videoId}/maxresdefault.jpg',
-                                width: 48,
-                                height: 48,
-                                fit: BoxFit.cover,
-                                errorBuilder: (context, error, stackTrace) {
-                                  return Container(
-                                    width: 48,
-                                    height: 48,
-                                    decoration: BoxDecoration(
-                                      color: Colors.grey[300],
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: const Icon(
-                                      Icons.music_video,
-                                      size: 20,
-                                    ),
-                                  );
-                                },
-                              ),
-                            ),
-                            title: Text(
-                              song.title ?? 'Sin título',
-                              style: Theme.of(context).textTheme.titleMedium,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
-                            subtitle: Text(
-                              song.artist?.replaceFirst(
-                                    RegExp(r' - Topic$'),
-                                    '',
-                                  ) ??
-                                  'Artista desconocido',
+                            Text(
+                              '${_urlPlaylistVideos.length} ${LocaleProvider.tr('songs')}',
                               style: TextStyle(
                                 color: Theme.of(
                                   context,
                                 ).colorScheme.onSurfaceVariant,
-                                fontSize: 12,
+                                fontSize: 13,
                               ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
                             ),
-                            trailing: IconButton(
-                              icon: const Icon(Icons.download),
-                              onPressed: () async {
-                                // Agregar a la cola de descargas
-                                final downloadQueue = DownloadQueue();
-                                await downloadQueue.addToQueue(
-                                  context: context,
-                                  videoId: song.videoId ?? '',
-                                  title: song.title ?? 'Sin título',
-                                  artist:
-                                      song.artist?.replaceFirst(
-                                        RegExp(r' - Topic$'),
-                                        '',
-                                      ) ??
-                                      'Artista desconocido',
-                                );
-                              },
-                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton(
+                        onPressed: () async {
+                          final downloadQueue = DownloadQueue();
+                          for (final song in _urlPlaylistVideos) {
+                            await downloadQueue.addToQueue(
+                              context: context,
+                              videoId: song.videoId ?? '',
+                              title: song.title ?? 'Sin título',
+                              artist:
+                                  song.artist?.replaceFirst(
+                                    RegExp(r' - Topic$'),
+                                    '',
+                                  ) ??
+                                  'Artista desconocido',
+                            );
+                          }
+                          _showMessage(
+                            LocaleProvider.tr('success'),
+                            '${_urlPlaylistVideos.length} ${LocaleProvider.tr('songs_added_to_queue')}',
                           );
                         },
+                        icon: const Icon(Icons.download),
+                        style: IconButton.styleFrom(
+                          backgroundColor: Theme.of(
+                            context,
+                          ).colorScheme.primary,
+                          foregroundColor: Theme.of(
+                            context,
+                          ).colorScheme.onPrimary,
+                        ),
                       ),
                     ],
+                  ),
+                ),
+
+                // Lista de canciones
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: _urlPlaylistVideos.length,
+                    itemBuilder: (context, index) {
+                      final item = _urlPlaylistVideos[index];
+
+                      // Card styling logic matching search results
+                      final cardColor = isAmoled && isDark
+                          ? Colors.white.withAlpha(20)
+                          : isDark
+                          ? Theme.of(
+                              context,
+                            ).colorScheme.onSecondary.withValues(alpha: 0.5)
+                          : Theme.of(context).colorScheme.secondaryContainer
+                                .withValues(alpha: 0.5);
+
+                      final bool isFirst = index == 0;
+                      final bool isLast =
+                          index == _urlPlaylistVideos.length - 1;
+                      final bool isOnly = _urlPlaylistVideos.length == 1;
+
+                      BorderRadius borderRadius;
+                      if (isOnly) {
+                        borderRadius = BorderRadius.circular(16);
+                      } else if (isFirst) {
+                        borderRadius = const BorderRadius.only(
+                          topLeft: Radius.circular(16),
+                          topRight: Radius.circular(16),
+                          bottomLeft: Radius.circular(4),
+                          bottomRight: Radius.circular(4),
+                        );
+                      } else if (isLast) {
+                        borderRadius = const BorderRadius.only(
+                          topLeft: Radius.circular(4),
+                          topRight: Radius.circular(4),
+                          bottomLeft: Radius.circular(16),
+                          bottomRight: Radius.circular(16),
+                        );
+                      } else {
+                        borderRadius = BorderRadius.circular(4);
+                      }
+
+                      return Padding(
+                        padding: EdgeInsets.only(bottom: isLast ? 0 : 4),
+                        child: Card(
+                          color: cardColor,
+                          margin: EdgeInsets.zero,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: borderRadius,
+                          ),
+                          child: InkWell(
+                            borderRadius: borderRadius,
+                            onTap: () {
+                              showModalBottomSheet(
+                                context: context,
+                                shape: const RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.vertical(
+                                    top: Radius.circular(16),
+                                  ),
+                                ),
+                                builder: (context) {
+                                  return SafeArea(
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(24),
+                                      child: YtPreviewPlayer(
+                                        results: _urlPlaylistVideos,
+                                        currentIndex: index,
+                                      ),
+                                    ),
+                                  );
+                                },
+                              );
+                            },
+                            child: ListTile(
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 4,
+                              ),
+                              leading: ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: _buildSafeNetworkImage(
+                                  item.thumbUrl ??
+                                      'https://img.youtube.com/vi/${item.videoId}/maxresdefault.jpg',
+                                  width: 50,
+                                  height: 50,
+                                  fit: BoxFit.cover,
+                                  fallback: Container(
+                                    width: 50,
+                                    height: 50,
+                                    decoration: BoxDecoration(
+                                      color: isSystem
+                                          ? Theme.of(
+                                              context,
+                                            ).colorScheme.secondaryContainer
+                                          : Theme.of(
+                                              context,
+                                            ).colorScheme.surfaceContainer,
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: const Icon(
+                                      Icons.music_note,
+                                      color: Colors.grey,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              title: Text(
+                                item.title ?? 'Sin título',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              subtitle: Text(
+                                item.artist?.replaceFirst(
+                                      RegExp(r' - Topic$'),
+                                      '',
+                                    ) ??
+                                    'Unknown Artist',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                              trailing: IconButton(
+                                icon: const Icon(Icons.download),
+                                onPressed: () async {
+                                  final downloadQueue = DownloadQueue();
+                                  await downloadQueue.addToQueue(
+                                    context: context,
+                                    videoId: item.videoId ?? '',
+                                    title: item.title ?? 'Sin título',
+                                    artist:
+                                        item.artist?.replaceFirst(
+                                          RegExp(r' - Topic$'),
+                                          '',
+                                        ) ??
+                                        'Artista desconocido',
+                                  );
+                                },
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
                   ),
                 ),
               ],

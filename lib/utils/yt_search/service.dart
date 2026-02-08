@@ -257,6 +257,328 @@ Future<Map<String, dynamic>?> getArtistInfoByName(String name) async {
   }
 }
 
+// Función para obtener canciones específicas de un artista (con paginación)
+Future<Map<String, dynamic>> getArtistSongs(
+  String browseId, {
+  String? params,
+  int initialLimit = 20,
+}) async {
+  // Si viene con MPLA, quitarlo
+  String normalizedId = browseId;
+  if (normalizedId.startsWith('MPLA')) {
+    normalizedId = normalizedId.substring(4);
+  }
+
+  try {
+    // Primero, obtener la página del artista
+    final artistData = {...ytServiceContext, 'browseId': normalizedId};
+
+    // Configurar idioma
+    try {
+      final ctx = (artistData['context'] as Map);
+      final client = (ctx['client'] as Map);
+      final locale = languageNotifier.value;
+      client['hl'] = locale.startsWith('es') ? 'es' : 'en';
+    } catch (_) {}
+
+    final artistResponse = (await sendRequest("browse", artistData)).data;
+
+    // Buscar las secciones de contenido
+    final sections = nav(artistResponse, [
+      'contents',
+      'singleColumnBrowseResultsRenderer',
+      'tabs',
+      0,
+      'tabRenderer',
+      'content',
+      'sectionListRenderer',
+      'contents',
+    ]);
+
+    if (sections == null || sections is! List) {
+      return {'results': [], 'continuationToken': null, 'browseEndpoint': null};
+    }
+
+    // Buscar el endpoint de "Songs" o "Top songs"
+    Map<String, dynamic>? songsEndpoint;
+    List<dynamic>? topSongsPreview;
+
+    for (var section in sections) {
+      // Buscar en musicShelfRenderer
+      if (section.containsKey('musicShelfRenderer')) {
+        final shelf = section['musicShelfRenderer'];
+        final title = nav(shelf, ['title', 'runs', 0, 'text']);
+
+        if (title != null &&
+            (title.toString().toLowerCase().contains('song') ||
+                title.toString().toLowerCase().contains('cancion'))) {
+          final browseEndpoint = nav(shelf, [
+            'bottomEndpoint',
+            'browseEndpoint',
+          ]);
+
+          if (browseEndpoint != null) {
+            songsEndpoint = browseEndpoint;
+          }
+
+          final contentList = nav(shelf, ['contents']);
+          if (contentList is List) {
+            topSongsPreview = contentList;
+          }
+          break;
+        }
+      }
+
+      // Buscar en musicCarouselShelfRenderer
+      if (section.containsKey('musicCarouselShelfRenderer')) {
+        final shelf = section['musicCarouselShelfRenderer'];
+        final title = nav(shelf, [
+          'header',
+          'musicCarouselShelfBasicHeaderRenderer',
+          'title',
+          'runs',
+          0,
+          'text',
+        ]);
+
+        if (title != null &&
+            (title.toString().toLowerCase().contains('song') ||
+                title.toString().toLowerCase().contains('cancion'))) {
+          final browseEndpoint = nav(shelf, [
+            'header',
+            'musicCarouselShelfBasicHeaderRenderer',
+            'moreContentButton',
+            'buttonRenderer',
+            'navigationEndpoint',
+            'browseEndpoint',
+          ]);
+
+          if (browseEndpoint != null) {
+            songsEndpoint = browseEndpoint;
+          }
+
+          final contentList = nav(shelf, ['contents']);
+          if (contentList is List) {
+            topSongsPreview = contentList;
+          }
+          break;
+        }
+      }
+    }
+
+    // Si solo hay preview sin endpoint, devolver eso (sin paginación)
+    if (songsEndpoint == null && topSongsPreview != null) {
+      final results = <YtMusicResult>[];
+      parseSongs(topSongsPreview, results);
+      return {
+        'results': results.take(initialLimit).toList(),
+        'continuationToken': null,
+        'browseEndpoint': null,
+      };
+    }
+
+    if (songsEndpoint == null) {
+      return {'results': [], 'continuationToken': null, 'browseEndpoint': null};
+    }
+
+    // Obtener las canciones usando el endpoint específico
+    final songsBrowseData = {...ytServiceContext};
+    songsBrowseData['browseId'] = songsEndpoint['browseId'];
+    if (songsEndpoint['params'] != null) {
+      songsBrowseData['params'] = songsEndpoint['params'];
+    }
+
+    final songResponse = (await sendRequest("browse", songsBrowseData)).data;
+    final results = <YtMusicResult>[];
+
+    // Extraer las canciones
+    final contents = nav(songResponse, [
+      'contents',
+      'singleColumnBrowseResultsRenderer',
+      'tabs',
+      0,
+      'tabRenderer',
+      'content',
+      'sectionListRenderer',
+      'contents',
+      0,
+    ]);
+
+    if (contents != null) {
+      var shelfContents = nav(contents, [
+        'musicPlaylistShelfRenderer',
+        'contents',
+      ]);
+      shelfContents ??= nav(contents, ['musicShelfRenderer', 'contents']);
+
+      if (shelfContents is List) {
+        // Parsear solo los primeros items (sin continuación)
+        final itemsToParse = shelfContents.where((item) {
+          // Filtrar el continuationItemRenderer
+          return item.containsKey('musicResponsiveListItemRenderer');
+        }).toList();
+
+        parseSongs(itemsToParse, results);
+      }
+
+      // Extraer token de continuación
+      String? continuationToken;
+
+      // Buscar en el último item del shelf
+      if (shelfContents is List && shelfContents.isNotEmpty) {
+        final lastItem = shelfContents.last;
+        if (lastItem.containsKey('continuationItemRenderer')) {
+          continuationToken = nav(lastItem, [
+            'continuationItemRenderer',
+            'continuationEndpoint',
+            'continuationCommand',
+            'token',
+          ]);
+        }
+      }
+
+      // Si no encontramos en el último item, buscar en el shelf mismo
+      continuationToken ??= nav(contents, [
+        'musicPlaylistShelfRenderer',
+        'continuations',
+        0,
+        'nextContinuationData',
+        'continuation',
+      ]);
+
+      continuationToken ??= nav(contents, [
+        'musicShelfRenderer',
+        'continuations',
+        0,
+        'nextContinuationData',
+        'continuation',
+      ]);
+
+      return {
+        'results': results.take(initialLimit).toList(),
+        'continuationToken': continuationToken,
+        'browseEndpoint': songsEndpoint, // Guardar para continuaciones
+      };
+    }
+
+    return {'results': [], 'continuationToken': null, 'browseEndpoint': null};
+  } catch (e) {
+    // print('❌ Error en getArtistSongs: $e');
+    return {'results': [], 'continuationToken': null, 'browseEndpoint': null};
+  }
+}
+
+// Función para obtener más canciones del artista (continuación)
+Future<Map<String, dynamic>> getArtistSongsContinuation({
+  required Map<String, dynamic> browseEndpoint,
+  required String continuationToken,
+  int limit = 20,
+}) async {
+  try {
+    final data = {...ytServiceContext};
+    data['browseId'] = browseEndpoint['browseId'];
+    if (browseEndpoint['params'] != null) {
+      data['params'] = browseEndpoint['params'];
+    }
+
+    // Agregar el token de continuación
+    final additionalParams =
+        '&ctoken=$continuationToken&continuation=$continuationToken';
+
+    final response = (await sendRequest(
+      "browse",
+      data,
+      additionalParams: additionalParams,
+    )).data;
+    final results = <YtMusicResult>[];
+
+    // Buscar en onResponseReceivedActions (estructura de continuación)
+    var contentList = nav(response, [
+      'onResponseReceivedActions',
+      0,
+      'appendContinuationItemsAction',
+      'continuationItems',
+    ]);
+
+    // Fallback a continuationContents
+    contentList ??= nav(response, [
+      'continuationContents',
+      'musicPlaylistShelfContinuation',
+      'contents',
+    ]);
+
+    contentList ??= nav(response, [
+      'continuationContents',
+      'musicShelfContinuation',
+      'contents',
+    ]);
+
+    if (contentList is List) {
+      // Filtrar solo los items de canciones
+      final songItems = contentList.where((item) {
+        return item.containsKey('musicResponsiveListItemRenderer');
+      }).toList();
+
+      parseSongs(songItems, results);
+
+      // Buscar el siguiente token de continuación
+      String? nextToken;
+
+      // Buscar en el último item
+      final lastItem = contentList.last;
+      if (lastItem.containsKey('continuationItemRenderer')) {
+        nextToken = nav(lastItem, [
+          'continuationItemRenderer',
+          'continuationEndpoint',
+          'continuationCommand',
+          'token',
+        ]);
+      }
+
+      // Fallback a otras ubicaciones
+      nextToken ??= nav(response, [
+        'continuationContents',
+        'musicPlaylistShelfContinuation',
+        'continuations',
+        0,
+        'nextContinuationData',
+        'continuation',
+      ]);
+
+      nextToken ??= nav(response, [
+        'continuationContents',
+        'musicShelfContinuation',
+        'continuations',
+        0,
+        'nextContinuationData',
+        'continuation',
+      ]);
+
+      nextToken ??= nav(response, [
+        'onResponseReceivedActions',
+        0,
+        'appendContinuationItemsAction',
+        'continuationItems',
+        0,
+        'continuationItemRenderer',
+        'continuationEndpoint',
+        'continuationCommand',
+        'token',
+      ]);
+
+      return {
+        'results': results.take(limit).toList(),
+        'continuationToken': nextToken,
+      };
+    }
+
+    return {'results': [], 'continuationToken': null};
+  } catch (e) {
+    // print('❌ Error en getArtistSongsContinuation: $e');
+    return {'results': [], 'continuationToken': null};
+  }
+}
+
 // Helper: limpia parámetros de recorte de URLs de thumbnails
 String _cleanThumbnailUrl(String url) {
   if (url.isEmpty) return url;
@@ -1418,7 +1740,8 @@ Map<String, String>? _parseAlbumItem(Map<String, dynamic> renderer) {
     'thumbnails',
   ]);
   if (thumbnails is List && thumbnails.isNotEmpty) {
-    thumbUrl = thumbnails.last['url']; if (thumbUrl != null) thumbUrl = _cleanThumbnailUrl(thumbUrl);
+    thumbUrl = thumbnails.last['url'];
+    if (thumbUrl != null) thumbUrl = _cleanThumbnailUrl(thumbUrl);
   }
 
   return {

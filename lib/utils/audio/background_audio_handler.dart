@@ -68,7 +68,7 @@ Future<AudioHandler> initAudioService() async {
               'Controles de reproducción de música',
           androidNotificationOngoing: true,
           androidNotificationClickStartsActivity: true,
-          androidStopForegroundOnPause: false,
+          // androidStopForegroundOnPause: false,
           androidResumeOnClick: true,
           preloadArtwork: true,
         ),
@@ -388,7 +388,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
   // Control de pausa automática durante cambios de canción
   Timer? _songChangeResumeTimer;
-  bool _wasPlayingBeforeChange = false;
+
   static const Duration _songChangeDelay = Duration(milliseconds: 800);
 
   // Claves de SharedPreferences
@@ -1597,6 +1597,15 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       // Esto asegura que el volumen sea correcto después de estar en segundo plano
       _restoreAudioConfiguration();
 
+      // Si la lista terminó (estado completed), reiniciar la canción actual
+      if (_player.processingState == ProcessingState.completed) {
+        await _player.seek(Duration.zero);
+        //delay de 200 ms
+        await Future.delayed(const Duration(milliseconds: 200));
+        await _player.play();
+        return;
+      }
+
       await _player.play();
     } catch (e) {
       // Reintentar una vez tras pequeña espera si seguía inicializando
@@ -1686,25 +1695,21 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
   /// Controla la pausa automática durante cambios de canción
   void _handleSongChangePause() {
-    // Solo establecer el estado original en el primer cambio
-    if (_songChangeResumeTimer == null) {
-      _wasPlayingBeforeChange = _player.playing;
-    }
-
     // Cancelar timer anterior si existe
     _songChangeResumeTimer?.cancel();
 
-    // Si estaba reproduciéndose originalmente y no está pausado, pausar
-    if (_wasPlayingBeforeChange && _player.playing) {
+    // Si está reproduciéndose, pausar momentáneamente para un cambio suave
+    if (_player.playing) {
       _player.pause();
     }
 
     // Configurar timer para reanudar después del delay
     _songChangeResumeTimer = Timer(_songChangeDelay, () {
-      if (_wasPlayingBeforeChange && !_player.playing) {
+      // Siempre reanudar/iniciar la reproducción después de un skip manual
+      // (cumpliendo con la solicitud del usuario de que inicie la canción aunque esté en pausa)
+      if (!_player.playing) {
         _player.play();
       }
-      _wasPlayingBeforeChange = false;
       _songChangeResumeTimer = null; // Limpiar referencia al timer
     });
   }

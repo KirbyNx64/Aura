@@ -3962,6 +3962,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ).colorScheme.secondaryContainer.withValues(alpha: 0.5);
 
     return Scaffold(
+      extendBody: true,
+      bottomNavigationBar: SizedBox(
+        height: MediaQuery.of(context).padding.bottom,
+        child: GestureDetector(
+          onVerticalDragStart: (_) {},
+          behavior: HitTestBehavior.translucent,
+        ),
+      ),
       appBar: AppBar(
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         surfaceTintColor: Colors.transparent,

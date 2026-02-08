@@ -35,6 +35,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
   List<YtMusicResult> _albumSongs = [];
   Map<String, dynamic>? _currentAlbum;
   bool _loadingAlbumSongs = false;
+  bool _loadingContent = false;
 
   // Estado para selección múltiple
   final Set<String> _selectedIndexes = {};
@@ -44,6 +45,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
   String? _songsContinuationToken;
   bool _loadingMoreSongs = false;
   bool _hasMoreSongs = true;
+  Map<String, dynamic>? _songsBrowseEndpoint; // Para usar en continuación
 
   // Estado para paginación de videos
   String? _videosContinuationToken;
@@ -154,13 +156,15 @@ class _ArtistScreenState extends State<ArtistScreen> {
         final detailed = await getArtistDetails(widget.browseId!);
         if (detailed != null) {
           // print('✅ Artista cargado con browseId: ${widget.browseId} - Nombre: ${detailed['name']} - Thumb: ${detailed['thumbUrl'] != null ? 'Sí' : 'No'}');
-          setState(() {
-            _artist = detailed;
-            _loading = false;
-          });
-
-          // Cargar contenido del artista
-          _loadArtistContent(detailed);
+          if (mounted) {
+            setState(() {
+              _artist = detailed;
+              _loading = false;
+              _loadingContent = true;
+            });
+            // Cargar contenido del artista
+            _loadArtistContent(detailed);
+          }
           return;
         } else {
           // print('❌ No se pudo cargar artista con browseId: ${widget.browseId}');
@@ -296,50 +300,14 @@ class _ArtistScreenState extends State<ArtistScreen> {
       setState(() {
         _artist = result;
         _loading = false;
+        if (result != null) {
+          _loadingContent = true;
+        }
       });
 
       // Cargar contenido del artista simulando búsqueda como yt_screen
       if (result != null) {
-        try {
-          // Buscar canciones, videos y álbumes del artista
-          final songFuture = _loadSongsWithPagination(widget.artistName);
-          final videoFuture = _loadVideosWithPagination(widget.artistName);
-          final albumFuture = searchAlbumsOnly(widget.artistName);
-
-          final searchResults = await Future.wait([
-            songFuture,
-            videoFuture,
-            albumFuture,
-          ]);
-
-          if (mounted) {
-            final songsData = searchResults[0] as Map<String, dynamic>;
-            final videosData = searchResults[1] as Map<String, dynamic>;
-            final allAlbums = (searchResults[2] as List)
-                .cast<Map<String, String>>();
-
-            setState(() {
-              // Filtrar canciones por artista
-              _songs = _filterSongsByArtist(
-                songsData['songs'] as List<YtMusicResult>,
-                widget.artistName,
-              );
-              _songsContinuationToken =
-                  songsData['continuationToken'] as String?;
-              _hasMoreSongs = _songsContinuationToken != null;
-
-              // Videos
-              _videos = videosData['videos'] as List<YtMusicResult>;
-              _videosContinuationToken =
-                  videosData['continuationToken'] as String?;
-              _hasMoreVideos = _videosContinuationToken != null;
-
-              _albums = allAlbums;
-            });
-          }
-        } catch (e) {
-          // print('👻 ArtistScreen._load error loading content: $e');
-        }
+        _loadArtistContent(result);
       }
     } catch (_) {
       if (!mounted) return;
@@ -353,7 +321,14 @@ class _ArtistScreenState extends State<ArtistScreen> {
   Future<void> _loadArtistContent(Map<String, dynamic> artistInfo) async {
     try {
       // Buscar canciones, videos y álbumes del artista
-      final songFuture = _loadSongsWithPagination(widget.artistName);
+      final String? browseId = artistInfo['browseId'];
+
+      // Si tenemos browseId, usar getArtistSongs (ahora con paginación)
+      // sino, usar búsqueda general como fallback
+      final songFuture = (browseId != null && browseId.isNotEmpty)
+          ? getArtistSongs(browseId, initialLimit: 20)
+          : _loadSongsWithPagination(widget.artistName);
+
       final videoFuture = _loadVideosWithPagination(widget.artistName);
       final albumFuture = searchAlbumsOnly(widget.artistName);
 
@@ -364,19 +339,31 @@ class _ArtistScreenState extends State<ArtistScreen> {
       ]);
 
       if (mounted) {
-        final songsData = searchResults[0] as Map<String, dynamic>;
         final videosData = searchResults[1] as Map<String, dynamic>;
         final allAlbums = (searchResults[2] as List)
             .cast<Map<String, String>>();
 
         setState(() {
-          // Filtrar canciones por artista
-          _songs = _filterSongsByArtist(
-            songsData['songs'] as List<YtMusicResult>,
-            widget.artistName,
-          );
-          _songsContinuationToken = songsData['continuationToken'] as String?;
-          _hasMoreSongs = _songsContinuationToken != null;
+          // getArtistSongs ahora devuelve un Map con paginación
+          final songsData = searchResults[0] as Map<String, dynamic>;
+
+          // Si viene de getArtistSongs (con browseId)
+          if (songsData.containsKey('browseEndpoint')) {
+            _songs = songsData['results'] as List<YtMusicResult>;
+            _songsContinuationToken = songsData['continuationToken'] as String?;
+            _songsBrowseEndpoint =
+                songsData['browseEndpoint'] as Map<String, dynamic>?;
+            _hasMoreSongs = _songsContinuationToken != null;
+          } else {
+            // Si usamos búsqueda general
+            _songs = _filterSongsByArtist(
+              songsData['songs'] as List<YtMusicResult>,
+              widget.artistName,
+            );
+            _songsContinuationToken = songsData['continuationToken'] as String?;
+            _songsBrowseEndpoint = null;
+            _hasMoreSongs = _songsContinuationToken != null;
+          }
 
           // Videos
           _videos = videosData['videos'] as List<YtMusicResult>;
@@ -384,9 +371,15 @@ class _ArtistScreenState extends State<ArtistScreen> {
           _hasMoreVideos = _videosContinuationToken != null;
 
           _albums = allAlbums;
+          _loadingContent = false;
         });
       }
     } catch (e) {
+      if (mounted) {
+        setState(() {
+          _loadingContent = false;
+        });
+      }
       // print('👻 ArtistScreen._loadArtistContent error: $e');
     }
   }
@@ -809,20 +802,38 @@ class _ArtistScreenState extends State<ArtistScreen> {
     });
 
     try {
-      final songsData = await _loadSongsWithPagination(
-        widget.artistName,
-        continuationToken: _songsContinuationToken,
-      );
+      Map<String, dynamic> songsData;
+
+      // Si tenemos browseEndpoint, usar getArtistSongsContinuation
+      if (_songsBrowseEndpoint != null) {
+        songsData = await getArtistSongsContinuation(
+          browseEndpoint: _songsBrowseEndpoint!,
+          continuationToken: _songsContinuationToken!,
+          limit: 20,
+        );
+      } else {
+        // Usar búsqueda general
+        songsData = await _loadSongsWithPagination(
+          widget.artistName,
+          continuationToken: _songsContinuationToken,
+        );
+      }
 
       if (mounted) {
-        final newSongs = songsData['songs'] as List<YtMusicResult>;
-        final filteredNewSongs = _filterSongsByArtist(
-          newSongs,
-          widget.artistName,
-        );
+        // getArtistSongsContinuation devuelve 'results', búsqueda general devuelve 'songs'
+        final newSongs =
+            (songsData.containsKey('results')
+                    ? songsData['results']
+                    : songsData['songs'])
+                as List<YtMusicResult>;
+
+        // Solo filtrar si usamos búsqueda general
+        final songsToAdd = _songsBrowseEndpoint != null
+            ? newSongs
+            : _filterSongsByArtist(newSongs, widget.artistName);
 
         setState(() {
-          _songs.addAll(filteredNewSongs);
+          _songs.addAll(songsToAdd);
           _songsContinuationToken = songsData['continuationToken'] as String?;
           _hasMoreSongs = _songsContinuationToken != null;
           _loadingMoreSongs = false;
@@ -889,6 +900,14 @@ class _ArtistScreenState extends State<ArtistScreen> {
         }
       },
       child: Scaffold(
+        extendBody: true,
+        bottomNavigationBar: SizedBox(
+          height: MediaQuery.of(context).padding.bottom,
+          child: GestureDetector(
+            onVerticalDragStart: (_) {},
+            behavior: HitTestBehavior.translucent,
+          ),
+        ),
         appBar: AppBar(
           backgroundColor: Theme.of(context).scaffoldBackgroundColor,
           surfaceTintColor: Colors.transparent,
@@ -942,22 +961,6 @@ class _ArtistScreenState extends State<ArtistScreen> {
                 tooltip: 'Cancelar selección',
               ),
             if (!_isSelectionMode) ...[
-              IconButton(
-                constraints: const BoxConstraints(
-                  minWidth: 40,
-                  minHeight: 40,
-                  maxWidth: 40,
-                  maxHeight: 40,
-                ),
-                padding: EdgeInsets.zero,
-                onPressed: () async {
-                  final artistName =
-                      _artist?['name']?.toString() ?? widget.artistName;
-                  await _showArtistSearchOptions(artistName);
-                },
-                icon: const Icon(Icons.arrow_outward, size: 28),
-                tooltip: LocaleProvider.tr('search_artist'),
-              ),
               // Dialogo de informacion de la pantalla
               IconButton(
                 icon: const Icon(Icons.info_outline, size: 28),
@@ -1090,6 +1093,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
               )
             : SingleChildScrollView(
                 controller: _scrollController,
+                physics: const ClampingScrollPhysics(),
                 padding: EdgeInsets.only(
                   bottom: 16 + MediaQuery.of(context).padding.bottom,
                 ),
@@ -1179,159 +1183,208 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                   ),
                                 ],
                               ),
-                              if ((_artist!['subscribers'] != null &&
-                                      _artist!['subscribers']
-                                          .toString()
-                                          .isNotEmpty) ||
-                                  (_artist!['monthlyListeners'] != null &&
-                                      _artist!['monthlyListeners']
-                                          .toString()
-                                          .isNotEmpty)) ...[
-                                const SizedBox(height: 8),
-                                SingleChildScrollView(
-                                  scrollDirection: Axis.horizontal,
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      if (_artist!['subscribers'] != null &&
-                                          _artist!['subscribers']
-                                              .toString()
-                                              .isNotEmpty)
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 12,
-                                            vertical: 6,
+                              const SizedBox(height: 8),
+                              SingleChildScrollView(
+                                scrollDirection: Axis.horizontal,
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    if (_artist!['subscribers'] != null &&
+                                        _artist!['subscribers']
+                                            .toString()
+                                            .isNotEmpty) ...[
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                          vertical: 6,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: isAmoled && isDark
+                                              ? Colors.white.withValues(
+                                                  alpha: 0.1,
+                                                )
+                                              : Theme.of(context)
+                                                    .colorScheme
+                                                    .surfaceContainerHighest
+                                                    .withValues(alpha: 0.5),
+                                          borderRadius: BorderRadius.circular(
+                                            20,
                                           ),
-                                          decoration: BoxDecoration(
-                                            color: isAmoled && isDark
-                                                ? Colors.white.withValues(
-                                                    alpha: 0.1,
-                                                  )
-                                                : Theme.of(context)
-                                                      .colorScheme
-                                                      .surfaceContainerHighest
-                                                      .withValues(alpha: 0.5),
-                                            borderRadius: BorderRadius.circular(
-                                              20,
-                                            ),
-                                            border: Border.all(
-                                              color:
-                                                  (isAmoled && isDark
-                                                          ? Colors.white
-                                                          : Theme.of(context)
-                                                                .colorScheme
-                                                                .onSurface)
-                                                      .withValues(alpha: 0.1),
-                                            ),
+                                          border: Border.all(
+                                            color:
+                                                (isAmoled && isDark
+                                                        ? Colors.white
+                                                        : Theme.of(context)
+                                                              .colorScheme
+                                                              .onSurface)
+                                                    .withValues(alpha: 0.1),
                                           ),
-                                          child: Row(
-                                            children: [
-                                              Icon(
-                                                Icons.people_alt_outlined,
-                                                size: 16,
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            Icon(
+                                              Icons.people_alt_outlined,
+                                              size: 16,
+                                              color: isAmoled && isDark
+                                                  ? Colors.white.withValues(
+                                                      alpha: 0.7,
+                                                    )
+                                                  : Theme.of(
+                                                      context,
+                                                    ).colorScheme.secondary,
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Text(
+                                              _artist!['subscribers'],
+                                              style: TextStyle(
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.w500,
                                                 color: isAmoled && isDark
                                                     ? Colors.white.withValues(
-                                                        alpha: 0.7,
+                                                        alpha: 0.9,
                                                       )
                                                     : Theme.of(
                                                         context,
-                                                      ).colorScheme.secondary,
+                                                      ).colorScheme.onSurface,
                                               ),
-                                              const SizedBox(width: 8),
-                                              Text(
-                                                _artist!['subscribers'],
-                                                style: TextStyle(
-                                                  fontSize: 13,
-                                                  fontWeight: FontWeight.w500,
-                                                  color: isAmoled && isDark
-                                                      ? Colors.white.withValues(
-                                                          alpha: 0.9,
-                                                        )
-                                                      : Theme.of(
-                                                          context,
-                                                        ).colorScheme.onSurface,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      if (_artist!['subscribers'] != null &&
-                                          _artist!['subscribers']
-                                              .toString()
-                                              .isNotEmpty &&
-                                          _artist!['monthlyListeners'] !=
-                                              null &&
-                                          _artist!['monthlyListeners']
-                                              .toString()
-                                              .isNotEmpty)
-                                        const SizedBox(width: 12),
-                                      if (_artist!['monthlyListeners'] !=
-                                              null &&
-                                          _artist!['monthlyListeners']
-                                              .toString()
-                                              .isNotEmpty)
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 12,
-                                            vertical: 6,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: isAmoled && isDark
-                                                ? Colors.white.withValues(
-                                                    alpha: 0.1,
-                                                  )
-                                                : Theme.of(context)
-                                                      .colorScheme
-                                                      .surfaceContainerHighest
-                                                      .withValues(alpha: 0.5),
-                                            borderRadius: BorderRadius.circular(
-                                              20,
                                             ),
-                                            border: Border.all(
-                                              color:
-                                                  (isAmoled && isDark
-                                                          ? Colors.white
-                                                          : Theme.of(context)
-                                                                .colorScheme
-                                                                .onSurface)
-                                                      .withValues(alpha: 0.1),
-                                            ),
-                                          ),
-                                          child: Row(
-                                            children: [
-                                              Icon(
-                                                Icons.headset_outlined,
-                                                size: 16,
-                                                color: isAmoled && isDark
-                                                    ? Colors.white.withValues(
-                                                        alpha: 0.7,
-                                                      )
-                                                    : Theme.of(
-                                                        context,
-                                                      ).colorScheme.secondary,
-                                              ),
-                                              const SizedBox(width: 8),
-                                              Text(
-                                                _artist!['monthlyListeners'],
-                                                style: TextStyle(
-                                                  fontSize: 13,
-                                                  fontWeight: FontWeight.w500,
-                                                  color: isAmoled && isDark
-                                                      ? Colors.white.withValues(
-                                                          alpha: 0.9,
-                                                        )
-                                                      : Theme.of(
-                                                          context,
-                                                        ).colorScheme.onSurface,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
+                                          ],
                                         ),
+                                      ),
+                                      const SizedBox(width: 12),
                                     ],
-                                  ),
+                                    if (_artist!['monthlyListeners'] != null &&
+                                        _artist!['monthlyListeners']
+                                            .toString()
+                                            .isNotEmpty) ...[
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                          vertical: 6,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: isAmoled && isDark
+                                              ? Colors.white.withValues(
+                                                  alpha: 0.1,
+                                                )
+                                              : Theme.of(context)
+                                                    .colorScheme
+                                                    .surfaceContainerHighest
+                                                    .withValues(alpha: 0.5),
+                                          borderRadius: BorderRadius.circular(
+                                            20,
+                                          ),
+                                          border: Border.all(
+                                            color:
+                                                (isAmoled && isDark
+                                                        ? Colors.white
+                                                        : Theme.of(context)
+                                                              .colorScheme
+                                                              .onSurface)
+                                                    .withValues(alpha: 0.1),
+                                          ),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            Icon(
+                                              Icons.headset_outlined,
+                                              size: 16,
+                                              color: isAmoled && isDark
+                                                  ? Colors.white.withValues(
+                                                      alpha: 0.7,
+                                                    )
+                                                  : Theme.of(
+                                                      context,
+                                                    ).colorScheme.secondary,
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Text(
+                                              _artist!['monthlyListeners'],
+                                              style: TextStyle(
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.w500,
+                                                color: isAmoled && isDark
+                                                    ? Colors.white.withValues(
+                                                        alpha: 0.9,
+                                                      )
+                                                    : Theme.of(
+                                                        context,
+                                                      ).colorScheme.onSurface,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                    ],
+                                    // Botón de búsqueda externa (YT Music)
+                                    InkWell(
+                                      onTap: () async {
+                                        final artistName =
+                                            _artist?['name']?.toString() ??
+                                            widget.artistName;
+                                        await _showArtistSearchOptions(
+                                          artistName,
+                                        );
+                                      },
+                                      borderRadius: BorderRadius.circular(20),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                          vertical: 6,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: isAmoled && isDark
+                                              ? Colors.white.withValues(
+                                                  alpha: 0.1,
+                                                )
+                                              : Theme.of(context)
+                                                    .colorScheme
+                                                    .surfaceContainerHighest
+                                                    .withValues(alpha: 0.5),
+                                          borderRadius: BorderRadius.circular(
+                                            20,
+                                          ),
+                                          border: Border.all(
+                                            color:
+                                                (isAmoled && isDark
+                                                        ? Colors.white
+                                                        : Theme.of(context)
+                                                              .colorScheme
+                                                              .onSurface)
+                                                    .withValues(alpha: 0.1),
+                                          ),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Image.asset(
+                                              'assets/icon/Youtube_Music_icon.png',
+                                              width: 18,
+                                              height: 18,
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Text(
+                                              'YouTube Music',
+                                              style: TextStyle(
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.w500,
+                                                color: isAmoled && isDark
+                                                    ? Colors.white.withValues(
+                                                        alpha: 0.9,
+                                                      )
+                                                    : Theme.of(
+                                                        context,
+                                                      ).colorScheme.onSurface,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                              ],
+                              ),
                             ],
                           ),
                         ),
@@ -1424,8 +1477,14 @@ class _ArtistScreenState extends State<ArtistScreen> {
                             ),
                           ),
 
+                          // Mostrar indicador de carga mientras se obtiene el contenido
+                          if (_loadingContent)
+                            Padding(
+                              padding: const EdgeInsets.all(32.0),
+                              child: Center(child: LoadingIndicator()),
+                            )
                           // Mostrar contenido del artista con diseño de YouTube
-                          if (_expandedCategory == 'songs') ...[
+                          else if (_expandedCategory == 'songs') ...[
                             // Vista de solo canciones con botón de volver
                             const SizedBox(height: 24),
                             Column(

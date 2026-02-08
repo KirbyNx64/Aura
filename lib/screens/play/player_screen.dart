@@ -116,6 +116,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
   final ValueNotifier<double?> _dragValueSecondsNotifier =
       ValueNotifier<double?>(null);
   String? _currentSongDataPath;
+  double? _dragStartY;
   bool _isCurrentFavorite = false;
   // final int _lyricsUpdateCounter = 0;
   final ValueNotifier<int> _lyricsUpdateNotifier = ValueNotifier<int>(0);
@@ -1740,7 +1741,16 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     final buttonFontSize = width * 0.04 + 10;
 
     return GestureDetector(
+      onVerticalDragStart: (details) {
+        _dragStartY = details.globalPosition.dy;
+      },
       onVerticalDragUpdate: (details) {
+        // Ignorar si el gesto empezó muy cerca del borde inferior (probablemente gesto del sistema "Home")
+        if (_dragStartY != null &&
+            _dragStartY! > MediaQuery.of(context).size.height - 50) {
+          return;
+        }
+
         if (details.primaryDelta != null && details.primaryDelta! > 6) {
           // Deslizar hacia abajo: cerrar (solo si no está desactivado)
           if (!_disableClosePlayerGesture) {
@@ -4645,16 +4655,20 @@ class _LyricsModalListView extends StatefulWidget {
   State<_LyricsModalListView> createState() => _LyricsModalListViewState();
 }
 
-class _LyricsModalListViewState extends State<_LyricsModalListView> {
+class _LyricsModalListViewState extends State<_LyricsModalListView>
+    with WidgetsBindingObserver {
   late final AutoScrollController _scrollController;
   int _currentLyricIndex = 0;
   int _lastCurrentIndex = -1;
   Timer? _scrollTimer;
   bool _isManualScrolling = false;
 
+  bool _isBackground = false;
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _scrollController = AutoScrollController();
 
     // Calculate initial current lyric index
@@ -4704,141 +4718,210 @@ class _LyricsModalListViewState extends State<_LyricsModalListView> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _scrollTimer?.cancel();
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
     super.dispose();
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
+      _isBackground = true;
+    } else if (state == AppLifecycleState.resumed) {
+      _isBackground = false;
+      // Force immediate update when returning to app
+      _updatePosition();
+    }
+  }
+
   void _startPositionListener() {
     _scrollTimer = Timer.periodic(Duration(milliseconds: 500), (timer) {
       if (!mounted) return;
-
-      final position =
-          audioHandler?.playbackState.value.position ?? Duration.zero;
-
-      // Find current lyric line
-      int currentIndex = 0;
-      for (int i = 0; i < widget.lyricLines.length; i++) {
-        if (position >= widget.lyricLines[i].time) {
-          currentIndex = i;
-        } else {
-          break;
-        }
+      if (_isBackground) {
+        return; // Don't update in background to avoid queuing scrolls
       }
-
-      if (currentIndex != _currentLyricIndex) {
-        setState(() {
-          _currentLyricIndex = currentIndex;
-        });
-
-        // Only scroll if the index actually changed and user is not manually scrolling
-        if (_currentLyricIndex != _lastCurrentIndex && !_isManualScrolling) {
-          _lastCurrentIndex = _currentLyricIndex;
-          _scrollToCurrentLyric();
-        }
-      }
+      _updatePosition();
     });
   }
 
-  Future<void> _scrollToCurrentLyric() async {
+  void _updatePosition() {
+    if (!mounted) return;
+
+    final position =
+        audioHandler?.playbackState.value.position ?? Duration.zero;
+
+    // Find current lyric line
+    int currentIndex = 0;
+    for (int i = 0; i < widget.lyricLines.length; i++) {
+      if (position >= widget.lyricLines[i].time) {
+        currentIndex = i;
+      } else {
+        break;
+      }
+    }
+
+    if (currentIndex != _currentLyricIndex) {
+      final int previousIndex = _currentLyricIndex;
+      setState(() {
+        _currentLyricIndex = currentIndex;
+      });
+
+      // Only scroll if the index actually changed and user is not manually scrolling
+      if (_currentLyricIndex != _lastCurrentIndex && !_isManualScrolling) {
+        _lastCurrentIndex = _currentLyricIndex;
+        _scrollToCurrentLyric(previousIndex);
+      }
+    }
+  }
+
+  Future<void> _scrollToCurrentLyric([int? previousIndex]) async {
     if (_currentLyricIndex >= 0 &&
         _currentLyricIndex < widget.lyricLines.length) {
+      // Determine duration based on jump size
+      Duration duration = const Duration(milliseconds: 500);
+      bool shouldJumpFirst = false;
+
+      if (previousIndex != null) {
+        final int diff = (_currentLyricIndex - previousIndex).abs();
+        // If jumping more than 4 lines, do it instantly (e.g. app resume or seek)
+        if (diff > 4) {
+          duration = const Duration(milliseconds: 1);
+          shouldJumpFirst = true;
+        }
+      }
+
+      // If we need to jump far, jump to an estimated offset first
+      // This forces the ListView to build items near the target, preventing "fast scroll" animation
+      if (shouldJumpFirst && _scrollController.hasClients) {
+        try {
+          // Estimate offset: 40px per line (22 font + 16 padding)
+          final double estimatedOffset = _currentLyricIndex * 40.0;
+          _scrollController.jumpTo(estimatedOffset);
+          // Wait for the ListView to render items at the new offset
+          await Future.delayed(const Duration(milliseconds: 50));
+        } catch (_) {
+          // Ignore jump errors
+        }
+      }
+
       await _scrollController.scrollToIndex(
         _currentLyricIndex,
         preferPosition: AutoScrollPosition.middle,
-        duration: Duration(milliseconds: 500),
+        duration: duration,
       );
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return ListView.builder(
-      controller: _scrollController,
-      padding: EdgeInsets.only(
-        top: 60,
-        bottom: MediaQuery.of(context).padding.bottom,
-      ),
-      itemCount: widget.lyricLines.length,
-      itemBuilder: (context, index) {
-        final isCurrent = index == _currentLyricIndex;
-        final textStyle = TextStyle(
-          color: isCurrent
-              ? (widget.isAmoled && widget.isDark
-                    ? Colors.white
-                    : Theme.of(context).colorScheme.primary)
-              : widget.isAmoled && widget.isDark
-              ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5)
-              : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
-          fontWeight: FontWeight.bold,
-          fontSize: 22,
-        );
-
-        return AutoScrollTag(
-          key: ValueKey(index),
+    return Stack(
+      children: [
+        ListView.builder(
           controller: _scrollController,
-          index: index,
-          child: GestureDetector(
-            onTap: () {
-              // Seek to the time of this lyric line
-              final targetTime = widget.lyricLines[index].time;
-              audioHandler?.seek(targetTime);
+          padding: EdgeInsets.only(
+            top: 60,
+            bottom: MediaQuery.of(context).padding.bottom,
+          ),
+          itemCount: widget.lyricLines.length,
+          itemBuilder: (context, index) {
+            final isCurrent = index == _currentLyricIndex;
+            final textStyle = TextStyle(
+              color: isCurrent
+                  ? (widget.isAmoled && widget.isDark
+                        ? Colors.white
+                        : Theme.of(context).colorScheme.primary)
+                  : widget.isAmoled && widget.isDark
+                  ? Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withValues(alpha: 0.5)
+                  : Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withValues(alpha: 0.7),
+              fontWeight: FontWeight.bold,
+              fontSize: 22,
+            );
 
-              // Set manual scrolling flag
-              _isManualScrolling = true;
+            return AutoScrollTag(
+              key: ValueKey(index),
+              controller: _scrollController,
+              index: index,
+              child: GestureDetector(
+                onTap: () {
+                  // Seek to the time of this lyric line
+                  final targetTime = widget.lyricLines[index].time;
+                  audioHandler?.seek(targetTime);
 
-              // Update current index immediately
-              setState(() {
-                _currentLyricIndex = index;
-                _lastCurrentIndex = index;
-              });
+                  // Set manual scrolling flag
+                  _isManualScrolling = true;
 
-              // Reset manual scrolling flag after a delay
-              Timer(Duration(seconds: 3), () {
-                _isManualScrolling = false;
-              });
-            },
-            child: Container(
-              padding: EdgeInsets.symmetric(vertical: 8, horizontal: 32),
-              child:
-                  widget.showTranslation &&
-                      widget.translatedLines != null &&
-                      index < widget.translatedLines!.length
-                  ? Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Texto original (más claro y más pequeño)
-                        Text(
+                  // Update current index immediately
+                  setState(() {
+                    _currentLyricIndex = index;
+                    _lastCurrentIndex = index;
+                  });
+
+                  // Reset manual scrolling flag after a delay
+                  Timer(Duration(seconds: 3), () {
+                    _isManualScrolling = false;
+                  });
+                },
+                child: Container(
+                  padding: EdgeInsets.symmetric(vertical: 8, horizontal: 32),
+                  child:
+                      widget.showTranslation &&
+                          widget.translatedLines != null &&
+                          index < widget.translatedLines!.length
+                      ? Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Texto original (más claro y más pequeño)
+                            Text(
+                              widget.lyricLines[index].text,
+                              textAlign: TextAlign.left,
+                              style: textStyle.copyWith(
+                                color: textStyle.color?.withValues(alpha: 0.6),
+                                fontSize: 18, // Tamaño fijo para texto original
+                                fontWeight: FontWeight.normal,
+                              ),
+                            ),
+                            SizedBox(height: 4),
+                            // Traducción (más prominente)
+                            Text(
+                              widget.translatedLines![index],
+                              textAlign: TextAlign.left,
+                              style: textStyle.copyWith(
+                                fontSize: 22, // Tamaño fijo para traducción
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        )
+                      : Text(
                           widget.lyricLines[index].text,
                           textAlign: TextAlign.left,
-                          style: textStyle.copyWith(
-                            color: textStyle.color?.withValues(alpha: 0.6),
-                            fontSize: 18, // Tamaño fijo para texto original
-                            fontWeight: FontWeight.normal,
-                          ),
+                          style: textStyle,
                         ),
-                        SizedBox(height: 4),
-                        // Traducción (más prominente)
-                        Text(
-                          widget.translatedLines![index],
-                          textAlign: TextAlign.left,
-                          style: textStyle.copyWith(
-                            fontSize: 22, // Tamaño fijo para traducción
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    )
-                  : Text(
-                      widget.lyricLines[index].text,
-                      textAlign: TextAlign.left,
-                      style: textStyle,
-                    ),
-            ),
+                ),
+              ),
+            );
+          },
+        ),
+        // Gesture blocker for system gestures
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: 0,
+          height: 30,
+          child: GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onVerticalDragStart: (_) {},
+            onVerticalDragUpdate: (_) {},
           ),
-        );
-      },
+        ),
+      ],
     );
   }
 }
