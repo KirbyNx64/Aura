@@ -33,6 +33,8 @@ import 'package:music/screens/play/lyrics_search_screen.dart';
 import 'package:music/screens/home/equalizer_screen.dart';
 import 'package:like_button/like_button.dart';
 import 'package:material_loading_indicator/loading_indicator.dart';
+import 'package:music/utils/db/playlist_model.dart' as hive_model;
+import 'package:music/utils/db/songs_index_db.dart';
 
 final OnAudioQuery _audioQuery = OnAudioQuery();
 
@@ -1213,6 +1215,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     MediaItem mediaItem,
   ) async {
     final playlists = await PlaylistsDB().getAllPlaylists();
+    final allSongs = await SongsIndexDB().getIndexedSongs();
     final TextEditingController controller = TextEditingController();
 
     if (!safeContext.mounted) return;
@@ -1220,112 +1223,424 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     showModalBottomSheet(
       context: safeContext,
       isScrollControlled: true,
-      builder: (context) => SafeArea(
-        child: Padding(
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(context).viewInsets.bottom,
-            left: 16,
-            right: 16,
-            top: 24,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                LocaleProvider.tr('save_to_playlist'),
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 18,
-                ),
-              ),
-              const SizedBox(height: 16),
-              if (playlists.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: Text(
-                    LocaleProvider.tr('no_playlists_yet'),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-              if (playlists.isNotEmpty)
-                Flexible(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxHeight: 240),
-                    child: ListView.builder(
-                      shrinkWrap: true,
-                      itemCount: playlists.length,
-                      itemBuilder: (context, i) {
-                        final pl = playlists[i];
-                        return ListTile(
-                          leading: const Icon(Icons.queue_music, size: 32),
-                          title: Text(
-                            pl.name,
-                            style: const TextStyle(fontSize: 18),
-                          ),
-                          onTap: () async {
-                            final allSongs = await _audioQuery.querySongs();
-                            final songList = allSongs
-                                .where(
-                                  (s) =>
-                                      s.data ==
-                                      (mediaItem.extras?['data'] ?? ''),
-                                )
-                                .toList();
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        final colorScheme = colorSchemeNotifier.value;
+        final isAmoled = colorScheme == AppColorScheme.amoled;
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+        final barColor = isAmoled
+            ? Colors.white.withAlpha(20)
+            : isDark
+            ? Theme.of(context).colorScheme.secondary.withValues(alpha: 0.06)
+            : Theme.of(context).colorScheme.secondary.withValues(alpha: 0.07);
 
-                            if (songList.isNotEmpty) {
-                              await PlaylistsDB().addSongToPlaylist(
-                                pl.id,
-                                songList.first,
-                              );
-                              playlistsShouldReload.value =
-                                  !playlistsShouldReload.value;
-                              if (context.mounted) Navigator.of(context).pop();
-                            }
-                          },
-                        );
-                      },
+        return Container(
+          decoration: BoxDecoration(
+            color: Theme.of(context).scaffoldBackgroundColor,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          child: SafeArea(
+            child: Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+                left: 16,
+                right: 16,
+                top: 12,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurfaceVariant.withAlpha(100),
+                      borderRadius: BorderRadius.circular(2),
                     ),
                   ),
-                ),
-              const Divider(height: 28),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: controller,
-                      autofocus: true,
-                      decoration: InputDecoration(
-                        labelText: LocaleProvider.tr('new_playlist'),
+                  const SizedBox(height: 16),
+                  Text(
+                    LocaleProvider.tr('save_to_playlist'),
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  if (playlists.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 24),
+                      child: Column(
+                        children: [
+                          Icon(
+                            Icons.playlist_add_rounded,
+                            size: 48,
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.primary.withAlpha(150),
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            LocaleProvider.tr('no_playlists_yet'),
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
                       ),
-                      onSubmitted: (value) async {
+                    ),
+                  if (playlists.isNotEmpty)
+                    Flexible(
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxHeight: MediaQuery.of(context).size.height * 0.4,
+                        ),
+                        child: ListView.builder(
+                          shrinkWrap: true,
+                          padding: EdgeInsets.zero,
+                          itemCount: playlists.length,
+                          itemBuilder: (context, i) {
+                            final pl = playlists[i];
+                            final bool isFirst = i == 0;
+                            final bool isLast = i == playlists.length - 1;
+                            final bool isOnly = playlists.length == 1;
+
+                            BorderRadius borderRadius;
+                            if (isOnly) {
+                              borderRadius = BorderRadius.circular(20);
+                            } else if (isFirst) {
+                              borderRadius = const BorderRadius.only(
+                                topLeft: Radius.circular(20),
+                                topRight: Radius.circular(20),
+                                bottomLeft: Radius.circular(4),
+                                bottomRight: Radius.circular(4),
+                              );
+                            } else if (isLast) {
+                              borderRadius = const BorderRadius.only(
+                                topLeft: Radius.circular(4),
+                                topRight: Radius.circular(4),
+                                bottomLeft: Radius.circular(20),
+                                bottomRight: Radius.circular(20),
+                              );
+                            } else {
+                              borderRadius = BorderRadius.circular(4);
+                            }
+
+                            return Padding(
+                              padding: EdgeInsets.only(bottom: isLast ? 0 : 4),
+                              child: Card(
+                                color: barColor,
+                                margin: EdgeInsets.zero,
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: borderRadius,
+                                ),
+                                child: ListTile(
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: borderRadius,
+                                  ),
+                                  leading: _buildPlaylistArtworkGrid(
+                                    pl,
+                                    allSongs,
+                                  ),
+                                  title: Text(
+                                    pl.name,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.titleMedium,
+                                  ),
+                                  onTap: () async {
+                                    final songList = allSongs
+                                        .where(
+                                          (s) =>
+                                              s.data ==
+                                              (mediaItem.extras?['data'] ?? ''),
+                                        )
+                                        .toList();
+
+                                    if (songList.isNotEmpty) {
+                                      await PlaylistsDB().addSongToPlaylist(
+                                        pl.id,
+                                        songList.first,
+                                      );
+                                      playlistsShouldReload.value =
+                                          !playlistsShouldReload.value;
+                                      if (context.mounted) {
+                                        Navigator.of(context).pop();
+                                      }
+                                    }
+                                  },
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: controller,
+                    autofocus: false,
+                    decoration: InputDecoration(
+                      hintText: LocaleProvider.tr('new_playlist'),
+                      prefixIcon: const Icon(Icons.playlist_add),
+                      suffixIcon: IconButton(
+                        icon: const Icon(Icons.check_rounded),
+                        onPressed: () async {
+                          if (controller.text.trim().isNotEmpty) {
+                            await _createPlaylistAndAddSong(
+                              context,
+                              controller,
+                              mediaItem,
+                            );
+                            playlistsShouldReload.value =
+                                !playlistsShouldReload.value;
+                          }
+                        },
+                      ),
+                      filled: true,
+                      fillColor: barColor,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(20),
+                        borderSide: BorderSide.none,
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(20),
+                        borderSide: BorderSide.none,
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(20),
+                        borderSide: BorderSide.none,
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 16,
+                      ),
+                    ),
+                    onSubmitted: (value) async {
+                      if (value.trim().isNotEmpty) {
                         await _createPlaylistAndAddSong(
                           context,
                           controller,
                           mediaItem,
                         );
-                      },
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  /// Generar cuadrícula de carátulas para una playlist
+  Widget _buildPlaylistArtworkGrid(
+    hive_model.PlaylistModel playlist,
+    List<SongModel> allSongs,
+  ) {
+    final rawList = playlist.songPaths;
+    // Filtra solo rutas válidas
+    final filtered = rawList.where((e) => e.isNotEmpty).toList();
+
+    // Obtener las canciones reales que existen en el índice cargado
+    final List<SongModel> validSongs = [];
+    for (final songPath in filtered) {
+      final songIndex = allSongs.indexWhere((s) => s.data == songPath);
+      if (songIndex != -1) {
+        validSongs.add(allSongs[songIndex]);
+        if (validSongs.length >= 4) break; // Máximo 4 para el grid
+      }
+    }
+
+    return SizedBox(
+      width: 40,
+      height: 40,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: _buildArtworkLayout(validSongs),
+      ),
+    );
+  }
+
+  Widget _buildArtworkLayout(List<SongModel> songs) {
+    switch (songs.length) {
+      case 0:
+        return Container(
+          color: Theme.of(context).colorScheme.primaryContainer.withAlpha(100),
+          child: Center(
+            child: Icon(
+              Icons.queue_music_rounded,
+              color: Theme.of(context).colorScheme.primary,
+              size: 20,
+            ),
+          ),
+        );
+
+      case 1:
+        return QueryArtworkWidget(
+          id: songs[0].id,
+          type: ArtworkType.AUDIO,
+          artworkHeight: 40,
+          artworkWidth: 40,
+          keepOldArtwork: true,
+          artworkBorder: BorderRadius.zero,
+          nullArtworkWidget: Container(
+            color: Theme.of(context).colorScheme.surfaceContainer,
+            child: Center(
+              child: Icon(
+                Icons.music_note,
+                color: Theme.of(context).colorScheme.onSurface,
+                size: 20,
+              ),
+            ),
+          ),
+        );
+
+      case 2:
+      case 3:
+        // Caso 2 y 3: mostramos 2 (lado a lado)
+        return Row(
+          children: [
+            Expanded(
+              child: QueryArtworkWidget(
+                id: songs[0].id,
+                type: ArtworkType.AUDIO,
+                artworkHeight: 40,
+                artworkWidth: 20,
+                keepOldArtwork: true,
+                artworkBorder: BorderRadius.zero,
+                nullArtworkWidget: Container(
+                  color: Theme.of(context).colorScheme.surfaceContainer,
+                  child: Icon(
+                    Icons.music_note,
+                    color: Theme.of(context).colorScheme.onSurface,
+                    size: 10,
+                  ),
+                ),
+              ),
+            ),
+            Expanded(
+              child: QueryArtworkWidget(
+                id: songs[1].id,
+                type: ArtworkType.AUDIO,
+                artworkHeight: 40,
+                artworkWidth: 20,
+                keepOldArtwork: true,
+                artworkBorder: BorderRadius.zero,
+                nullArtworkWidget: Container(
+                  color: Theme.of(context).colorScheme.surfaceContainer,
+                  child: Icon(
+                    Icons.music_note,
+                    color: Theme.of(context).colorScheme.onSurface,
+                    size: 10,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+
+      default:
+        // 4 o más canciones: Cuadrícula 2x2
+        return Column(
+          children: [
+            Expanded(
+              child: Row(
+                children: [
+                  Expanded(
+                    child: QueryArtworkWidget(
+                      id: songs[0].id,
+                      type: ArtworkType.AUDIO,
+                      artworkHeight: 20,
+                      artworkWidth: 20,
+                      keepOldArtwork: true,
+                      artworkBorder: BorderRadius.zero,
+                      nullArtworkWidget: Container(
+                        color: Theme.of(context).colorScheme.surfaceContainer,
+                        child: Icon(
+                          Icons.music_note,
+                          color: Theme.of(context).colorScheme.onSurface,
+                          size: 10,
+                        ),
+                      ),
                     ),
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.add),
-                    onPressed: () async {
-                      await _createPlaylistAndAddSong(
-                        context,
-                        controller,
-                        mediaItem,
-                      );
-                      playlistsShouldReload.value =
-                          !playlistsShouldReload.value;
-                    },
+                  Expanded(
+                    child: QueryArtworkWidget(
+                      id: songs[1].id,
+                      type: ArtworkType.AUDIO,
+                      artworkHeight: 20,
+                      artworkWidth: 20,
+                      keepOldArtwork: true,
+                      artworkBorder: BorderRadius.zero,
+                      nullArtworkWidget: Container(
+                        color: Theme.of(context).colorScheme.surfaceContainer,
+                        child: Icon(
+                          Icons.music_note,
+                          color: Theme.of(context).colorScheme.onSurface,
+                          size: 10,
+                        ),
+                      ),
+                    ),
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
-            ],
-          ),
-        ),
-      ),
-    );
+            ),
+            Expanded(
+              child: Row(
+                children: [
+                  Expanded(
+                    child: QueryArtworkWidget(
+                      id: songs[2].id,
+                      type: ArtworkType.AUDIO,
+                      artworkHeight: 20,
+                      artworkWidth: 20,
+                      keepOldArtwork: true,
+                      artworkBorder: BorderRadius.zero,
+                      nullArtworkWidget: Container(
+                        color: Theme.of(context).colorScheme.surfaceContainer,
+                        child: Icon(
+                          Icons.music_note,
+                          color: Theme.of(context).colorScheme.onSurface,
+                          size: 10,
+                        ),
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: QueryArtworkWidget(
+                      id: songs[3].id,
+                      type: ArtworkType.AUDIO,
+                      artworkHeight: 20,
+                      artworkWidth: 20,
+                      keepOldArtwork: true,
+                      artworkBorder: BorderRadius.zero,
+                      nullArtworkWidget: Container(
+                        color: Theme.of(context).colorScheme.surfaceContainer,
+                        child: Icon(
+                          Icons.music_note,
+                          color: Theme.of(context).colorScheme.onSurface,
+                          size: 10,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        );
+    }
   }
 
   Future<void> _createPlaylistAndAddSong(
@@ -5498,10 +5813,8 @@ class _PlaylistListViewState extends State<_PlaylistListView>
     final cardColor = isAmoled
         ? Colors.white.withAlpha(20)
         : isDark
-        ? Theme.of(context).colorScheme.onSecondary.withValues(alpha: 0.5)
-        : Theme.of(
-            context,
-          ).colorScheme.secondaryContainer.withValues(alpha: 0.5);
+        ? Theme.of(context).colorScheme.secondary.withValues(alpha: 0.06)
+        : Theme.of(context).colorScheme.secondary.withValues(alpha: 0.07);
 
     final placeholderCount = widget.queue.length.clamp(0, 10);
     final isFirst = index == 0;
@@ -5644,10 +5957,10 @@ class _PlaylistListViewState extends State<_PlaylistListView>
                       : isDark
                       ? Theme.of(
                           context,
-                        ).colorScheme.onSecondary.withValues(alpha: 0.5)
+                        ).colorScheme.secondary.withValues(alpha: 0.06)
                       : Theme.of(
                           context,
-                        ).colorScheme.secondaryContainer.withValues(alpha: 0.5);
+                        ).colorScheme.secondary.withValues(alpha: 0.07);
 
                   // Calcular borderRadius según posición
                   final bool isFirst = index == 0;
@@ -5687,10 +6000,9 @@ class _PlaylistListViewState extends State<_PlaylistListView>
                     ),
                     child: Card(
                       color: isCurrent
-                          ? (isAmoledTheme
-                                ? cardColor
-                                : Theme.of(context).colorScheme.primaryContainer
-                                      .withValues(alpha: 0.8))
+                          ? Theme.of(
+                              context,
+                            ).colorScheme.primary.withAlpha(isDark ? 40 : 25)
                           : cardColor,
                       margin: EdgeInsets.zero,
                       elevation: 0,
@@ -5908,9 +6220,10 @@ class _PlaylistListViewState extends State<_PlaylistListView>
                         : isDark
                         ? Theme.of(
                             context,
-                          ).colorScheme.onSecondary.withValues(alpha: 0.5)
-                        : Theme.of(context).colorScheme.secondaryContainer
-                              .withValues(alpha: 0.5);
+                          ).colorScheme.secondary.withValues(alpha: 0.06)
+                        : Theme.of(
+                            context,
+                          ).colorScheme.secondary.withValues(alpha: 0.07);
 
                     return TextField(
                       controller: _searchController,

@@ -27,36 +27,34 @@ class SongInfoDialog {
           builder: (context, colorScheme, child) {
             final isAmoled = colorScheme == AppColorScheme.amoled;
             final isDark = Theme.of(context).brightness == Brightness.dark;
-            
+
             return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-            side: isAmoled && isDark
-                ? const BorderSide(color: Colors.white, width: 1)
-                : BorderSide.none,
-          ),
-          title: TranslatedText('song_info'),
-          actions: [],
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '${LocaleProvider.tr('title')}: ${mediaItem.title}\n',
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: isAmoled && isDark
+                    ? const BorderSide(color: Colors.white, width: 1)
+                    : BorderSide.none,
               ),
-              Text(
-                '${LocaleProvider.tr('artist')}: ${mediaItem.artist ?? LocaleProvider.tr('unknown_artist')}\n',
+              title: TranslatedText('song_info'),
+              actions: [],
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('${LocaleProvider.tr('title')}: ${mediaItem.title}\n'),
+                  Text(
+                    '${LocaleProvider.tr('artist')}: ${mediaItem.artist ?? LocaleProvider.tr('unknown_artist')}\n',
+                  ),
+                  Text(
+                    '${LocaleProvider.tr('album')}: ${mediaItem.album ?? LocaleProvider.tr('unknown_artist')}\n',
+                  ),
+                  Text(
+                    '${LocaleProvider.tr('duration')}: ${mediaItem.duration != null ? _formatDuration(mediaItem.duration!.inMilliseconds) : "?"}',
+                  ),
+                ],
               ),
-              Text(
-                '${LocaleProvider.tr('album')}: ${mediaItem.album ?? LocaleProvider.tr('unknown_artist')}\n',
-              ),
-              Text(
-                '${LocaleProvider.tr('duration')}: ${mediaItem.duration != null ? _formatDuration(mediaItem.duration!.inMilliseconds) : "?"}',
-              ),
-            ],
-          ),
-        );
-        }
+            );
+          },
         ),
       );
       return;
@@ -81,7 +79,7 @@ class SongInfoDialog {
           builder: (context, colorScheme, child) {
             final isAmoled = colorScheme == AppColorScheme.amoled;
             final isDark = Theme.of(context).brightness == Brightness.dark;
-            
+
             return AlertDialog(
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
@@ -92,10 +90,7 @@ class SongInfoDialog {
               title: Center(
                 child: TranslatedText(
                   'song_info',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
                 ),
               ),
               actions: [],
@@ -184,7 +179,8 @@ class SongInfoDialog {
                   child: _InfoItem(
                     icon: Icons.person,
                     label: LocaleProvider.tr('song_artist'),
-                    value: mediaItem.artist ?? LocaleProvider.tr('unknown_artist'),
+                    value:
+                        mediaItem.artist ?? LocaleProvider.tr('unknown_artist'),
                   ),
                 ),
               ],
@@ -196,7 +192,8 @@ class SongInfoDialog {
                   child: _InfoItem(
                     icon: Icons.album,
                     label: LocaleProvider.tr('song_album'),
-                    value: mediaItem.album ?? LocaleProvider.tr('unknown_album'),
+                    value:
+                        mediaItem.album ?? LocaleProvider.tr('unknown_album'),
                   ),
                 ),
                 const SizedBox(width: 16),
@@ -204,11 +201,13 @@ class SongInfoDialog {
                   child: _InfoItem(
                     icon: Icons.timer,
                     label: LocaleProvider.tr('duration'),
-                    value: audioInfo.durationMs != null 
-                        ? _formatDuration(audioInfo.durationMs!) 
-                        : (mediaItem.duration != null 
-                            ? _formatDuration(mediaItem.duration!.inMilliseconds)
-                            : 'N/A'),
+                    value: audioInfo.durationMs != null
+                        ? _formatDuration(audioInfo.durationMs!)
+                        : (mediaItem.duration != null
+                              ? _formatDuration(
+                                  mediaItem.duration!.inMilliseconds,
+                                )
+                              : 'N/A'),
                   ),
                 ),
               ],
@@ -220,8 +219,8 @@ class SongInfoDialog {
                   child: _InfoItem(
                     icon: Icons.storage,
                     label: LocaleProvider.tr('file_size'),
-                    value: audioInfo.fileSize != null 
-                        ? _formatFileSize(audioInfo.fileSize!) 
+                    value: audioInfo.fileSize != null
+                        ? _formatFileSize(audioInfo.fileSize!)
                         : 'N/A',
                   ),
                 ),
@@ -230,8 +229,8 @@ class SongInfoDialog {
                   child: _InfoItem(
                     icon: Icons.volume_up,
                     label: LocaleProvider.tr('channels'),
-                    value: audioInfo.channels != null 
-                        ? '${audioInfo.channels}' 
+                    value: audioInfo.channels != null
+                        ? '${audioInfo.channels}'
                         : 'N/A',
                   ),
                 ),
@@ -244,8 +243,8 @@ class SongInfoDialog {
                   child: _InfoItem(
                     icon: Icons.speed,
                     label: LocaleProvider.tr('original_bitrate'),
-                    value: audioInfo.bitRate != null 
-                        ? '${audioInfo.bitRate} ${LocaleProvider.tr('kbps')}' 
+                    value: audioInfo.bitRate != null
+                        ? '${audioInfo.bitRate} ${LocaleProvider.tr('kbps')}'
                         : 'N/A',
                   ),
                 ),
@@ -254,8 +253,8 @@ class SongInfoDialog {
                   child: _InfoItem(
                     icon: Icons.graphic_eq,
                     label: LocaleProvider.tr('original_sample_rate'),
-                    value: audioInfo.sampleRate != null 
-                        ? '${audioInfo.sampleRate} ${LocaleProvider.tr('hz')}' 
+                    value: audioInfo.sampleRate != null
+                        ? '${audioInfo.sampleRate} ${LocaleProvider.tr('hz')}'
                         : 'N/A',
                   ),
                 ),
@@ -291,7 +290,9 @@ class SongInfoDialog {
   static String _formatFileSize(int bytes) {
     if (bytes < 1024) return '$bytes B';
     if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
-    if (bytes < 1024 * 1024 * 1024) return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+    if (bytes < 1024 * 1024 * 1024) {
+      return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+    }
     return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
   }
 
@@ -300,7 +301,7 @@ class SongInfoDialog {
     final hours = duration.inHours;
     final minutes = duration.inMinutes % 60;
     final seconds = duration.inSeconds % 60;
-    
+
     if (hours > 0) {
       return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
     } else {
@@ -310,9 +311,9 @@ class SongInfoDialog {
 
   static String _getAudioFormat(String filePath) {
     if (filePath.isEmpty) return 'N/A';
-    
+
     final extension = filePath.split('.').last.toLowerCase();
-    
+
     switch (extension) {
       case 'mp3':
         return 'MP3';
@@ -383,7 +384,7 @@ class SongInfoDialog {
           builder: (context, colorScheme, child) {
             final isAmoled = colorScheme == AppColorScheme.amoled;
             final isDark = Theme.of(context).brightness == Brightness.dark;
-            
+
             return AlertDialog(
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
@@ -394,10 +395,7 @@ class SongInfoDialog {
               title: Center(
                 child: TranslatedText(
                   'song_info',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
                 ),
               ),
               actions: [],
@@ -506,8 +504,8 @@ class SongInfoDialog {
                   child: _InfoItem(
                     icon: Icons.timer,
                     label: LocaleProvider.tr('duration'),
-                    value: audioInfo.durationMs != null 
-                        ? _formatDuration(audioInfo.durationMs!) 
+                    value: audioInfo.durationMs != null
+                        ? _formatDuration(audioInfo.durationMs!)
                         : 'N/A',
                   ),
                 ),
@@ -520,8 +518,8 @@ class SongInfoDialog {
                   child: _InfoItem(
                     icon: Icons.storage,
                     label: LocaleProvider.tr('file_size'),
-                    value: audioInfo.fileSize != null 
-                        ? _formatFileSize(audioInfo.fileSize!) 
+                    value: audioInfo.fileSize != null
+                        ? _formatFileSize(audioInfo.fileSize!)
                         : 'N/A',
                   ),
                 ),
@@ -530,8 +528,8 @@ class SongInfoDialog {
                   child: _InfoItem(
                     icon: Icons.volume_up,
                     label: LocaleProvider.tr('channels'),
-                    value: audioInfo.channels != null 
-                        ? '${audioInfo.channels}' 
+                    value: audioInfo.channels != null
+                        ? '${audioInfo.channels}'
                         : 'N/A',
                   ),
                 ),
@@ -544,8 +542,8 @@ class SongInfoDialog {
                   child: _InfoItem(
                     icon: Icons.speed,
                     label: LocaleProvider.tr('original_bitrate'),
-                    value: audioInfo.bitRate != null 
-                        ? '${audioInfo.bitRate} ${LocaleProvider.tr('kbps')}' 
+                    value: audioInfo.bitRate != null
+                        ? '${audioInfo.bitRate} ${LocaleProvider.tr('kbps')}'
                         : 'N/A',
                   ),
                 ),
@@ -554,8 +552,8 @@ class SongInfoDialog {
                   child: _InfoItem(
                     icon: Icons.graphic_eq,
                     label: LocaleProvider.tr('original_sample_rate'),
-                    value: audioInfo.sampleRate != null 
-                        ? '${audioInfo.sampleRate} ${LocaleProvider.tr('hz')}' 
+                    value: audioInfo.sampleRate != null
+                        ? '${audioInfo.sampleRate} ${LocaleProvider.tr('hz')}'
                         : 'N/A',
                   ),
                 ),
@@ -607,16 +605,14 @@ class _InfoItem extends StatelessWidget {
       children: [
         Row(
           children: [
-            Icon(
-              icon,
-              size: 16,
-              color: Theme.of(context).colorScheme.primary,
-            ),
+            Icon(icon, size: 16, color: Theme.of(context).colorScheme.primary),
             const SizedBox(width: 8),
             Text(
               label,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+                color: Theme.of(
+                  context,
+                ).colorScheme.onSurface.withValues(alpha: 0.7),
               ),
             ),
           ],
@@ -626,9 +622,9 @@ class _InfoItem extends StatelessWidget {
           value,
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            fontWeight: FontWeight.w500,
-          ),
+          style: Theme.of(
+            context,
+          ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500),
         ),
       ],
     );

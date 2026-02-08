@@ -405,11 +405,11 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> {
                             margin: const EdgeInsets.symmetric(horizontal: 12),
                             decoration: BoxDecoration(
                               color: isLight
-                                  ? Theme.of(
-                                      context,
-                                    ).colorScheme.secondaryContainer
+                                  ? Theme.of(context).colorScheme.primary
+                                        .withAlpha(isDark ? 40 : 25)
                                   : isSystem
-                                  ? backgroundColor
+                                  ? Theme.of(context).colorScheme.primary
+                                        .withAlpha(isDark ? 40 : 25)
                                   : Color.lerp(
                                       backgroundColor,
                                       Colors.white,
@@ -655,15 +655,6 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> {
                                                                               AppColorScheme.amoled
                                                                           ? Colors.white
                                                                           : Theme.of(
-                                                                                  context,
-                                                                                ).brightness ==
-                                                                                Brightness.light
-                                                                          ? Theme.of(
-                                                                              context,
-                                                                            ).colorScheme.onPrimaryContainer.withValues(
-                                                                              alpha: 0.7,
-                                                                            )
-                                                                          : Theme.of(
                                                                               context,
                                                                             ).colorScheme.primary,
                                                                       borderRadius: BorderRadius.circular(
@@ -777,15 +768,6 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> {
                                                                               colorScheme ==
                                                                                   AppColorScheme.amoled
                                                                               ? Colors.white
-                                                                              : Theme.of(
-                                                                                      context,
-                                                                                    ).brightness ==
-                                                                                    Brightness.light
-                                                                              ? Theme.of(
-                                                                                  context,
-                                                                                ).colorScheme.onPrimaryContainer.withValues(
-                                                                                  alpha: 0.7,
-                                                                                )
                                                                               : Theme.of(
                                                                                   context,
                                                                                 ).colorScheme.primary,

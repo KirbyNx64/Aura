@@ -141,77 +141,222 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     SongModel song,
   ) async {
     final playlists = await PlaylistsDB().getAllPlaylists();
+    final allSongs = await SongsIndexDB().getIndexedSongs();
+    final TextEditingController controller = TextEditingController();
+
     if (!context.mounted) return;
-    final TextEditingController playlistNameController =
-        TextEditingController();
-    final selectedPlaylistId = await showDialog<String>(
+
+    showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
       builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setStateDialog) => SimpleDialog(
-            title: TranslatedText('select_playlist'),
-            children: [
-              if (playlists.isNotEmpty) ...[
-                for (final playlist in playlists)
-                  SimpleDialogOption(
-                    onPressed: () {
-                      Navigator.of(context).pop(playlist.id);
-                    },
-                    child: Text(playlist.name),
-                  ),
-                const Divider(),
-              ],
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 4,
-                ),
-                child: TextField(
-                  controller: playlistNameController,
-                  decoration: InputDecoration(
-                    hintText: LocaleProvider.tr('new_playlist_name'),
-                  ),
-                  autofocus: playlists.isEmpty,
-                ),
+        final colorScheme = colorSchemeNotifier.value;
+        final isAmoled = colorScheme == AppColorScheme.amoled;
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+        final barColor = isAmoled
+            ? Colors.white.withAlpha(20)
+            : isDark
+            ? Theme.of(context).colorScheme.secondary.withValues(alpha: 0.06)
+            : Theme.of(context).colorScheme.secondary.withValues(alpha: 0.07);
+
+        return Container(
+          decoration: BoxDecoration(
+            color: Theme.of(context).scaffoldBackgroundColor,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          child: SafeArea(
+            child: Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+                left: 16,
+                right: 16,
+                top: 12,
               ),
-              TextButton.icon(
-                icon: const Icon(Icons.add),
-                label: TranslatedText('create_playlist'),
-                onPressed: () async {
-                  final name = playlistNameController.text.trim();
-                  if (name.isEmpty) return;
-                  final id = await PlaylistsDB().createPlaylist(name);
-                  setStateDialog(() {
-                    playlists.insert(
-                      0,
-                      hive_model.PlaylistModel(
-                        id: id,
-                        name: name,
-                        songPaths: [],
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurfaceVariant.withAlpha(100),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    LocaleProvider.tr('save_to_playlist'),
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  if (playlists.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 24),
+                      child: Column(
+                        children: [
+                          Icon(
+                            Icons.playlist_add_rounded,
+                            size: 48,
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.primary.withAlpha(150),
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            LocaleProvider.tr('no_playlists_yet'),
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
                       ),
-                    );
-                  });
-                  playlistNameController.clear();
+                    ),
+                  if (playlists.isNotEmpty)
+                    Flexible(
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxHeight: MediaQuery.of(context).size.height * 0.4,
+                        ),
+                        child: ListView.builder(
+                          shrinkWrap: true,
+                          padding: EdgeInsets.zero,
+                          itemCount: playlists.length,
+                          itemBuilder: (context, i) {
+                            final pl = playlists[i];
+                            final bool isFirst = i == 0;
+                            final bool isLast = i == playlists.length - 1;
+                            final bool isOnly = playlists.length == 1;
 
-                  // Notificar a la pantalla de inicio que debe actualizar las playlists
-                  playlistsShouldReload.value = !playlistsShouldReload.value;
+                            BorderRadius borderRadius;
+                            if (isOnly) {
+                              borderRadius = BorderRadius.circular(20);
+                            } else if (isFirst) {
+                              borderRadius = const BorderRadius.only(
+                                topLeft: Radius.circular(20),
+                                topRight: Radius.circular(20),
+                                bottomLeft: Radius.circular(4),
+                                bottomRight: Radius.circular(4),
+                              );
+                            } else if (isLast) {
+                              borderRadius = const BorderRadius.only(
+                                topLeft: Radius.circular(4),
+                                topRight: Radius.circular(4),
+                                bottomLeft: Radius.circular(20),
+                                bottomRight: Radius.circular(20),
+                              );
+                            } else {
+                              borderRadius = BorderRadius.circular(4);
+                            }
 
-                  if (context.mounted) {
-                    Navigator.of(context).pop(id);
-                  }
-                },
+                            return Padding(
+                              padding: EdgeInsets.only(bottom: isLast ? 0 : 4),
+                              child: Card(
+                                color: barColor,
+                                margin: EdgeInsets.zero,
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: borderRadius,
+                                ),
+                                child: ListTile(
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: borderRadius,
+                                  ),
+                                  leading: _buildPlaylistArtworkGrid(
+                                    pl,
+                                    allSongs,
+                                  ),
+                                  title: Text(
+                                    pl.name,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.titleMedium,
+                                  ),
+                                  onTap: () async {
+                                    await PlaylistsDB().addSongToPlaylist(
+                                      pl.id,
+                                      song,
+                                    );
+                                    playlistsShouldReload.value =
+                                        !playlistsShouldReload.value;
+                                    if (context.mounted) {
+                                      Navigator.of(context).pop();
+                                    }
+                                  },
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: controller,
+                    autofocus: false,
+                    decoration: InputDecoration(
+                      hintText: LocaleProvider.tr('new_playlist'),
+                      prefixIcon: const Icon(Icons.playlist_add),
+                      suffixIcon: IconButton(
+                        icon: const Icon(Icons.check_rounded),
+                        onPressed: () async {
+                          final name = controller.text.trim();
+                          if (name.isNotEmpty) {
+                            final id = await PlaylistsDB().createPlaylist(name);
+                            await PlaylistsDB().addSongToPlaylist(id, song);
+                            playlistsShouldReload.value =
+                                !playlistsShouldReload.value;
+                            if (context.mounted) Navigator.of(context).pop();
+                          }
+                        },
+                      ),
+                      filled: true,
+                      fillColor: barColor,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(20),
+                        borderSide: BorderSide.none,
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(20),
+                        borderSide: BorderSide.none,
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(20),
+                        borderSide: BorderSide.none,
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 16,
+                      ),
+                    ),
+                    onSubmitted: (value) async {
+                      final name = value.trim();
+                      if (name.isNotEmpty) {
+                        final id = await PlaylistsDB().createPlaylist(name);
+                        await PlaylistsDB().addSongToPlaylist(id, song);
+                        playlistsShouldReload.value =
+                            !playlistsShouldReload.value;
+                        if (context.mounted) Navigator.of(context).pop();
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                ],
               ),
-            ],
+            ),
           ),
         );
       },
     );
-    if (selectedPlaylistId != null) {
-      await PlaylistsDB().addSongToPlaylist(selectedPlaylistId, song);
-
-      // Notificar a la pantalla de inicio que debe actualizar las playlists
-      playlistsShouldReload.value = !playlistsShouldReload.value;
-    }
   }
 
   Timer? _playingDebounce;
@@ -999,14 +1144,15 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       final isAmoled = colorScheme == AppColorScheme.amoled;
                       final isDark =
                           Theme.of(context).brightness == Brightness.dark;
-                      final cardColor = isAmoled && isDark
+                      final cardColor = isAmoled
                           ? Colors.white.withAlpha(20)
                           : isDark
                           ? Theme.of(
                               context,
-                            ).colorScheme.onSecondary.withValues(alpha: 0.5)
-                          : Theme.of(context).colorScheme.secondaryContainer
-                                .withValues(alpha: 0.5);
+                            ).colorScheme.secondary.withValues(alpha: 0.06)
+                          : Theme.of(
+                              context,
+                            ).colorScheme.secondary.withValues(alpha: 0.07);
 
                       // Calcular borderRadius según posición
                       final bool isFirst = index == 0;
@@ -1015,11 +1161,11 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
                       BorderRadius borderRadius;
                       if (isOnly) {
-                        borderRadius = BorderRadius.circular(16);
+                        borderRadius = BorderRadius.circular(20);
                       } else if (isFirst) {
                         borderRadius = const BorderRadius.only(
-                          topLeft: Radius.circular(16),
-                          topRight: Radius.circular(16),
+                          topLeft: Radius.circular(20),
+                          topRight: Radius.circular(20),
                           bottomLeft: Radius.circular(4),
                           bottomRight: Radius.circular(4),
                         );
@@ -1027,8 +1173,8 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         borderRadius = const BorderRadius.only(
                           topLeft: Radius.circular(4),
                           topRight: Radius.circular(4),
-                          bottomLeft: Radius.circular(16),
-                          bottomRight: Radius.circular(16),
+                          bottomLeft: Radius.circular(20),
+                          bottomRight: Radius.circular(20),
                         );
                       } else {
                         borderRadius = BorderRadius.circular(4);
@@ -1038,12 +1184,12 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         padding: EdgeInsets.only(bottom: isLast ? 0 : 4),
                         child: Card(
                           color: isCurrent
-                              ? (isAmoledTheme
-                                    ? Colors.white.withValues(alpha: 0.15)
-                                    : Theme.of(context)
-                                          .colorScheme
-                                          .primaryContainer
-                                          .withValues(alpha: 0.8))
+                              ? Theme.of(context).colorScheme.primary.withAlpha(
+                                  Theme.of(context).brightness ==
+                                          Brightness.dark
+                                      ? 40
+                                      : 25,
+                                )
                               : cardColor,
                           margin: EdgeInsets.zero,
                           elevation: 0,
@@ -1055,6 +1201,10 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                             child: ListTile(
                               shape: RoundedRectangleBorder(
                                 borderRadius: borderRadius,
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 0,
                               ),
                               leading: FutureBuilder<Uint8List?>(
                                 future: _getCachedArtwork(song.id),
@@ -1148,10 +1298,13 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                 style: TextStyle(
                                   color: isCurrent
                                       ? (isAmoledTheme
-                                            ? Colors.white
-                                            : Theme.of(
-                                                context,
-                                              ).colorScheme.primary)
+                                            ? Colors.white.withValues(
+                                                alpha: 0.7,
+                                              )
+                                            : Theme.of(context)
+                                                  .colorScheme
+                                                  .primary
+                                                  .withValues(alpha: 0.8))
                                       : null,
                                 ),
                               ),
@@ -1250,7 +1403,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               width: 80,
               height: 80,
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(20),
                 child: artist['thumbUrl'] != null
                     ? CachedNetworkImage(
                         imageUrl: artist['thumbUrl'] as String,
@@ -1268,7 +1421,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                         .colorScheme
                                         .secondaryContainer
                                         .withValues(alpha: 0.8),
-                              borderRadius: BorderRadius.circular(16),
+                              borderRadius: BorderRadius.circular(20),
                             ),
                             child: Center(child: Icon(Icons.person, size: 40)),
                           );
@@ -1283,7 +1436,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                       .colorScheme
                                       .secondaryContainer
                                       .withValues(alpha: 0.8),
-                            borderRadius: BorderRadius.circular(16),
+                            borderRadius: BorderRadius.circular(20),
                           ),
                           child: Center(child: LoadingIndicator()),
                         ),
@@ -1295,7 +1448,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                               ? Colors.white.withValues(alpha: 0.1)
                               : Theme.of(context).colorScheme.secondaryContainer
                                     .withValues(alpha: 0.8),
-                          borderRadius: BorderRadius.circular(16),
+                          borderRadius: BorderRadius.circular(20),
                         ),
                         child: Center(child: Icon(Icons.person, size: 40)),
                       ),
@@ -2164,6 +2317,206 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     });
   }
 
+  /// Generar cuadrícula de carátulas para una playlist
+  Widget _buildPlaylistArtworkGrid(
+    hive_model.PlaylistModel playlist,
+    List<SongModel> allSongs,
+  ) {
+    final rawList = playlist.songPaths;
+    // Filtra solo rutas válidas
+    final filtered = rawList.where((e) => e.isNotEmpty).toList();
+
+    // Obtener las canciones reales que existen en el índice cargado
+    final List<SongModel> validSongs = [];
+    for (final songPath in filtered) {
+      final songIndex = allSongs.indexWhere((s) => s.data == songPath);
+      if (songIndex != -1) {
+        validSongs.add(allSongs[songIndex]);
+        if (validSongs.length >= 4) break; // Máximo 4 para el grid
+      }
+    }
+
+    return SizedBox(
+      width: 40,
+      height: 40,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: _buildArtworkLayout(validSongs),
+      ),
+    );
+  }
+
+  Widget _buildArtworkLayout(List<SongModel> songs) {
+    switch (songs.length) {
+      case 0:
+        return Container(
+          color: Theme.of(context).colorScheme.primaryContainer.withAlpha(100),
+          child: Center(
+            child: Icon(
+              Icons.queue_music_rounded,
+              color: Theme.of(context).colorScheme.primary,
+              size: 20,
+            ),
+          ),
+        );
+
+      case 1:
+        return QueryArtworkWidget(
+          id: songs[0].id,
+          type: ArtworkType.AUDIO,
+          artworkHeight: 40,
+          artworkWidth: 40,
+          keepOldArtwork: true,
+          artworkBorder: BorderRadius.zero,
+          nullArtworkWidget: Container(
+            color: Theme.of(context).colorScheme.surfaceContainer,
+            child: Center(
+              child: Icon(
+                Icons.music_note,
+                color: Theme.of(context).colorScheme.onSurface,
+                size: 20,
+              ),
+            ),
+          ),
+        );
+
+      case 2:
+      case 3:
+        // Caso 2 y 3: mostramos 2 (lado a lado)
+        return Row(
+          children: [
+            Expanded(
+              child: QueryArtworkWidget(
+                id: songs[0].id,
+                type: ArtworkType.AUDIO,
+                artworkHeight: 40,
+                artworkWidth: 20,
+                keepOldArtwork: true,
+                artworkBorder: BorderRadius.zero,
+                nullArtworkWidget: Container(
+                  color: Theme.of(context).colorScheme.surfaceContainer,
+                  child: Icon(
+                    Icons.music_note,
+                    color: Theme.of(context).colorScheme.onSurface,
+                    size: 10,
+                  ),
+                ),
+              ),
+            ),
+            Expanded(
+              child: QueryArtworkWidget(
+                id: songs[1].id,
+                type: ArtworkType.AUDIO,
+                artworkHeight: 40,
+                artworkWidth: 20,
+                keepOldArtwork: true,
+                artworkBorder: BorderRadius.zero,
+                nullArtworkWidget: Container(
+                  color: Theme.of(context).colorScheme.surfaceContainer,
+                  child: Icon(
+                    Icons.music_note,
+                    color: Theme.of(context).colorScheme.onSurface,
+                    size: 10,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+
+      default:
+        // 4 o más canciones: Cuadrícula 2x2
+        return Column(
+          children: [
+            Expanded(
+              child: Row(
+                children: [
+                  Expanded(
+                    child: QueryArtworkWidget(
+                      id: songs[0].id,
+                      type: ArtworkType.AUDIO,
+                      artworkHeight: 20,
+                      artworkWidth: 20,
+                      keepOldArtwork: true,
+                      artworkBorder: BorderRadius.zero,
+                      nullArtworkWidget: Container(
+                        color: Theme.of(context).colorScheme.surfaceContainer,
+                        child: Icon(
+                          Icons.music_note,
+                          color: Theme.of(context).colorScheme.onSurface,
+                          size: 10,
+                        ),
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: QueryArtworkWidget(
+                      id: songs[1].id,
+                      type: ArtworkType.AUDIO,
+                      artworkHeight: 20,
+                      artworkWidth: 20,
+                      keepOldArtwork: true,
+                      artworkBorder: BorderRadius.zero,
+                      nullArtworkWidget: Container(
+                        color: Theme.of(context).colorScheme.surfaceContainer,
+                        child: Icon(
+                          Icons.music_note,
+                          color: Theme.of(context).colorScheme.onSurface,
+                          size: 10,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: Row(
+                children: [
+                  Expanded(
+                    child: QueryArtworkWidget(
+                      id: songs[2].id,
+                      type: ArtworkType.AUDIO,
+                      artworkHeight: 20,
+                      artworkWidth: 20,
+                      keepOldArtwork: true,
+                      artworkBorder: BorderRadius.zero,
+                      nullArtworkWidget: Container(
+                        color: Theme.of(context).colorScheme.surfaceContainer,
+                        child: Icon(
+                          Icons.music_note,
+                          color: Theme.of(context).colorScheme.onSurface,
+                          size: 10,
+                        ),
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: QueryArtworkWidget(
+                      id: songs[3].id,
+                      type: ArtworkType.AUDIO,
+                      artworkHeight: 20,
+                      artworkWidth: 20,
+                      keepOldArtwork: true,
+                      artworkBorder: BorderRadius.zero,
+                      nullArtworkWidget: Container(
+                        color: Theme.of(context).colorScheme.surfaceContainer,
+                        child: Icon(
+                          Icons.music_note,
+                          color: Theme.of(context).colorScheme.onSurface,
+                          size: 10,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        );
+    }
+  }
+
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
@@ -2599,7 +2952,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       context: context,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(20),
           side: isAmoled && isDark
               ? const BorderSide(color: Colors.white, width: 1)
               : BorderSide.none,
@@ -2684,7 +3037,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           builder: (context, setStateDialog) {
             return AlertDialog(
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(20),
                 side: isAmoled && isDark
                     ? const BorderSide(color: Colors.white, width: 1)
                     : BorderSide.none,
@@ -3101,9 +3454,10 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           color: isDark
                               ? Theme.of(
                                   context,
-                                ).colorScheme.onSecondary.withValues(alpha: 0.5)
-                              : Theme.of(context).colorScheme.secondaryContainer
-                                    .withValues(alpha: 0.5),
+                                ).colorScheme.secondary.withValues(alpha: 0.06)
+                              : Theme.of(
+                                  context,
+                                ).colorScheme.secondary.withValues(alpha: 0.07),
                         ),
                         child: const Icon(Icons.arrow_back, size: 24),
                       ),
@@ -3346,9 +3700,10 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           : isDark
                           ? Theme.of(
                               context,
-                            ).colorScheme.onSecondary.withValues(alpha: 0.5)
-                          : Theme.of(context).colorScheme.secondaryContainer
-                                .withValues(alpha: 0.5);
+                            ).colorScheme.secondary.withValues(alpha: 0.06)
+                          : Theme.of(
+                              context,
+                            ).colorScheme.secondary.withValues(alpha: 0.07);
 
                       return TextField(
                         controller: _showingRecents
@@ -3465,14 +3820,15 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           final isAmoled = colorScheme == AppColorScheme.amoled;
                           final isDark =
                               Theme.of(context).brightness == Brightness.dark;
-                          final cardColor = isAmoled && isDark
+                          final cardColor = isAmoled
                               ? Colors.white.withAlpha(20)
                               : isDark
                               ? Theme.of(
                                   context,
-                                ).colorScheme.onSecondary.withValues(alpha: 0.5)
-                              : Theme.of(context).colorScheme.secondaryContainer
-                                    .withValues(alpha: 0.5);
+                                ).colorScheme.secondary.withValues(alpha: 0.06)
+                              : Theme.of(
+                                  context,
+                                ).colorScheme.secondary.withValues(alpha: 0.07);
 
                           return ListView.builder(
                             padding: const EdgeInsets.only(
@@ -3505,11 +3861,11 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
                               BorderRadius borderRadius;
                               if (isOnly) {
-                                borderRadius = BorderRadius.circular(16);
+                                borderRadius = BorderRadius.circular(20);
                               } else if (isFirst) {
                                 borderRadius = const BorderRadius.only(
-                                  topLeft: Radius.circular(16),
-                                  topRight: Radius.circular(16),
+                                  topLeft: Radius.circular(20),
+                                  topRight: Radius.circular(20),
                                   bottomLeft: Radius.circular(4),
                                   bottomRight: Radius.circular(4),
                                 );
@@ -3517,8 +3873,8 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                 borderRadius = const BorderRadius.only(
                                   topLeft: Radius.circular(4),
                                   topRight: Radius.circular(4),
-                                  bottomLeft: Radius.circular(16),
-                                  bottomRight: Radius.circular(16),
+                                  bottomLeft: Radius.circular(20),
+                                  bottomRight: Radius.circular(20),
                                 );
                               } else {
                                 borderRadius = BorderRadius.circular(4);
@@ -3574,11 +3930,9 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                 right: 8.0,
                                               ),
                                               child: MiniMusicVisualizer(
-                                                color: isAmoledTheme
-                                                    ? Colors.white
-                                                    : Theme.of(
-                                                        context,
-                                                      ).colorScheme.primary,
+                                                color: Theme.of(
+                                                  context,
+                                                ).colorScheme.primary,
                                                 width: 4,
                                                 height: 15,
                                                 radius: 4,
@@ -3617,44 +3971,56 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                       ),
-                                      trailing: IconButton(
-                                        icon: Icon(
-                                          isCurrent && playing
-                                              ? Icons.pause_rounded
-                                              : Icons.play_arrow_rounded,
-                                          grade: 200,
-                                          fill: 1,
+                                      trailing: Container(
+                                        width: 40,
+                                        height: 40,
+                                        decoration: BoxDecoration(
+                                          color: isAmoledTheme
+                                              ? Colors.white.withAlpha(10)
+                                              : isDark
+                                              ? Colors.white.withAlpha(15)
+                                              : Theme.of(context)
+                                                    .colorScheme
+                                                    .secondary
+                                                    .withValues(alpha: 0.08),
+                                          shape: BoxShape.circle,
                                         ),
-                                        onPressed: () {
-                                          if (isCurrent) {
-                                            playing
-                                                ? (audioHandler
-                                                          as MyAudioHandler)
-                                                      .pause()
-                                                : (audioHandler
-                                                          as MyAudioHandler)
-                                                      .play();
-                                          } else {
-                                            // Precargar la carátula antes de reproducir
-                                            unawaited(
-                                              _preloadArtworkForSong(song),
-                                            );
-                                            _playSongAndOpenPlayer(
-                                              song,
-                                              songsToShow,
-                                            );
-                                          }
-                                        },
+                                        child: IconButton(
+                                          icon: Icon(
+                                            isCurrent && playing
+                                                ? Icons.pause_rounded
+                                                : Icons.play_arrow_rounded,
+                                            grade: 200,
+                                            fill: 1,
+                                            color: isCurrent
+                                                ? Theme.of(
+                                                    context,
+                                                  ).colorScheme.primary
+                                                : null,
+                                          ),
+                                          onPressed: () {
+                                            if (isCurrent) {
+                                              playing
+                                                  ? (audioHandler
+                                                            as MyAudioHandler)
+                                                        .pause()
+                                                  : (audioHandler
+                                                            as MyAudioHandler)
+                                                        .play();
+                                            } else {
+                                              unawaited(
+                                                _preloadArtworkForSong(song),
+                                              );
+                                              _playSongAndOpenPlayer(
+                                                song,
+                                                songsToShow,
+                                              );
+                                            }
+                                          },
+                                        ),
                                       ),
                                       selected: isCurrent,
-                                      selectedTileColor: isCurrent
-                                          ? (isAmoledTheme
-                                                ? Colors.transparent
-                                                : Theme.of(context)
-                                                      .colorScheme
-                                                      .primaryContainer
-                                                      .withValues(alpha: 0.8))
-                                          : null,
+                                      selectedTileColor: Colors.transparent,
                                       onTap: () async {
                                         // Precargar la carátula antes de reproducir
                                         unawaited(_preloadArtworkForSong(song));
@@ -4101,17 +4467,35 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                   ),
-                                  trailing: IconButton(
-                                    icon: const Icon(
-                                      Icons.play_arrow_rounded,
-                                      grade: 200,
-                                      fill: 1,
+                                  trailing: Container(
+                                    width: 40,
+                                    height: 40,
+                                    decoration: BoxDecoration(
+                                      color: isAmoledTheme
+                                          ? Colors.white.withAlpha(10)
+                                          : isDark
+                                          ? Colors.white.withAlpha(15)
+                                          : Theme.of(context)
+                                                .colorScheme
+                                                .secondary
+                                                .withValues(alpha: 0.08),
+                                      shape: BoxShape.circle,
                                     ),
-                                    onPressed: () {
-                                      // Precargar la carátula antes de reproducir
-                                      unawaited(_preloadArtworkForSong(song));
-                                      _playSongAndOpenPlayer(song, songsToShow);
-                                    },
+                                    child: IconButton(
+                                      icon: const Icon(
+                                        Icons.play_arrow_rounded,
+                                        grade: 200,
+                                        fill: 1,
+                                      ),
+                                      onPressed: () {
+                                        // Precargar la carátula antes de reproducir
+                                        unawaited(_preloadArtworkForSong(song));
+                                        _playSongAndOpenPlayer(
+                                          song,
+                                          songsToShow,
+                                        );
+                                      },
+                                    ),
                                   ),
                                   selected: isCurrent,
                                   selectedTileColor: isAmoledTheme
@@ -4496,7 +4880,10 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                   bottom: isLastItem ? 0 : 4,
                                 ),
                                 child: Card(
-                                  color: cardColor,
+                                  color: isCurrent
+                                      ? Theme.of(context).colorScheme.primary
+                                            .withAlpha(isDark ? 40 : 25)
+                                      : cardColor,
                                   margin: EdgeInsets.zero,
                                   elevation: 0,
                                   shape: RoundedRectangleBorder(
@@ -4558,15 +4945,13 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                 colorScheme == AppColorScheme.amoled;
                             final isDark =
                                 Theme.of(context).brightness == Brightness.dark;
-                            final cardColor = isAmoled && isDark
+                            final cardColor = isAmoled
                                 ? Colors.white.withAlpha(20)
                                 : isDark
-                                ? Theme.of(context).colorScheme.onSecondary
-                                      .withValues(alpha: 0.5)
-                                : Theme.of(context)
-                                      .colorScheme
-                                      .secondaryContainer
-                                      .withValues(alpha: 0.5);
+                                ? Theme.of(context).colorScheme.secondary
+                                      .withValues(alpha: 0.06)
+                                : Theme.of(context).colorScheme.secondary
+                                      .withValues(alpha: 0.07);
 
                             return ListView.builder(
                               padding: const EdgeInsets.only(
@@ -4599,11 +4984,11 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
                                 BorderRadius borderRadius;
                                 if (isOnly) {
-                                  borderRadius = BorderRadius.circular(16);
+                                  borderRadius = BorderRadius.circular(20);
                                 } else if (isFirst) {
                                   borderRadius = const BorderRadius.only(
-                                    topLeft: Radius.circular(16),
-                                    topRight: Radius.circular(16),
+                                    topLeft: Radius.circular(20),
+                                    topRight: Radius.circular(20),
                                     bottomLeft: Radius.circular(4),
                                     bottomRight: Radius.circular(4),
                                   );
@@ -4611,8 +4996,8 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                   borderRadius = const BorderRadius.only(
                                     topLeft: Radius.circular(4),
                                     topRight: Radius.circular(4),
-                                    bottomLeft: Radius.circular(16),
-                                    bottomRight: Radius.circular(16),
+                                    bottomLeft: Radius.circular(20),
+                                    bottomRight: Radius.circular(20),
                                   );
                                 } else {
                                   borderRadius = BorderRadius.circular(4);
@@ -5777,7 +6162,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                               width: 4,
                                               height: 15,
                                               radius: 4,
-                                              animate: false, // No playing
+                                              animate: playing,
                                             ),
                                           ),
                                         Expanded(
@@ -5838,16 +6223,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                       },
                                     ),
                                     selected: isCurrent,
-                                    selectedTileColor: isCurrent
-                                        ? (isAmoledTheme
-                                              ? Colors.white.withValues(
-                                                  alpha: 0.15,
-                                                )
-                                              : Theme.of(context)
-                                                    .colorScheme
-                                                    .primaryContainer
-                                                    .withValues(alpha: 0.8))
-                                        : null,
+                                    selectedTileColor: Colors.transparent,
                                   );
                                 }
 
@@ -5860,7 +6236,16 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                     bottom: isLastItem ? 0 : 4,
                                   ),
                                   child: Card(
-                                    color: cardColor,
+                                    color: isCurrent
+                                        ? Theme.of(
+                                            context,
+                                          ).colorScheme.primary.withAlpha(
+                                            Theme.of(context).brightness ==
+                                                    Brightness.dark
+                                                ? 40
+                                                : 25,
+                                          )
+                                        : cardColor,
                                     margin: EdgeInsets.zero,
                                     elevation: 0,
                                     shape: RoundedRectangleBorder(
@@ -6025,12 +6410,10 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                 final barColor = isAmoled
                                     ? Colors.white.withAlpha(20)
                                     : isDark
-                                    ? Theme.of(context).colorScheme.onSecondary
-                                          .withValues(alpha: 0.5)
-                                    : Theme.of(context)
-                                          .colorScheme
-                                          .secondaryContainer
-                                          .withValues(alpha: 0.5);
+                                    ? Theme.of(context).colorScheme.secondary
+                                          .withValues(alpha: 0.06)
+                                    : Theme.of(context).colorScheme.secondary
+                                          .withValues(alpha: 0.07);
                                 return Material(
                                   color: Colors.transparent,
                                   child: InkWell(
@@ -7095,8 +7478,8 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                   context,
                                 ).colorScheme.secondaryContainer,
                           borderRadius: BorderRadius.only(
-                            topLeft: Radius.circular(16),
-                            topRight: Radius.circular(16),
+                            topLeft: Radius.circular(20),
+                            topRight: Radius.circular(20),
                             bottomLeft: Radius.circular(4),
                             bottomRight: Radius.circular(4),
                           ),
@@ -7164,8 +7547,8 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           borderRadius: BorderRadius.only(
                             topLeft: Radius.circular(4),
                             topRight: Radius.circular(4),
-                            bottomLeft: Radius.circular(16),
-                            bottomRight: Radius.circular(16),
+                            bottomLeft: Radius.circular(20),
+                            bottomRight: Radius.circular(20),
                           ),
                           border: Border.all(
                             color: isAmoled && isDark

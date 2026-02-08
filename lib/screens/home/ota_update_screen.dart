@@ -412,9 +412,10 @@ class _UpdateScreenState extends State<UpdateScreen> {
                         color: isDark
                             ? Theme.of(
                                 context,
-                              ).colorScheme.onSecondary.withValues(alpha: 0.5)
-                            : Theme.of(context).colorScheme.secondaryContainer
-                                  .withValues(alpha: 0.5),
+                              ).colorScheme.secondary.withValues(alpha: 0.06)
+                            : Theme.of(
+                                context,
+                              ).colorScheme.secondary.withValues(alpha: 0.07),
                       ),
                       child: const Icon(Icons.arrow_back, size: 24),
                     ),
@@ -506,12 +507,10 @@ class _UpdateScreenState extends State<UpdateScreen> {
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
                                 color: isDark
-                                    ? Theme.of(context).colorScheme.onSecondary
-                                          .withValues(alpha: 0.5)
-                                    : Theme.of(context)
-                                          .colorScheme
-                                          .secondaryContainer
-                                          .withValues(alpha: 0.5),
+                                    ? Theme.of(context).colorScheme.secondary
+                                          .withValues(alpha: 0.06)
+                                    : Theme.of(context).colorScheme.secondary
+                                          .withValues(alpha: 0.07),
                               ),
                               child: Icon(
                                 Icons.update_rounded,
@@ -590,12 +589,10 @@ class _UpdateScreenState extends State<UpdateScreen> {
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             color: isDark
-                                ? Theme.of(context).colorScheme.onSecondary
-                                      .withValues(alpha: 0.5)
-                                : Theme.of(context)
-                                      .colorScheme
-                                      .secondaryContainer
-                                      .withValues(alpha: 0.5),
+                                ? Theme.of(context).colorScheme.secondary
+                                      .withValues(alpha: 0.06)
+                                : Theme.of(context).colorScheme.secondary
+                                      .withValues(alpha: 0.07),
                           ),
                           child: LoadingIndicator(
                             activeIndicatorColor: isDark
@@ -630,12 +627,10 @@ class _UpdateScreenState extends State<UpdateScreen> {
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             color: isDark
-                                ? Theme.of(context).colorScheme.onSecondary
-                                      .withValues(alpha: 0.5)
-                                : Theme.of(context)
-                                      .colorScheme
-                                      .secondaryContainer
-                                      .withValues(alpha: 0.5),
+                                ? Theme.of(context).colorScheme.secondary
+                                      .withValues(alpha: 0.06)
+                                : Theme.of(context).colorScheme.secondary
+                                      .withValues(alpha: 0.07),
                           ),
                           child: Icon(
                             Icons.check_circle_outline_rounded,

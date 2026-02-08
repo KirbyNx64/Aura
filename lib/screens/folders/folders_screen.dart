@@ -1520,172 +1520,93 @@ class _FoldersScreenState extends State<FoldersScreen>
           builder: (context, colorScheme, child) {
             final isAmoled = colorScheme == AppColorScheme.amoled;
             final isDark = Theme.of(context).brightness == Brightness.dark;
+            final primaryColor = Theme.of(context).colorScheme.primary;
 
             return AlertDialog(
+              backgroundColor: isAmoled && isDark
+                  ? Colors.black
+                  : Theme.of(context).colorScheme.surface,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(28),
                 side: isAmoled && isDark
-                    ? const BorderSide(color: Colors.white, width: 1)
+                    ? const BorderSide(color: Colors.white24, width: 1)
                     : BorderSide.none,
               ),
-              title: Center(
-                child: TranslatedText(
-                  'search_song',
-                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
+              contentPadding: const EdgeInsets.fromLTRB(0, 24, 0, 8),
+              content: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: 400,
+                  maxHeight: MediaQuery.of(context).size.height * 0.8,
                 ),
-              ),
-              content: SizedBox(
-                width: double.maxFinite,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    SizedBox(height: 18),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Row(
-                        children: [
-                          SizedBox(width: 4),
-                          TranslatedText(
-                            'search_options',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Theme.of(context).colorScheme.onSurface,
-                            ),
-                          ),
-                        ],
+                    Icon(Icons.search_rounded, size: 32),
+                    const SizedBox(height: 16),
+                    TranslatedText(
+                      'search_song',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w500,
+                        color: Theme.of(context).colorScheme.onSurface,
                       ),
                     ),
-                    SizedBox(height: 20),
-                    // Tarjeta de YouTube
-                    InkWell(
+                    const SizedBox(height: 16),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: TranslatedText(
+                        'search_options',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onSurface.withAlpha(180),
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    _buildActionOption(
+                      context: context,
+                      title: 'YouTube',
+                      leading: Image.asset(
+                        'assets/icon/Youtube_logo.png',
+                        width: 24,
+                        height: 24,
+                      ),
                       onTap: () {
                         Navigator.of(context).pop();
                         _searchSongOnYouTube(song);
                       },
-                      borderRadius: BorderRadius.circular(16),
-                      child: Container(
-                        width: double.infinity,
-                        padding: EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: isAmoled && isDark
-                              ? Colors.white.withValues(
-                                  alpha: 0.1,
-                                ) // Color personalizado para amoled
-                              : Theme.of(
-                                  context,
-                                ).colorScheme.secondaryContainer,
-                          borderRadius: BorderRadius.only(
-                            topLeft: Radius.circular(16),
-                            topRight: Radius.circular(16),
-                            bottomLeft: Radius.circular(4),
-                            bottomRight: Radius.circular(4),
-                          ),
-                          border: Border.all(
-                            color: isAmoled && isDark
-                                ? Colors.white.withValues(
-                                    alpha: 0.2,
-                                  ) // Borde personalizado para amoled
-                                : Theme.of(
-                                    context,
-                                  ).colorScheme.outline.withValues(alpha: 0.1),
-                            width: 1,
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Image.asset(
-                                'assets/icon/Youtube_logo.png',
-                                width: 30,
-                                height: 30,
-                              ),
-                            ),
-                            SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                'YouTube',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                  color: isAmoled && isDark
-                                      ? Colors
-                                            .white // Texto blanco para amoled
-                                      : Theme.of(context).colorScheme.onSurface,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
                     ),
-                    SizedBox(height: 4),
-                    // Tarjeta de YouTube Music
-                    InkWell(
+                    const SizedBox(height: 8),
+                    _buildActionOption(
+                      context: context,
+                      title: 'YT Music',
+                      leading: Image.asset(
+                        'assets/icon/Youtube_Music_icon.png',
+                        width: 24,
+                        height: 24,
+                      ),
                       onTap: () {
                         Navigator.of(context).pop();
                         _searchSongOnYouTubeMusic(song);
                       },
-                      borderRadius: BorderRadius.circular(16),
-                      child: Container(
-                        width: double.infinity,
-                        padding: EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: isAmoled && isDark
-                              ? Colors.white.withValues(
-                                  alpha: 0.1,
-                                ) // Color personalizado para amoled
-                              : Theme.of(
-                                  context,
-                                ).colorScheme.secondaryContainer,
-                          borderRadius: BorderRadius.only(
-                            topLeft: Radius.circular(4),
-                            topRight: Radius.circular(4),
-                            bottomLeft: Radius.circular(16),
-                            bottomRight: Radius.circular(16),
-                          ),
-                          border: Border.all(
-                            color: isAmoled && isDark
-                                ? Colors.white.withValues(
-                                    alpha: 0.2,
-                                  ) // Borde personalizado para amoled
-                                : Theme.of(
-                                    context,
-                                  ).colorScheme.outline.withValues(alpha: 0.1),
-                            width: 1,
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Image.asset(
-                                'assets/icon/Youtube_Music_icon.png',
-                                width: 30,
-                                height: 30,
-                              ),
+                    ),
+                    const SizedBox(height: 16),
+                    Padding(
+                      padding: const EdgeInsets.only(right: 24, bottom: 8),
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          child: TranslatedText(
+                            'cancel',
+                            style: TextStyle(
+                              color: primaryColor,
+                              fontWeight: FontWeight.bold,
                             ),
-                            SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                'YT Music',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                  color: isAmoled && isDark
-                                      ? Colors
-                                            .white // Texto blanco para amoled
-                                      : Theme.of(context).colorScheme.onSurface,
-                                ),
-                              ),
-                            ),
-                          ],
+                          ),
                         ),
                       ),
                     ),
@@ -1699,7 +1620,6 @@ class _FoldersScreenState extends State<FoldersScreen>
     );
   }
 
-  // Función para mostrar confirmación de borrado con el mismo diseño
   Future<void> _showDeleteConfirmation(SongModel song) async {
     showDialog(
       context: context,
@@ -1709,45 +1629,60 @@ class _FoldersScreenState extends State<FoldersScreen>
           builder: (context, colorScheme, child) {
             final isAmoled = colorScheme == AppColorScheme.amoled;
             final isDark = Theme.of(context).brightness == Brightness.dark;
+            final primaryColor = Theme.of(context).colorScheme.primary;
 
             return AlertDialog(
+              backgroundColor: isAmoled && isDark
+                  ? Colors.black
+                  : Theme.of(context).colorScheme.surface,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(28),
                 side: isAmoled && isDark
-                    ? const BorderSide(color: Colors.white, width: 1)
+                    ? const BorderSide(color: Colors.white24, width: 1)
                     : BorderSide.none,
               ),
-              title: Center(
-                child: TranslatedText(
-                  'delete_song',
-                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
+              contentPadding: const EdgeInsets.fromLTRB(0, 24, 0, 8),
+              content: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: 400,
+                  maxHeight: MediaQuery.of(context).size.height * 0.8,
                 ),
-              ),
-              content: SizedBox(
-                width: 400,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    SizedBox(height: 18),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 4),
-                        child: TranslatedText(
-                          'delete_song_confirm',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Theme.of(context).colorScheme.onSurface,
-                          ),
-                          textAlign: TextAlign.left,
-                          maxLines: 3,
-                          overflow: TextOverflow.ellipsis,
-                        ),
+                    Icon(
+                      Icons.delete_sweep_rounded,
+                      size: 32,
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                    const SizedBox(height: 16),
+                    TranslatedText(
+                      'delete_song',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w500,
+                        color: Theme.of(context).colorScheme.onSurface,
                       ),
                     ),
-                    SizedBox(height: 20),
-                    // Tarjeta de confirmar borrado
-                    InkWell(
+                    const SizedBox(height: 16),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: TranslatedText(
+                        'delete_song_confirm',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onSurface.withAlpha(180),
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    _buildDestructiveOption(
+                      context: context,
+                      title: LocaleProvider.tr('delete'),
+                      icon: Icons.delete_forever_rounded,
                       onTap: () async {
                         Navigator.of(context).pop();
                         final success = await _deleteSongFromDevice(song);
@@ -1755,11 +1690,14 @@ class _FoldersScreenState extends State<FoldersScreen>
                           showDialog(
                             context: context,
                             builder: (context) => AlertDialog(
+                              backgroundColor: isAmoled && isDark
+                                  ? Colors.black
+                                  : Theme.of(context).colorScheme.surface,
                               shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
+                                borderRadius: BorderRadius.circular(28),
                                 side: isAmoled && isDark
                                     ? const BorderSide(
-                                        color: Colors.white,
+                                        color: Colors.white24,
                                         width: 1,
                                       )
                                     : BorderSide.none,
@@ -1776,137 +1714,21 @@ class _FoldersScreenState extends State<FoldersScreen>
                           );
                         }
                       },
-                      borderRadius: BorderRadius.circular(16),
-                      child: Container(
-                        width: double.infinity,
-                        padding: EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: isAmoled && isDark
-                              ? Colors.red.withValues(
-                                  alpha: 0.2,
-                                ) // Color personalizado para amoled
-                              : Theme.of(context).colorScheme.errorContainer,
-                          borderRadius: BorderRadius.only(
-                            topLeft: Radius.circular(16),
-                            topRight: Radius.circular(16),
-                            bottomLeft: Radius.circular(4),
-                            bottomRight: Radius.circular(4),
-                          ),
-                          border: Border.all(
-                            color: isAmoled && isDark
-                                ? Colors.red.withValues(
-                                    alpha: 0.4,
-                                  ) // Borde personalizado para amoled
-                                : Theme.of(
-                                    context,
-                                  ).colorScheme.outline.withValues(alpha: 0.1),
-                            width: 1,
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Icon(
-                                Icons.delete_forever,
-                                size: 30,
-                                color: isAmoled && isDark
-                                    ? Colors
-                                          .red // Ícono rojo para amoled
-                                    : Theme.of(
-                                        context,
-                                      ).colorScheme.onErrorContainer,
-                              ),
-                            ),
-                            SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                LocaleProvider.tr('delete'),
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                  color: isAmoled && isDark
-                                      ? Colors
-                                            .red // Texto rojo para amoled
-                                      : Theme.of(
-                                          context,
-                                        ).colorScheme.onErrorContainer,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
                     ),
-                    SizedBox(height: 4),
-                    // Tarjeta de cancelar
-                    InkWell(
-                      onTap: () {
-                        Navigator.of(context).pop();
-                      },
-                      borderRadius: BorderRadius.circular(16),
-                      child: Container(
-                        width: double.infinity,
-                        padding: EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: isAmoled && isDark
-                              ? Colors.white.withValues(
-                                  alpha: 0.1,
-                                ) // Color personalizado para amoled
-                              : Theme.of(
-                                  context,
-                                ).colorScheme.secondaryContainer,
-                          borderRadius: BorderRadius.only(
-                            bottomLeft: Radius.circular(16),
-                            bottomRight: Radius.circular(16),
-                            topLeft: Radius.circular(4),
-                            topRight: Radius.circular(4),
-                          ),
-                          border: Border.all(
-                            color: isAmoled && isDark
-                                ? Colors.white.withValues(
-                                    alpha: 0.2,
-                                  ) // Borde personalizado para amoled
-                                : Theme.of(
-                                    context,
-                                  ).colorScheme.outline.withValues(alpha: 0.1),
-                            width: 1,
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Icon(
-                                Icons.cancel_outlined,
-                                size: 30,
-                                color: isAmoled && isDark
-                                    ? Colors
-                                          .white // Ícono blanco para amoled
-                                    : Theme.of(context).colorScheme.onSurface,
-                              ),
+                    const SizedBox(height: 16),
+                    Padding(
+                      padding: const EdgeInsets.only(right: 24, bottom: 8),
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          child: TranslatedText(
+                            'cancel',
+                            style: TextStyle(
+                              color: primaryColor,
+                              fontWeight: FontWeight.bold,
                             ),
-                            SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                LocaleProvider.tr('cancel'),
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                  color: isAmoled && isDark
-                                      ? Colors
-                                            .white // Texto blanco para amoled
-                                      : Theme.of(context).colorScheme.onSurface,
-                                ),
-                              ),
-                            ),
-                          ],
+                          ),
                         ),
                       ),
                     ),
@@ -1929,62 +1751,62 @@ class _FoldersScreenState extends State<FoldersScreen>
       text: currentName,
     );
 
-    final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
     showDialog(
       context: context,
       builder: (BuildContext context) {
         return ValueListenableBuilder<AppColorScheme>(
           valueListenable: colorSchemeNotifier,
           builder: (context, colorScheme, child) {
+            final isAmoled = colorScheme == AppColorScheme.amoled;
+            final isDark = Theme.of(context).brightness == Brightness.dark;
+            final primaryColor = Theme.of(context).colorScheme.primary;
+
             return AlertDialog(
+              backgroundColor: isAmoled && isDark
+                  ? Colors.black
+                  : Theme.of(context).colorScheme.surface,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(28),
                 side: isAmoled && isDark
-                    ? const BorderSide(color: Colors.white, width: 1)
+                    ? const BorderSide(color: Colors.white24, width: 1)
                     : BorderSide.none,
               ),
-              title: Center(
-                child: TranslatedText(
-                  'rename_folder',
-                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
+              contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
+              content: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: 400,
+                  maxHeight: MediaQuery.of(context).size.height * 0.8,
                 ),
-              ),
-              content: SizedBox(
-                width: double.maxFinite,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    SizedBox(height: 18),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Row(
-                        children: [
-                          SizedBox(width: 4),
-                          TranslatedText(
-                            'folder_name',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Theme.of(context).colorScheme.onSurface,
-                            ),
-                          ),
-                        ],
+                    Icon(Icons.drive_file_rename_outline_rounded, size: 32),
+                    const SizedBox(height: 16),
+                    TranslatedText(
+                      'rename_folder',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w500,
+                        color: Theme.of(context).colorScheme.onSurface,
                       ),
                     ),
-                    SizedBox(height: 20),
+                    const SizedBox(height: 24),
                     TextField(
                       controller: nameController,
                       autofocus: true,
                       decoration: InputDecoration(
+                        labelText: LocaleProvider.tr('folder_name'),
                         hintText: LocaleProvider.tr('enter_folder_name'),
                         border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(16),
                         ),
-                        contentPadding: EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 12,
-                        ),
+                        filled: true,
+                        fillColor: isAmoled && isDark
+                            ? Colors.white.withAlpha(10)
+                            : Theme.of(context)
+                                  .colorScheme
+                                  .surfaceContainerHighest
+                                  .withAlpha(100),
                       ),
                     ),
                   ],
@@ -1993,20 +1815,23 @@ class _FoldersScreenState extends State<FoldersScreen>
               actions: [
                 TextButton(
                   onPressed: () => Navigator.of(context).pop(),
-                  child: TranslatedText('cancel'),
+                  child: TranslatedText(
+                    'cancel',
+                    style: TextStyle(
+                      color: primaryColor,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ),
                 TextButton(
                   onPressed: () async {
                     final newName = nameController.text.trim();
                     if (newName.isNotEmpty && newName != currentName) {
-                      // Cerrar el diálogo primero
                       if (context.mounted) {
                         Navigator.of(context).pop();
                       }
-                      // Luego ejecutar el renombrado
                       await _renameFolder(folderKey, newName);
                     } else if (newName.isEmpty) {
-                      // Mostrar mensaje de error si el nombre está vacío
                       _showMessage(
                         LocaleProvider.tr('error'),
                         description: LocaleProvider.tr('folder_name_required'),
@@ -2014,7 +1839,13 @@ class _FoldersScreenState extends State<FoldersScreen>
                       );
                     }
                   },
-                  child: TranslatedText('rename'),
+                  child: TranslatedText(
+                    'rename',
+                    style: TextStyle(
+                      color: primaryColor,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ),
               ],
             );
@@ -2143,45 +1974,60 @@ class _FoldersScreenState extends State<FoldersScreen>
           builder: (context, colorScheme, child) {
             final isAmoled = colorScheme == AppColorScheme.amoled;
             final isDark = Theme.of(context).brightness == Brightness.dark;
+            final primaryColor = Theme.of(context).colorScheme.primary;
 
             return AlertDialog(
+              backgroundColor: isAmoled && isDark
+                  ? Colors.black
+                  : Theme.of(context).colorScheme.surface,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(28),
                 side: isAmoled && isDark
-                    ? const BorderSide(color: Colors.white, width: 1)
+                    ? const BorderSide(color: Colors.white24, width: 1)
                     : BorderSide.none,
               ),
-              title: Center(
-                child: TranslatedText(
-                  'delete_folder',
-                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
+              contentPadding: const EdgeInsets.fromLTRB(0, 24, 0, 8),
+              content: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: 400,
+                  maxHeight: MediaQuery.of(context).size.height * 0.8,
                 ),
-              ),
-              content: SizedBox(
-                width: 400,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    SizedBox(height: 18),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 4),
-                        child: TranslatedText(
-                          'delete_folder_confirm',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Theme.of(context).colorScheme.onSurface,
-                          ),
-                          textAlign: TextAlign.left,
-                          maxLines: 3,
-                          overflow: TextOverflow.ellipsis,
-                        ),
+                    Icon(
+                      Icons.folder_delete_rounded,
+                      size: 32,
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                    const SizedBox(height: 16),
+                    TranslatedText(
+                      'delete_folder',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w500,
+                        color: Theme.of(context).colorScheme.onSurface,
                       ),
                     ),
-                    SizedBox(height: 20),
-                    // Tarjeta de confirmar borrado
-                    InkWell(
+                    const SizedBox(height: 16),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: TranslatedText(
+                        'delete_folder_confirm',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onSurface.withAlpha(180),
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    _buildDestructiveOption(
+                      context: context,
+                      title: LocaleProvider.tr('delete'),
+                      icon: Icons.delete_forever_rounded,
                       onTap: () async {
                         Navigator.of(context).pop();
                         final success = await _deleteFolderAndSongs(folderKey);
@@ -2212,137 +2058,21 @@ class _FoldersScreenState extends State<FoldersScreen>
                           );
                         }
                       },
-                      borderRadius: BorderRadius.circular(16),
-                      child: Container(
-                        width: double.infinity,
-                        padding: EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: isAmoled && isDark
-                              ? Colors.red.withValues(
-                                  alpha: 0.2,
-                                ) // Color personalizado para amoled
-                              : Theme.of(context).colorScheme.errorContainer,
-                          borderRadius: BorderRadius.only(
-                            topLeft: Radius.circular(16),
-                            topRight: Radius.circular(16),
-                            bottomLeft: Radius.circular(4),
-                            bottomRight: Radius.circular(4),
-                          ),
-                          border: Border.all(
-                            color: isAmoled && isDark
-                                ? Colors.red.withValues(
-                                    alpha: 0.4,
-                                  ) // Borde personalizado para amoled
-                                : Theme.of(
-                                    context,
-                                  ).colorScheme.outline.withValues(alpha: 0.1),
-                            width: 1,
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Icon(
-                                Icons.folder_delete,
-                                size: 30,
-                                color: isAmoled && isDark
-                                    ? Colors
-                                          .red // Ícono rojo para amoled
-                                    : Theme.of(
-                                        context,
-                                      ).colorScheme.onErrorContainer,
-                              ),
-                            ),
-                            SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                LocaleProvider.tr('delete'),
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                  color: isAmoled && isDark
-                                      ? Colors
-                                            .red // Texto rojo para amoled
-                                      : Theme.of(
-                                          context,
-                                        ).colorScheme.onErrorContainer,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
                     ),
-                    SizedBox(height: 4),
-                    // Tarjeta de cancelar
-                    InkWell(
-                      onTap: () {
-                        Navigator.of(context).pop();
-                      },
-                      borderRadius: BorderRadius.circular(16),
-                      child: Container(
-                        width: double.infinity,
-                        padding: EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: isAmoled && isDark
-                              ? Colors.white.withValues(
-                                  alpha: 0.1,
-                                ) // Color personalizado para amoled
-                              : Theme.of(
-                                  context,
-                                ).colorScheme.secondaryContainer,
-                          borderRadius: BorderRadius.only(
-                            bottomLeft: Radius.circular(16),
-                            bottomRight: Radius.circular(16),
-                            topLeft: Radius.circular(4),
-                            topRight: Radius.circular(4),
-                          ),
-                          border: Border.all(
-                            color: isAmoled && isDark
-                                ? Colors.white.withValues(
-                                    alpha: 0.2,
-                                  ) // Borde personalizado para amoled
-                                : Theme.of(
-                                    context,
-                                  ).colorScheme.outline.withValues(alpha: 0.1),
-                            width: 1,
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Icon(
-                                Icons.cancel_outlined,
-                                size: 30,
-                                color: isAmoled && isDark
-                                    ? Colors
-                                          .white // Ícono blanco para amoled
-                                    : Theme.of(context).colorScheme.onSurface,
-                              ),
+                    const SizedBox(height: 16),
+                    Padding(
+                      padding: const EdgeInsets.only(right: 24, bottom: 8),
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          child: TranslatedText(
+                            'cancel',
+                            style: TextStyle(
+                              color: primaryColor,
+                              fontWeight: FontWeight.bold,
                             ),
-                            SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                LocaleProvider.tr('cancel'),
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                  color: isAmoled && isDark
-                                      ? Colors
-                                            .white // Texto blanco para amoled
-                                      : Theme.of(context).colorScheme.onSurface,
-                                ),
-                              ),
-                            ),
-                          ],
+                          ),
                         ),
                       ),
                     ),
@@ -2353,6 +2083,97 @@ class _FoldersScreenState extends State<FoldersScreen>
           },
         );
       },
+    );
+  }
+
+  Widget _buildDestructiveOption({
+    required BuildContext context,
+    required String title,
+    required IconData icon,
+    required VoidCallback onTap,
+  }) {
+    final errorContainer = Theme.of(context).colorScheme.error;
+    final onErrorContainer = Theme.of(context).colorScheme.onError;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(28),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          decoration: BoxDecoration(
+            color: errorContainer,
+            borderRadius: BorderRadius.circular(28),
+          ),
+          child: Row(
+            children: [
+              Icon(icon, color: onErrorContainer, size: 24),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: onErrorContainer,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActionOption({
+    required BuildContext context,
+    required String title,
+    required VoidCallback onTap,
+    IconData? icon,
+    Widget? leading,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(28),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.primary,
+            borderRadius: BorderRadius.circular(28),
+          ),
+          child: Row(
+            children: [
+              if (leading != null)
+                SizedBox(width: 24, height: 24, child: Center(child: leading))
+              else if (icon != null)
+                Icon(
+                  icon,
+                  color: Theme.of(context).colorScheme.onPrimary,
+                  size: 24,
+                ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: Theme.of(context).colorScheme.onPrimary,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -2412,181 +2233,74 @@ class _FoldersScreenState extends State<FoldersScreen>
           builder: (context, colorScheme, child) {
             final isAmoled = colorScheme == AppColorScheme.amoled;
             final isDark = Theme.of(context).brightness == Brightness.dark;
+            final primaryColor = Theme.of(context).colorScheme.primary;
 
             return AlertDialog(
+              backgroundColor: isAmoled && isDark
+                  ? Colors.black
+                  : Theme.of(context).colorScheme.surface,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(28),
                 side: isAmoled && isDark
-                    ? const BorderSide(color: Colors.white, width: 1)
+                    ? const BorderSide(color: Colors.white24, width: 1)
                     : BorderSide.none,
               ),
-              title: Center(
-                child: TranslatedText(
-                  'ignore_folder',
-                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
+              contentPadding: const EdgeInsets.fromLTRB(0, 24, 0, 8),
+              content: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: 400,
+                  maxHeight: MediaQuery.of(context).size.height * 0.8,
                 ),
-              ),
-              content: SizedBox(
-                width: 400,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    SizedBox(height: 18),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 4),
-                        child: Text(
-                          LocaleProvider.tr(
-                            'ignore_folder_confirm',
-                          ).replaceAll('{folder}', folderName),
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Theme.of(context).colorScheme.onSurface,
-                          ),
-                          textAlign: TextAlign.left,
-                          maxLines: 3,
-                          overflow: TextOverflow.ellipsis,
-                        ),
+                    Icon(Icons.visibility_off_rounded, size: 32),
+                    const SizedBox(height: 16),
+                    TranslatedText(
+                      'ignore_folder',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w500,
+                        color: Theme.of(context).colorScheme.onSurface,
                       ),
                     ),
-                    SizedBox(height: 20),
-                    // Tarjeta de confirmar ignorar
-                    InkWell(
-                      onTap: () {
-                        Navigator.of(context).pop(true);
-                      },
-                      borderRadius: BorderRadius.circular(16),
-                      child: Container(
-                        width: double.infinity,
-                        padding: EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: isAmoled && isDark
-                              ? Colors.orange.withValues(
-                                  alpha: 0.2,
-                                ) // Color personalizado para amoled
-                              : Theme.of(context).colorScheme.primaryContainer,
-                          borderRadius: BorderRadius.only(
-                            topLeft: Radius.circular(16),
-                            topRight: Radius.circular(16),
-                            bottomLeft: Radius.circular(4),
-                            bottomRight: Radius.circular(4),
-                          ),
-                          border: Border.all(
-                            color: isAmoled && isDark
-                                ? Colors.orange.withValues(
-                                    alpha: 0.4,
-                                  ) // Borde personalizado para amoled
-                                : Theme.of(
-                                    context,
-                                  ).colorScheme.outline.withValues(alpha: 0.1),
-                            width: 1,
-                          ),
+                    const SizedBox(height: 16),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: Text(
+                        LocaleProvider.tr(
+                          'ignore_folder_confirm',
+                        ).replaceAll('{folder}', folderName),
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onSurface.withAlpha(180),
                         ),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Icon(
-                                Icons.visibility_off,
-                                size: 30,
-                                color: isAmoled && isDark
-                                    ? Colors
-                                          .orange // Ícono naranja para amoled
-                                    : Theme.of(
-                                        context,
-                                      ).colorScheme.onPrimaryContainer,
-                              ),
-                            ),
-                            SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                LocaleProvider.tr('ignore_folder'),
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                  color: isAmoled && isDark
-                                      ? Colors
-                                            .orange // Texto naranja para amoled
-                                      : Theme.of(
-                                          context,
-                                        ).colorScheme.onPrimaryContainer,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
+                        textAlign: TextAlign.center,
                       ),
                     ),
-                    SizedBox(height: 4),
-                    // Tarjeta de cancelar
-                    InkWell(
-                      onTap: () {
-                        Navigator.of(context).pop(false);
-                      },
-                      borderRadius: BorderRadius.circular(16),
-                      child: Container(
-                        width: double.infinity,
-                        padding: EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: isAmoled && isDark
-                              ? Colors.white.withValues(
-                                  alpha: 0.1,
-                                ) // Color personalizado para amoled
-                              : Theme.of(
-                                  context,
-                                ).colorScheme.secondaryContainer,
-                          borderRadius: BorderRadius.only(
-                            bottomLeft: Radius.circular(16),
-                            bottomRight: Radius.circular(16),
-                            topLeft: Radius.circular(4),
-                            topRight: Radius.circular(4),
-                          ),
-                          border: Border.all(
-                            color: isAmoled && isDark
-                                ? Colors.white.withValues(
-                                    alpha: 0.2,
-                                  ) // Borde personalizado para amoled
-                                : Theme.of(
-                                    context,
-                                  ).colorScheme.outline.withValues(alpha: 0.1),
-                            width: 1,
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Icon(
-                                Icons.cancel_outlined,
-                                size: 30,
-                                color: isAmoled && isDark
-                                    ? Colors
-                                          .white // Ícono blanco para amoled
-                                    : Theme.of(context).colorScheme.onSurface,
-                              ),
+                    const SizedBox(height: 24),
+                    _buildActionOption(
+                      context: context,
+                      title: LocaleProvider.tr('ignore_folder'),
+                      icon: Icons.visibility_off_rounded,
+                      onTap: () => Navigator.of(context).pop(true),
+                    ),
+                    const SizedBox(height: 16),
+                    Padding(
+                      padding: const EdgeInsets.only(right: 24, bottom: 8),
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: () => Navigator.of(context).pop(false),
+                          child: TranslatedText(
+                            'cancel',
+                            style: TextStyle(
+                              color: primaryColor,
+                              fontWeight: FontWeight.bold,
                             ),
-                            SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                LocaleProvider.tr('cancel'),
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                  color: isAmoled && isDark
-                                      ? Colors
-                                            .white // Texto blanco para amoled
-                                      : Theme.of(context).colorScheme.onSurface,
-                                ),
-                              ),
-                            ),
-                          ],
+                          ),
                         ),
                       ),
                     ),
@@ -2667,9 +2381,161 @@ class _FoldersScreenState extends State<FoldersScreen>
     _lastBottomInset = bottomInset;
   }
 
+  Future<void> _showSortOptionsDialog() async {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return ValueListenableBuilder<AppColorScheme>(
+          valueListenable: colorSchemeNotifier,
+          builder: (context, colorScheme, child) {
+            final isAmoled = colorScheme == AppColorScheme.amoled;
+            final isDark = Theme.of(context).brightness == Brightness.dark;
+
+            return AlertDialog(
+              backgroundColor: isAmoled && isDark
+                  ? Colors.black
+                  : Theme.of(context).colorScheme.surface,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(28),
+                side: isAmoled && isDark
+                    ? const BorderSide(color: Colors.white24, width: 1)
+                    : BorderSide.none,
+              ),
+              contentPadding: const EdgeInsets.fromLTRB(0, 24, 0, 8),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.sort_rounded, size: 32),
+                  const SizedBox(height: 16),
+                  TranslatedText(
+                    'filters',
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w500,
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  _buildSortOption(
+                    OrdenCarpetas.normal,
+                    'default',
+                    Icons.history_rounded,
+                  ),
+                  _buildSortOption(
+                    OrdenCarpetas.ultimoAgregado,
+                    'invert_order',
+                    Icons.swap_vert_rounded,
+                  ),
+                  _buildSortOption(
+                    OrdenCarpetas.alfabetico,
+                    'alphabetical_az',
+                    Icons.sort_by_alpha_rounded,
+                  ),
+                  _buildSortOption(
+                    OrdenCarpetas.invertido,
+                    'alphabetical_za',
+                    Icons.sort_by_alpha_rounded,
+                  ),
+                  _buildSortOption(
+                    OrdenCarpetas.fechaEdicionDesc,
+                    'edit_date_newest_first',
+                    Icons.calendar_month_rounded,
+                  ),
+                  _buildSortOption(
+                    OrdenCarpetas.fechaEdicionAsc,
+                    'edit_date_oldest_first',
+                    Icons.calendar_today_rounded,
+                  ),
+                  const SizedBox(height: 8),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildSortOption(OrdenCarpetas value, String labelKey, IconData icon) {
+    final ordenActual = _selectedPlaylist != null ? _ordenPlaylist : _orden;
+    final isSelected = ordenActual == value;
+    final colorScheme = Theme.of(context).colorScheme;
+    final primaryColor = colorScheme.primary;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
+    final useSubtleStyling = isAmoled && isDark;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      child: InkWell(
+        onTap: () async {
+          setState(() {
+            if (_selectedPlaylist != null) {
+              _ordenPlaylist = value;
+            } else {
+              _orden = value;
+            }
+          });
+          await _ordenarCanciones();
+          _saveOrderFilter();
+          if (mounted) {
+            Navigator.pop(context);
+          }
+        },
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? (useSubtleStyling ? primaryColor.withAlpha(30) : primaryColor)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(20),
+            border: isSelected && useSubtleStyling
+                ? Border.all(color: primaryColor.withAlpha(100), width: 1)
+                : null,
+          ),
+          child: Row(
+            children: [
+              Icon(
+                icon,
+                color: isSelected
+                    ? (useSubtleStyling ? primaryColor : colorScheme.onPrimary)
+                    : colorScheme.onSurfaceVariant,
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: TranslatedText(
+                  labelKey,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: isSelected
+                        ? FontWeight.bold
+                        : FontWeight.normal,
+                    color: isSelected
+                        ? (useSubtleStyling
+                              ? primaryColor
+                              : colorScheme.onPrimary)
+                        : colorScheme.onSurface,
+                  ),
+                ),
+              ),
+              if (isSelected)
+                Icon(
+                  Icons.check_circle_rounded,
+                  color: useSubtleStyling
+                      ? primaryColor
+                      : colorScheme.onPrimary,
+                  size: 20,
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     if (_isLoading) {
@@ -2736,10 +2602,8 @@ class _FoldersScreenState extends State<FoldersScreen>
       final barColor = isAmoled
           ? Colors.white.withAlpha(20)
           : isDark
-          ? Theme.of(context).colorScheme.onSecondary.withValues(alpha: 0.5)
-          : Theme.of(
-              context,
-            ).colorScheme.secondaryContainer.withValues(alpha: 0.5);
+          ? Theme.of(context).colorScheme.secondary.withValues(alpha: 0.06)
+          : Theme.of(context).colorScheme.secondary.withValues(alpha: 0.07);
 
       return Scaffold(
         resizeToAvoidBottomInset: true,
@@ -2762,9 +2626,13 @@ class _FoldersScreenState extends State<FoldersScreen>
                   padding: const EdgeInsets.all(2),
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.primary.withValues(alpha: 0.1),
+                    color: isDark
+                        ? Theme.of(
+                            context,
+                          ).colorScheme.secondary.withValues(alpha: 0.06)
+                        : Theme.of(
+                            context,
+                          ).colorScheme.secondary.withValues(alpha: 0.06),
                   ),
                   child: Icon(
                     Icons.keyboard_arrow_down,
@@ -2898,11 +2766,11 @@ class _FoldersScreenState extends State<FoldersScreen>
 
                     BorderRadius borderRadius;
                     if (isOnly) {
-                      borderRadius = BorderRadius.circular(16);
+                      borderRadius = BorderRadius.circular(20);
                     } else if (isFirst) {
                       borderRadius = const BorderRadius.only(
-                        topLeft: Radius.circular(16),
-                        topRight: Radius.circular(16),
+                        topLeft: Radius.circular(20),
+                        topRight: Radius.circular(20),
                         bottomLeft: Radius.circular(4),
                         bottomRight: Radius.circular(4),
                       );
@@ -2910,8 +2778,8 @@ class _FoldersScreenState extends State<FoldersScreen>
                       borderRadius = const BorderRadius.only(
                         topLeft: Radius.circular(4),
                         topRight: Radius.circular(4),
-                        bottomLeft: Radius.circular(16),
-                        bottomRight: Radius.circular(16),
+                        bottomLeft: Radius.circular(20),
+                        bottomRight: Radius.circular(20),
                       );
                     } else {
                       borderRadius = BorderRadius.circular(4);
@@ -2978,9 +2846,13 @@ class _FoldersScreenState extends State<FoldersScreen>
                   padding: const EdgeInsets.all(2),
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.primary.withValues(alpha: 0.1),
+                    color: isDark
+                        ? Theme.of(
+                            context,
+                          ).colorScheme.secondary.withValues(alpha: 0.06)
+                        : Theme.of(
+                            context,
+                          ).colorScheme.secondary.withValues(alpha: 0.06),
                   ),
                   child: Icon(
                     Icons.keyboard_arrow_down,
@@ -2998,88 +2870,107 @@ class _FoldersScreenState extends State<FoldersScreen>
               onPressed: () {
                 showDialog(
                   context: context,
-                  builder: (context) => AlertDialog(
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      side: isAmoled && isDark
-                          ? const BorderSide(color: Colors.white, width: 1)
-                          : BorderSide.none,
-                    ),
-                    title: Center(
-                      child: Text(
-                        LocaleProvider.tr('info'),
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                    content: TranslatedText('folders_and_songs_info'),
-                    actions: [
-                      SizedBox(height: 16),
-                      InkWell(
-                        onTap: () => Navigator.of(context).pop(),
-                        borderRadius: BorderRadius.circular(16),
-                        child: Container(
-                          width: double.infinity,
-                          padding: EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: isAmoled && isDark
-                                ? Colors.white.withValues(alpha: 0.2)
-                                : Theme.of(
-                                    context,
-                                  ).colorScheme.primaryContainer,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                              color: isAmoled && isDark
-                                  ? Colors.white.withValues(alpha: 0.4)
-                                  : Theme.of(context).colorScheme.primary
-                                        .withValues(alpha: 0.3),
-                              width: 2,
-                            ),
+                  builder: (context) {
+                    return ValueListenableBuilder<AppColorScheme>(
+                      valueListenable: colorSchemeNotifier,
+                      builder: (context, colorScheme, child) {
+                        final isAmoled = colorScheme == AppColorScheme.amoled;
+                        final isDark =
+                            Theme.of(context).brightness == Brightness.dark;
+                        final primaryColor = Theme.of(
+                          context,
+                        ).colorScheme.primary;
+
+                        return AlertDialog(
+                          backgroundColor: isAmoled && isDark
+                              ? Colors.black
+                              : Theme.of(context).colorScheme.surface,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(28),
+                            side: isAmoled && isDark
+                                ? const BorderSide(
+                                    color: Colors.white24,
+                                    width: 1,
+                                  )
+                                : BorderSide.none,
                           ),
-                          child: Row(
-                            children: [
-                              Container(
-                                padding: EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(12),
-                                  color: isAmoled && isDark
-                                      ? Colors.white.withValues(alpha: 0.2)
-                                      : Theme.of(context).colorScheme.primary
-                                            .withValues(alpha: 0.1),
+                          contentPadding: const EdgeInsets.fromLTRB(
+                            0,
+                            24,
+                            0,
+                            8,
+                          ),
+                          content: ConstrainedBox(
+                            constraints: BoxConstraints(
+                              maxWidth: 400,
+                              maxHeight:
+                                  MediaQuery.of(context).size.height * 0.8,
+                            ),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.info_rounded,
+                                  size: 32,
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onSurface,
                                 ),
-                                child: Icon(
-                                  Icons.check_circle,
-                                  size: 30,
-                                  color: isAmoled && isDark
-                                      ? Colors.white
-                                      : Theme.of(context).colorScheme.primary,
+                                const SizedBox(height: 16),
+                                TranslatedText(
+                                  'info',
+                                  style: TextStyle(
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.w500,
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.onSurface,
+                                  ),
                                 ),
-                              ),
-                              SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      LocaleProvider.tr('ok'),
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w600,
-                                        color: isAmoled && isDark
-                                            ? Colors.white
-                                            : Theme.of(
-                                                context,
-                                              ).colorScheme.primary,
+                                const SizedBox(height: 16),
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 24,
+                                  ),
+                                  child: TranslatedText(
+                                    'folders_and_songs_info',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.onSurface.withAlpha(180),
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ),
+                                const SizedBox(height: 24),
+                                Padding(
+                                  padding: const EdgeInsets.only(
+                                    right: 24,
+                                    bottom: 8,
+                                  ),
+                                  child: Align(
+                                    alignment: Alignment.centerRight,
+                                    child: TextButton(
+                                      onPressed: () =>
+                                          Navigator.of(context).pop(),
+                                      child: TranslatedText(
+                                        'ok',
+                                        style: TextStyle(
+                                          color: primaryColor,
+                                          fontWeight: FontWeight.bold,
+                                        ),
                                       ),
                                     ),
-                                  ],
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
-                        ),
-                      ),
-                    ],
-                  ),
+                        );
+                      },
+                    );
+                  },
                 );
               },
             ),
@@ -3092,17 +2983,17 @@ class _FoldersScreenState extends State<FoldersScreen>
                 builder: (context) {
                   final colorScheme = colorSchemeNotifier.value;
                   final isAmoled = colorScheme == AppColorScheme.amoled;
-                  final innerDark =
+                  final isDark =
                       Theme.of(context).brightness == Brightness.dark;
                   final barColor = isAmoled
                       ? Colors.white.withAlpha(20)
-                      : innerDark
+                      : isDark
                       ? Theme.of(
                           context,
-                        ).colorScheme.onSecondary.withValues(alpha: 0.5)
+                        ).colorScheme.secondary.withValues(alpha: 0.06)
                       : Theme.of(
                           context,
-                        ).colorScheme.secondaryContainer.withValues(alpha: 0.5);
+                        ).colorScheme.secondary.withValues(alpha: 0.07);
 
                   return TextField(
                     controller: _folderSearchController,
@@ -3173,14 +3064,15 @@ class _FoldersScreenState extends State<FoldersScreen>
                     final isAmoled = colorScheme == AppColorScheme.amoled;
                     final isDark =
                         Theme.of(context).brightness == Brightness.dark;
-                    final cardColor = isAmoled && isDark
+                    final cardColor = isAmoled
                         ? Colors.white.withAlpha(20)
                         : isDark
                         ? Theme.of(
                             context,
-                          ).colorScheme.onSecondary.withValues(alpha: 0.5)
-                        : Theme.of(context).colorScheme.secondaryContainer
-                              .withValues(alpha: 0.5);
+                          ).colorScheme.secondary.withValues(alpha: 0.06)
+                        : Theme.of(
+                            context,
+                          ).colorScheme.secondary.withValues(alpha: 0.07);
 
                     final sortedEntries =
                         _folderSearchController.text.isNotEmpty
@@ -3220,11 +3112,11 @@ class _FoldersScreenState extends State<FoldersScreen>
 
                         BorderRadius borderRadius;
                         if (isOnly) {
-                          borderRadius = BorderRadius.circular(16);
+                          borderRadius = BorderRadius.circular(20);
                         } else if (isFirst) {
                           borderRadius = const BorderRadius.only(
-                            topLeft: Radius.circular(16),
-                            topRight: Radius.circular(16),
+                            topLeft: Radius.circular(20),
+                            topRight: Radius.circular(20),
                             bottomLeft: Radius.circular(4),
                             bottomRight: Radius.circular(4),
                           );
@@ -3232,8 +3124,8 @@ class _FoldersScreenState extends State<FoldersScreen>
                           borderRadius = const BorderRadius.only(
                             topLeft: Radius.circular(4),
                             topRight: Radius.circular(4),
-                            bottomLeft: Radius.circular(16),
-                            bottomRight: Radius.circular(16),
+                            bottomLeft: Radius.circular(20),
+                            bottomRight: Radius.circular(20),
                           );
                         } else {
                           borderRadius = BorderRadius.circular(4);
@@ -3273,66 +3165,34 @@ class _FoldersScreenState extends State<FoldersScreen>
                                       : () async {
                                           await _loadSongsForFolder(entry);
                                         },
-                                  trailing: PopupMenuButton<String>(
-                                    onSelected: (value) async {
-                                      if (value == 'rename') {
-                                        await _showRenameFolderDialog(
-                                          entry.key,
-                                          folderDisplayNames[entry.key] ?? '',
-                                        );
-                                      } else if (value == 'delete') {
-                                        await _showDeleteFolderConfirmation(
-                                          entry.key,
-                                          folderDisplayNames[entry.key] ?? '',
-                                        );
-                                      } else if (value == 'toggle_ignore') {
-                                        if (ignored) {
-                                          await _unignoreFolderFlow(entry.key);
-                                        } else {
-                                          await _ignoreFolderFlow(entry.key);
-                                        }
-                                      }
-                                    },
-                                    itemBuilder: (context) => [
-                                      PopupMenuItem(
-                                        value: 'rename',
-                                        child: Row(
-                                          children: [
-                                            Icon(Icons.edit_outlined),
-                                            SizedBox(width: 8),
-                                            TranslatedText('rename_folder'),
-                                          ],
-                                        ),
+                                  trailing: Container(
+                                    width: 26,
+                                    height: 40,
+                                    decoration: BoxDecoration(
+                                      color: isAmoled
+                                          ? Colors.white.withAlpha(5)
+                                          : isDark
+                                          ? Colors.white.withAlpha(15)
+                                          : Theme.of(context)
+                                                .colorScheme
+                                                .onSecondary
+                                                .withAlpha(120),
+                                      borderRadius: BorderRadius.circular(16),
+                                    ),
+                                    child: IconButton(
+                                      icon: const Icon(
+                                        Icons.more_vert,
+                                        size: 22,
                                       ),
-                                      PopupMenuItem(
-                                        value: 'delete',
-                                        child: Row(
-                                          children: [
-                                            Icon(Icons.delete_outline),
-                                            SizedBox(width: 8),
-                                            TranslatedText('delete_folder'),
-                                          ],
-                                        ),
+                                      padding: EdgeInsets.zero,
+                                      constraints: const BoxConstraints(),
+                                      onPressed: () => _showFolderOptionsModal(
+                                        context,
+                                        entry.key,
+                                        nombre,
+                                        ignored,
                                       ),
-                                      PopupMenuItem(
-                                        value: 'toggle_ignore',
-                                        child: Row(
-                                          children: [
-                                            Icon(
-                                              ignored
-                                                  ? Icons.visibility
-                                                  : Icons.visibility_off,
-                                            ),
-                                            SizedBox(width: 8),
-                                            TranslatedText(
-                                              ignored
-                                                  ? 'unignore_folder'
-                                                  : 'ignore_folder',
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ],
+                                    ),
                                   ),
                                 ),
                               ),
@@ -3390,9 +3250,10 @@ class _FoldersScreenState extends State<FoldersScreen>
                       color: isDark
                           ? Theme.of(
                               context,
-                            ).colorScheme.onSecondary.withValues(alpha: 0.5)
-                          : Theme.of(context).colorScheme.secondaryContainer
-                                .withValues(alpha: 0.5),
+                            ).colorScheme.secondary.withValues(alpha: 0.06)
+                          : Theme.of(
+                              context,
+                            ).colorScheme.secondary.withValues(alpha: 0.06),
                     ),
                     child: const Icon(Icons.arrow_back, size: 24),
                   ),
@@ -3445,9 +3306,13 @@ class _FoldersScreenState extends State<FoldersScreen>
                         padding: const EdgeInsets.all(2),
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.primary.withValues(alpha: 0.1),
+                          color: isDark
+                              ? Theme.of(
+                                  context,
+                                ).colorScheme.secondary.withValues(alpha: 0.06)
+                              : Theme.of(
+                                  context,
+                                ).colorScheme.secondary.withValues(alpha: 0.06),
                         ),
                         child: Icon(
                           Icons.keyboard_arrow_down,
@@ -3633,46 +3498,10 @@ class _FoldersScreenState extends State<FoldersScreen>
                   }
                 },
               ),
-              PopupMenuButton<OrdenCarpetas>(
+              IconButton(
                 icon: const Icon(Icons.sort, size: 28),
                 tooltip: LocaleProvider.tr('filters'),
-                onSelected: (orden) async {
-                  setState(() {
-                    if (_selectedPlaylist != null) {
-                      _ordenPlaylist = orden;
-                    } else {
-                      _orden = orden;
-                    }
-                  });
-                  await _ordenarCanciones();
-                  _saveOrderFilter();
-                },
-                itemBuilder: (context) => [
-                  PopupMenuItem(
-                    value: OrdenCarpetas.normal,
-                    child: TranslatedText('default'),
-                  ),
-                  PopupMenuItem(
-                    value: OrdenCarpetas.ultimoAgregado,
-                    child: TranslatedText('invert_order'),
-                  ),
-                  PopupMenuItem(
-                    value: OrdenCarpetas.alfabetico,
-                    child: TranslatedText('alphabetical_az'),
-                  ),
-                  PopupMenuItem(
-                    value: OrdenCarpetas.invertido,
-                    child: TranslatedText('alphabetical_za'),
-                  ),
-                  PopupMenuItem(
-                    value: OrdenCarpetas.fechaEdicionDesc,
-                    child: TranslatedText('edit_date_newest_first'),
-                  ),
-                  PopupMenuItem(
-                    value: OrdenCarpetas.fechaEdicionAsc,
-                    child: TranslatedText('edit_date_oldest_first'),
-                  ),
-                ],
+                onPressed: _showSortOptionsDialog,
               ),
             ],
           ],
@@ -3685,17 +3514,17 @@ class _FoldersScreenState extends State<FoldersScreen>
                 builder: (context, lang, child) {
                   final colorScheme = colorSchemeNotifier.value;
                   final isAmoled = colorScheme == AppColorScheme.amoled;
-                  final innerDark =
+                  final isDark =
                       Theme.of(context).brightness == Brightness.dark;
                   final barColor = isAmoled
                       ? Colors.white.withAlpha(20)
-                      : innerDark
+                      : isDark
                       ? Theme.of(
                           context,
-                        ).colorScheme.onSecondary.withValues(alpha: 0.5)
+                        ).colorScheme.secondary.withValues(alpha: 0.06)
                       : Theme.of(
                           context,
-                        ).colorScheme.secondaryContainer.withValues(alpha: 0.5);
+                        ).colorScheme.secondary.withValues(alpha: 0.07);
 
                   return TextField(
                     controller: _searchController,
@@ -3804,14 +3633,15 @@ class _FoldersScreenState extends State<FoldersScreen>
                           final isAmoled = colorScheme == AppColorScheme.amoled;
                           final isDark =
                               Theme.of(context).brightness == Brightness.dark;
-                          final cardColor = isAmoled && isDark
+                          final cardColor = isAmoled
                               ? Colors.white.withAlpha(20)
                               : isDark
                               ? Theme.of(
                                   context,
-                                ).colorScheme.onSecondary.withValues(alpha: 0.5)
-                              : Theme.of(context).colorScheme.secondaryContainer
-                                    .withValues(alpha: 0.5);
+                                ).colorScheme.secondary.withValues(alpha: 0.06)
+                              : Theme.of(
+                                  context,
+                                ).colorScheme.secondary.withValues(alpha: 0.07);
 
                           return ListView.builder(
                             controller: _scrollController,
@@ -3843,11 +3673,11 @@ class _FoldersScreenState extends State<FoldersScreen>
 
                               BorderRadius borderRadius;
                               if (isOnly) {
-                                borderRadius = BorderRadius.circular(16);
+                                borderRadius = BorderRadius.circular(20);
                               } else if (isFirst) {
                                 borderRadius = const BorderRadius.only(
-                                  topLeft: Radius.circular(16),
-                                  topRight: Radius.circular(16),
+                                  topLeft: Radius.circular(20),
+                                  topRight: Radius.circular(20),
                                   bottomLeft: Radius.circular(4),
                                   bottomRight: Radius.circular(4),
                                 );
@@ -3855,8 +3685,8 @@ class _FoldersScreenState extends State<FoldersScreen>
                                 borderRadius = const BorderRadius.only(
                                   topLeft: Radius.circular(4),
                                   topRight: Radius.circular(4),
-                                  bottomLeft: Radius.circular(16),
-                                  bottomRight: Radius.circular(16),
+                                  bottomLeft: Radius.circular(20),
+                                  bottomRight: Radius.circular(20),
                                 );
                               } else {
                                 borderRadius = BorderRadius.circular(4);
@@ -3905,7 +3735,12 @@ class _FoldersScreenState extends State<FoldersScreen>
                                       bottom: isLast ? 0 : 4,
                                     ),
                                     child: Card(
-                                      color: cardColor,
+                                      color: isCurrent
+                                          ? Theme.of(context)
+                                                .colorScheme
+                                                .primary
+                                                .withAlpha(isDark ? 40 : 25)
+                                          : cardColor,
                                       margin: EdgeInsets.zero,
                                       elevation: 0,
                                       shape: RoundedRectangleBorder(
@@ -4054,40 +3889,48 @@ class _FoldersScreenState extends State<FoldersScreen>
           ),
         ),
         trailing: !_isSelecting
-            ? IconButton(
-                icon: Icon(
-                  isCurrent
-                      ? (playing
-                            ? Icons.pause_rounded
-                            : Icons.play_arrow_rounded)
-                      : Icons.play_arrow_rounded,
-                  fill: 1,
-                  grade: 200,
-                  color: isCurrent
-                      ? Theme.of(context).colorScheme.primary
-                      : null,
+            ? Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: isAmoledTheme
+                      ? Colors.white.withAlpha(10)
+                      : Theme.of(context).brightness == Brightness.dark
+                      ? Colors.white.withAlpha(15)
+                      : Theme.of(
+                          context,
+                        ).colorScheme.secondary.withValues(alpha: 0.08),
+                  shape: BoxShape.circle,
                 ),
-                onPressed: isIgnored
-                    ? null
-                    : () {
-                        if (isCurrent) {
-                          playing
-                              ? (audioHandler as MyAudioHandler).pause()
-                              : (audioHandler as MyAudioHandler).play();
-                        } else {
-                          _onSongSelected(song);
-                        }
-                      },
+                child: IconButton(
+                  icon: Icon(
+                    isCurrent
+                        ? (playing
+                              ? Icons.pause_rounded
+                              : Icons.play_arrow_rounded)
+                        : Icons.play_arrow_rounded,
+                    fill: 1,
+                    grade: 200,
+                    color: isCurrent
+                        ? Theme.of(context).colorScheme.primary
+                        : null,
+                  ),
+                  onPressed: isIgnored
+                      ? null
+                      : () {
+                          if (isCurrent) {
+                            playing
+                                ? (audioHandler as MyAudioHandler).pause()
+                                : (audioHandler as MyAudioHandler).play();
+                          } else {
+                            _onSongSelected(song);
+                          }
+                        },
+                ),
               )
             : null,
         selected: isCurrent,
-        selectedTileColor: isCurrent
-            ? (isAmoledTheme
-                  ? Colors.transparent
-                  : Theme.of(
-                      context,
-                    ).colorScheme.primaryContainer.withValues(alpha: 0.8))
-            : null,
+        selectedTileColor: Colors.transparent,
         shape: borderRadius != null
             ? RoundedRectangleBorder(borderRadius: borderRadius)
             : null,
@@ -4096,88 +3939,247 @@ class _FoldersScreenState extends State<FoldersScreen>
   }
 
   Future<void> _handleAddToPlaylistMassive(BuildContext context) async {
-    final playlists = await PlaylistsDB()
-        .getAllPlaylists(); // List<PlaylistModel>
+    final playlists = await PlaylistsDB().getAllPlaylists();
+    final TextEditingController controller = TextEditingController();
+
     if (!context.mounted) return;
-    final TextEditingController playlistNameController =
-        TextEditingController();
-    final selectedPlaylistId = await showDialog<String>(
+
+    showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
       builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setStateDialog) => SimpleDialog(
-            title: TranslatedText('select_playlist'),
-            children: [
-              if (playlists.isNotEmpty) ...[
-                for (final playlist in playlists)
-                  SimpleDialogOption(
-                    onPressed: () {
-                      Navigator.of(context).pop(playlist.id);
-                    },
-                    child: Text(playlist.name),
-                  ),
-                const Divider(),
-              ],
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 4,
-                ),
-                child: TextField(
-                  controller: playlistNameController,
-                  decoration: InputDecoration(
-                    hintText: LocaleProvider.tr('new_playlist_name'),
-                  ),
-                  autofocus: playlists.isEmpty,
-                ),
+        final colorScheme = colorSchemeNotifier.value;
+        final isAmoled = colorScheme == AppColorScheme.amoled;
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+        final barColor = isAmoled
+            ? Colors.white.withAlpha(20)
+            : isDark
+            ? Theme.of(context).colorScheme.secondary.withValues(alpha: 0.06)
+            : Theme.of(context).colorScheme.secondary.withValues(alpha: 0.07);
+
+        return Container(
+          decoration: BoxDecoration(
+            color: Theme.of(context).scaffoldBackgroundColor,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          child: SafeArea(
+            child: Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+                left: 16,
+                right: 16,
+                top: 12,
               ),
-              TextButton.icon(
-                icon: const Icon(Icons.add),
-                label: TranslatedText('create_playlist'),
-                onPressed: () async {
-                  final name = playlistNameController.text.trim();
-                  if (name.isEmpty) return;
-                  final id = await PlaylistsDB().createPlaylist(name);
-                  setStateDialog(() {
-                    playlists.insert(
-                      0,
-                      hive_model.PlaylistModel(
-                        id: id,
-                        name: name,
-                        songPaths: [],
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurfaceVariant.withAlpha(100),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    LocaleProvider.tr('save_to_playlist'),
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  if (playlists.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 24),
+                      child: Column(
+                        children: [
+                          Icon(
+                            Icons.playlist_add_rounded,
+                            size: 48,
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.primary.withAlpha(150),
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            LocaleProvider.tr('no_playlists_yet'),
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
                       ),
-                    );
-                  });
-                  playlistNameController.clear();
+                    ),
+                  if (playlists.isNotEmpty)
+                    Flexible(
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxHeight: MediaQuery.of(context).size.height * 0.4,
+                        ),
+                        child: ListView.builder(
+                          shrinkWrap: true,
+                          padding: EdgeInsets.zero,
+                          itemCount: playlists.length,
+                          itemBuilder: (context, i) {
+                            final pl = playlists[i];
+                            final bool isFirst = i == 0;
+                            final bool isLast = i == playlists.length - 1;
+                            final bool isOnly = playlists.length == 1;
 
-                  // Notificar a la pantalla de inicio que debe actualizar las playlists
-                  playlistsShouldReload.value = !playlistsShouldReload.value;
+                            BorderRadius borderRadius;
+                            if (isOnly) {
+                              borderRadius = BorderRadius.circular(20);
+                            } else if (isFirst) {
+                              borderRadius = const BorderRadius.only(
+                                topLeft: Radius.circular(20),
+                                topRight: Radius.circular(20),
+                                bottomLeft: Radius.circular(4),
+                                bottomRight: Radius.circular(4),
+                              );
+                            } else if (isLast) {
+                              borderRadius = const BorderRadius.only(
+                                topLeft: Radius.circular(4),
+                                topRight: Radius.circular(4),
+                                bottomLeft: Radius.circular(20),
+                                bottomRight: Radius.circular(20),
+                              );
+                            } else {
+                              borderRadius = BorderRadius.circular(4);
+                            }
 
-                  if (context.mounted) {
-                    Navigator.of(context).pop(id);
-                  }
-                },
+                            return Padding(
+                              padding: EdgeInsets.only(bottom: isLast ? 0 : 4),
+                              child: Card(
+                                color: barColor,
+                                margin: EdgeInsets.zero,
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: borderRadius,
+                                ),
+                                child: ListTile(
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: borderRadius,
+                                  ),
+                                  leading: _buildPlaylistArtworkGrid(pl),
+                                  title: Text(
+                                    pl.name,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.titleMedium,
+                                  ),
+                                  onTap: () async {
+                                    final selectedSongs = _displaySongs.where(
+                                      (s) =>
+                                          _selectedSongPaths.contains(s.data),
+                                    );
+                                    for (final song in selectedSongs) {
+                                      await PlaylistsDB().addSongToPlaylist(
+                                        pl.id,
+                                        song,
+                                      );
+                                    }
+                                    setState(() {
+                                      _isSelecting = false;
+                                      _selectedSongPaths.clear();
+                                    });
+                                    playlistsShouldReload.value =
+                                        !playlistsShouldReload.value;
+                                    if (context.mounted) {
+                                      Navigator.of(context).pop();
+                                    }
+                                  },
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: controller,
+                    autofocus: false,
+                    decoration: InputDecoration(
+                      hintText: LocaleProvider.tr('new_playlist'),
+                      prefixIcon: const Icon(Icons.playlist_add),
+                      suffixIcon: IconButton(
+                        icon: const Icon(Icons.check_rounded),
+                        onPressed: () async {
+                          final name = controller.text.trim();
+                          if (name.isNotEmpty) {
+                            final id = await PlaylistsDB().createPlaylist(name);
+                            final selectedSongs = _displaySongs.where(
+                              (s) => _selectedSongPaths.contains(s.data),
+                            );
+                            for (final song in selectedSongs) {
+                              await PlaylistsDB().addSongToPlaylist(id, song);
+                            }
+                            setState(() {
+                              _isSelecting = false;
+                              _selectedSongPaths.clear();
+                            });
+                            playlistsShouldReload.value =
+                                !playlistsShouldReload.value;
+                            if (context.mounted) Navigator.of(context).pop();
+                          }
+                        },
+                      ),
+                      filled: true,
+                      fillColor: barColor,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(20),
+                        borderSide: BorderSide.none,
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(20),
+                        borderSide: BorderSide.none,
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(20),
+                        borderSide: BorderSide.none,
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 16,
+                      ),
+                    ),
+                    onSubmitted: (value) async {
+                      final name = value.trim();
+                      if (name.isNotEmpty) {
+                        final id = await PlaylistsDB().createPlaylist(name);
+                        final selectedSongs = _displaySongs.where(
+                          (s) => _selectedSongPaths.contains(s.data),
+                        );
+                        for (final song in selectedSongs) {
+                          await PlaylistsDB().addSongToPlaylist(id, song);
+                        }
+                        setState(() {
+                          _isSelecting = false;
+                          _selectedSongPaths.clear();
+                        });
+                        playlistsShouldReload.value =
+                            !playlistsShouldReload.value;
+                        if (context.mounted) Navigator.of(context).pop();
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                ],
               ),
-            ],
+            ),
           ),
         );
       },
     );
-    if (selectedPlaylistId != null) {
-      final selectedSongs = _displaySongs.where(
-        (s) => _selectedSongPaths.contains(s.data),
-      );
-      for (final song in selectedSongs) {
-        await PlaylistsDB().addSongToPlaylist(selectedPlaylistId, song);
-      }
-      setState(() {
-        _isSelecting = false;
-        _selectedSongPaths.clear();
-      });
-
-      // Notificar a la pantalla de inicio que debe actualizar las playlists
-      playlistsShouldReload.value = !playlistsShouldReload.value;
-    }
   }
 
   Future<void> _handleCopyToFolder(BuildContext context) async {
@@ -4226,7 +4228,7 @@ class _FoldersScreenState extends State<FoldersScreen>
 
         return AlertDialog(
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(20),
             side: isAmoled && isDark
                 ? const BorderSide(color: Colors.white, width: 1)
                 : BorderSide.none,
@@ -4267,7 +4269,7 @@ class _FoldersScreenState extends State<FoldersScreen>
                   onTap: () {
                     Navigator.of(context).pop(true);
                   },
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(20),
                   child: Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(16),
@@ -4276,8 +4278,8 @@ class _FoldersScreenState extends State<FoldersScreen>
                           ? Colors.red.withValues(alpha: 0.2)
                           : Theme.of(context).colorScheme.errorContainer,
                       borderRadius: const BorderRadius.only(
-                        topLeft: Radius.circular(16),
-                        topRight: Radius.circular(16),
+                        topLeft: Radius.circular(20),
+                        topRight: Radius.circular(20),
                         bottomLeft: Radius.circular(4),
                         bottomRight: Radius.circular(4),
                       ),
@@ -4332,7 +4334,7 @@ class _FoldersScreenState extends State<FoldersScreen>
                   onTap: () {
                     Navigator.of(context).pop(false);
                   },
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(20),
                   child: Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(16),
@@ -4341,8 +4343,8 @@ class _FoldersScreenState extends State<FoldersScreen>
                           ? Colors.white.withValues(alpha: 0.1)
                           : Theme.of(context).colorScheme.secondaryContainer,
                       borderRadius: const BorderRadius.only(
-                        bottomLeft: Radius.circular(16),
-                        bottomRight: Radius.circular(16),
+                        bottomLeft: Radius.circular(20),
+                        bottomRight: Radius.circular(20),
                         topLeft: Radius.circular(4),
                         topRight: Radius.circular(4),
                       ),
@@ -4684,7 +4686,7 @@ class _FoldersScreenState extends State<FoldersScreen>
             builder: (context, progress, child) {
               return AlertDialog(
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(20),
                 ),
                 content: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -4898,79 +4900,219 @@ class _FoldersScreenState extends State<FoldersScreen>
     BuildContext context,
     SongModel song,
   ) async {
-    final playlists = await PlaylistsDB()
-        .getAllPlaylists(); // List<PlaylistModel>
+    final playlists = await PlaylistsDB().getAllPlaylists();
+    final TextEditingController controller = TextEditingController();
+
     if (!context.mounted) return;
-    final TextEditingController playlistNameController =
-        TextEditingController();
-    final selectedPlaylistId = await showDialog<String>(
+
+    showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
       builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setStateDialog) => SimpleDialog(
-            title: TranslatedText('select_playlist'),
-            children: [
-              if (playlists.isNotEmpty) ...[
-                for (final playlist in playlists)
-                  SimpleDialogOption(
-                    onPressed: () {
-                      Navigator.of(context).pop(playlist.id);
-                    },
-                    child: Text(playlist.name),
-                  ),
-                const Divider(),
-              ],
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 4,
-                ),
-                child: TextField(
-                  controller: playlistNameController,
-                  decoration: InputDecoration(
-                    hintText: LocaleProvider.tr('new_playlist_name'),
-                  ),
-                  autofocus: playlists.isEmpty,
-                ),
+        final colorScheme = colorSchemeNotifier.value;
+        final isAmoled = colorScheme == AppColorScheme.amoled;
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+        final barColor = isAmoled
+            ? Colors.white.withAlpha(20)
+            : isDark
+            ? Theme.of(context).colorScheme.secondary.withValues(alpha: 0.06)
+            : Theme.of(context).colorScheme.secondary.withValues(alpha: 0.07);
+
+        return Container(
+          decoration: BoxDecoration(
+            color: Theme.of(context).scaffoldBackgroundColor,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          child: SafeArea(
+            child: Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+                left: 16,
+                right: 16,
+                top: 12,
               ),
-              TextButton.icon(
-                icon: const Icon(Icons.add),
-                label: TranslatedText('create_playlist'),
-                onPressed: () async {
-                  final name = playlistNameController.text.trim();
-                  if (name.isEmpty) return;
-                  final id = await PlaylistsDB().createPlaylist(name);
-                  setStateDialog(() {
-                    playlists.insert(
-                      0,
-                      hive_model.PlaylistModel(
-                        id: id,
-                        name: name,
-                        songPaths: [],
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurfaceVariant.withAlpha(100),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    LocaleProvider.tr('save_to_playlist'),
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  if (playlists.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 24),
+                      child: Column(
+                        children: [
+                          Icon(
+                            Icons.playlist_add_rounded,
+                            size: 48,
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.primary.withAlpha(150),
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            LocaleProvider.tr('no_playlists_yet'),
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
                       ),
-                    );
-                  });
-                  playlistNameController.clear();
+                    ),
+                  if (playlists.isNotEmpty)
+                    Flexible(
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxHeight: MediaQuery.of(context).size.height * 0.4,
+                        ),
+                        child: ListView.builder(
+                          shrinkWrap: true,
+                          padding: EdgeInsets.zero,
+                          itemCount: playlists.length,
+                          itemBuilder: (context, i) {
+                            final pl = playlists[i];
+                            final bool isFirst = i == 0;
+                            final bool isLast = i == playlists.length - 1;
+                            final bool isOnly = playlists.length == 1;
 
-                  // Notificar a la pantalla de inicio que debe actualizar las playlists
-                  playlistsShouldReload.value = !playlistsShouldReload.value;
+                            BorderRadius borderRadius;
+                            if (isOnly) {
+                              borderRadius = BorderRadius.circular(20);
+                            } else if (isFirst) {
+                              borderRadius = const BorderRadius.only(
+                                topLeft: Radius.circular(20),
+                                topRight: Radius.circular(20),
+                                bottomLeft: Radius.circular(4),
+                                bottomRight: Radius.circular(4),
+                              );
+                            } else if (isLast) {
+                              borderRadius = const BorderRadius.only(
+                                topLeft: Radius.circular(4),
+                                topRight: Radius.circular(4),
+                                bottomLeft: Radius.circular(20),
+                                bottomRight: Radius.circular(20),
+                              );
+                            } else {
+                              borderRadius = BorderRadius.circular(4);
+                            }
 
-                  if (context.mounted) {
-                    Navigator.of(context).pop(id);
-                  }
-                },
+                            return Padding(
+                              padding: EdgeInsets.only(bottom: isLast ? 0 : 4),
+                              child: Card(
+                                color: barColor,
+                                margin: EdgeInsets.zero,
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: borderRadius,
+                                ),
+                                child: ListTile(
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: borderRadius,
+                                  ),
+                                  leading: _buildPlaylistArtworkGrid(pl),
+                                  title: Text(
+                                    pl.name,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.titleMedium,
+                                  ),
+                                  onTap: () async {
+                                    await PlaylistsDB().addSongToPlaylist(
+                                      pl.id,
+                                      song,
+                                    );
+                                    playlistsShouldReload.value =
+                                        !playlistsShouldReload.value;
+                                    if (context.mounted) {
+                                      Navigator.of(context).pop();
+                                    }
+                                  },
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: controller,
+                    autofocus: false,
+                    decoration: InputDecoration(
+                      hintText: LocaleProvider.tr('new_playlist'),
+                      prefixIcon: const Icon(Icons.playlist_add),
+                      suffixIcon: IconButton(
+                        icon: const Icon(Icons.check_rounded),
+                        onPressed: () async {
+                          final name = controller.text.trim();
+                          if (name.isNotEmpty) {
+                            final id = await PlaylistsDB().createPlaylist(name);
+                            await PlaylistsDB().addSongToPlaylist(id, song);
+                            playlistsShouldReload.value =
+                                !playlistsShouldReload.value;
+                            if (context.mounted) Navigator.of(context).pop();
+                          }
+                        },
+                      ),
+                      filled: true,
+                      fillColor: barColor,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(20),
+                        borderSide: BorderSide.none,
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(20),
+                        borderSide: BorderSide.none,
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(20),
+                        borderSide: BorderSide.none,
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 16,
+                      ),
+                    ),
+                    onSubmitted: (value) async {
+                      final name = value.trim();
+                      if (name.isNotEmpty) {
+                        final id = await PlaylistsDB().createPlaylist(name);
+                        await PlaylistsDB().addSongToPlaylist(id, song);
+                        playlistsShouldReload.value =
+                            !playlistsShouldReload.value;
+                        if (context.mounted) Navigator.of(context).pop();
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                ],
               ),
-            ],
+            ),
           ),
         );
       },
     );
-    if (selectedPlaylistId != null) {
-      await PlaylistsDB().addSongToPlaylist(selectedPlaylistId, song);
-
-      // Notificar a la pantalla de inicio que debe actualizar las playlists
-      playlistsShouldReload.value = !playlistsShouldReload.value;
-    }
   }
 
   Future<bool> _deleteFolderAndSongs(String folderKey) async {
@@ -5436,135 +5578,260 @@ class _FoldersScreenState extends State<FoldersScreen>
           builder: (context, colorScheme, child) {
             final isAmoled = colorScheme == AppColorScheme.amoled;
             final isDark = Theme.of(context).brightness == Brightness.dark;
+            final primaryColor = Theme.of(context).colorScheme.primary;
 
             return StatefulBuilder(
               builder: (context, setStateDialog) {
-                final filtered = availableSongs.where((s) {
-                  final title = s.title.toLowerCase();
-                  final artist = (s.artist ?? "").toLowerCase();
-                  final q = query.toLowerCase();
-                  return title.contains(q) || artist.contains(q);
-                }).toList();
+                // Optimizar filtrado para evitar procesar toda la lista en cada frame si es posible
+                final filtered = query.isEmpty
+                    ? availableSongs
+                    : availableSongs.where((s) {
+                        final title = s.title.toLowerCase();
+                        final artist = (s.artist ?? "").toLowerCase();
+                        final q = query.toLowerCase();
+                        return title.contains(q) || artist.contains(q);
+                      }).toList();
 
                 return AlertDialog(
+                  backgroundColor: isAmoled && isDark
+                      ? Colors.black
+                      : Theme.of(context).colorScheme.surface,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(28),
                     side: isAmoled && isDark
-                        ? const BorderSide(color: Colors.white, width: 1)
+                        ? const BorderSide(color: Colors.white24, width: 1)
                         : BorderSide.none,
                   ),
-                  title: TranslatedText('add_songs'),
+                  contentPadding: const EdgeInsets.fromLTRB(0, 24, 0, 8),
                   content: SizedBox(
-                    width: double.maxFinite,
-                    height: 500,
-                    child: Column(
-                      children: [
-                        TextField(
-                          decoration: InputDecoration(
-                            hintText: LocaleProvider.tr('search_songs'),
-                            prefixIcon: const Icon(Icons.search),
+                    width: 500, // Forzar ancho
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxHeight: MediaQuery.of(context).size.height * 0.7,
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.playlist_add, size: 32),
+                          const SizedBox(height: 16),
+                          TranslatedText(
+                            'add_songs',
+                            style: TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.w500,
+                              color: Theme.of(context).colorScheme.onSurface,
+                            ),
                           ),
-                          onChanged: (v) {
-                            setStateDialog(() {
-                              query = v;
-                            });
-                          },
-                        ),
-                        const SizedBox(height: 10),
-                        Expanded(
-                          child: filtered.isEmpty
-                              ? Center(child: TranslatedText('no_songs'))
-                              : ListView.builder(
-                                  itemCount: filtered.length,
-                                  itemBuilder: (context, index) {
-                                    final song = filtered[index];
-                                    final isSelected = selectedPaths.contains(
-                                      song.data,
-                                    );
-                                    return ListTile(
-                                      dense: true,
-                                      onTap: () {
-                                        setStateDialog(() {
-                                          if (isSelected) {
-                                            selectedPaths.remove(song.data);
-                                          } else {
-                                            selectedPaths.add(song.data);
-                                          }
-                                        });
-                                      },
-                                      leading: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Checkbox(
-                                            value: isSelected,
-                                            onChanged: (v) {
+                          const SizedBox(height: 16),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 24),
+                            child: TextField(
+                              decoration: InputDecoration(
+                                hintText: LocaleProvider.tr('search_songs'),
+                                prefixIcon: const Icon(Icons.search),
+                                filled: true,
+                                fillColor: isDark
+                                    ? Colors.white.withAlpha(20)
+                                    : Colors.black.withAlpha(10),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(20),
+                                  borderSide: BorderSide.none,
+                                ),
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 12,
+                                ),
+                              ),
+                              onChanged: (v) {
+                                setStateDialog(() {
+                                  query = v;
+                                });
+                              },
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          Flexible(
+                            child: Container(
+                              margin: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                              ),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(20),
+                                color: isDark
+                                    ? Colors.white.withAlpha(10)
+                                    : Colors.black.withAlpha(5),
+                              ),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(20),
+                                child: filtered.isEmpty
+                                    ? Center(
+                                        child: Padding(
+                                          padding: const EdgeInsets.all(24.0),
+                                          child: Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(
+                                                Icons.music_off_rounded,
+                                                size: 48,
+                                                color: Theme.of(context)
+                                                    .colorScheme
+                                                    .onSurface
+                                                    .withAlpha(100),
+                                              ),
+                                              const SizedBox(height: 12),
+                                              TranslatedText(
+                                                'no_songs',
+                                                style: TextStyle(
+                                                  color: Theme.of(context)
+                                                      .colorScheme
+                                                      .onSurface
+                                                      .withAlpha(150),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      )
+                                    : ListView.builder(
+                                        padding: const EdgeInsets.symmetric(
+                                          vertical: 8,
+                                        ),
+                                        itemCount: filtered.length,
+                                        itemBuilder: (context, index) {
+                                          final song = filtered[index];
+                                          final isSelected = selectedPaths
+                                              .contains(song.data);
+                                          return ListTile(
+                                            onTap: () {
                                               setStateDialog(() {
-                                                if (v == true) {
-                                                  selectedPaths.add(song.data);
-                                                } else {
+                                                if (isSelected) {
                                                   selectedPaths.remove(
                                                     song.data,
                                                   );
+                                                } else {
+                                                  selectedPaths.add(song.data);
                                                 }
                                               });
                                             },
-                                          ),
-                                          ClipRRect(
-                                            borderRadius: BorderRadius.circular(
-                                              8,
-                                            ),
-                                            child: QueryArtworkWidget(
-                                              id: song.id,
-                                              type: ArtworkType.AUDIO,
-                                              artworkBorder:
+                                            leading: ClipRRect(
+                                              borderRadius:
                                                   BorderRadius.circular(8),
-                                              artworkHeight: 40,
-                                              artworkWidth: 40,
-                                              keepOldArtwork: true,
-                                              nullArtworkWidget: Container(
-                                                width: 40,
-                                                height: 40,
-                                                color: Theme.of(context)
-                                                    .colorScheme
-                                                    .surfaceContainerHighest,
-                                                child: const Icon(
-                                                  Icons.music_note,
+                                              child: QueryArtworkWidget(
+                                                id: song.id,
+                                                type: ArtworkType.AUDIO,
+                                                artworkBorder:
+                                                    BorderRadius.circular(8),
+                                                artworkHeight: 40,
+                                                artworkWidth: 40,
+                                                keepOldArtwork: true,
+                                                nullArtworkWidget: Container(
+                                                  width: 40,
+                                                  height: 40,
+                                                  color: primaryColor.withAlpha(
+                                                    30,
+                                                  ),
+                                                  child: Icon(
+                                                    Icons.music_note,
+                                                    color: primaryColor,
+                                                    size: 20,
+                                                  ),
                                                 ),
                                               ),
                                             ),
-                                          ),
-                                        ],
+                                            title: Text(
+                                              song.title,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: const TextStyle(
+                                                fontSize: 14,
+                                                fontWeight: FontWeight.w500,
+                                              ),
+                                            ),
+                                            subtitle: Text(
+                                              song.artist ??
+                                                  LocaleProvider.tr('unknown'),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                color: Theme.of(context)
+                                                    .colorScheme
+                                                    .onSurface
+                                                    .withAlpha(150),
+                                              ),
+                                            ),
+                                            trailing: Checkbox(
+                                              value: isSelected,
+                                              activeColor: primaryColor,
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(4),
+                                              ),
+                                              onChanged: (v) {
+                                                setStateDialog(() {
+                                                  if (v == true) {
+                                                    selectedPaths.add(
+                                                      song.data,
+                                                    );
+                                                  } else {
+                                                    selectedPaths.remove(
+                                                      song.data,
+                                                    );
+                                                  }
+                                                });
+                                              },
+                                            ),
+                                          );
+                                        },
                                       ),
-                                      title: Text(
-                                        song.title,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      subtitle: Text(
-                                        song.artist ?? "",
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    );
-                                  },
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Padding(
+                            padding: const EdgeInsets.only(
+                              right: 24,
+                              bottom: 8,
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              children: [
+                                TextButton(
+                                  onPressed: () => Navigator.pop(context),
+                                  child: TranslatedText(
+                                    'cancel',
+                                    style: TextStyle(
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.primary,
+                                    ),
+                                  ),
                                 ),
-                        ),
-                      ],
+                                const SizedBox(width: 8),
+                                TextButton(
+                                  onPressed: selectedPaths.isEmpty
+                                      ? null
+                                      : () => Navigator.pop(
+                                          context,
+                                          selectedPaths.toList(),
+                                        ),
+                                  style: TextButton.styleFrom(
+                                    foregroundColor: primaryColor,
+                                  ),
+                                  child: TranslatedText(
+                                    'add',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: TranslatedText('cancel'),
-                    ),
-                    TextButton(
-                      onPressed: selectedPaths.isEmpty
-                          ? null
-                          : () =>
-                                Navigator.pop(context, selectedPaths.toList()),
-                      child: TranslatedText('add'),
-                    ),
-                  ],
                 );
               },
             );
@@ -5590,7 +5857,7 @@ class _FoldersScreenState extends State<FoldersScreen>
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (context) => SafeArea(
         child: Column(
@@ -5636,28 +5903,94 @@ class _FoldersScreenState extends State<FoldersScreen>
     );
     final String? newName = await showDialog<String>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: TranslatedText('rename_playlist'),
-        content: TextField(
-          controller: nameController,
-          autofocus: true,
-          decoration: InputDecoration(
-            hintText: LocaleProvider.tr('playlist_name'),
-          ),
-          onSubmitted: (value) => Navigator.of(context).pop(value.trim()),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: TranslatedText('cancel'),
-          ),
-          TextButton(
-            onPressed: () =>
-                Navigator.of(context).pop(nameController.text.trim()),
-            child: TranslatedText('rename'),
-          ),
-        ],
-      ),
+      builder: (BuildContext context) {
+        return ValueListenableBuilder<AppColorScheme>(
+          valueListenable: colorSchemeNotifier,
+          builder: (context, colorScheme, child) {
+            final isAmoled = colorScheme == AppColorScheme.amoled;
+            final isDark = Theme.of(context).brightness == Brightness.dark;
+            final primaryColor = Theme.of(context).colorScheme.primary;
+
+            return AlertDialog(
+              backgroundColor: isAmoled && isDark
+                  ? Colors.black
+                  : Theme.of(context).colorScheme.surface,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(28),
+                side: isAmoled && isDark
+                    ? const BorderSide(color: Colors.white24, width: 1)
+                    : BorderSide.none,
+              ),
+              contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
+              content: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: 400,
+                  maxHeight: MediaQuery.of(context).size.height * 0.8,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.edit_note_rounded, size: 32),
+                    const SizedBox(height: 16),
+                    TranslatedText(
+                      'rename_playlist',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w500,
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    TextField(
+                      controller: nameController,
+                      autofocus: true,
+                      decoration: InputDecoration(
+                        labelText: LocaleProvider.tr('playlist_name'),
+                        hintText: LocaleProvider.tr('enter_playlist_name'),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        filled: true,
+                        fillColor: isAmoled && isDark
+                            ? Colors.white.withAlpha(10)
+                            : Theme.of(context)
+                                  .colorScheme
+                                  .surfaceContainerHighest
+                                  .withAlpha(100),
+                      ),
+                      onSubmitted: (value) =>
+                          Navigator.of(context).pop(value.trim()),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: TranslatedText(
+                    'cancel',
+                    style: TextStyle(
+                      color: primaryColor,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () =>
+                      Navigator.of(context).pop(nameController.text.trim()),
+                  child: TranslatedText(
+                    'rename',
+                    style: TextStyle(
+                      color: primaryColor,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
 
     if (newName != null && newName.isNotEmpty && newName != playlist.name) {
@@ -5671,27 +6004,99 @@ class _FoldersScreenState extends State<FoldersScreen>
   Future<void> _showDeletePlaylistConfirmation(
     hive_model.PlaylistModel playlist,
   ) async {
-    final bool? confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: TranslatedText('delete_playlist'),
-        content: Text(
-          '${LocaleProvider.tr('delete_playlist_confirm')} "${playlist.name}"?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: TranslatedText('cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: TranslatedText('delete'),
-          ),
-        ],
-      ),
-    );
+    final bool confirmed =
+        await showDialog<bool>(
+          context: context,
+          builder: (BuildContext context) {
+            return ValueListenableBuilder<AppColorScheme>(
+              valueListenable: colorSchemeNotifier,
+              builder: (context, colorScheme, child) {
+                final isAmoled = colorScheme == AppColorScheme.amoled;
+                final isDark = Theme.of(context).brightness == Brightness.dark;
+                final primaryColor = Theme.of(context).colorScheme.primary;
 
-    if (confirm == true) {
+                return AlertDialog(
+                  backgroundColor: isAmoled && isDark
+                      ? Colors.black
+                      : Theme.of(context).colorScheme.surface,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(28),
+                    side: isAmoled && isDark
+                        ? const BorderSide(color: Colors.white24, width: 1)
+                        : BorderSide.none,
+                  ),
+                  contentPadding: const EdgeInsets.fromLTRB(0, 24, 0, 8),
+                  content: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth: 400,
+                      maxHeight: MediaQuery.of(context).size.height * 0.8,
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.delete_sweep_rounded,
+                          size: 32,
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                        const SizedBox(height: 16),
+                        TranslatedText(
+                          'delete_playlist',
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.w500,
+                            color: Theme.of(context).colorScheme.onSurface,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 24),
+                          child: Text(
+                            '${LocaleProvider.tr('delete_playlist_confirm')} "${playlist.name}"?',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSurface.withAlpha(180),
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        _buildDestructiveOption(
+                          context: context,
+                          title: LocaleProvider.tr('delete'),
+                          icon: Icons.delete_forever_rounded,
+                          onTap: () => Navigator.of(context).pop(true),
+                        ),
+                        const SizedBox(height: 16),
+                        Padding(
+                          padding: const EdgeInsets.only(right: 24, bottom: 8),
+                          child: Align(
+                            alignment: Alignment.centerRight,
+                            child: TextButton(
+                              onPressed: () => Navigator.of(context).pop(false),
+                              child: TranslatedText(
+                                'cancel',
+                                style: TextStyle(
+                                  color: primaryColor,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            );
+          },
+        ) ??
+        false;
+
+    if (confirmed) {
       await PlaylistsDB().deletePlaylist(playlist.id);
       playlistsShouldReload.value = !playlistsShouldReload.value;
       await _loadPlaylists();
@@ -6094,7 +6499,7 @@ class _FoldersScreenState extends State<FoldersScreen>
           canPop: false,
           child: AlertDialog(
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(20),
             ),
             content: Column(
               mainAxisSize: MainAxisSize.min,
@@ -6244,7 +6649,7 @@ class _FoldersScreenState extends State<FoldersScreen>
           canPop: false,
           child: AlertDialog(
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(20),
             ),
             content: Column(
               mainAxisSize: MainAxisSize.min,
@@ -6395,7 +6800,7 @@ class _FoldersScreenState extends State<FoldersScreen>
 
             return AlertDialog(
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(20),
                 side: isAmoled && isDark
                     ? const BorderSide(color: Colors.white, width: 1)
                     : BorderSide.none,
@@ -6434,7 +6839,7 @@ class _FoldersScreenState extends State<FoldersScreen>
                     // Tarjeta de aceptar
                     InkWell(
                       onTap: () => Navigator.of(context).pop(),
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: BorderRadius.circular(20),
                       child: Container(
                         width: double.infinity,
                         padding: EdgeInsets.all(16),
@@ -6442,7 +6847,7 @@ class _FoldersScreenState extends State<FoldersScreen>
                           color: isAmoled && isDark
                               ? Colors.white.withValues(alpha: 0.2)
                               : Theme.of(context).colorScheme.primaryContainer,
-                          borderRadius: BorderRadius.circular(16),
+                          borderRadius: BorderRadius.circular(20),
                           border: Border.all(
                             color: isAmoled && isDark
                                 ? Colors.white.withValues(alpha: 0.4)
@@ -6546,4 +6951,90 @@ class _FoldersScreenState extends State<FoldersScreen>
     );
   }
   */
+
+  void _showFolderOptionsModal(
+    BuildContext context,
+    String folderKey,
+    String folderName,
+    bool isIgnored,
+  ) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 12),
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurfaceVariant.withAlpha(100),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 24),
+              ListTile(
+                leading: const Icon(Icons.edit_outlined),
+                title: TranslatedText(
+                  'rename_folder',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                onTap: () async {
+                  Navigator.of(context).pop();
+                  await _showRenameFolderDialog(folderKey, folderName);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.delete_outline),
+                title: TranslatedText(
+                  'delete_folder',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                onTap: () async {
+                  Navigator.of(context).pop();
+                  await _showDeleteFolderConfirmation(folderKey, folderName);
+                },
+              ),
+              ListTile(
+                leading: Icon(
+                  isIgnored
+                      ? Icons.visibility_outlined
+                      : Icons.visibility_off_outlined,
+                ),
+                title: TranslatedText(
+                  isIgnored ? 'unignore_folder' : 'ignore_folder',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                onTap: () async {
+                  Navigator.of(context).pop();
+                  if (isIgnored) {
+                    await _unignoreFolderFlow(folderKey);
+                  } else {
+                    await _ignoreFolderFlow(folderKey);
+                  }
+                },
+              ),
+              const SizedBox(height: 16),
+            ],
+          ),
+        );
+      },
+    );
+  }
 }

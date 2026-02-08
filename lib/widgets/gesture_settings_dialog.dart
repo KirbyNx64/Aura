@@ -59,17 +59,29 @@ class _GestureSettingsDialogState extends State<GestureSettingsDialog> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return AlertDialog(
+      backgroundColor: isAmoled && isDark
+          ? Colors.black
+          : Theme.of(context).colorScheme.surface,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(28),
         side: isAmoled && isDark
-            ? const BorderSide(color: Colors.white, width: 1)
+            ? const BorderSide(color: Colors.white24, width: 1)
             : BorderSide.none,
       ),
-      title: Center(
-        child: Text(
-          LocaleProvider.tr('gesture_settings_title'),
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
+      title: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.gesture_rounded,
+            size: 32,
+            color: Theme.of(context).colorScheme.onSurface,
+          ),
+          const SizedBox(height: 16),
+          Text(
+            LocaleProvider.tr('gesture_settings_title'),
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+        ],
       ),
       content: _isLoading
           ? const SizedBox(
@@ -82,7 +94,11 @@ class _GestureSettingsDialogState extends State<GestureSettingsDialog> {
               children: [
                 Text(
                   LocaleProvider.tr('gesture_settings_desc_dialog'),
-                  style: Theme.of(context).textTheme.bodyMedium,
+                  style: TextStyle(
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withAlpha(180),
+                  ),
                 ),
                 const SizedBox(height: 16),
                 SwitchListTile(
@@ -126,19 +142,40 @@ class _GestureSettingsDialogState extends State<GestureSettingsDialog> {
       actions: _isLoading
           ? []
           : [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: Text(LocaleProvider.tr('cancel')),
-              ),
-              TextButton(
-                onPressed: () async {
-                  await _savePreferences();
-                  if (mounted) {
-                    if (!context.mounted) return;
-                    Navigator.of(context).pop();
-                  }
-                },
-                child: Text(LocaleProvider.tr('ok')),
+              Padding(
+                padding: const EdgeInsets.only(right: 8, bottom: 8),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: Text(
+                        LocaleProvider.tr('cancel'),
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.primary,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    TextButton(
+                      onPressed: () async {
+                        await _savePreferences();
+                        if (mounted) {
+                          if (!context.mounted) return;
+                          Navigator.of(context).pop();
+                        }
+                      },
+                      child: Text(
+                        LocaleProvider.tr('ok'),
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.primary,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ],
     );

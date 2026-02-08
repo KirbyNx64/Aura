@@ -768,8 +768,8 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
     if (_urlVideoResult == null) return const SizedBox.shrink();
 
     final topBorderRadius = const BorderRadius.only(
-      topLeft: Radius.circular(16),
-      topRight: Radius.circular(16),
+      topLeft: Radius.circular(20),
+      topRight: Radius.circular(20),
       bottomLeft: Radius.circular(4),
       bottomRight: Radius.circular(4),
     );
@@ -777,8 +777,8 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
     final bottomBorderRadius = const BorderRadius.only(
       topLeft: Radius.circular(4),
       topRight: Radius.circular(4),
-      bottomLeft: Radius.circular(16),
-      bottomRight: Radius.circular(16),
+      bottomLeft: Radius.circular(20),
+      bottomRight: Radius.circular(20),
     );
 
     return SingleChildScrollView(
@@ -787,9 +787,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
           // Card 1: Información (Thumbnail, Título, Artista)
           Card(
             color: isDark && !isAmoled
-                ? Theme.of(
-                    context,
-                  ).colorScheme.secondaryContainer.withAlpha(160)
+                ? Theme.of(context).colorScheme.secondary.withValues(alpha: 0.2)
                 : isAmoled
                 ? Colors.white.withAlpha(40)
                 : Theme.of(context).colorScheme.secondaryContainer,
@@ -803,7 +801,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                   context: context,
                   shape: const RoundedRectangleBorder(
                     borderRadius: BorderRadius.vertical(
-                      top: Radius.circular(16),
+                      top: Radius.circular(20),
                     ),
                   ),
                   builder: (context) {
@@ -1064,9 +1062,10 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                           : isDark
                           ? Theme.of(
                               context,
-                            ).colorScheme.onSecondary.withValues(alpha: 0.5)
-                          : Theme.of(context).colorScheme.secondaryContainer
-                                .withValues(alpha: 0.5);
+                            ).colorScheme.secondary.withValues(alpha: 0.06)
+                          : Theme.of(
+                              context,
+                            ).colorScheme.secondary.withValues(alpha: 0.07);
 
                       final bool isFirst = index == 0;
                       final bool isLast =
@@ -1075,11 +1074,11 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
 
                       BorderRadius borderRadius;
                       if (isOnly) {
-                        borderRadius = BorderRadius.circular(16);
+                        borderRadius = BorderRadius.circular(20);
                       } else if (isFirst) {
                         borderRadius = const BorderRadius.only(
-                          topLeft: Radius.circular(16),
-                          topRight: Radius.circular(16),
+                          topLeft: Radius.circular(20),
+                          topRight: Radius.circular(20),
                           bottomLeft: Radius.circular(4),
                           bottomRight: Radius.circular(4),
                         );
@@ -1087,8 +1086,8 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                         borderRadius = const BorderRadius.only(
                           topLeft: Radius.circular(4),
                           topRight: Radius.circular(4),
-                          bottomLeft: Radius.circular(16),
-                          bottomRight: Radius.circular(16),
+                          bottomLeft: Radius.circular(20),
+                          bottomRight: Radius.circular(20),
                         );
                       } else {
                         borderRadius = BorderRadius.circular(4);
@@ -1110,7 +1109,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                 context: context,
                                 shape: const RoundedRectangleBorder(
                                   borderRadius: BorderRadius.vertical(
-                                    top: Radius.circular(16),
+                                    top: Radius.circular(20),
                                   ),
                                 ),
                                 builder: (context) {
@@ -1396,9 +1395,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
   Future<void> _pickDirectory() async {
     final androidInfo = await DeviceInfoPlugin().androidInfo;
     final sdkInt = androidInfo.version.sdkInt;
-    final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
     if (!mounted) return;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     // Android 9 or lower: use default Music folder
     if (sdkInt <= 28) {
@@ -1409,21 +1406,78 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
       if (!mounted) return;
       showDialog(
         context: context,
-        builder: (context) => AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-            side: isAmoled && isDark
-                ? const BorderSide(color: Colors.white, width: 1)
-                : BorderSide.none,
-          ),
-          title: TranslatedText('info'),
-          content: Text(LocaleProvider.tr('android_9_or_lower')),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: TranslatedText('ok'),
-            ),
-          ],
+        builder: (context) => ValueListenableBuilder<AppColorScheme>(
+          valueListenable: colorSchemeNotifier,
+          builder: (context, colorScheme, child) {
+            final isAmoled = colorScheme == AppColorScheme.amoled;
+            final isDark = Theme.of(context).brightness == Brightness.dark;
+            final primaryColor = Theme.of(context).colorScheme.primary;
+
+            return AlertDialog(
+              backgroundColor: isAmoled && isDark
+                  ? Colors.black
+                  : Theme.of(context).colorScheme.surface,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(28),
+                side: isAmoled && isDark
+                    ? const BorderSide(color: Colors.white24, width: 1)
+                    : BorderSide.none,
+              ),
+              contentPadding: const EdgeInsets.fromLTRB(0, 24, 0, 8),
+              content: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: 400,
+                  maxHeight: MediaQuery.of(context).size.height * 0.8,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.info_rounded, size: 32, color: primaryColor),
+                    const SizedBox(height: 16),
+                    TranslatedText(
+                      'info',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w500,
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: Text(
+                        LocaleProvider.tr('android_9_or_lower'),
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onSurface.withAlpha(160),
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    Padding(
+                      padding: const EdgeInsets.only(right: 24, bottom: 8),
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          child: TranslatedText(
+                            'ok',
+                            style: TextStyle(
+                              color: primaryColor,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
         ),
       );
       return;
@@ -1446,28 +1500,48 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
           builder: (context, colorScheme, child) {
             final isAmoled = colorScheme == AppColorScheme.amoled;
             final isDark = Theme.of(context).brightness == Brightness.dark;
+            final primaryColor = Theme.of(context).colorScheme.primary;
 
             return AlertDialog(
+              backgroundColor: isAmoled && isDark
+                  ? Colors.black
+                  : Theme.of(context).colorScheme.surface,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(28),
                 side: isAmoled && isDark
-                    ? const BorderSide(color: Colors.white, width: 1)
+                    ? const BorderSide(color: Colors.white24, width: 1)
                     : BorderSide.none,
               ),
-              title: Center(
-                child: Text(
-                  LocaleProvider.tr('select_common_folder'),
-                  style: TextStyle(fontWeight: FontWeight.bold),
+              contentPadding: const EdgeInsets.fromLTRB(0, 24, 0, 8),
+              content: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: 400,
+                  maxHeight: MediaQuery.of(context).size.height * 0.8,
                 ),
-              ),
-              content: SizedBox(
-                width: double.maxFinite,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    Icon(
+                      Icons.folder_special_rounded,
+                      size: 32,
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+                    const SizedBox(height: 16),
+                    TranslatedText(
+                      'select_common_folder',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w500,
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
                     if (commonFolders.isEmpty)
                       Padding(
-                        padding: const EdgeInsets.all(16.0),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 24,
+                          vertical: 16,
+                        ),
                         child: Text(
                           LocaleProvider.tr('no_common_folders'),
                           style: Theme.of(context).textTheme.bodyMedium,
@@ -1475,91 +1549,101 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                         ),
                       )
                     else
-                      ...commonFolders.map(
-                        (folder) => ListTile(
-                          leading: const Icon(Icons.folder),
-                          title: Text(
-                            folder.split('/').last.isEmpty
-                                ? folder
-                                : folder.split('/').last,
-                            overflow: TextOverflow.ellipsis,
+                      Flexible(
+                        child: SingleChildScrollView(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: commonFolders
+                                .map(
+                                  (folder) => _buildFolderTile(
+                                    context: context,
+                                    folder: folder,
+                                    isAmoled: isAmoled,
+                                    isDark: isDark,
+                                  ),
+                                )
+                                .toList(),
                           ),
-                          subtitle: Text(
-                            formatFolderPath(folder),
-                            style: Theme.of(context).textTheme.bodySmall,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          onTap: () {
-                            Navigator.of(context).pop();
-                            _selectFolder(folder);
-                          },
                         ),
                       ),
-                    if (commonFolders.isNotEmpty) SizedBox(height: 16),
-                    // Botón para elegir otra carpeta con diseño especial
-                    InkWell(
-                      onTap: () async {
-                        Navigator.of(context).pop();
-                        await _pickNewFolder();
-                      },
-                      borderRadius: BorderRadius.circular(16),
-                      child: Container(
-                        width: double.infinity,
-                        padding: EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: (isAmoled && isDark
-                              ? Colors.white.withAlpha(20)
-                              : Theme.of(context).colorScheme.primaryContainer),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: (isAmoled && isDark
-                                ? Colors.white.withAlpha(40)
-                                : Theme.of(
-                                    context,
-                                  ).colorScheme.primary.withValues(alpha: 0.3)),
-                            width: 2,
+                    const SizedBox(height: 16),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: InkWell(
+                        onTap: () async {
+                          Navigator.of(context).pop();
+                          await _pickNewFolder();
+                        },
+                        borderRadius: BorderRadius.circular(28),
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 16,
                           ),
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(12),
-                                color: (isAmoled && isDark
-                                    ? Colors.white.withAlpha(20)
-                                    : Theme.of(context).colorScheme.primary
-                                          .withValues(alpha: 0.1)),
-                              ),
-                              child: Icon(
-                                Icons.folder_open,
-                                size: 30,
-                                color: (isAmoled && isDark
-                                    ? Colors.white
-                                    : Theme.of(context).colorScheme.primary),
-                              ),
+                          decoration: BoxDecoration(
+                            color: isAmoled && isDark
+                                ? Colors.white.withAlpha(20)
+                                : Theme.of(context).colorScheme.primary,
+                            borderRadius: BorderRadius.circular(28),
+                            border: Border.all(
+                              color: isAmoled && isDark
+                                  ? Colors.white.withAlpha(40)
+                                  : Theme.of(
+                                      context,
+                                    ).colorScheme.primary.withAlpha(40),
+                              width: 1,
                             ),
-                            SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                LocaleProvider.tr('choose_other_folder'),
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                  color: (isAmoled && isDark
-                                      ? Colors.white
-                                      : Theme.of(context).colorScheme.primary),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.folder_open_rounded,
+                                color: isAmoled && isDark
+                                    ? Colors.white
+                                    : Theme.of(context).colorScheme.onPrimary,
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  LocaleProvider.tr('choose_other_folder'),
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                    color: isAmoled && isDark
+                                        ? Colors.white
+                                        : Theme.of(
+                                            context,
+                                          ).colorScheme.onPrimary,
+                                  ),
                                 ),
                               ),
+                              Icon(
+                                Icons.arrow_forward_ios_rounded,
+                                size: 16,
+                                color: isAmoled && isDark
+                                    ? Colors.white
+                                    : Theme.of(context).colorScheme.onPrimary,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Padding(
+                      padding: const EdgeInsets.only(right: 24, bottom: 8),
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          child: TranslatedText(
+                            'cancel',
+                            style: TextStyle(
+                              color: primaryColor,
+                              fontWeight: FontWeight.bold,
                             ),
-                            Icon(
-                              Icons.arrow_forward_ios,
-                              size: 20,
-                              color: (isAmoled && isDark
-                                  ? Colors.white
-                                  : Theme.of(context).colorScheme.primary),
-                            ),
-                          ],
+                          ),
                         ),
                       ),
                     ),
@@ -1570,6 +1654,78 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
           },
         );
       },
+    );
+  }
+
+  Widget _buildFolderTile({
+    required BuildContext context,
+    required String folder,
+    required bool isAmoled,
+    required bool isDark,
+  }) {
+    final folderName = folder.split('/').last.isEmpty
+        ? folder
+        : folder.split('/').last;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      child: InkWell(
+        onTap: () {
+          Navigator.of(context).pop();
+          _selectFolder(folder);
+        },
+        borderRadius: BorderRadius.circular(28),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(28),
+            color: Colors.transparent,
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primary.withAlpha(20),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.folder_rounded,
+                  color: Theme.of(context).colorScheme.primary,
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      folderName,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    Text(
+                      formatFolderPath(folder),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withAlpha(150),
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -1886,104 +2042,118 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                         onPressed: () {
                           showDialog(
                             context: context,
-                            builder: (context) => AlertDialog(
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
-                                side: isAmoled && isDark
-                                    ? const BorderSide(
-                                        color: Colors.white,
-                                        width: 1,
-                                      )
-                                    : BorderSide.none,
-                              ),
-                              title: Center(
-                                child: Text(
-                                  LocaleProvider.tr('info'),
-                                  style: TextStyle(fontWeight: FontWeight.bold),
-                                ),
-                              ),
-                              content: TranslatedText('search_music_in_ytm'),
-                              actions: [
-                                SizedBox(height: 16),
-                                InkWell(
-                                  onTap: () => Navigator.of(context).pop(),
-                                  borderRadius: BorderRadius.circular(16),
-                                  child: Container(
-                                    width: double.infinity,
-                                    padding: EdgeInsets.all(16),
-                                    decoration: BoxDecoration(
-                                      color: isAmoled && isDark
-                                          ? Colors.white.withValues(alpha: 0.2)
+                            builder: (context) =>
+                                ValueListenableBuilder<AppColorScheme>(
+                                  valueListenable: colorSchemeNotifier,
+                                  builder: (context, colorScheme, child) {
+                                    final isAmoled =
+                                        colorScheme == AppColorScheme.amoled;
+                                    final isDark =
+                                        Theme.of(context).brightness ==
+                                        Brightness.dark;
+                                    final primaryColor = Theme.of(
+                                      context,
+                                    ).colorScheme.primary;
+
+                                    return AlertDialog(
+                                      backgroundColor: isAmoled && isDark
+                                          ? Colors.black
                                           : Theme.of(
                                               context,
-                                            ).colorScheme.primaryContainer,
-                                      borderRadius: BorderRadius.circular(16),
-                                      border: Border.all(
-                                        color: isAmoled && isDark
-                                            ? Colors.white.withValues(
-                                                alpha: 0.4,
+                                            ).colorScheme.surface,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(28),
+                                        side: isAmoled && isDark
+                                            ? const BorderSide(
+                                                color: Colors.white24,
+                                                width: 1,
                                               )
-                                            : Theme.of(context)
-                                                  .colorScheme
-                                                  .primary
-                                                  .withValues(alpha: 0.3),
-                                        width: 2,
+                                            : BorderSide.none,
                                       ),
-                                    ),
-                                    child: Row(
-                                      children: [
-                                        Container(
-                                          padding: EdgeInsets.all(8),
-                                          decoration: BoxDecoration(
-                                            borderRadius: BorderRadius.circular(
-                                              12,
-                                            ),
-                                            color: isAmoled && isDark
-                                                ? Colors.white.withValues(
-                                                    alpha: 0.2,
-                                                  )
-                                                : Theme.of(context)
-                                                      .colorScheme
-                                                      .primary
-                                                      .withValues(alpha: 0.1),
-                                          ),
-                                          child: Icon(
-                                            Icons.check_circle,
-                                            size: 30,
-                                            color: isAmoled && isDark
-                                                ? Colors.white
-                                                : Theme.of(
-                                                    context,
-                                                  ).colorScheme.primary,
-                                          ),
+                                      contentPadding: const EdgeInsets.fromLTRB(
+                                        0,
+                                        24,
+                                        0,
+                                        8,
+                                      ),
+                                      content: ConstrainedBox(
+                                        constraints: BoxConstraints(
+                                          maxWidth: 400,
+                                          maxHeight:
+                                              MediaQuery.of(
+                                                context,
+                                              ).size.height *
+                                              0.8,
                                         ),
-                                        SizedBox(width: 12),
-                                        Expanded(
-                                          child: Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            children: [
-                                              Text(
-                                                LocaleProvider.tr('ok'),
+                                        child: Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(
+                                              Icons.info_rounded,
+                                              size: 32,
+                                              color: Theme.of(
+                                                context,
+                                              ).colorScheme.onSurface,
+                                            ),
+                                            const SizedBox(height: 16),
+                                            TranslatedText(
+                                              'info',
+                                              style: TextStyle(
+                                                fontSize: 24,
+                                                fontWeight: FontWeight.w500,
+                                                color: Theme.of(
+                                                  context,
+                                                ).colorScheme.onSurface,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 16),
+                                            Padding(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 24,
+                                                  ),
+                                              child: TranslatedText(
+                                                'search_music_in_ytm',
                                                 style: TextStyle(
-                                                  fontSize: 16,
-                                                  fontWeight: FontWeight.w600,
-                                                  color: isAmoled && isDark
-                                                      ? Colors.white
-                                                      : Theme.of(
-                                                          context,
-                                                        ).colorScheme.primary,
+                                                  fontSize: 14,
+                                                  color: Theme.of(context)
+                                                      .colorScheme
+                                                      .onSurface
+                                                      .withAlpha(160),
+                                                ),
+                                                textAlign: TextAlign.center,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 24),
+                                            Padding(
+                                              padding: const EdgeInsets.only(
+                                                right: 24,
+                                                bottom: 8,
+                                              ),
+                                              child: Align(
+                                                alignment:
+                                                    Alignment.centerRight,
+                                                child: TextButton(
+                                                  onPressed: () => Navigator.of(
+                                                    context,
+                                                  ).pop(),
+                                                  child: TranslatedText(
+                                                    'ok',
+                                                    style: TextStyle(
+                                                      color: primaryColor,
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                    ),
+                                                  ),
                                                 ),
                                               ),
-                                            ],
-                                          ),
+                                            ),
+                                          ],
                                         ),
-                                      ],
-                                    ),
-                                  ),
+                                      ),
+                                    );
+                                  },
                                 ),
-                              ],
-                            ),
                           );
                         },
                       );
@@ -2006,10 +2176,10 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                       : isDark
                       ? Theme.of(
                           context,
-                        ).colorScheme.onSecondary.withValues(alpha: 0.5)
+                        ).colorScheme.secondary.withValues(alpha: 0.06)
                       : Theme.of(
                           context,
-                        ).colorScheme.secondaryContainer.withValues(alpha: 0.5);
+                        ).colorScheme.secondary.withValues(alpha: 0.07);
 
                   return TextField(
                     controller: _controller,
@@ -2125,9 +2295,8 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                 ).colorScheme.primary,
                                 unselectedBackgroundColor: isAmoled
                                     ? Colors.white.withAlpha(30)
-                                    : Theme.of(
-                                        context,
-                                      ).colorScheme.secondaryContainer,
+                                    : Theme.of(context).colorScheme.secondary
+                                          .withValues(alpha: 0.2),
                                 labelStyle: TextStyle(
                                   color: Theme.of(
                                     context,
@@ -2424,12 +2593,14 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                   : isDark
                                                   ? Theme.of(context)
                                                         .colorScheme
-                                                        .onSecondary
-                                                        .withValues(alpha: 0.5)
+                                                        .secondary
+                                                        .withValues(alpha: 0.06)
                                                   : Theme.of(context)
                                                         .colorScheme
-                                                        .secondaryContainer
-                                                        .withValues(alpha: 0.5);
+                                                        .secondary
+                                                        .withValues(
+                                                          alpha: 0.07,
+                                                        );
 
                                               final bool isFirst = idx == 0;
                                               final bool isLast =
@@ -2441,12 +2612,12 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                               BorderRadius borderRadius;
                                               if (isOnly) {
                                                 borderRadius =
-                                                    BorderRadius.circular(16);
+                                                    BorderRadius.circular(20);
                                               } else if (isFirst) {
                                                 borderRadius =
                                                     const BorderRadius.only(
                                                       topLeft: Radius.circular(
-                                                        16,
+                                                        20,
                                                       ),
                                                       topRight: Radius.circular(
                                                         16,
@@ -2466,9 +2637,9 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                         4,
                                                       ),
                                                       bottomLeft:
-                                                          Radius.circular(16),
+                                                          Radius.circular(20),
                                                       bottomRight:
-                                                          Radius.circular(16),
+                                                          Radius.circular(20),
                                                     );
                                               } else {
                                                 borderRadius =
@@ -2743,12 +2914,14 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                   : isDark
                                                   ? Theme.of(context)
                                                         .colorScheme
-                                                        .onSecondary
-                                                        .withValues(alpha: 0.5)
+                                                        .secondary
+                                                        .withValues(alpha: 0.06)
                                                   : Theme.of(context)
                                                         .colorScheme
-                                                        .secondaryContainer
-                                                        .withValues(alpha: 0.5);
+                                                        .secondary
+                                                        .withValues(
+                                                          alpha: 0.07,
+                                                        );
 
                                               final bool isFirst = idx == 0;
                                               final bool isLast =
@@ -2760,15 +2933,15 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                               BorderRadius borderRadius;
                                               if (isOnly) {
                                                 borderRadius =
-                                                    BorderRadius.circular(16);
+                                                    BorderRadius.circular(20);
                                               } else if (isFirst) {
                                                 borderRadius =
                                                     const BorderRadius.only(
                                                       topLeft: Radius.circular(
-                                                        16,
+                                                        20,
                                                       ),
                                                       topRight: Radius.circular(
-                                                        16,
+                                                        20,
                                                       ),
                                                       bottomLeft:
                                                           Radius.circular(4),
@@ -2785,9 +2958,9 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                         4,
                                                       ),
                                                       bottomLeft:
-                                                          Radius.circular(16),
+                                                          Radius.circular(20),
                                                       bottomRight:
-                                                          Radius.circular(16),
+                                                          Radius.circular(20),
                                                     );
                                               } else {
                                                 borderRadius =
@@ -2828,7 +3001,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                                 BorderRadius.vertical(
                                                                   top:
                                                                       Radius.circular(
-                                                                        16,
+                                                                        20,
                                                                       ),
                                                                 ),
                                                           ),
@@ -3048,12 +3221,14 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                   : isDark
                                                   ? Theme.of(context)
                                                         .colorScheme
-                                                        .onSecondary
-                                                        .withValues(alpha: 0.5)
+                                                        .secondary
+                                                        .withValues(alpha: 0.06)
                                                   : Theme.of(context)
                                                         .colorScheme
-                                                        .secondaryContainer
-                                                        .withValues(alpha: 0.5);
+                                                        .secondary
+                                                        .withValues(
+                                                          alpha: 0.07,
+                                                        );
 
                                               final bool isFirst = index == 0;
                                               final bool isLast =
@@ -3065,15 +3240,15 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                               BorderRadius borderRadius;
                                               if (isOnly) {
                                                 borderRadius =
-                                                    BorderRadius.circular(16);
+                                                    BorderRadius.circular(20);
                                               } else if (isFirst) {
                                                 borderRadius =
                                                     const BorderRadius.only(
                                                       topLeft: Radius.circular(
-                                                        16,
+                                                        20,
                                                       ),
                                                       topRight: Radius.circular(
-                                                        16,
+                                                        20,
                                                       ),
                                                       bottomLeft:
                                                           Radius.circular(4),
@@ -3090,9 +3265,9 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                         4,
                                                       ),
                                                       bottomLeft:
-                                                          Radius.circular(16),
+                                                          Radius.circular(20),
                                                       bottomRight:
-                                                          Radius.circular(16),
+                                                          Radius.circular(20),
                                                     );
                                               } else {
                                                 borderRadius =
@@ -3379,15 +3554,15 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                     : isDark
                                                     ? Theme.of(context)
                                                           .colorScheme
-                                                          .onSecondary
+                                                          .secondary
                                                           .withValues(
-                                                            alpha: 0.5,
+                                                            alpha: 0.06,
                                                           )
                                                     : Theme.of(context)
                                                           .colorScheme
-                                                          .secondaryContainer
+                                                          .secondary
                                                           .withValues(
-                                                            alpha: 0.5,
+                                                            alpha: 0.07,
                                                           );
 
                                                 final bool isFirst = idx == 0;
@@ -3400,14 +3575,14 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                 BorderRadius borderRadius;
                                                 if (isOnly) {
                                                   borderRadius =
-                                                      BorderRadius.circular(16);
+                                                      BorderRadius.circular(20);
                                                 } else if (isFirst) {
                                                   borderRadius =
                                                       const BorderRadius.only(
                                                         topLeft:
-                                                            Radius.circular(16),
+                                                            Radius.circular(20),
                                                         topRight:
-                                                            Radius.circular(16),
+                                                            Radius.circular(20),
                                                         bottomLeft:
                                                             Radius.circular(4),
                                                         bottomRight:
@@ -3421,9 +3596,9 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                         topRight:
                                                             Radius.circular(4),
                                                         bottomLeft:
-                                                            Radius.circular(16),
+                                                            Radius.circular(20),
                                                         bottomRight:
-                                                            Radius.circular(16),
+                                                            Radius.circular(20),
                                                       );
                                                 } else {
                                                   borderRadius =
@@ -3505,7 +3680,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                                   BorderRadius.vertical(
                                                                     top:
                                                                         Radius.circular(
-                                                                          16,
+                                                                          20,
                                                                         ),
                                                                   ),
                                                             ),
@@ -3878,15 +4053,15 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                     : isDark
                                                     ? Theme.of(context)
                                                           .colorScheme
-                                                          .onSecondary
+                                                          .secondary
                                                           .withValues(
-                                                            alpha: 0.5,
+                                                            alpha: 0.06,
                                                           )
                                                     : Theme.of(context)
                                                           .colorScheme
-                                                          .secondaryContainer
+                                                          .secondary
                                                           .withValues(
-                                                            alpha: 0.5,
+                                                            alpha: 0.07,
                                                           );
 
                                                 final bool isFirst = idx == 0;
@@ -3899,14 +4074,14 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                 BorderRadius borderRadius;
                                                 if (isOnly) {
                                                   borderRadius =
-                                                      BorderRadius.circular(16);
+                                                      BorderRadius.circular(20);
                                                 } else if (isFirst) {
                                                   borderRadius =
                                                       const BorderRadius.only(
                                                         topLeft:
-                                                            Radius.circular(16),
+                                                            Radius.circular(20),
                                                         topRight:
-                                                            Radius.circular(16),
+                                                            Radius.circular(20),
                                                         bottomLeft:
                                                             Radius.circular(4),
                                                         bottomRight:
@@ -3920,9 +4095,9 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                         topRight:
                                                             Radius.circular(4),
                                                         bottomLeft:
-                                                            Radius.circular(16),
+                                                            Radius.circular(20),
                                                         bottomRight:
-                                                            Radius.circular(16),
+                                                            Radius.circular(20),
                                                       );
                                                 } else {
                                                   borderRadius =
@@ -4004,7 +4179,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                                   BorderRadius.vertical(
                                                                     top:
                                                                         Radius.circular(
-                                                                          16,
+                                                                          20,
                                                                         ),
                                                                   ),
                                                             ),
@@ -4258,12 +4433,14 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                   : isDark
                                                   ? Theme.of(context)
                                                         .colorScheme
-                                                        .onSecondary
-                                                        .withValues(alpha: 0.5)
+                                                        .secondary
+                                                        .withValues(alpha: 0.06)
                                                   : Theme.of(context)
                                                         .colorScheme
-                                                        .secondaryContainer
-                                                        .withValues(alpha: 0.5);
+                                                        .secondary
+                                                        .withValues(
+                                                          alpha: 0.07,
+                                                        );
 
                                               final bool isFirst = idx == 0;
                                               final bool isLast =
@@ -4275,15 +4452,15 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                               BorderRadius borderRadius;
                                               if (isOnly) {
                                                 borderRadius =
-                                                    BorderRadius.circular(16);
+                                                    BorderRadius.circular(20);
                                               } else if (isFirst) {
                                                 borderRadius =
                                                     const BorderRadius.only(
                                                       topLeft: Radius.circular(
-                                                        16,
+                                                        20,
                                                       ),
                                                       topRight: Radius.circular(
-                                                        16,
+                                                        20,
                                                       ),
                                                       bottomLeft:
                                                           Radius.circular(4),
@@ -4300,9 +4477,9 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                         4,
                                                       ),
                                                       bottomLeft:
-                                                          Radius.circular(16),
+                                                          Radius.circular(20),
                                                       bottomRight:
-                                                          Radius.circular(16),
+                                                          Radius.circular(20),
                                                     );
                                               } else {
                                                 borderRadius =
@@ -4517,20 +4694,32 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                             crossAxisAlignment:
                                                 CrossAxisAlignment.start,
                                             children: [
+                                              const SizedBox(height: 24),
                                               Padding(
                                                 padding:
                                                     const EdgeInsets.symmetric(
                                                       vertical: 4,
                                                     ),
-                                                child: Text(
-                                                  LocaleProvider.tr('artists'),
-                                                  style: Theme.of(context)
-                                                      .textTheme
-                                                      .titleMedium
-                                                      ?.copyWith(fontSize: 20),
+                                                child: Row(
+                                                  children: [
+                                                    const SizedBox(width: 14),
+                                                    Text(
+                                                      LocaleProvider.tr(
+                                                        'artists',
+                                                      ),
+                                                      style: TextStyle(
+                                                        fontSize: 16,
+                                                        fontWeight:
+                                                            FontWeight.w600,
+                                                        color: Theme.of(
+                                                          context,
+                                                        ).colorScheme.primary,
+                                                      ),
+                                                    ),
+                                                  ],
                                                 ),
                                               ),
-                                              const SizedBox(height: 2),
+                                              const SizedBox(height: 12),
                                               Column(
                                                 children: _artistResults.take(3).toList().asMap().entries.map((
                                                   entry,
@@ -4564,15 +4753,15 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                       : isDark
                                                       ? Theme.of(context)
                                                             .colorScheme
-                                                            .onSecondary
+                                                            .secondary
                                                             .withValues(
-                                                              alpha: 0.5,
+                                                              alpha: 0.06,
                                                             )
                                                       : Theme.of(context)
                                                             .colorScheme
-                                                            .secondaryContainer
+                                                            .secondary
                                                             .withValues(
-                                                              alpha: 0.5,
+                                                              alpha: 0.07,
                                                             );
 
                                                   final bool isFirst = idx == 0;
@@ -4585,18 +4774,18 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                   if (isOnly) {
                                                     borderRadius =
                                                         BorderRadius.circular(
-                                                          16,
+                                                          20,
                                                         );
                                                   } else if (isFirst) {
                                                     borderRadius =
                                                         const BorderRadius.only(
                                                           topLeft:
                                                               Radius.circular(
-                                                                16,
+                                                                20,
                                                               ),
                                                           topRight:
                                                               Radius.circular(
-                                                                16,
+                                                                20,
                                                               ),
                                                           bottomLeft:
                                                               Radius.circular(
@@ -4620,11 +4809,11 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                               ),
                                                           bottomLeft:
                                                               Radius.circular(
-                                                                16,
+                                                                20,
                                                               ),
                                                           bottomRight:
                                                               Radius.circular(
-                                                                16,
+                                                                20,
                                                               ),
                                                         );
                                                   } else {
@@ -4785,308 +4974,305 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                   );
                                                 }).toList(),
                                               ),
-                                              const SizedBox(height: 16),
                                             ],
                                           ),
                                         // Sección Canciones
                                         if (_songResults.isNotEmpty)
-                                          Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            children: [
-                                              InkWell(
-                                                borderRadius:
-                                                    BorderRadius.circular(8),
-                                                onTap: () {
-                                                  setState(() {
-                                                    _expandedCategory = 'songs';
-                                                    _tabController.animateTo(1);
-                                                  });
-                                                },
-                                                child: Padding(
-                                                  padding:
-                                                      const EdgeInsets.symmetric(
-                                                        vertical: 4,
-                                                      ),
-                                                  child: Row(
-                                                    mainAxisAlignment:
-                                                        MainAxisAlignment
-                                                            .spaceBetween,
-                                                    children: [
-                                                      Text(
-                                                        LocaleProvider.tr(
-                                                          'songs_search',
+                                          const SizedBox(height: 24),
+                                        Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            InkWell(
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                              onTap: () {
+                                                setState(() {
+                                                  _expandedCategory = 'songs';
+                                                  _tabController.animateTo(1);
+                                                });
+                                              },
+                                              child: Padding(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      vertical: 4,
+                                                    ),
+                                                child: Row(
+                                                  mainAxisAlignment:
+                                                      MainAxisAlignment
+                                                          .spaceBetween,
+                                                  children: [
+                                                    Row(
+                                                      children: [
+                                                        SizedBox(width: 14),
+                                                        Text(
+                                                          LocaleProvider.tr(
+                                                            'songs_search',
+                                                          ),
+                                                          style: TextStyle(
+                                                            fontSize: 16,
+                                                            fontWeight:
+                                                                FontWeight.w600,
+                                                            color:
+                                                                Theme.of(
+                                                                      context,
+                                                                    )
+                                                                    .colorScheme
+                                                                    .primary,
+                                                          ),
                                                         ),
-                                                        style: Theme.of(context)
-                                                            .textTheme
-                                                            .titleMedium
-                                                            ?.copyWith(
-                                                              fontSize: 20,
-                                                            ),
-                                                      ),
-                                                      Icon(Icons.chevron_right),
-                                                    ],
-                                                  ),
+                                                      ],
+                                                    ),
+                                                    Icon(
+                                                      Icons.chevron_right,
+                                                      color: Theme.of(
+                                                        context,
+                                                      ).colorScheme.onSurface,
+                                                    ),
+                                                  ],
                                                 ),
                                               ),
-                                              AnimatedSize(
-                                                duration: const Duration(
-                                                  milliseconds: 300,
-                                                ),
-                                                curve: Curves.easeInOut,
-                                                child: Column(
-                                                  children: _songResults.take(3).map((
-                                                    item,
-                                                  ) {
-                                                    final index = _songResults
-                                                        .indexOf(item);
-                                                    final videoId =
-                                                        item.videoId;
-                                                    final isSelected =
-                                                        videoId != null &&
-                                                        _selectedIndexes
-                                                            .contains(
-                                                              'song-$videoId',
+                                            ),
+                                            const SizedBox(height: 12),
+                                            AnimatedSize(
+                                              duration: const Duration(
+                                                milliseconds: 300,
+                                              ),
+                                              curve: Curves.easeInOut,
+                                              child: Column(
+                                                children: _songResults.take(3).map((
+                                                  item,
+                                                ) {
+                                                  final index = _songResults
+                                                      .indexOf(item);
+                                                  final videoId = item.videoId;
+                                                  final isSelected =
+                                                      videoId != null &&
+                                                      _selectedIndexes.contains(
+                                                        'song-$videoId',
+                                                      );
+
+                                                  final isDark =
+                                                      Theme.of(
+                                                        context,
+                                                      ).brightness ==
+                                                      Brightness.dark;
+                                                  final cardColor =
+                                                      isAmoled && isDark
+                                                      ? Colors.white.withAlpha(
+                                                          20,
+                                                        )
+                                                      : isDark
+                                                      ? Theme.of(context)
+                                                            .colorScheme
+                                                            .secondary
+                                                            .withValues(
+                                                              alpha: 0.06,
+                                                            )
+                                                      : Theme.of(context)
+                                                            .colorScheme
+                                                            .secondary
+                                                            .withValues(
+                                                              alpha: 0.07,
                                                             );
 
-                                                    final isDark =
-                                                        Theme.of(
-                                                          context,
-                                                        ).brightness ==
-                                                        Brightness.dark;
-                                                    final cardColor =
-                                                        isAmoled && isDark
-                                                        ? Colors.white
-                                                              .withAlpha(20)
-                                                        : isDark
-                                                        ? Theme.of(context)
-                                                              .colorScheme
-                                                              .onSecondary
-                                                              .withValues(
-                                                                alpha: 0.5,
-                                                              )
-                                                        : Theme.of(context)
-                                                              .colorScheme
-                                                              .secondaryContainer
-                                                              .withValues(
-                                                                alpha: 0.5,
-                                                              );
+                                                  final int totalToShow =
+                                                      _songResults.length < 3
+                                                      ? _songResults.length
+                                                      : 3;
+                                                  final bool isFirst =
+                                                      index == 0;
+                                                  final bool isLast =
+                                                      index == totalToShow - 1;
+                                                  final bool isOnly =
+                                                      totalToShow == 1;
 
-                                                    final int totalToShow =
-                                                        _songResults.length < 3
-                                                        ? _songResults.length
-                                                        : 3;
-                                                    final bool isFirst =
-                                                        index == 0;
-                                                    final bool isLast =
-                                                        index ==
-                                                        totalToShow - 1;
-                                                    final bool isOnly =
-                                                        totalToShow == 1;
+                                                  BorderRadius borderRadius;
+                                                  if (isOnly) {
+                                                    borderRadius =
+                                                        BorderRadius.circular(
+                                                          20,
+                                                        );
+                                                  } else if (isFirst) {
+                                                    borderRadius =
+                                                        const BorderRadius.only(
+                                                          topLeft:
+                                                              Radius.circular(
+                                                                20,
+                                                              ),
+                                                          topRight:
+                                                              Radius.circular(
+                                                                20,
+                                                              ),
+                                                          bottomLeft:
+                                                              Radius.circular(
+                                                                4,
+                                                              ),
+                                                          bottomRight:
+                                                              Radius.circular(
+                                                                4,
+                                                              ),
+                                                        );
+                                                  } else if (isLast) {
+                                                    borderRadius =
+                                                        const BorderRadius.only(
+                                                          topLeft:
+                                                              Radius.circular(
+                                                                4,
+                                                              ),
+                                                          topRight:
+                                                              Radius.circular(
+                                                                4,
+                                                              ),
+                                                          bottomLeft:
+                                                              Radius.circular(
+                                                                20,
+                                                              ),
+                                                          bottomRight:
+                                                              Radius.circular(
+                                                                20,
+                                                              ),
+                                                        );
+                                                  } else {
+                                                    borderRadius =
+                                                        BorderRadius.circular(
+                                                          4,
+                                                        );
+                                                  }
 
-                                                    BorderRadius borderRadius;
-                                                    if (isOnly) {
-                                                      borderRadius =
-                                                          BorderRadius.circular(
-                                                            16,
+                                                  return Padding(
+                                                    padding: EdgeInsets.only(
+                                                      bottom: isLast ? 0 : 4,
+                                                    ),
+                                                    child: Card(
+                                                      color: cardColor,
+                                                      margin: EdgeInsets.zero,
+                                                      elevation: 0,
+                                                      shape:
+                                                          RoundedRectangleBorder(
+                                                            borderRadius:
+                                                                borderRadius,
+                                                          ),
+                                                      child: InkWell(
+                                                        borderRadius:
+                                                            borderRadius,
+                                                        onLongPress: () {
+                                                          HapticFeedback.selectionClick();
+                                                          _toggleSelection(
+                                                            index,
+                                                            isVideo: false,
                                                           );
-                                                    } else if (isFirst) {
-                                                      borderRadius =
-                                                          const BorderRadius.only(
-                                                            topLeft:
-                                                                Radius.circular(
-                                                                  16,
-                                                                ),
-                                                            topRight:
-                                                                Radius.circular(
-                                                                  16,
-                                                                ),
-                                                            bottomLeft:
-                                                                Radius.circular(
-                                                                  4,
-                                                                ),
-                                                            bottomRight:
-                                                                Radius.circular(
-                                                                  4,
-                                                                ),
-                                                          );
-                                                    } else if (isLast) {
-                                                      borderRadius =
-                                                          const BorderRadius.only(
-                                                            topLeft:
-                                                                Radius.circular(
-                                                                  4,
-                                                                ),
-                                                            topRight:
-                                                                Radius.circular(
-                                                                  4,
-                                                                ),
-                                                            bottomLeft:
-                                                                Radius.circular(
-                                                                  16,
-                                                                ),
-                                                            bottomRight:
-                                                                Radius.circular(
-                                                                  16,
-                                                                ),
-                                                          );
-                                                    } else {
-                                                      borderRadius =
-                                                          BorderRadius.circular(
-                                                            4,
-                                                          );
-                                                    }
-
-                                                    return Padding(
-                                                      padding: EdgeInsets.only(
-                                                        bottom: isLast ? 0 : 4,
-                                                      ),
-                                                      child: Card(
-                                                        color: cardColor,
-                                                        margin: EdgeInsets.zero,
-                                                        elevation: 0,
-                                                        shape:
-                                                            RoundedRectangleBorder(
-                                                              borderRadius:
-                                                                  borderRadius,
-                                                            ),
-                                                        child: InkWell(
-                                                          borderRadius:
-                                                              borderRadius,
-                                                          onLongPress: () {
-                                                            HapticFeedback.selectionClick();
+                                                        },
+                                                        onTap: () {
+                                                          if (_isSelectionMode) {
                                                             _toggleSelection(
                                                               index,
                                                               isVideo: false,
                                                             );
-                                                          },
-                                                          onTap: () {
-                                                            if (_isSelectionMode) {
-                                                              _toggleSelection(
-                                                                index,
-                                                                isVideo: false,
-                                                              );
-                                                            } else {
-                                                              showModalBottomSheet(
-                                                                context:
-                                                                    context,
-                                                                shape: const RoundedRectangleBorder(
-                                                                  borderRadius:
-                                                                      BorderRadius.vertical(
-                                                                        top: Radius.circular(
-                                                                          16,
-                                                                        ),
-                                                                      ),
-                                                                ),
-                                                                builder: (context) {
-                                                                  return SafeArea(
-                                                                    child: Padding(
-                                                                      padding:
-                                                                          const EdgeInsets.all(
-                                                                            24,
+                                                          } else {
+                                                            showModalBottomSheet(
+                                                              context: context,
+                                                              shape: const RoundedRectangleBorder(
+                                                                borderRadius:
+                                                                    BorderRadius.vertical(
+                                                                      top:
+                                                                          Radius.circular(
+                                                                            20,
                                                                           ),
-                                                                      child: YtPreviewPlayer(
-                                                                        results:
-                                                                            _songResults,
-                                                                        currentIndex:
-                                                                            index,
-                                                                      ),
                                                                     ),
-                                                                  );
-                                                                },
-                                                              );
-                                                            }
-                                                          },
-                                                          child: ListTile(
-                                                            contentPadding:
-                                                                const EdgeInsets.symmetric(
-                                                                  horizontal:
-                                                                      16,
-                                                                  vertical: 4,
-                                                                ),
-                                                            leading: Row(
-                                                              mainAxisSize:
-                                                                  MainAxisSize
-                                                                      .min,
-                                                              children: [
-                                                                if (_isSelectionMode)
-                                                                  Checkbox(
-                                                                    value:
-                                                                        isSelected,
-                                                                    onChanged: (checked) {
-                                                                      setState(() {
-                                                                        if (videoId ==
-                                                                            null) {
-                                                                          return;
-                                                                        }
-                                                                        final key =
-                                                                            'song-$videoId';
-                                                                        if (checked ==
-                                                                            true) {
-                                                                          _selectedIndexes.add(
-                                                                            key,
-                                                                          );
-                                                                        } else {
-                                                                          _selectedIndexes.remove(
-                                                                            key,
-                                                                          );
-                                                                          if (_selectedIndexes
-                                                                              .isEmpty) {
-                                                                            _isSelectionMode =
-                                                                                false;
-                                                                          }
-                                                                        }
-                                                                      });
-                                                                    },
+                                                              ),
+                                                              builder: (context) {
+                                                                return SafeArea(
+                                                                  child: Padding(
+                                                                    padding:
+                                                                        const EdgeInsets.all(
+                                                                          24,
+                                                                        ),
+                                                                    child: YtPreviewPlayer(
+                                                                      results:
+                                                                          _songResults,
+                                                                      currentIndex:
+                                                                          index,
+                                                                    ),
                                                                   ),
-                                                                ClipRRect(
-                                                                  borderRadius:
-                                                                      BorderRadius.circular(
-                                                                        8,
-                                                                      ),
-                                                                  child:
-                                                                      item.thumbUrl !=
-                                                                          null
-                                                                      ? _buildSafeNetworkImage(
-                                                                          item.thumbUrl!,
-                                                                          width:
-                                                                              50,
-                                                                          height:
-                                                                              50,
-                                                                          fit: BoxFit
-                                                                              .cover,
-                                                                          fallback: Container(
-                                                                            width:
-                                                                                50,
-                                                                            height:
-                                                                                50,
-                                                                            decoration: BoxDecoration(
-                                                                              color: isSystem
-                                                                                  ? Theme.of(
-                                                                                      context,
-                                                                                    ).colorScheme.secondaryContainer
-                                                                                  : Theme.of(
-                                                                                      context,
-                                                                                    ).colorScheme.surfaceContainer,
-                                                                              borderRadius: BorderRadius.circular(
-                                                                                8,
-                                                                              ),
-                                                                            ),
-                                                                            child: const Icon(
-                                                                              Icons.music_note,
-                                                                              size: 24,
-                                                                              color: Colors.grey,
-                                                                            ),
-                                                                          ),
-                                                                        )
-                                                                      : Container(
+                                                                );
+                                                              },
+                                                            );
+                                                          }
+                                                        },
+                                                        child: ListTile(
+                                                          contentPadding:
+                                                              const EdgeInsets.symmetric(
+                                                                horizontal: 16,
+                                                                vertical: 4,
+                                                              ),
+                                                          leading: Row(
+                                                            mainAxisSize:
+                                                                MainAxisSize
+                                                                    .min,
+                                                            children: [
+                                                              if (_isSelectionMode)
+                                                                Checkbox(
+                                                                  value:
+                                                                      isSelected,
+                                                                  onChanged: (checked) {
+                                                                    setState(() {
+                                                                      if (videoId ==
+                                                                          null) {
+                                                                        return;
+                                                                      }
+                                                                      final key =
+                                                                          'song-$videoId';
+                                                                      if (checked ==
+                                                                          true) {
+                                                                        _selectedIndexes
+                                                                            .add(
+                                                                              key,
+                                                                            );
+                                                                      } else {
+                                                                        _selectedIndexes
+                                                                            .remove(
+                                                                              key,
+                                                                            );
+                                                                        if (_selectedIndexes
+                                                                            .isEmpty) {
+                                                                          _isSelectionMode =
+                                                                              false;
+                                                                        }
+                                                                      }
+                                                                    });
+                                                                  },
+                                                                ),
+                                                              ClipRRect(
+                                                                borderRadius:
+                                                                    BorderRadius.circular(
+                                                                      8,
+                                                                    ),
+                                                                child:
+                                                                    item.thumbUrl !=
+                                                                        null
+                                                                    ? _buildSafeNetworkImage(
+                                                                        item.thumbUrl!,
+                                                                        width:
+                                                                            50,
+                                                                        height:
+                                                                            50,
+                                                                        fit: BoxFit
+                                                                            .cover,
+                                                                        fallback: Container(
                                                                           width:
                                                                               50,
                                                                           height:
                                                                               50,
                                                                           decoration: BoxDecoration(
                                                                             color:
-                                                                                Colors.grey[300],
+                                                                                isSystem
+                                                                                ? Theme.of(
+                                                                                    context,
+                                                                                  ).colorScheme.secondaryContainer
+                                                                                : Theme.of(
+                                                                                    context,
+                                                                                  ).colorScheme.surfaceContainer,
                                                                             borderRadius: BorderRadius.circular(
                                                                               8,
                                                                             ),
@@ -5095,66 +5281,89 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                                             Icons.music_note,
                                                                             size:
                                                                                 24,
+                                                                            color:
+                                                                                Colors.grey,
                                                                           ),
                                                                         ),
-                                                                ),
-                                                              ],
-                                                            ),
-                                                            title: Text(
-                                                              item.title ??
-                                                                  LocaleProvider.tr(
-                                                                    'title_unknown',
-                                                                  ),
-                                                              style:
-                                                                  Theme.of(
-                                                                        context,
                                                                       )
-                                                                      .textTheme
-                                                                      .titleMedium,
-                                                              maxLines: 1,
-                                                              overflow:
-                                                                  TextOverflow
-                                                                      .ellipsis,
-                                                            ),
-                                                            subtitle: Text(
-                                                              item.artist ??
-                                                                  LocaleProvider.tr(
-                                                                    'artist_unknown',
-                                                                  ),
-                                                              maxLines: 1,
-                                                              overflow:
-                                                                  TextOverflow
-                                                                      .ellipsis,
-                                                            ),
-                                                            trailing: IconButton(
-                                                              icon: const Icon(
-                                                                Icons.link,
+                                                                    : Container(
+                                                                        width:
+                                                                            50,
+                                                                        height:
+                                                                            50,
+                                                                        decoration: BoxDecoration(
+                                                                          color:
+                                                                              Colors.grey[300],
+                                                                          borderRadius:
+                                                                              BorderRadius.circular(
+                                                                                8,
+                                                                              ),
+                                                                        ),
+                                                                        child: const Icon(
+                                                                          Icons
+                                                                              .music_note,
+                                                                          size:
+                                                                              24,
+                                                                        ),
+                                                                      ),
                                                               ),
-                                                              tooltip:
-                                                                  LocaleProvider.tr(
-                                                                    'copy_link',
-                                                                  ),
-                                                              onPressed: () {
-                                                                Clipboard.setData(
-                                                                  ClipboardData(
-                                                                    text:
-                                                                        'https://music.youtube.com/watch?v=${item.videoId}',
-                                                                  ),
-                                                                );
-                                                              },
+                                                            ],
+                                                          ),
+                                                          title: Text(
+                                                            item.title ??
+                                                                LocaleProvider.tr(
+                                                                  'title_unknown',
+                                                                ),
+                                                            style:
+                                                                Theme.of(
+                                                                      context,
+                                                                    )
+                                                                    .textTheme
+                                                                    .titleMedium,
+                                                            maxLines: 1,
+                                                            overflow:
+                                                                TextOverflow
+                                                                    .ellipsis,
+                                                          ),
+                                                          subtitle: Text(
+                                                            item.artist ??
+                                                                LocaleProvider.tr(
+                                                                  'artist_unknown',
+                                                                ),
+                                                            maxLines: 1,
+                                                            overflow:
+                                                                TextOverflow
+                                                                    .ellipsis,
+                                                          ),
+                                                          trailing: IconButton(
+                                                            icon: const Icon(
+                                                              Icons.link,
                                                             ),
+                                                            tooltip:
+                                                                LocaleProvider.tr(
+                                                                  'copy_link',
+                                                                ),
+                                                            onPressed: () {
+                                                              Clipboard.setData(
+                                                                ClipboardData(
+                                                                  text:
+                                                                      'https://music.youtube.com/watch?v=${item.videoId}',
+                                                                ),
+                                                              );
+                                                            },
                                                           ),
                                                         ),
                                                       ),
-                                                    );
-                                                  }).toList(),
-                                                ),
+                                                    ),
+                                                  );
+                                                }).toList(),
                                               ),
-                                            ],
-                                          ),
+                                            ),
+                                          ],
+                                        ),
                                         // Sección Videos
                                         if (_videoResults.isNotEmpty)
-                                          SizedBox(height: 16),
+                                          SizedBox(height: 24),
                                         Column(
                                           crossAxisAlignment:
                                               CrossAxisAlignment.start,
@@ -5178,22 +5387,35 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                       MainAxisAlignment
                                                           .spaceBetween,
                                                   children: [
-                                                    Text(
-                                                      LocaleProvider.tr(
-                                                        'videos',
-                                                      ),
-                                                      style: Theme.of(context)
-                                                          .textTheme
-                                                          .titleMedium
-                                                          ?.copyWith(
-                                                            fontSize: 20,
+                                                    Row(
+                                                      children: [
+                                                        const SizedBox(
+                                                          width: 14,
+                                                        ),
+                                                        Text(
+                                                          LocaleProvider.tr(
+                                                            'videos',
                                                           ),
+                                                          style: TextStyle(
+                                                            fontSize: 16,
+                                                            fontWeight:
+                                                                FontWeight.w600,
+                                                            color:
+                                                                Theme.of(
+                                                                      context,
+                                                                    )
+                                                                    .colorScheme
+                                                                    .primary,
+                                                          ),
+                                                        ),
+                                                      ],
                                                     ),
                                                     Icon(Icons.chevron_right),
                                                   ],
                                                 ),
                                               ),
                                             ),
+                                            const SizedBox(height: 12),
                                             AnimatedSize(
                                               duration: const Duration(
                                                 milliseconds: 300,
@@ -5225,15 +5447,15 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                       : isDark
                                                       ? Theme.of(context)
                                                             .colorScheme
-                                                            .onSecondary
+                                                            .secondary
                                                             .withValues(
-                                                              alpha: 0.5,
+                                                              alpha: 0.06,
                                                             )
                                                       : Theme.of(context)
                                                             .colorScheme
-                                                            .secondaryContainer
+                                                            .secondary
                                                             .withValues(
-                                                              alpha: 0.5,
+                                                              alpha: 0.07,
                                                             );
 
                                                   final int totalToShow =
@@ -5251,18 +5473,18 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                   if (isOnly) {
                                                     borderRadius =
                                                         BorderRadius.circular(
-                                                          16,
+                                                          20,
                                                         );
                                                   } else if (isFirst) {
                                                     borderRadius =
                                                         const BorderRadius.only(
                                                           topLeft:
                                                               Radius.circular(
-                                                                16,
+                                                                20,
                                                               ),
                                                           topRight:
                                                               Radius.circular(
-                                                                16,
+                                                                20,
                                                               ),
                                                           bottomLeft:
                                                               Radius.circular(
@@ -5286,11 +5508,11 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                               ),
                                                           bottomLeft:
                                                               Radius.circular(
-                                                                16,
+                                                                20,
                                                               ),
                                                           bottomRight:
                                                               Radius.circular(
-                                                                16,
+                                                                20,
                                                               ),
                                                         );
                                                   } else {
@@ -5337,7 +5559,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                                     BorderRadius.vertical(
                                                                       top:
                                                                           Radius.circular(
-                                                                            16,
+                                                                            20,
                                                                           ),
                                                                     ),
                                                               ),
@@ -5523,7 +5745,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                         ),
                                         // Sección Listas de Reproducción
                                         if (_playlistResults.isNotEmpty)
-                                          SizedBox(height: 16),
+                                          SizedBox(height: 24),
                                         Column(
                                           crossAxisAlignment:
                                               CrossAxisAlignment.start,
@@ -5548,22 +5770,35 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                       MainAxisAlignment
                                                           .spaceBetween,
                                                   children: [
-                                                    Text(
-                                                      LocaleProvider.tr(
-                                                        'playlists',
-                                                      ),
-                                                      style: Theme.of(context)
-                                                          .textTheme
-                                                          .titleMedium
-                                                          ?.copyWith(
-                                                            fontSize: 20,
+                                                    Row(
+                                                      children: [
+                                                        const SizedBox(
+                                                          width: 14,
+                                                        ),
+                                                        Text(
+                                                          LocaleProvider.tr(
+                                                            'playlists',
                                                           ),
+                                                          style: TextStyle(
+                                                            fontSize: 16,
+                                                            fontWeight:
+                                                                FontWeight.w600,
+                                                            color:
+                                                                Theme.of(
+                                                                      context,
+                                                                    )
+                                                                    .colorScheme
+                                                                    .primary,
+                                                          ),
+                                                        ),
+                                                      ],
                                                     ),
                                                     Icon(Icons.chevron_right),
                                                   ],
                                                 ),
                                               ),
                                             ),
+                                            const SizedBox(height: 12),
                                             AnimatedSize(
                                               duration: const Duration(
                                                 milliseconds: 300,
@@ -5589,15 +5824,15 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                       : isDark
                                                       ? Theme.of(context)
                                                             .colorScheme
-                                                            .onSecondary
+                                                            .secondary
                                                             .withValues(
-                                                              alpha: 0.5,
+                                                              alpha: 0.06,
                                                             )
                                                       : Theme.of(context)
                                                             .colorScheme
-                                                            .secondaryContainer
+                                                            .secondary
                                                             .withValues(
-                                                              alpha: 0.5,
+                                                              alpha: 0.07,
                                                             );
 
                                                   final int totalToShow =
@@ -5616,18 +5851,18 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                   if (isOnly) {
                                                     borderRadius =
                                                         BorderRadius.circular(
-                                                          16,
+                                                          20,
                                                         );
                                                   } else if (isFirst) {
                                                     borderRadius =
                                                         const BorderRadius.only(
                                                           topLeft:
                                                               Radius.circular(
-                                                                16,
+                                                                20,
                                                               ),
                                                           topRight:
                                                               Radius.circular(
-                                                                16,
+                                                                20,
                                                               ),
                                                           bottomLeft:
                                                               Radius.circular(
@@ -5651,11 +5886,11 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                               ),
                                                           bottomLeft:
                                                               Radius.circular(
-                                                                16,
+                                                                20,
                                                               ),
                                                           bottomRight:
                                                               Radius.circular(
-                                                                16,
+                                                                20,
                                                               ),
                                                         );
                                                   } else {
@@ -5880,7 +6115,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                         ),
                                         // Sección Álbumes
                                         if (_albumResults.isNotEmpty)
-                                          SizedBox(height: 16),
+                                          SizedBox(height: 24),
                                         Column(
                                           crossAxisAlignment:
                                               CrossAxisAlignment.start,
@@ -5904,23 +6139,33 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                       MainAxisAlignment
                                                           .spaceBetween,
                                                   children: [
-                                                    Text(
-                                                      LocaleProvider.tr(
-                                                        'albums',
-                                                      ),
-                                                      style: Theme.of(context)
-                                                          .textTheme
-                                                          .titleMedium
-                                                          ?.copyWith(
-                                                            fontSize: 20,
+                                                    Row(
+                                                      children: [
+                                                        SizedBox(width: 14),
+                                                        Text(
+                                                          LocaleProvider.tr(
+                                                            'albums',
                                                           ),
+                                                          style: TextStyle(
+                                                            fontSize: 16,
+                                                            fontWeight:
+                                                                FontWeight.w600,
+                                                            color:
+                                                                Theme.of(
+                                                                      context,
+                                                                    )
+                                                                    .colorScheme
+                                                                    .primary,
+                                                          ),
+                                                        ),
+                                                      ],
                                                     ),
                                                     Icon(Icons.chevron_right),
                                                   ],
                                                 ),
                                               ),
                                             ),
-                                            const SizedBox(height: 8),
+                                            const SizedBox(height: 12),
                                             SizedBox(
                                               height: 180,
                                               child: ListView.separated(
@@ -6125,110 +6370,71 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
         builder: (context, colorScheme, child) {
           final isAmoled = colorScheme == AppColorScheme.amoled;
           final isDark = Theme.of(context).brightness == Brightness.dark;
+          final primaryColor = Theme.of(context).colorScheme.primary;
 
           return AlertDialog(
+            backgroundColor: isAmoled && isDark
+                ? Colors.black
+                : Theme.of(context).colorScheme.surface,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(28),
               side: isAmoled && isDark
-                  ? const BorderSide(color: Colors.white, width: 1)
+                  ? const BorderSide(color: Colors.white24, width: 1)
                   : BorderSide.none,
             ),
-            title: Center(
-              child: Text(
-                title,
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
+            contentPadding: const EdgeInsets.fromLTRB(0, 24, 0, 8),
+            content: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: 400,
+                maxHeight: MediaQuery.of(context).size.height * 0.8,
               ),
-            ),
-            content: SizedBox(
-              width: 400,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  SizedBox(height: 18),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 4),
-                      child: Text(
-                        message,
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Theme.of(context).colorScheme.onSurface,
-                        ),
-                        textAlign: TextAlign.left,
-                        maxLines: 3,
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                  Icon(
+                    title == 'Error' ? Icons.error_rounded : Icons.info_rounded,
+                    size: 32,
+                    color: title == 'Error'
+                        ? Theme.of(context).colorScheme.error
+                        : primaryColor,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w500,
+                      color: Theme.of(context).colorScheme.onSurface,
                     ),
                   ),
-                  SizedBox(height: 20),
-                  // Tarjeta de aceptar
-                  InkWell(
-                    onTap: () => Navigator.of(context).pop(),
-                    borderRadius: BorderRadius.circular(16),
-                    child: Container(
-                      width: double.infinity,
-                      padding: EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: isAmoled && isDark
-                            ? Colors.white.withValues(
-                                alpha: 0.2,
-                              ) // Color personalizado para amoled
-                            : Theme.of(context).colorScheme.primaryContainer,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: isAmoled && isDark
-                              ? Colors.white.withValues(
-                                  alpha: 0.4,
-                                ) // Borde personalizado para amoled
-                              : Theme.of(
-                                  context,
-                                ).colorScheme.primary.withValues(alpha: 0.3),
-                          width: 2,
-                        ),
+                  const SizedBox(height: 16),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: Text(
+                      message,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withAlpha(160),
                       ),
-                      child: Row(
-                        children: [
-                          Container(
-                            padding: EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(12),
-                              color: isAmoled && isDark
-                                  ? Colors.white.withValues(
-                                      alpha: 0.2,
-                                    ) // Fondo del ícono para amoled
-                                  : Theme.of(context).colorScheme.primary
-                                        .withValues(alpha: 0.1),
-                            ),
-                            child: Icon(
-                              Icons.check_circle,
-                              size: 30,
-                              color: isAmoled && isDark
-                                  ? Colors
-                                        .white // Ícono blanco para amoled
-                                  : Theme.of(context).colorScheme.primary,
-                            ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Padding(
+                    padding: const EdgeInsets.only(right: 24, bottom: 8),
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        child: TranslatedText(
+                          'ok',
+                          style: TextStyle(
+                            color: primaryColor,
+                            fontWeight: FontWeight.bold,
                           ),
-                          SizedBox(width: 8),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  LocaleProvider.tr('ok'),
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600,
-                                    color: isAmoled && isDark
-                                        ? Colors
-                                              .white // Texto blanco para amoled
-                                        : Theme.of(context).colorScheme.primary,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
                     ),
                   ),
@@ -6597,7 +6803,7 @@ class YtPreviewPlayerState extends State<YtPreviewPlayer>
       shadowColor: Colors.transparent,
       color: Colors.transparent,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         side: isAmoled && isDark
             ? const BorderSide(color: Colors.white, width: 1)
             : BorderSide.none,
@@ -7263,110 +7469,71 @@ class YtPreviewPlayerState extends State<YtPreviewPlayer>
         builder: (context, colorScheme, child) {
           final isAmoled = colorScheme == AppColorScheme.amoled;
           final isDark = Theme.of(context).brightness == Brightness.dark;
+          final primaryColor = Theme.of(context).colorScheme.primary;
 
           return AlertDialog(
+            backgroundColor: isAmoled && isDark
+                ? Colors.black
+                : Theme.of(context).colorScheme.surface,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(28),
               side: isAmoled && isDark
-                  ? const BorderSide(color: Colors.white, width: 1)
+                  ? const BorderSide(color: Colors.white24, width: 1)
                   : BorderSide.none,
             ),
-            title: Center(
-              child: Text(
-                title,
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
+            contentPadding: const EdgeInsets.fromLTRB(0, 24, 0, 8),
+            content: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: 400,
+                maxHeight: MediaQuery.of(context).size.height * 0.8,
               ),
-            ),
-            content: SizedBox(
-              width: 400,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  SizedBox(height: 18),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 4),
-                      child: Text(
-                        message,
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Theme.of(context).colorScheme.onSurface,
-                        ),
-                        textAlign: TextAlign.left,
-                        maxLines: 3,
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                  Icon(
+                    title == 'Error' ? Icons.error_rounded : Icons.info_rounded,
+                    size: 32,
+                    color: title == 'Error'
+                        ? Theme.of(context).colorScheme.error
+                        : primaryColor,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w500,
+                      color: Theme.of(context).colorScheme.onSurface,
                     ),
                   ),
-                  SizedBox(height: 20),
-                  // Tarjeta de aceptar
-                  InkWell(
-                    onTap: () => Navigator.of(context).pop(),
-                    borderRadius: BorderRadius.circular(16),
-                    child: Container(
-                      width: double.infinity,
-                      padding: EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: isAmoled && isDark
-                            ? Colors.white.withValues(
-                                alpha: 0.2,
-                              ) // Color personalizado para amoled
-                            : Theme.of(context).colorScheme.primaryContainer,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: isAmoled && isDark
-                              ? Colors.white.withValues(
-                                  alpha: 0.4,
-                                ) // Borde personalizado para amoled
-                              : Theme.of(
-                                  context,
-                                ).colorScheme.primary.withValues(alpha: 0.3),
-                          width: 2,
-                        ),
+                  const SizedBox(height: 16),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: Text(
+                      message,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withAlpha(160),
                       ),
-                      child: Row(
-                        children: [
-                          Container(
-                            padding: EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(12),
-                              color: isAmoled && isDark
-                                  ? Colors.white.withValues(
-                                      alpha: 0.2,
-                                    ) // Fondo del ícono para amoled
-                                  : Theme.of(context).colorScheme.primary
-                                        .withValues(alpha: 0.1),
-                            ),
-                            child: Icon(
-                              Icons.check_circle,
-                              size: 30,
-                              color: isAmoled && isDark
-                                  ? Colors
-                                        .white // Ícono blanco para amoled
-                                  : Theme.of(context).colorScheme.primary,
-                            ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Padding(
+                    padding: const EdgeInsets.only(right: 24, bottom: 8),
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        child: TranslatedText(
+                          'ok',
+                          style: TextStyle(
+                            color: primaryColor,
+                            fontWeight: FontWeight.bold,
                           ),
-                          SizedBox(width: 8),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  LocaleProvider.tr('ok'),
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600,
-                                    color: isAmoled && isDark
-                                        ? Colors
-                                              .white // Texto blanco para amoled
-                                        : Theme.of(context).colorScheme.primary,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
                     ),
                   ),
