@@ -252,6 +252,9 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
       return;
     }
 
+    // Ocultar la barra de navegación al iniciar cualquier búsqueda (incluyendo enlaces)
+    bottomNavVisibleNotifier.value = false;
+
     // Verificar si es un enlace de playlist de YouTube
     if (_isYouTubePlaylistUrl(_controller.text)) {
       _focusNode.unfocus();
@@ -337,7 +340,6 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
       _loadingMorePlaylists = false;
       _showSuggestions = false;
     });
-    bottomNavVisibleNotifier.value = false;
     try {
       // 1. Obtener los primeros 20 resultados rápidamente
       final songFuture = searchSongsOnly(_controller.text);
@@ -1187,7 +1189,12 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                 ),
                               ),
                               trailing: IconButton(
-                                icon: const Icon(Icons.download),
+                                style: IconButton.styleFrom(
+                                  backgroundColor: Theme.of(
+                                    context,
+                                  ).colorScheme.primary.withAlpha(20),
+                                ),
+                                icon: const Icon(Icons.download, size: 20),
                                 onPressed: () async {
                                   final downloadQueue = DownloadQueue();
                                   await downloadQueue.addToQueue(
