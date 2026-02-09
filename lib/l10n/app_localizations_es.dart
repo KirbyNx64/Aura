@@ -3,6 +3,12 @@
 const Map<String, String> appLocalizationsEs = {
   // General
   'settings': 'Ajustes',
+  'welcome_title': 'Bienvenido a Aura Music',
+  'welcome_desc': 'Disfruta de tu música local con la mejor experiencia.',
+  'get_started': 'Comenzar',
+  'permissions_title': 'Permisos necesarios',
+  'permissions_desc':
+      'Para reproducir tu música, necesitamos acceso a tus archivos de audio.',
   'cancel': 'Cancelar',
   'delete': 'Eliminar',
   'remove': 'Quitar',
@@ -12,6 +18,17 @@ const Map<String, String> appLocalizationsEs = {
   'no': 'No',
   'error': 'Error',
   'success': 'Éxito',
+  'notifications_title': 'Notificaciones',
+  'notifications_desc':
+      'Permite que Aura Music muestre notificaciones de descarga de canciones.',
+  'grant_notifications': 'Permitir notificaciones',
+  'battery_optimization_onboarding_title': 'Reproducción en segundo plano',
+  'battery_optimization_onboarding_desc':
+      'Para evitar que la música se detenga cuando la app está en segundo plano, necesitamos ignorar la optimización de batería.',
+  'ignore_optimization': 'Desactivar optimización',
+  'finish': 'Finalizar',
+  'all_files_permission': 'Acceso a todos los archivos',
+  'music_audio_permission': 'Música y Audio',
   'player': 'Reproductor',
   'overlay': 'Overlay',
 
@@ -23,6 +40,7 @@ const Map<String, String> appLocalizationsEs = {
   'light_mode': 'Modo claro',
   'dark_mode': 'Modo oscuro',
   'change_language': 'Cambiar idioma',
+  'choose_language': 'Seleccionar idioma',
   'spanish': 'Español',
   'english': 'English',
   'gesture_settings': 'Gestos en el reproductor',
@@ -263,8 +281,8 @@ const Map<String, String> appLocalizationsEs = {
   'results': 'Resultados',
   'no_description': 'Descripción no disponible',
   'songs_search': 'Canciones',
-  'videos': 'Videos',
   'albums': 'Álbumes',
+  'videos': 'Videos',
   'write_song_or_artist': 'Escribe el nombre de una canción o artista',
   'loading_more': 'Cargando más resultados...',
   'copy_link': 'Copiar enlace',

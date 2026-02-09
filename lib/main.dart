@@ -27,6 +27,7 @@ import 'package:music/utils/sharing_handler.dart';
 import 'package:music/utils/yt_preview_modal.dart';
 import 'package:music/services/download_history_service.dart';
 import 'package:material_loading_indicator/loading_indicator.dart';
+import 'package:music/screens/onboarding/onboarding_screen.dart';
 import 'dart:async';
 
 // Cambiar de late final a nullable para mejor manejo de errores
@@ -378,7 +379,21 @@ void main() async {
   await NotificationService.initialize();
 
   await LocaleProvider.loadLocale();
-  final permisosOk = await pedirPermisosMedia();
+
+  // Verificar si es la primera vez que se ejecuta la app
+  final prefs = await SharedPreferences.getInstance();
+  final isFirstRun = prefs.getBool('first_run') ?? true;
+
+  bool permisosOk = false;
+
+  if (!isFirstRun) {
+    permisosOk = await pedirPermisosMedia();
+  } else {
+    // Si es primera vez, asumimos que no hay permisos pero dejamos pasar al Onboarding,
+    // que se encargará de pedirlos.
+    permisosOk = true;
+  }
+
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
@@ -402,7 +417,7 @@ void main() async {
     overlays: [SystemUiOverlay.top, SystemUiOverlay.bottom],
   );
 
-  if (!permisosOk) {
+  if (!permisosOk && !isFirstRun) {
     runApp(
       MaterialApp(
         home: PermisosScreen(),
@@ -431,8 +446,10 @@ void main() async {
     // La app seguirá, pero el audio podría no estar disponible hasta que se intente de nuevo
   }
 
-  // Realizar indexación solo si es la primera vez que se abre la app
-  performIndexingIfNeeded();
+  // Realizar indexación solo si es la primera vez que se abre la app (pero no en onboarding)
+  if (!isFirstRun) {
+    performIndexingIfNeeded();
+  }
 
   // Precargar el SVG en memoria antes de mostrar la app
   try {
@@ -543,12 +560,11 @@ class _PermisosScreenState extends State<PermisosScreen>
               ElevatedButton.icon(
                 icon: const Icon(Icons.security),
                 label: _cargando
-                    ? const SizedBox(
+                    ? SizedBox(
                         width: 18,
                         height: 18,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
+                        child: LoadingIndicator(
+                          activeIndicatorColor: Colors.white,
                         ),
                       )
                     : const Text('Otorgar permisos'),
@@ -587,6 +603,7 @@ class MainApp extends StatefulWidget {
 class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
   AppThemeMode _themeMode = AppThemeMode.system;
   bool _isLoading = true;
+  bool _showOnboarding = false;
 
   // Variables para mantener los colores dinámicos actuales
   ColorScheme? _currentLightDynamic;
@@ -715,31 +732,32 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
     final savedThemeMode = await ThemePreferences.getThemeMode();
     final savedColorScheme = await ThemePreferences.getColorScheme();
     if (mounted) {
-      setState(() {
-        _themeMode = savedThemeMode;
-        _isLoading = false;
-      });
       // Inicializar el notifier con el color guardado
       colorSchemeNotifier.value = savedColorScheme;
 
       // Inicializar la configuración de animación hero
       final prefs = await SharedPreferences.getInstance();
-      final useHero = prefs.getBool('use_hero_animation') ?? true;
-      heroAnimationNotifier.value = useHero;
 
-      // Inicializar la configuración del botón next en overlay
+      // Verificar si es la primera vez (onboarding) y otras preferencias
+      final isFirstRun = prefs.getBool('first_run') ?? true;
+      final useHero = prefs.getBool('use_hero_animation') ?? true;
       final nextButtonEnabled =
           prefs.getBool('overlay_next_button_enabled') ?? false;
-      overlayNextButtonEnabled.value = nextButtonEnabled;
-
-      // Inicializar la configuración de fondo con carátula
       final useArtworkOverlay =
           prefs.getBool('use_artwork_background_overlay') ?? true;
-      useArtworkAsBackgroundOverlayNotifier.value = useArtworkOverlay;
-
       final useArtworkPlayer =
           prefs.getBool('use_artwork_background_player') ?? true;
-      useArtworkAsBackgroundPlayerNotifier.value = useArtworkPlayer;
+
+      // Actualizar estado una sola vez
+      setState(() {
+        _themeMode = savedThemeMode;
+        _showOnboarding = isFirstRun;
+        heroAnimationNotifier.value = useHero;
+        overlayNextButtonEnabled.value = nextButtonEnabled;
+        useArtworkAsBackgroundOverlayNotifier.value = useArtworkOverlay;
+        useArtworkAsBackgroundPlayerNotifier.value = useArtworkPlayer;
+        _isLoading = false;
+      });
 
       // Configurar la barra de navegación del sistema después de cargar las preferencias
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -894,10 +912,20 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
                   : ThemeMode.light,
               theme: _buildTheme(Brightness.light, lightDynamic),
               darkTheme: _buildTheme(Brightness.dark, darkDynamic),
-              home: MainNavRoot(
-                setThemeMode: _setThemeMode,
-                setColorScheme: _setColorScheme,
-              ),
+              home: _showOnboarding
+                  ? OnboardingScreen(
+                      onFinish: () {
+                        setState(() {
+                          _showOnboarding = false;
+                        });
+                        // Después de terminar el onboarding y tener permisos, indexar la música
+                        performIndexingIfNeeded();
+                      },
+                    )
+                  : MainNavRoot(
+                      setThemeMode: _setThemeMode,
+                      setColorScheme: _setColorScheme,
+                    ),
             );
           },
         );

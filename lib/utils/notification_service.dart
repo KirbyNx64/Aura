@@ -171,11 +171,14 @@ class NotificationService {
         ?.createNotificationChannel(channel);
 
     // Solicitar permisos de notificación en Android 13+
+    // SE ELIMINA LA SOLICITUD AUTOMÁTICA AQUÍ PORQUE SE MANEJA EN EL ONBOARDING
+    /*
     await flutterLocalNotificationsPlugin
         .resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin
         >()
         ?.requestNotificationsPermission();
+    */
   }
 
   // Manejar cuando se toca una notificación
