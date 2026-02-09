@@ -1747,11 +1747,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
         width: 40,
         height: 40,
         decoration: BoxDecoration(
-          color: isAmoledTheme
-              ? Colors.white.withAlpha(10)
-              : Theme.of(context).brightness == Brightness.dark
-              ? Colors.white.withAlpha(15)
-              : Theme.of(context).colorScheme.secondary.withValues(alpha: 0.08),
+          color: Theme.of(context).colorScheme.primary.withAlpha(20),
           shape: BoxShape.circle,
         ),
         child: IconButton(

@@ -62,7 +62,7 @@ class _DownloadScreenState extends State<DownloadScreen>
   int _downloadedVideos = 0;
   String? _playlistTitle;
   bool _isPlaylistDownloading = false;
-  
+
   // Servicio de YouTube Music para manejar playlists grandes
   final YouTubeMusicService _youtubeMusicService = YouTubeMusicService();
 
@@ -71,7 +71,7 @@ class _DownloadScreenState extends State<DownloadScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _loadSavedDirectory();
-    
+
     // Escuchar cambios en el controlador de URL
     _urlController.addListener(_onUrlChanged);
     // Escuchar cambios en la ruta de descargas
@@ -114,6 +114,7 @@ class _DownloadScreenState extends State<DownloadScreen>
       _directoryPath = downloadDirectoryNotifier.value;
     });
   }
+
   void _onDownloadTypeChanged() {
     setState(() {
       _usarExplode = downloadTypeNotifier.value;
@@ -127,8 +128,6 @@ class _DownloadScreenState extends State<DownloadScreen>
       });
     }
   }
-
-
 
   @override
   void didChangeDependencies() {
@@ -151,13 +150,14 @@ class _DownloadScreenState extends State<DownloadScreen>
 
   Future<void> _loadSavedDirectory() async {
     final prefs = await SharedPreferences.getInstance();
-    final savedPath = prefs.getString('download_directory') ?? '/storage/emulated/0/Music';
-    
+    final savedPath =
+        prefs.getString('download_directory') ?? '/storage/emulated/0/Music';
+
     // Guardar el directorio por defecto si no existe
     if (!prefs.containsKey('download_directory')) {
       await prefs.setString('download_directory', '/storage/emulated/0/Music');
     }
-    
+
     setState(() {
       _directoryPath = savedPath;
     });
@@ -185,11 +185,11 @@ class _DownloadScreenState extends State<DownloadScreen>
   // Método para seleccionar stream de audio según calidad (para StreamProvider)
   Audio? _selectAudioStream(List<Audio> audioFormats) {
     if (audioFormats.isEmpty) return null;
-    
+
     // Ordenar por bitrate (mayor a menor)
     final sortedFormats = List<Audio>.from(audioFormats)
       ..sort((a, b) => b.bitrate.compareTo(a.bitrate));
-    
+
     switch (_audioQuality) {
       case 'high':
         // Mejor calidad disponible
@@ -209,11 +209,11 @@ class _DownloadScreenState extends State<DownloadScreen>
   // Método para seleccionar stream de audio según calidad (para YouTube Explode)
   AudioStreamInfo? _selectAudioStreamInfo(List<AudioStreamInfo> audioStreams) {
     if (audioStreams.isEmpty) return null;
-    
+
     // Ordenar por bitrate (mayor a menor)
     final sortedStreams = List<AudioStreamInfo>.from(audioStreams)
       ..sort((a, b) => b.bitrate.compareTo(a.bitrate));
-    
+
     switch (_audioQuality) {
       case 'high':
         // Mejor calidad disponible
@@ -240,20 +240,24 @@ class _DownloadScreenState extends State<DownloadScreen>
     try {
       // Leer configuración de calidad
       final highQuality = await _getCoverQualitySetting();
-      
+
       if (highQuality) {
         // Calidad alta: prioridad maxresdefault, fallback hqdefault, luego http
         try {
           final request = await client.getUrl(Uri.parse(coverUrlMax));
           final response = await request.close();
           if (response.statusCode == 200) {
-            bytes = Uint8List.fromList(await consolidateResponseBytes(response));
+            bytes = Uint8List.fromList(
+              await consolidateResponseBytes(response),
+            );
           } else {
             // Si maxresdefault falla, intentar hqdefault
             final requestHQ = await client.getUrl(Uri.parse(coverUrlHQ));
             final responseHQ = await requestHQ.close();
             if (responseHQ.statusCode == 200) {
-              bytes = Uint8List.fromList(await consolidateResponseBytes(responseHQ));
+              bytes = Uint8List.fromList(
+                await consolidateResponseBytes(responseHQ),
+              );
             } else {
               // Si hqdefault también falla, usar http
               final httpResponse = await http.get(Uri.parse(coverUrlHQ));
@@ -279,7 +283,9 @@ class _DownloadScreenState extends State<DownloadScreen>
           final requestHQ = await client.getUrl(Uri.parse(coverUrlHQ));
           final responseHQ = await requestHQ.close();
           if (responseHQ.statusCode == 200) {
-            bytes = Uint8List.fromList(await consolidateResponseBytes(responseHQ));
+            bytes = Uint8List.fromList(
+              await consolidateResponseBytes(responseHQ),
+            );
           } else {
             // Si hqdefault falla, usar http
             final httpResponse = await http.get(Uri.parse(coverUrlHQ));
@@ -299,36 +305,44 @@ class _DownloadScreenState extends State<DownloadScreen>
           }
         }
       }
-      
+
       // Recortar a cuadrado centrado según la calidad
       final original = img.decodeImage(bytes);
       if (original != null) {
         if (highQuality) {
           // Para calidad alta (maxresdefault), recorte normal centrado
-          final minSide = original.width < original.height ? original.width : original.height;
+          final minSide = original.width < original.height
+              ? original.width
+              : original.height;
           final offsetX = (original.width - minSide) ~/ 2;
           final offsetY = (original.height - minSide) ~/ 2;
-          final square = img.copyCrop(original, x: offsetX, y: offsetY, width: minSide, height: minSide);
+          final square = img.copyCrop(
+            original,
+            x: offsetX,
+            y: offsetY,
+            width: minSide,
+            height: minSide,
+          );
           bytes = img.encodeJpg(square);
         } else {
           // Para calidad baja (hqdefault), recorte especial para eliminar franjas negras
           final width = original.width;
           final height = original.height;
-          
+
           // Calcular el área de contenido real (aproximadamente 60% del centro)
           final contentHeight = (height * 0.6).round();
           final offsetY = (height - contentHeight) ~/ 2;
-          
+
           // Crear un cuadrado del área de contenido
           final minSide = width < contentHeight ? width : contentHeight;
           final offsetX = (width - minSide) ~/ 2;
-          
+
           final square = img.copyCrop(
-            original, 
-            x: offsetX, 
-            y: offsetY, 
-            width: minSide, 
-            height: minSide
+            original,
+            x: offsetX,
+            y: offsetY,
+            width: minSide,
+            height: minSide,
           );
           bytes = img.encodeJpg(square);
         }
@@ -342,16 +356,16 @@ class _DownloadScreenState extends State<DownloadScreen>
 
   // Nuevo método para detectar si es playlist
   bool _isPlaylistUrl(String url) {
-    return url.contains('playlist?list=') || 
-           url.contains('&list=') ||
-           url.contains('youtube.com/playlist');
+    return url.contains('playlist?list=') ||
+        url.contains('&list=') ||
+        url.contains('youtube.com/playlist');
   }
 
   // Nuevo método para obtener información de playlist con continuaciones
   Future<void> _fetchPlaylistInfo(String url) async {
     final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+
     setState(() {
       _isDownloading = true;
       _isPlaylist = true;
@@ -376,15 +390,17 @@ class _DownloadScreenState extends State<DownloadScreen>
 
       // Obtener videos usando el servicio de YouTube Music (maneja continuaciones)
       List<Video> videos = [];
-      
+
       try {
         // Intentar primero con YouTube Music API
-        videos = await _youtubeMusicService.getPlaylistVideosWithContinuations(playlistId);
-        
+        videos = await _youtubeMusicService.getPlaylistVideosWithContinuations(
+          playlistId,
+        );
+
         // Si no obtuvimos suficientes videos, intentar con YouTube Explode como fallback
         if (videos.length < _totalVideos && _totalVideos > 0) {
           // print('YouTube Music API obtuvo ${videos.length} videos, intentando con YouTube Explode...');
-          
+
           final ytVideos = <Video>[];
           await for (final video in yt.playlists.getVideos(playlistId)) {
             // Evitar duplicados
@@ -392,20 +408,19 @@ class _DownloadScreenState extends State<DownloadScreen>
               ytVideos.add(video);
             }
           }
-          
+
           // Combinar videos únicos
           videos.addAll(ytVideos);
         }
-        
       } catch (e) {
         // print(' 👻 Error con YouTube Music API, usando solo YouTube Explode: $e');
-        
+
         // Fallback completo a YouTube Explode
         await for (final video in yt.playlists.getVideos(playlistId)) {
           videos.add(video);
         }
       }
-      
+
       setState(() {
         _playlistVideos = videos;
         _currentVideoIndex = 0; // Reset para descarga
@@ -457,7 +472,7 @@ class _DownloadScreenState extends State<DownloadScreen>
               title: Text(LocaleProvider.tr('large_playlist_confirmation')),
               content: Text(
                 '${LocaleProvider.tr('large_playlist_confirmation_desc')}\n\n'
-                '${LocaleProvider.tr('videos_found')}: ${videos.length}\n'
+                '${LocaleProvider.tr('videos_found')}: ${videos.length}\n',
               ),
               actions: [
                 TextButton(
@@ -469,7 +484,6 @@ class _DownloadScreenState extends State<DownloadScreen>
           );
         }
       }
-
     } catch (e) {
       setState(() {
         _isDownloading = false;
@@ -514,7 +528,7 @@ class _DownloadScreenState extends State<DownloadScreen>
     try {
       for (int i = 0; i < _playlistVideos.length; i++) {
         final video = _playlistVideos[i];
-        
+
         setState(() {
           _currentVideoIndex = i + 1;
           _currentTitle = video.title;
@@ -529,14 +543,13 @@ class _DownloadScreenState extends State<DownloadScreen>
           } else {
             await _downloadSingleVideoFromPlaylistDirect(video);
           }
-          
+
           setState(() {
             _downloadedVideos++;
           });
 
           // Pequeña pausa entre descargas
           await Future.delayed(const Duration(seconds: 1));
-          
         } catch (e) {
           // Continuar con el siguiente video si falla uno
           // print('Error descargando video ${video.title}: $e');
@@ -561,14 +574,15 @@ class _DownloadScreenState extends State<DownloadScreen>
         _focusNode.unfocus();
         _mostrarAlerta(
           titulo: LocaleProvider.tr('playlist_completed'),
-          mensaje: '${LocaleProvider.tr('playlist_completed_desc')} $downloadedCount ${LocaleProvider.tr('of')} $totalCount ${LocaleProvider.tr('videos_found')}.',
+          mensaje:
+              '${LocaleProvider.tr('playlist_completed_desc')} $downloadedCount ${LocaleProvider.tr('of')} $totalCount ${LocaleProvider.tr('videos_found')}.',
         );
       }
-
     } catch (e) {
       _mostrarAlerta(
         titulo: LocaleProvider.tr('playlist_error_download'),
-        mensaje: '${LocaleProvider.tr('playlist_error_download_desc')}: ${e.toString()}',
+        mensaje:
+            '${LocaleProvider.tr('playlist_error_download_desc')}: ${e.toString()}',
       );
     } finally {
       setState(() {
@@ -587,10 +601,15 @@ class _DownloadScreenState extends State<DownloadScreen>
     try {
       final manifest = await yt.videos.streamsClient.getManifest(video.id);
 
-      final audioList = manifest.audioOnly
-          .where((s) => s.codec.mimeType == 'audio/mp4' || s.codec.toString().contains('mp4a'))
-          .toList()
-        ..sort((a, b) => b.bitrate.compareTo(a.bitrate));
+      final audioList =
+          manifest.audioOnly
+              .where(
+                (s) =>
+                    s.codec.mimeType == 'audio/mp4' ||
+                    s.codec.toString().contains('mp4a'),
+              )
+              .toList()
+            ..sort((a, b) => b.bitrate.compareTo(a.bitrate));
       final audioStreamInfo = audioList.isNotEmpty ? audioList.first : null;
 
       if (audioStreamInfo == null) {
@@ -656,7 +675,6 @@ class _DownloadScreenState extends State<DownloadScreen>
           isPlaylistDownload: true,
         );
       }
-
     } catch (e) {
       throw Exception('Error descargando ${video.title}: $e');
     } finally {
@@ -777,10 +795,10 @@ class _DownloadScreenState extends State<DownloadScreen>
   Future<void> _incrementFolderUsage(String path) async {
     final prefs = await SharedPreferences.getInstance();
     Map<String, int> folderUsage = {};
-    
+
     // Obtener el mapa actual de uso de carpetas
     final usageList = prefs.getStringList('folder_usage') ?? [];
-    
+
     if (usageList.isNotEmpty) {
       // Convertir la lista de vuelta a un mapa
       for (int i = 0; i < usageList.length - 1; i += 2) {
@@ -789,26 +807,26 @@ class _DownloadScreenState extends State<DownloadScreen>
         folderUsage[path] = usage;
       }
     }
-    
+
     // Incrementar el contador para esta carpeta
     folderUsage[path] = (folderUsage[path] ?? 0) + 1;
-    
+
     // Guardar como lista de pares key-value
     final List<String> newUsageList = [];
     folderUsage.forEach((key, value) {
       newUsageList.add(key);
       newUsageList.add(value.toString());
     });
-    
+
     await prefs.setStringList('folder_usage', newUsageList);
   }
 
   Future<List<String>> _getMostUsedFolders() async {
     final prefs = await SharedPreferences.getInstance();
     final usageList = prefs.getStringList('folder_usage') ?? [];
-    
+
     if (usageList.isEmpty) return [];
-    
+
     // Convertir la lista de vuelta a un mapa
     Map<String, int> folderUsage = {};
     for (int i = 0; i < usageList.length - 1; i += 2) {
@@ -816,11 +834,11 @@ class _DownloadScreenState extends State<DownloadScreen>
       final usage = int.tryParse(usageList[i + 1]) ?? 0;
       folderUsage[path] = usage;
     }
-    
+
     // Ordenar por uso (mayor a menor) y tomar las 5 más usadas
     final sortedFolders = folderUsage.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
-    
+
     return sortedFolders.take(5).map((e) => e.key).toList();
   }
 
@@ -833,9 +851,9 @@ class _DownloadScreenState extends State<DownloadScreen>
 
   Future<void> _showFolderSelectionDialog() async {
     final commonFolders = await _getMostUsedFolders();
-    
+
     if (!mounted) return;
-    
+
     showDialog(
       context: context,
       builder: (context) {
@@ -844,7 +862,7 @@ class _DownloadScreenState extends State<DownloadScreen>
           builder: (context, colorScheme, child) {
             final isAmoled = colorScheme == AppColorScheme.amoled;
             final isDark = Theme.of(context).brightness == Brightness.dark;
-            
+
             return AlertDialog(
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
@@ -868,22 +886,26 @@ class _DownloadScreenState extends State<DownloadScreen>
                         ),
                       )
                     else
-                      ...commonFolders.map((folder) => ListTile(
-                        leading: const Icon(Icons.folder),
-                        title: Text(
-                          folder.split('/').last.isEmpty ? folder : folder.split('/').last,
-                          overflow: TextOverflow.ellipsis,
+                      ...commonFolders.map(
+                        (folder) => ListTile(
+                          leading: const Icon(Icons.folder),
+                          title: Text(
+                            folder.split('/').last.isEmpty
+                                ? folder
+                                : folder.split('/').last,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          subtitle: Text(
+                            formatFolderPath(folder),
+                            style: Theme.of(context).textTheme.bodySmall,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          onTap: () {
+                            Navigator.of(context).pop();
+                            _selectFolder(folder);
+                          },
                         ),
-                        subtitle: Text(
-                          formatFolderPath(folder),
-                          style: Theme.of(context).textTheme.bodySmall,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        onTap: () {
-                          Navigator.of(context).pop();
-                          _selectFolder(folder);
-                        },
-                      )),
+                      ),
                     if (commonFolders.isNotEmpty) SizedBox(height: 16),
                     // Botón para elegir otra carpeta con diseño especial
                     InkWell(
@@ -903,7 +925,9 @@ class _DownloadScreenState extends State<DownloadScreen>
                           border: Border.all(
                             color: (isAmoled && isDark
                                 ? Colors.white.withValues(alpha: 0.4)
-                                : Theme.of(context).colorScheme.primary.withValues(alpha: 0.3)),
+                                : Theme.of(
+                                    context,
+                                  ).colorScheme.primary.withValues(alpha: 0.3)),
                             width: 2,
                           ),
                         ),
@@ -915,7 +939,8 @@ class _DownloadScreenState extends State<DownloadScreen>
                                 borderRadius: BorderRadius.circular(12),
                                 color: (isAmoled && isDark
                                     ? Colors.white.withValues(alpha: 0.2)
-                                    : Theme.of(context).colorScheme.primary.withValues(alpha: 0.1)),
+                                    : Theme.of(context).colorScheme.primary
+                                          .withValues(alpha: 0.1)),
                               ),
                               child: Icon(
                                 Icons.folder_open,
@@ -1228,7 +1253,7 @@ class _DownloadScreenState extends State<DownloadScreen>
   Future<void> _downloadAudioOnlyExplode() async {
     final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+
     final url = _urlController.text.trim();
     if (url.isEmpty) return;
 
@@ -1290,7 +1315,11 @@ class _DownloadScreenState extends State<DownloadScreen>
       final manifest = await yt.videos.streamsClient.getManifest(video.id);
 
       final audioList = manifest.audioOnly
-          .where((s) => s.codec.mimeType == 'audio/mp4' || s.codec.toString().contains('mp4a'))
+          .where(
+            (s) =>
+                s.codec.mimeType == 'audio/mp4' ||
+                s.codec.toString().contains('mp4a'),
+          )
           .toList();
       final audioStreamInfo = _selectAudioStreamInfo(audioList);
 
@@ -1441,7 +1470,7 @@ class _DownloadScreenState extends State<DownloadScreen>
     );
   }
 
-    Future<void> downloadAudioInParallel({
+  Future<void> downloadAudioInParallel({
     required String url,
     required String filePath,
     required int totalSize,
@@ -1474,24 +1503,28 @@ class _DownloadScreenState extends State<DownloadScreen>
           );
 
           final bytes = <int>[];
-          await response.data!.stream.listen(
-            (chunk) {
-              bytes.addAll(chunk);
-              synchronized(lock, () {
-                downloaded += chunk.length;
-                onProgress(downloaded / totalSize);
-              });
-            },
-            onDone: () {},
-            onError: (e) => throw Exception('Error en chunk $index: $e'),
-          ).asFuture();
+          await response.data!.stream
+              .listen(
+                (chunk) {
+                  bytes.addAll(chunk);
+                  synchronized(lock, () {
+                    downloaded += chunk.length;
+                    onProgress(downloaded / totalSize);
+                  });
+                },
+                onDone: () {},
+                onError: (e) => throw Exception('Error en chunk $index: $e'),
+              )
+              .asFuture();
 
           raf.setPositionSync(start);
           raf.writeFromSync(bytes);
           break; // Éxito, salimos del while
         } catch (e) {
           if (attempt >= maxRetries) {
-            throw Exception('Error permanente en el chunk $index después de $attempt intentos: $e');
+            throw Exception(
+              'Error permanente en el chunk $index después de $attempt intentos: $e',
+            );
           } else {
             await Future.delayed(const Duration(seconds: 1));
           }
@@ -1671,11 +1704,15 @@ class _DownloadScreenState extends State<DownloadScreen>
   //   return packageInfo.packageName;
   // }
 
-  void _mostrarAlerta({required String titulo, required String mensaje, bool mostrarBotonCarpeta = false}) {
+  void _mostrarAlerta({
+    required String titulo,
+    required String mensaje,
+    bool mostrarBotonCarpeta = false,
+  }) {
     if (!mounted) return;
     final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
@@ -1686,28 +1723,28 @@ class _DownloadScreenState extends State<DownloadScreen>
               : BorderSide.none,
         ),
         title: Text(titulo),
-        content: mostrarBotonCarpeta 
-          ? Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(mensaje),
-                const SizedBox(height: 16),
-                // Botón para seleccionar carpeta
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    onPressed: () async {
-                      Navigator.of(context).pop(); // Cerrar diálogo
-                      await _pickDirectory(); // Abrir selector de carpetas
-                    },
-                    icon: const Icon(Icons.folder_open),
-                    label: Text(LocaleProvider.tr('select_folder')),
+        content: mostrarBotonCarpeta
+            ? Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(mensaje),
+                  const SizedBox(height: 16),
+                  // Botón para seleccionar carpeta
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () async {
+                        Navigator.of(context).pop(); // Cerrar diálogo
+                        await _pickDirectory(); // Abrir selector de carpetas
+                      },
+                      icon: const Icon(Icons.folder_open),
+                      label: Text(LocaleProvider.tr('select_folder')),
+                    ),
                   ),
-                ),
-              ],
-            )
-          : Text(mensaje),
+                ],
+              )
+            : Text(mensaje),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
@@ -1725,7 +1762,7 @@ class _DownloadScreenState extends State<DownloadScreen>
 
     final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+
     await showDialog(
       context: context,
       barrierDismissible: false, // No se puede cerrar tocando fuera
@@ -1738,7 +1775,7 @@ class _DownloadScreenState extends State<DownloadScreen>
         ),
         title: Text(LocaleProvider.tr('grant_all_files_permission')),
         content: Text(
-          '${LocaleProvider.tr('grant_all_files_permission_desc')}\n\n${LocaleProvider.tr('permission_required_for_download')}'
+          '${LocaleProvider.tr('grant_all_files_permission_desc')}\n\n${LocaleProvider.tr('permission_required_for_download')}',
         ),
         actions: [
           TextButton(
@@ -1760,7 +1797,7 @@ class _DownloadScreenState extends State<DownloadScreen>
         ],
       ),
     );
-    
+
     return permisoOtorgado;
   }
 
@@ -1977,7 +2014,7 @@ class _DownloadScreenState extends State<DownloadScreen>
     // Procesar audio sin cambiar estado de UI
     final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+
     final baseName = title.replaceAll(RegExp(r'[\\/:*?"<>|]'), '').trim();
     final m4aPath = inputPath;
 
@@ -1999,7 +2036,7 @@ class _DownloadScreenState extends State<DownloadScreen>
               bytes: bytes,
               mimeType: null,
               pictureType: PictureType.other,
-            )
+            ),
           ],
         );
         await AudioTags.write(m4aPath, tag);
@@ -2135,7 +2172,9 @@ class _DownloadScreenState extends State<DownloadScreen>
                           if (!context.mounted) return;
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
-                              content: Text(LocaleProvider.tr('browser_open_error')),
+                              content: Text(
+                                LocaleProvider.tr('browser_open_error'),
+                              ),
                             ),
                           );
                         }
@@ -2242,9 +2281,7 @@ class _DownloadScreenState extends State<DownloadScreen>
                       decoration: InputDecoration(
                         labelText: LocaleProvider.tr('youtube_link'),
                         border: const OutlineInputBorder(
-                          borderRadius: BorderRadius.all(
-                            Radius.circular(8),
-                          ),
+                          borderRadius: BorderRadius.all(Radius.circular(8)),
                         ),
                       ),
                     ),
@@ -2260,10 +2297,12 @@ class _DownloadScreenState extends State<DownloadScreen>
                           : Theme.of(context).colorScheme.secondaryContainer,
                       child: InkWell(
                         borderRadius: BorderRadius.circular(8),
-                        onTap: (_isDownloading || _isPlaylistDownloading) 
-                            ? null 
+                        onTap: (_isDownloading || _isPlaylistDownloading)
+                            ? null
                             : () async {
-                                final data = await Clipboard.getData('text/plain');
+                                final data = await Clipboard.getData(
+                                  'text/plain',
+                                );
                                 if (data != null && data.text != null) {
                                   setState(() {
                                     _urlController.text = data.text!;
@@ -2284,7 +2323,7 @@ class _DownloadScreenState extends State<DownloadScreen>
                   ),
                 ],
               ),
-          
+
               const SizedBox(height: 16),
               Row(
                 children: [
@@ -2297,90 +2336,121 @@ class _DownloadScreenState extends State<DownloadScreen>
                         color: Theme.of(context).colorScheme.primaryContainer,
                         child: InkWell(
                           borderRadius: BorderRadius.circular(8),
-                                                  onTap: (_isDownloading || _isPlaylistDownloading)
-                            ? null
-                            : () async {
-                                // Verificar permisos de acceso a todos los archivos antes de descargar
-                                final tienePermisos = await verificarPermisosTodosLosArchivos();
-                                if (!tienePermisos) {
-                                  if (context.mounted) {
-                                    final permisoOtorgado = await _mostrarDialogoPermisos(context);
-                                    if (!permisoOtorgado) {
-                                      return; // Cancelar descarga si no se otorgan los permisos
+                          onTap: (_isDownloading || _isPlaylistDownloading)
+                              ? null
+                              : () async {
+                                  // Verificar permisos de acceso a todos los archivos antes de descargar
+                                  final tienePermisos =
+                                      await verificarPermisosTodosLosArchivos();
+                                  if (!tienePermisos) {
+                                    if (context.mounted) {
+                                      final permisoOtorgado =
+                                          await _mostrarDialogoPermisos(
+                                            context,
+                                          );
+                                      if (!permisoOtorgado) {
+                                        return; // Cancelar descarga si no se otorgan los permisos
+                                      }
                                     }
                                   }
-                                }
-                                
-                                // Verificar conexión a internet antes de descargar
-                                final List<ConnectivityResult> connectivityResult = await Connectivity().checkConnectivity();
-                                if (connectivityResult.contains(ConnectivityResult.none)) {
-                                  if (context.mounted) {
-                                    showDialog(
-                                      context: context,
-                                      builder: (context) => AlertDialog(
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(16),
-                                          side: isAmoled && isDark
-                                              ? const BorderSide(color: Colors.white, width: 1)
-                                              : BorderSide.none,
-                                        ),
-                                        title: Text(LocaleProvider.tr('error')),
-                                        content: Text(LocaleProvider.tr('no_internet_connection')),
-                                        actions: [
-                                          TextButton(
-                                            onPressed: () => Navigator.of(context).pop(),
-                                            child: Text(LocaleProvider.tr('ok')),
+
+                                  // Verificar conexión a internet antes de descargar
+                                  final List<ConnectivityResult>
+                                  connectivityResult = await Connectivity()
+                                      .checkConnectivity();
+                                  if (connectivityResult.contains(
+                                    ConnectivityResult.none,
+                                  )) {
+                                    if (context.mounted) {
+                                      showDialog(
+                                        context: context,
+                                        builder: (context) => AlertDialog(
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(
+                                              16,
+                                            ),
+                                            side: isAmoled && isDark
+                                                ? const BorderSide(
+                                                    color: Colors.white,
+                                                    width: 1,
+                                                  )
+                                                : BorderSide.none,
                                           ),
-                                        ],
+                                          title: Text(
+                                            LocaleProvider.tr('error'),
+                                          ),
+                                          content: Text(
+                                            LocaleProvider.tr(
+                                              'no_internet_connection',
+                                            ),
+                                          ),
+                                          actions: [
+                                            TextButton(
+                                              onPressed: () =>
+                                                  Navigator.of(context).pop(),
+                                              child: Text(
+                                                LocaleProvider.tr('ok'),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                    }
+                                    return;
+                                  }
+                                  final url = _urlController.text.trim();
+                                  if (url.isEmpty) return;
+
+                                  if (Platform.isAndroid &&
+                                          _directoryPath == null ||
+                                      _directoryPath!.isEmpty) {
+                                    _mostrarAlerta(
+                                      titulo: LocaleProvider.tr(
+                                        'folder_not_selected',
                                       ),
+                                      mensaje: LocaleProvider.tr(
+                                        'folder_not_selected_desc',
+                                      ),
+                                      mostrarBotonCarpeta: true,
                                     );
+                                    return;
                                   }
-                                  return;
-                                }
-                                final url = _urlController.text.trim();
-                                if (url.isEmpty) return;
 
-                                if (Platform.isAndroid && _directoryPath == null ||
-                                    _directoryPath!.isEmpty) {
-                                  _mostrarAlerta(
-                                    titulo: LocaleProvider.tr('folder_not_selected'),
-                                    mensaje: LocaleProvider.tr('folder_not_selected_desc'),
-                                    mostrarBotonCarpeta: true,
-                                  );
-                                  return;
-                                }
-
-                                // Detectar si es playlist
-                                if (_isPlaylistUrl(url)) {
-                                  await _fetchPlaylistInfo(url);
-                                } else {
-                                  // Descarga de video individual
-                                  if (_usarExplode) {
-                                    _downloadAudioOnlyExplode();
+                                  // Detectar si es playlist
+                                  if (_isPlaylistUrl(url)) {
+                                    await _fetchPlaylistInfo(url);
                                   } else {
-                                    _downloadAudioOnly();
+                                    // Descarga de video individual
+                                    if (_usarExplode) {
+                                      _downloadAudioOnlyExplode();
+                                    } else {
+                                      _downloadAudioOnly();
+                                    }
                                   }
-                                }
-                              },
-                                                  child: Center(
-                          child: DefaultTextStyle(
-                            style: TextStyle(
-                              color: Theme.of(context).colorScheme.onPrimaryContainer,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
+                                },
+                          child: Center(
+                            child: DefaultTextStyle(
+                              style: TextStyle(
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onPrimaryContainer,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                              ),
+                              child: (_isDownloading || _isPlaylistDownloading)
+                                  ? (_isPlaylist
+                                        ? TranslatedText('downloading')
+                                        : Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              TranslatedText('downloading'),
+                                              Text(
+                                                ' ${(_progress * 100).toStringAsFixed(0)}%',
+                                              ),
+                                            ],
+                                          ))
+                                  : TranslatedText('download_audio'),
                             ),
-                            child: (_isDownloading || _isPlaylistDownloading)
-                                ? (_isPlaylist 
-                                    ? TranslatedText('downloading')
-                                    : Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          TranslatedText('downloading'),
-                                          Text(' ${(_progress * 100).toStringAsFixed(0)}%'),
-                                        ],
-                                      ))
-                                : TranslatedText('download_audio'),
-                          ),
                           ),
                         ),
                       ),
@@ -2398,7 +2468,9 @@ class _DownloadScreenState extends State<DownloadScreen>
                           : Theme.of(context).colorScheme.secondaryContainer,
                       child: InkWell(
                         borderRadius: BorderRadius.circular(8),
-                        onTap: (_isDownloading || _isPlaylistDownloading) ? null : _pickDirectory,
+                        onTap: (_isDownloading || _isPlaylistDownloading)
+                            ? null
+                            : _pickDirectory,
                         child: Tooltip(
                           message: _directoryPath == null
                               ? LocaleProvider.tr('choose_folder')
@@ -2413,361 +2485,428 @@ class _DownloadScreenState extends State<DownloadScreen>
                       ),
                     ),
                   ),
-                  
                 ],
               ),
               const SizedBox(height: 16),
               if (_isDownloading && !_isPlaylist)
-              Container(
-                width: double.infinity,
-                margin: const EdgeInsets.symmetric(vertical: 8),
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: isSystem ? Theme.of(context).colorScheme.secondaryContainer.withValues(alpha: 0.5) : Theme.of(context).colorScheme.surfaceContainer,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withAlpha((0.05 * 255).toInt()),
-                      blurRadius: 6,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Carátula a la izquierda
-                        if (_currentCoverBytes != null)
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: Image.memory(
-                              _currentCoverBytes!,
-                              width: 56,
-                              height: 56,
-                              fit: BoxFit.cover,
+                Container(
+                  width: double.infinity,
+                  margin: const EdgeInsets.symmetric(vertical: 8),
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: isSystem
+                        ? Theme.of(context).colorScheme.secondaryContainer
+                              .withValues(alpha: 0.5)
+                        : Theme.of(context).colorScheme.surfaceContainer,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withAlpha((0.05 * 255).toInt()),
+                        blurRadius: 6,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Carátula a la izquierda
+                          if (_currentCoverBytes != null)
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: Image.memory(
+                                _currentCoverBytes!,
+                                width: 56,
+                                height: 56,
+                                fit: BoxFit.cover,
+                              ),
+                            ),
+                          if (_currentCoverBytes != null)
+                            const SizedBox(width: 16),
+                          // Info
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                if (_currentTitle != null &&
+                                    _currentArtist != null) ...[
+                                  Text(
+                                    _currentTitle!,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    _currentArtist!.replaceFirst(
+                                      RegExp(r' - Topic$'),
+                                      '',
+                                    ),
+                                    style: TextStyle(
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.onSurfaceVariant,
+                                      fontSize: 14,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ] else ...[
+                                  TranslatedText(
+                                    'getting_info',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                                ],
+                              ],
                             ),
                           ),
-                        if (_currentCoverBytes != null)
-                          const SizedBox(width: 16),
-                        // Info
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              if (_currentTitle != null && _currentArtist != null) ...[
-                                Text(
-                                  _currentTitle!,
-                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  _currentArtist!.replaceFirst(RegExp(r' - Topic$'), ''),
-                                  style: TextStyle(
-                                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                    fontSize: 14,
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ] else ...[
-                                TranslatedText(
-                                  'getting_info',
-                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    LinearProgressIndicator(
-                      // ignore: deprecated_member_use
-                      year2023: false,
-                      value: _progress,
-                      minHeight: 8,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ],
-                ),
-              ),
-              // Nuevo: UI para obtención de información de playlist
-              if (_isPlaylist && _isDownloading && _playlistVideos.isEmpty)
-              Container(
-                width: double.infinity,
-                margin: const EdgeInsets.symmetric(vertical: 8),
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: isSystem ? Theme.of(context).colorScheme.secondaryContainer.withValues(alpha: 0.5) : Theme.of(context).colorScheme.surfaceContainer,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withAlpha((0.05 * 255).toInt()),
-                      blurRadius: 6,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.playlist_play,
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: TranslatedText(
-                            'fetching_playlist_info',
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      LocaleProvider.tr('playlist_processing_time_info'),
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        fontSize: 12,
-                        fontStyle: FontStyle.italic,
+                        ],
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                    LinearProgressIndicator(
-                      // ignore: deprecated_member_use
-                      year2023: false,
-                      value: null, // Barra de progreso indeterminada
-                      minHeight: 8,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ],
-                ),
-              ),
-              // Nuevo: UI para playlist detectada
-              if (_isPlaylist && _playlistVideos.isNotEmpty && !_isPlaylistDownloading)
-              Container(
-                width: double.infinity,
-                margin: const EdgeInsets.symmetric(vertical: 8),
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: isSystem ? Theme.of(context).colorScheme.secondaryContainer.withValues(alpha: 0.5) : Theme.of(context).colorScheme.primaryContainer.withAlpha(25),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: Theme.of(context).colorScheme.primary.withAlpha(76),
-                    width: 1,
+                      const SizedBox(height: 12),
+                      LinearProgressIndicator(
+                        // ignore: deprecated_member_use
+                        year2023: false,
+                        value: _progress,
+                        minHeight: 8,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ],
                   ),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.playlist_play,
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: _playlistTitle != null
-                              ? Text(
-                                  _playlistTitle!,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16,
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
-                                )
-                              : TranslatedText(
-                                  'playlist_detected',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16,
-                                  ),
-                                ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Text(
-                          '$_totalVideos ',
-                          style: TextStyle(
-                            color: Theme.of(context).colorScheme.onSurfaceVariant,
-                            fontSize: 14,
+              // Nuevo: UI para obtención de información de playlist
+              if (_isPlaylist && _isDownloading && _playlistVideos.isEmpty)
+                Container(
+                  width: double.infinity,
+                  margin: const EdgeInsets.symmetric(vertical: 8),
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: isSystem
+                        ? Theme.of(context).colorScheme.secondaryContainer
+                              .withValues(alpha: 0.5)
+                        : Theme.of(context).colorScheme.surfaceContainer,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withAlpha((0.05 * 255).toInt()),
+                        blurRadius: 6,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.playlist_play,
+                            color: Theme.of(context).colorScheme.primary,
                           ),
-                        ),
-                        TranslatedText(
-                          'videos_found',
-                          style: TextStyle(
-                            color: Theme.of(context).colorScheme.onSurfaceVariant,
-                            fontSize: 14,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: ElevatedButton.icon(
-                            onPressed: () {
-                              setState(() {
-                                _isPlaylist = false;
-                                _playlistVideos = [];
-                                _currentVideoIndex = 0;
-                                _totalVideos = 0;
-                                _downloadedVideos = 0;
-                                _playlistTitle = null;
-                                _isPlaylistDownloading = false;
-                                _isDownloading = false;
-                              });
-                            },
-                            icon: const Icon(Icons.cancel),
-                            label: TranslatedText('cancel'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.red.shade400,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 12),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: TranslatedText(
+                              'fetching_playlist_info',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: ElevatedButton.icon(
-                            onPressed: _downloadPlaylist,
-                            icon: const Icon(Icons.download),
-                            label: TranslatedText('download_complete_playlist'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Theme.of(context).colorScheme.primary,
-                              foregroundColor: Theme.of(context).colorScheme.onPrimary,
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              // Nuevo: UI para progreso de playlist
-              if (_isPlaylistDownloading)
-              Container(
-                width: double.infinity,
-                margin: const EdgeInsets.symmetric(vertical: 8),
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: isSystem ? Theme.of(context).colorScheme.secondaryContainer.withValues(alpha: 0.5) : Theme.of(context).colorScheme.surfaceContainer,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withAlpha((0.05 * 255).toInt()),
-                      blurRadius: 6,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.playlist_play,
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: _playlistTitle != null
-                              ? Text(
-                                  _playlistTitle!,
-                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                                  overflow: TextOverflow.ellipsis,
-                                )
-                              : TranslatedText(
-                                  'playlist_detected',
-                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                                ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        TranslatedText(
-                          'video_of',
-                          style: TextStyle(
-                            color: Theme.of(context).colorScheme.onSurfaceVariant,
-                            fontSize: 14,
-                          ),
-                        ),
-                        Text(
-                          ' $_currentVideoIndex ',
-                          style: TextStyle(
-                            color: Theme.of(context).colorScheme.onSurfaceVariant,
-                            fontSize: 14,
-                          ),
-                        ),
-                        TranslatedText(
-                          'of',
-                          style: TextStyle(
-                            color: Theme.of(context).colorScheme.onSurfaceVariant,
-                            fontSize: 14,
-                          ),
-                        ),
-                        Text(
-                          ' $_totalVideos',
-                          style: TextStyle(
-                            color: Theme.of(context).colorScheme.onSurfaceVariant,
-                            fontSize: 14,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        TranslatedText(
-                          'downloaded',
-                          style: TextStyle(
-                            color: Theme.of(context).colorScheme.onSurfaceVariant,
-                            fontSize: 14,
-                          ),
-                        ),
-                        Text(
-                          ': $_downloadedVideos',
-                          style: TextStyle(
-                            color: Theme.of(context).colorScheme.onSurfaceVariant,
-                            fontSize: 14,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    if (_currentTitle != null) ...[
-                      Text(
-                        _currentTitle!,
-                        style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
-                        overflow: TextOverflow.ellipsis,
+                        ],
                       ),
                       const SizedBox(height: 8),
+                      Text(
+                        LocaleProvider.tr('playlist_processing_time_info'),
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          fontSize: 12,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      LinearProgressIndicator(
+                        // ignore: deprecated_member_use
+                        year2023: false,
+                        value: null, // Barra de progreso indeterminada
+                        minHeight: 8,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                     ],
-                    LinearProgressIndicator(
-                      // ignore: deprecated_member_use
-                      year2023: false,
-                      value: _progress,
-                      minHeight: 8,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ],
+                  ),
                 ),
-              ),
+              // Nuevo: UI para playlist detectada
+              if (_isPlaylist &&
+                  _playlistVideos.isNotEmpty &&
+                  !_isPlaylistDownloading)
+                Container(
+                  width: double.infinity,
+                  margin: const EdgeInsets.symmetric(vertical: 8),
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: isSystem
+                        ? Theme.of(context).colorScheme.secondaryContainer
+                              .withValues(alpha: 0.5)
+                        : Theme.of(
+                            context,
+                          ).colorScheme.primaryContainer.withAlpha(25),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.primary.withAlpha(76),
+                      width: 1,
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.playlist_play,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: _playlistTitle != null
+                                ? Text(
+                                    _playlistTitle!,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  )
+                                : TranslatedText(
+                                    'playlist_detected',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Text(
+                            '$_totalVideos ',
+                            style: TextStyle(
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSurfaceVariant,
+                              fontSize: 14,
+                            ),
+                          ),
+                          TranslatedText(
+                            'videos_found',
+                            style: TextStyle(
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSurfaceVariant,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: () {
+                                setState(() {
+                                  _isPlaylist = false;
+                                  _playlistVideos = [];
+                                  _currentVideoIndex = 0;
+                                  _totalVideos = 0;
+                                  _downloadedVideos = 0;
+                                  _playlistTitle = null;
+                                  _isPlaylistDownloading = false;
+                                  _isDownloading = false;
+                                });
+                              },
+                              icon: const Icon(Icons.cancel),
+                              label: TranslatedText('cancel'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.red.shade400,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 12,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: _downloadPlaylist,
+                              icon: const Icon(Icons.download),
+                              label: TranslatedText(
+                                'download_complete_playlist',
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Theme.of(
+                                  context,
+                                ).colorScheme.primary,
+                                foregroundColor: Theme.of(
+                                  context,
+                                ).colorScheme.onPrimary,
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 12,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              // Nuevo: UI para progreso de playlist
+              if (_isPlaylistDownloading)
+                Container(
+                  width: double.infinity,
+                  margin: const EdgeInsets.symmetric(vertical: 8),
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: isSystem
+                        ? Theme.of(context).colorScheme.secondaryContainer
+                              .withValues(alpha: 0.5)
+                        : Theme.of(context).colorScheme.surfaceContainer,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withAlpha((0.05 * 255).toInt()),
+                        blurRadius: 6,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.playlist_play,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: _playlistTitle != null
+                                ? Text(
+                                    _playlistTitle!,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  )
+                                : TranslatedText(
+                                    'playlist_detected',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          TranslatedText(
+                            'video_of',
+                            style: TextStyle(
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSurfaceVariant,
+                              fontSize: 14,
+                            ),
+                          ),
+                          Text(
+                            ' $_currentVideoIndex ',
+                            style: TextStyle(
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSurfaceVariant,
+                              fontSize: 14,
+                            ),
+                          ),
+                          TranslatedText(
+                            'of',
+                            style: TextStyle(
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSurfaceVariant,
+                              fontSize: 14,
+                            ),
+                          ),
+                          Text(
+                            ' $_totalVideos',
+                            style: TextStyle(
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSurfaceVariant,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          TranslatedText(
+                            'downloaded',
+                            style: TextStyle(
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSurfaceVariant,
+                              fontSize: 14,
+                            ),
+                          ),
+                          Text(
+                            ': $_downloadedVideos',
+                            style: TextStyle(
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSurfaceVariant,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      if (_currentTitle != null) ...[
+                        Text(
+                          _currentTitle!,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w500,
+                            fontSize: 14,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 8),
+                      ],
+                      LinearProgressIndicator(
+                        // ignore: deprecated_member_use
+                        year2023: false,
+                        value: _progress,
+                        minHeight: 8,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ],
+                  ),
+                ),
               const SizedBox(height: 14),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -2780,25 +2919,34 @@ class _DownloadScreenState extends State<DownloadScreen>
                   Expanded(
                     child: _directoryPath != null
                         ? Text(
-                            _directoryPath!.replaceFirst('/storage/emulated/0', ''),
+                            _directoryPath!.replaceFirst(
+                              '/storage/emulated/0',
+                              '',
+                            ),
                             style: TextStyle(
-                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSurfaceVariant,
                             ),
                             overflow: TextOverflow.ellipsis,
                           )
                         : (Platform.isAndroid
-                            ? TranslatedText(
-                                'not_selected_folder',
-                                style: TextStyle(
-                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                ),
-                              )
-                            : TranslatedText(
-                                'app_documents',
-                                style: TextStyle(
-                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                ),
-                              )),
+                              ? TranslatedText(
+                                  'not_selected_folder',
+                                  style: TextStyle(
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.onSurfaceVariant,
+                                  ),
+                                )
+                              : TranslatedText(
+                                  'app_documents',
+                                  style: TextStyle(
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.onSurfaceVariant,
+                                  ),
+                                )),
                   ),
                 ],
               ),

@@ -3088,14 +3088,9 @@ class _FoldersScreenState extends State<FoldersScreen>
                                     width: 26,
                                     height: 40,
                                     decoration: BoxDecoration(
-                                      color: isAmoled
-                                          ? Colors.white.withAlpha(5)
-                                          : isDark
-                                          ? Colors.white.withAlpha(15)
-                                          : Theme.of(context)
-                                                .colorScheme
-                                                .onSecondary
-                                                .withAlpha(120),
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.primary.withAlpha(20),
                                       borderRadius: BorderRadius.circular(16),
                                     ),
                                     child: IconButton(
@@ -3830,13 +3825,7 @@ class _FoldersScreenState extends State<FoldersScreen>
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(
-                  color: isAmoledTheme
-                      ? Colors.white.withAlpha(10)
-                      : Theme.of(context).brightness == Brightness.dark
-                      ? Colors.white.withAlpha(15)
-                      : Theme.of(
-                          context,
-                        ).colorScheme.secondary.withValues(alpha: 0.08),
+                  color: Theme.of(context).colorScheme.primary.withAlpha(20),
                   shape: BoxShape.circle,
                 ),
                 child: IconButton(

@@ -196,6 +196,12 @@ class _EqualizerScreenState extends State<EqualizerScreen> {
     });
 
     await _equalizer!.setEnabled(value);
+
+    // Si se desactiva, bajar volume boost a 1.0x
+    if (!value) {
+      await _updateVolumeBoost(1.0);
+    }
+
     await _saveEqualizerSettings();
   }
 
@@ -686,6 +692,12 @@ class _EqualizerScreenState extends State<EqualizerScreen> {
                                         activeTrackColor: colorScheme.primary,
                                         inactiveTrackColor:
                                             colorScheme.surfaceContainerHighest,
+                                        disabledActiveTrackColor: colorScheme
+                                            .primary
+                                            .withValues(alpha: 0.4),
+                                        disabledInactiveTrackColor: colorScheme
+                                            .surfaceContainerHighest
+                                            .withValues(alpha: 0.4),
                                         trackShape:
                                             _RoundedRectSliderTrackShape(),
                                       ),
@@ -827,6 +839,12 @@ class _EqualizerScreenState extends State<EqualizerScreen> {
                       ),
                       activeTrackColor: colorScheme.primary,
                       inactiveTrackColor: colorScheme.surfaceContainerHighest,
+                      disabledActiveTrackColor: colorScheme.primary.withValues(
+                        alpha: 0.4,
+                      ),
+                      disabledInactiveTrackColor: colorScheme
+                          .surfaceContainerHighest
+                          .withValues(alpha: 0.4),
                       trackShape: _RoundedRectSliderTrackShape(),
                     ),
                     child: Slider(
@@ -835,7 +853,9 @@ class _EqualizerScreenState extends State<EqualizerScreen> {
                       max: 3.0,
                       divisions: 20,
                       label: '${_volumeBoost.toStringAsFixed(1)}x',
-                      onChanged: (value) => _updateVolumeBoost(value),
+                      onChanged: _isEnabled
+                          ? (value) => _updateVolumeBoost(value)
+                          : null,
                     ),
                   ),
 

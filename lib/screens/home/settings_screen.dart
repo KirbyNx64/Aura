@@ -1023,6 +1023,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ? folder
         : folder.split('/').last;
 
+    final isSelected = folder == _downloadDirectory;
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       child: InkWell(
@@ -1036,7 +1038,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(28),
-            color: Colors.transparent,
+            color: isSelected
+                ? Theme.of(
+                    context,
+                  ).colorScheme.primary.withAlpha(isDark ? 40 : 25)
+                : Colors.transparent,
+            border: isSelected
+                ? Border.all(
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.primary.withAlpha(isDark ? 60 : 40),
+                    width: 1,
+                  )
+                : null,
           ),
           child: Row(
             children: [
@@ -1047,7 +1061,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
-                  Icons.folder_rounded,
+                  isSelected
+                      ? Icons.check_circle_rounded
+                      : Icons.folder_rounded,
                   color: Theme.of(context).colorScheme.primary,
                   size: 24,
                 ),
@@ -1059,9 +1075,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   children: [
                     Text(
                       folderName,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 16,
-                        fontWeight: FontWeight.w500,
+                        fontWeight: isSelected
+                            ? FontWeight.bold
+                            : FontWeight.w500,
                       ),
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -1078,6 +1096,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ],
                 ),
               ),
+              if (isSelected)
+                Padding(
+                  padding: const EdgeInsets.only(left: 8),
+                  child: Icon(
+                    Icons.check_rounded,
+                    color: Theme.of(context).colorScheme.primary,
+                    size: 20,
+                  ),
+                ),
             ],
           ),
         ),

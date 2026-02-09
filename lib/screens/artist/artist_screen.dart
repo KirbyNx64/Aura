@@ -27,6 +27,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
   Map<String, dynamic>? _artist;
   bool _descExpanded = false;
   String? _expandedCategory; // 'songs', 'videos', 'albums', o null
+  String? _previousCategory; // Para volver a la vista anterior
   List<YtMusicResult> _songs = [];
   List<YtMusicResult> _videos = [];
   List<Map<String, String>> _albums = [];
@@ -418,7 +419,13 @@ class _ArtistScreenState extends State<ArtistScreen> {
 
   void handleInternalPop() {
     setState(() {
-      _expandedCategory = null;
+      if (_expandedCategory == 'album' && _previousCategory != null) {
+        _expandedCategory = _previousCategory;
+        _previousCategory = null;
+      } else {
+        _expandedCategory = null;
+        _previousCategory = null;
+      }
       _albumSongs = [];
       _currentAlbum = null;
       _resetScroll();
@@ -965,7 +972,13 @@ class _ArtistScreenState extends State<ArtistScreen> {
               ),
               child: const Icon(Icons.arrow_back, size: 24),
             ),
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: () {
+              if (canPopInternally()) {
+                handleInternalPop();
+              } else {
+                Navigator.of(context).pop();
+              }
+            },
           ),
           title: TranslatedText(
             'artist',
@@ -1778,7 +1791,17 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                               overflow: TextOverflow.ellipsis,
                                             ),
                                             trailing: IconButton(
-                                              icon: const Icon(Icons.link),
+                                              style: IconButton.styleFrom(
+                                                backgroundColor:
+                                                    Theme.of(context)
+                                                        .colorScheme
+                                                        .primary
+                                                        .withAlpha(20),
+                                              ),
+                                              icon: const Icon(
+                                                Icons.link,
+                                                size: 20,
+                                              ),
                                               tooltip: LocaleProvider.tr(
                                                 'copy_link',
                                               ),
@@ -1840,7 +1863,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                       tooltip: 'Volver',
                                       onPressed: () {
                                         setState(() {
-                                          _expandedCategory = null;
+                                          _expandedCategory = _previousCategory;
                                           _albumSongs = [];
                                           _currentAlbum = null;
                                           _resetScroll();
@@ -2164,7 +2187,17 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                                 overflow: TextOverflow.ellipsis,
                                               ),
                                               trailing: IconButton(
-                                                icon: const Icon(Icons.link),
+                                                style: IconButton.styleFrom(
+                                                  backgroundColor:
+                                                      Theme.of(context)
+                                                          .colorScheme
+                                                          .primary
+                                                          .withAlpha(20),
+                                                ),
+                                                icon: const Icon(
+                                                  Icons.link,
+                                                  size: 20,
+                                                ),
                                                 tooltip: LocaleProvider.tr(
                                                   'copy_link',
                                                 ),
@@ -2226,7 +2259,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                       tooltip: 'Volver',
                                       onPressed: () {
                                         setState(() {
-                                          _expandedCategory = null;
+                                          _expandedCategory = _previousCategory;
                                           _resetScroll();
                                         });
                                       },
@@ -2473,7 +2506,17 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                               overflow: TextOverflow.ellipsis,
                                             ),
                                             trailing: IconButton(
-                                              icon: const Icon(Icons.link),
+                                              style: IconButton.styleFrom(
+                                                backgroundColor:
+                                                    Theme.of(context)
+                                                        .colorScheme
+                                                        .primary
+                                                        .withAlpha(20),
+                                              ),
+                                              icon: const Icon(
+                                                Icons.link,
+                                                size: 20,
+                                              ),
                                               tooltip: LocaleProvider.tr(
                                                 'copy_link',
                                               ),
@@ -2535,7 +2578,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                       tooltip: 'Volver',
                                       onPressed: () {
                                         setState(() {
-                                          _expandedCategory = null;
+                                          _expandedCategory = _previousCategory;
                                           _resetScroll();
                                         });
                                       },
@@ -2636,6 +2679,8 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                                 return;
                                               }
                                               setState(() {
+                                                _previousCategory =
+                                                    _expandedCategory;
                                                 _expandedCategory = 'album';
                                                 _loadingAlbumSongs = true;
                                                 _albumSongs = [];
@@ -2734,7 +2779,17 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                               overflow: TextOverflow.ellipsis,
                                             ),
                                             trailing: IconButton(
-                                              icon: const Icon(Icons.link),
+                                              style: IconButton.styleFrom(
+                                                backgroundColor:
+                                                    Theme.of(context)
+                                                        .colorScheme
+                                                        .primary
+                                                        .withAlpha(20),
+                                              ),
+                                              icon: const Icon(
+                                                Icons.link,
+                                                size: 20,
+                                              ),
                                               tooltip: LocaleProvider.tr(
                                                 'copy_link',
                                               ),
@@ -2771,6 +2826,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                     borderRadius: BorderRadius.circular(8),
                                     onTap: () {
                                       setState(() {
+                                        _previousCategory = _expandedCategory;
                                         _expandedCategory = 'songs';
                                         _resetScroll();
                                       });
@@ -3025,7 +3081,17 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                                       TextOverflow.ellipsis,
                                                 ),
                                                 trailing: IconButton(
-                                                  icon: const Icon(Icons.link),
+                                                  style: IconButton.styleFrom(
+                                                    backgroundColor:
+                                                        Theme.of(context)
+                                                            .colorScheme
+                                                            .primary
+                                                            .withAlpha(20),
+                                                  ),
+                                                  icon: const Icon(
+                                                    Icons.link,
+                                                    size: 20,
+                                                  ),
                                                   tooltip: LocaleProvider.tr(
                                                     'copy_link',
                                                   ),
@@ -3085,6 +3151,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                     borderRadius: BorderRadius.circular(8),
                                     onTap: () {
                                       setState(() {
+                                        _previousCategory = _expandedCategory;
                                         _expandedCategory = 'albums';
                                         _resetScroll();
                                       });
@@ -3135,6 +3202,8 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                               return;
                                             }
                                             setState(() {
+                                              _previousCategory =
+                                                  _expandedCategory;
                                               _expandedCategory = 'album';
                                               _loadingAlbumSongs = true;
                                               _albumSongs = [];
@@ -3227,6 +3296,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                     borderRadius: BorderRadius.circular(8),
                                     onTap: () {
                                       setState(() {
+                                        _previousCategory = _expandedCategory;
                                         _expandedCategory = 'videos';
                                         _resetScroll();
                                       });
@@ -3480,7 +3550,17 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                                       TextOverflow.ellipsis,
                                                 ),
                                                 trailing: IconButton(
-                                                  icon: const Icon(Icons.link),
+                                                  style: IconButton.styleFrom(
+                                                    backgroundColor:
+                                                        Theme.of(context)
+                                                            .colorScheme
+                                                            .primary
+                                                            .withAlpha(20),
+                                                  ),
+                                                  icon: const Icon(
+                                                    Icons.link,
+                                                    size: 20,
+                                                  ),
                                                   tooltip: LocaleProvider.tr(
                                                     'copy_link',
                                                   ),

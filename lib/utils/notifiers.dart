@@ -68,3 +68,6 @@ final ValueNotifier<bool> useArtworkAsBackgroundOverlayNotifier =
 
 // Notifier para enfocar la búsqueda YT al cambiar de tab desde la barra de home
 final ValueNotifier<bool> focusYtSearchNotifier = ValueNotifier<bool>(false);
+
+// Notifier para ocultar la barra de navegación en búsquedas
+final ValueNotifier<bool> bottomNavVisibleNotifier = ValueNotifier<bool>(true);

@@ -71,7 +71,6 @@ class AboutScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                const SizedBox(height: 14),
                 // App Icon with premium glow/shadow
                 Center(
                   child: Container(
@@ -125,6 +124,22 @@ class AboutScreen extends StatelessWidget {
                   },
                 ),
                 const SizedBox(height: 32),
+
+                // Information
+                Row(
+                  children: [
+                    const SizedBox(width: 14),
+                    TranslatedText(
+                      'information',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
                 // Developer Card
                 Card(
                   color: isAmoled && isDark

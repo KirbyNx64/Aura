@@ -8,6 +8,7 @@ import 'package:music/screens/home/about_screen.dart';
 import 'dart:io';
 import 'package:music/l10n/locale_provider.dart';
 import 'package:material_loading_indicator/loading_indicator.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 class OnboardingScreen extends StatefulWidget {
   final VoidCallback onFinish;
@@ -292,15 +293,18 @@ class _WelcomePage extends StatelessWidget {
               const Spacer(),
               // Icono principal
               Container(
-                padding: const EdgeInsets.all(26),
+                padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   color: colorScheme.primary,
                   shape: BoxShape.circle,
                 ),
-                child: Icon(
-                  Icons.flutter_dash_rounded,
-                  size: 90,
-                  color: colorScheme.onPrimary,
+                child: SvgPicture.asset(
+                  'assets/icon/icon_foreground.svg',
+                  height: 120,
+                  colorFilter: ColorFilter.mode(
+                    colorScheme.onPrimary,
+                    BlendMode.srcIn,
+                  ),
                 ),
               ),
               const SizedBox(height: 36),

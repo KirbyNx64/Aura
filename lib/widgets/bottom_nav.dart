@@ -113,6 +113,7 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
       _pages[index] ??= widget.pageBuilders[index](context, _onTabChange);
       widget.selectedTabIndex.value = index;
     });
+    bottomNavVisibleNotifier.value = true;
   }
 
   // Nuevo: función para cambiar de pestaña desde hijos
@@ -276,49 +277,74 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
           );
         },
       ),
-      bottomNavigationBar: ValueListenableBuilder<String>(
-        valueListenable: languageNotifier,
-        builder: (context, lang, child) {
-          return ValueListenableBuilder<AppColorScheme>(
-            valueListenable: colorSchemeNotifier,
-            builder: (context, colorScheme, child) {
-              final isAmoled = colorScheme == AppColorScheme.amoled;
-              final isDark = Theme.of(context).brightness == Brightness.dark;
-
-              return NavigationBar(
-                backgroundColor: Theme.of(context).colorScheme.surface,
-                animationDuration: const Duration(milliseconds: 400),
-                selectedIndex: _selectedIndex,
-                onDestinationSelected: _onItemTapped,
-                destinations: _getNavBarItems(context),
-                // Personalizar el color del indicador seleccionado para tema amoled
-                indicatorColor: isAmoled && isDark
-                    ? Colors
-                          .white // Color más sutil para amoled
-                    : null, // Usar el color por defecto para otros temas
-                labelTextStyle: WidgetStateProperty.resolveWith<TextStyle?>((
-                  Set<WidgetState> states,
-                ) {
-                  final isSelected = states.contains(WidgetState.selected);
-                  return Theme.of(context).textTheme.labelSmall?.copyWith(
-                    overflow: TextOverflow.ellipsis,
-                    fontWeight: isSelected
-                        ? FontWeight.bold
-                        : FontWeight.normal,
-                    fontSize: 12,
-                    color: isSelected
-                        ? (isAmoled && isDark
-                              ? Colors.white
-                              : Theme.of(
-                                  context,
-                                ).colorScheme.onPrimaryContainer)
-                        : null,
-                  );
-                }),
-              );
-            },
+      bottomNavigationBar: ValueListenableBuilder<bool>(
+        valueListenable: bottomNavVisibleNotifier,
+        builder: (context, isVisible, navChild) {
+          final bottomPadding = MediaQuery.paddingOf(context).bottom;
+          return AnimatedContainer(
+            duration: const Duration(milliseconds: 300),
+            height: isVisible ? (80 + bottomPadding) : bottomPadding,
+            child: Stack(
+              children: [
+                // Gesto para bloquear toques en la barra de Android (como en settings_screen.dart)
+                GestureDetector(
+                  onVerticalDragStart: (_) {},
+                  behavior: HitTestBehavior.translucent,
+                  child: SizedBox(
+                    height: isVisible ? (80 + bottomPadding) : bottomPadding,
+                    width: double.infinity,
+                  ),
+                ),
+                AnimatedSlide(
+                  offset: isVisible ? Offset.zero : const Offset(0, 1),
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.easeInOut,
+                  child: navChild!,
+                ),
+              ],
+            ),
           );
         },
+        child: ValueListenableBuilder<String>(
+          valueListenable: languageNotifier,
+          builder: (context, lang, child) {
+            return ValueListenableBuilder<AppColorScheme>(
+              valueListenable: colorSchemeNotifier,
+              builder: (context, colorScheme, child) {
+                final isAmoled = colorScheme == AppColorScheme.amoled;
+                final isDark = Theme.of(context).brightness == Brightness.dark;
+
+                return NavigationBar(
+                  backgroundColor: Theme.of(context).colorScheme.surface,
+                  animationDuration: const Duration(milliseconds: 400),
+                  selectedIndex: _selectedIndex,
+                  onDestinationSelected: _onItemTapped,
+                  destinations: _getNavBarItems(context),
+                  indicatorColor: isAmoled && isDark ? Colors.white : null,
+                  labelTextStyle: WidgetStateProperty.resolveWith<TextStyle?>((
+                    Set<WidgetState> states,
+                  ) {
+                    final isSelected = states.contains(WidgetState.selected);
+                    return Theme.of(context).textTheme.labelSmall?.copyWith(
+                      overflow: TextOverflow.ellipsis,
+                      fontWeight: isSelected
+                          ? FontWeight.bold
+                          : FontWeight.normal,
+                      fontSize: 12,
+                      color: isSelected
+                          ? (isAmoled && isDark
+                                ? Colors.white
+                                : Theme.of(
+                                    context,
+                                  ).colorScheme.onPrimaryContainer)
+                          : null,
+                    );
+                  }),
+                );
+              },
+            );
+          },
+        ),
       ),
     );
   }
