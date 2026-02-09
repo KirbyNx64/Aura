@@ -281,184 +281,62 @@ class _DownloadHistoryScreenState extends State<DownloadHistoryScreen> {
             final isDark = Theme.of(context).brightness == Brightness.dark;
 
             return AlertDialog(
+              backgroundColor: isAmoled && isDark
+                  ? Colors.black
+                  : Theme.of(context).colorScheme.surface,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(28),
                 side: isAmoled && isDark
-                    ? const BorderSide(color: Colors.white, width: 1)
+                    ? const BorderSide(color: Colors.white24, width: 1)
                     : BorderSide.none,
               ),
-              title: Center(
-                child: Text(
-                  LocaleProvider.tr('delete_download'),
-                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
+              contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
+              icon: Icon(
+                Icons.delete_forever_rounded,
+                size: 32,
+                color: Theme.of(context).colorScheme.error,
+              ),
+              title: Text(
+                LocaleProvider.tr('delete_download'),
+                style: const TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w500,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              content: Text(
+                '${LocaleProvider.tr('delete_download_confirm')} "${record.title}"?',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
               ),
-              content: SizedBox(
-                width: 400,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    SizedBox(height: 18),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 4),
-                        child: Text(
-                          '${LocaleProvider.tr('delete_download_confirm')} "${record.title}"?',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Theme.of(context).colorScheme.onSurface,
-                          ),
-                          textAlign: TextAlign.left,
-                          maxLines: 3,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
+              actionsPadding: const EdgeInsets.all(16),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: Text(
+                    LocaleProvider.tr('cancel'),
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).colorScheme.onSurface,
                     ),
-                    SizedBox(height: 20),
-                    // Tarjeta de confirmar borrado
-                    InkWell(
-                      onTap: () {
-                        Navigator.of(context).pop();
-                        _deleteDownload(record);
-                      },
-                      borderRadius: BorderRadius.circular(16),
-                      child: Container(
-                        width: double.infinity,
-                        padding: EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: isAmoled && isDark
-                              ? Colors.red.withValues(
-                                  alpha: 0.2,
-                                ) // Color personalizado para amoled
-                              : Theme.of(context).colorScheme.errorContainer,
-                          borderRadius: BorderRadius.only(
-                            topLeft: Radius.circular(16),
-                            topRight: Radius.circular(16),
-                            bottomLeft: Radius.circular(4),
-                            bottomRight: Radius.circular(4),
-                          ),
-                          border: Border.all(
-                            color: isAmoled && isDark
-                                ? Colors.red.withValues(
-                                    alpha: 0.4,
-                                  ) // Borde personalizado para amoled
-                                : Theme.of(
-                                    context,
-                                  ).colorScheme.outline.withValues(alpha: 0.1),
-                            width: 1,
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Icon(
-                                Icons.delete_forever,
-                                size: 30,
-                                color: isAmoled && isDark
-                                    ? Colors
-                                          .red // Ícono rojo para amoled
-                                    : Theme.of(
-                                        context,
-                                      ).colorScheme.onErrorContainer,
-                              ),
-                            ),
-                            SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                LocaleProvider.tr('delete'),
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                  color: isAmoled && isDark
-                                      ? Colors
-                                            .red // Texto rojo para amoled
-                                      : Theme.of(
-                                          context,
-                                        ).colorScheme.onErrorContainer,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    SizedBox(height: 4),
-                    // Tarjeta de cancelar
-                    InkWell(
-                      onTap: () {
-                        Navigator.of(context).pop();
-                      },
-                      borderRadius: BorderRadius.circular(16),
-                      child: Container(
-                        width: double.infinity,
-                        padding: EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: isAmoled && isDark
-                              ? Colors.white.withValues(
-                                  alpha: 0.1,
-                                ) // Color personalizado para amoled
-                              : Theme.of(
-                                  context,
-                                ).colorScheme.secondaryContainer,
-                          borderRadius: BorderRadius.only(
-                            bottomLeft: Radius.circular(16),
-                            bottomRight: Radius.circular(16),
-                            topLeft: Radius.circular(4),
-                            topRight: Radius.circular(4),
-                          ),
-                          border: Border.all(
-                            color: isAmoled && isDark
-                                ? Colors.white.withValues(
-                                    alpha: 0.2,
-                                  ) // Borde personalizado para amoled
-                                : Theme.of(
-                                    context,
-                                  ).colorScheme.outline.withValues(alpha: 0.1),
-                            width: 1,
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Icon(
-                                Icons.cancel_outlined,
-                                size: 30,
-                                color: isAmoled && isDark
-                                    ? Colors
-                                          .white // Ícono blanco para amoled
-                                    : Theme.of(context).colorScheme.onSurface,
-                              ),
-                            ),
-                            SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                LocaleProvider.tr('cancel'),
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                  color: isAmoled && isDark
-                                      ? Colors
-                                            .white // Texto blanco para amoled
-                                      : Theme.of(context).colorScheme.onSurface,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
-              ),
+                TextButton(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    _deleteDownload(record);
+                  },
+                  style: TextButton.styleFrom(
+                    foregroundColor: Theme.of(context).colorScheme.error,
+                  ),
+                  child: Text(
+                    LocaleProvider.tr('delete'),
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
             );
           },
         );
@@ -624,10 +502,10 @@ class _DownloadHistoryScreenState extends State<DownloadHistoryScreen> {
               color: isDark
                   ? Theme.of(
                       context,
-                    ).colorScheme.onSecondary.withValues(alpha: 0.5)
+                    ).colorScheme.secondary.withValues(alpha: 0.06)
                   : Theme.of(
                       context,
-                    ).colorScheme.secondaryContainer.withValues(alpha: 0.5),
+                    ).colorScheme.secondary.withValues(alpha: 0.07),
             ),
             child: const Icon(Icons.arrow_back, size: 24),
           ),
@@ -667,15 +545,15 @@ class _DownloadHistoryScreenState extends State<DownloadHistoryScreen> {
                 final isAmoled = colorScheme == AppColorScheme.amoled;
                 final isDark = Theme.of(context).brightness == Brightness.dark;
 
-                final cardColor = isAmoled && isDark
+                final cardColor = isAmoled
                     ? Colors.white.withAlpha(20)
                     : isDark
                     ? Theme.of(
                         context,
-                      ).colorScheme.onSecondary.withValues(alpha: 0.5)
+                      ).colorScheme.secondary.withValues(alpha: 0.06)
                     : Theme.of(
                         context,
-                      ).colorScheme.secondaryContainer.withValues(alpha: 0.5);
+                      ).colorScheme.secondary.withValues(alpha: 0.07);
 
                 return ListView.builder(
                   itemCount: _downloadRecords.length,

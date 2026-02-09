@@ -6,9 +6,7 @@ class LineThumbShape extends SliderComponentShape {
   /// The size of the thumb
   final Size thumbSize;
 
-  const LineThumbShape({
-    this.thumbSize = const Size(8, 32),
-  });
+  const LineThumbShape({this.thumbSize = const Size(8, 24)});
 
   @override
   Size getPreferredSize(bool isEnabled, bool isDiscrete) {

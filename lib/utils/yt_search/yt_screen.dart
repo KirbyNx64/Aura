@@ -6392,11 +6392,13 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(
-                    title == 'Error' ? Icons.error_rounded : Icons.info_rounded,
+                    title == 'Error'
+                        ? Icons.error_rounded
+                        : Icons.task_alt_rounded,
                     size: 32,
                     color: title == 'Error'
                         ? Theme.of(context).colorScheme.error
-                        : primaryColor,
+                        : Theme.of(context).colorScheme.onSurface,
                   ),
                   const SizedBox(height: 16),
                   Text(
@@ -7495,7 +7497,7 @@ class YtPreviewPlayerState extends State<YtPreviewPlayer>
                     size: 32,
                     color: title == 'Error'
                         ? Theme.of(context).colorScheme.error
-                        : primaryColor,
+                        : Theme.of(context).colorScheme.onSurface,
                   ),
                   const SizedBox(height: 16),
                   Text(

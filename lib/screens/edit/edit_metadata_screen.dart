@@ -331,21 +331,46 @@ class _EditMetadataScreenState extends State<EditMetadataScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
+        backgroundColor: isAmoled && isDark
+            ? Colors.black
+            : Theme.of(context).colorScheme.surface,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(28),
           side: isAmoled && isDark
-              ? const BorderSide(color: Colors.white, width: 1)
+              ? const BorderSide(color: Colors.white24, width: 1)
               : BorderSide.none,
         ),
-        title: Text(LocaleProvider.tr('changes_saved')),
-        content: Text(LocaleProvider.tr('changes_saved_desc')),
+        contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
+        icon: Icon(
+          Icons.task_alt_rounded,
+          size: 32,
+          color: Theme.of(context).colorScheme.onSurface,
+        ),
+        title: Text(
+          LocaleProvider.tr('changes_saved'),
+          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w500),
+          textAlign: TextAlign.center,
+        ),
+        content: Text(
+          LocaleProvider.tr('changes_saved_desc'),
+          textAlign: TextAlign.center,
+        ),
+        actionsPadding: const EdgeInsets.all(16),
         actions: [
           TextButton(
             onPressed: () {
               Navigator.of(context).pop();
               Navigator.of(context).pop();
             },
-            child: Text(LocaleProvider.tr('ok')),
+            child: Text(
+              LocaleProvider.tr('ok'),
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: isAmoled && isDark
+                    ? Colors.white
+                    : Theme.of(context).colorScheme.primary,
+              ),
+            ),
           ),
         ],
       ),
@@ -359,18 +384,40 @@ class _EditMetadataScreenState extends State<EditMetadataScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
+        backgroundColor: isAmoled && isDark
+            ? Colors.black
+            : Theme.of(context).colorScheme.surface,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(28),
           side: isAmoled && isDark
-              ? const BorderSide(color: Colors.white, width: 1)
+              ? const BorderSide(color: Colors.white24, width: 1)
               : BorderSide.none,
         ),
-        title: Text(title),
-        content: Text(message),
+        contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
+        icon: Icon(
+          Icons.error_outline_rounded,
+          size: 32,
+          color: Theme.of(context).colorScheme.error,
+        ),
+        title: Text(
+          title,
+          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w500),
+          textAlign: TextAlign.center,
+        ),
+        content: Text(message, textAlign: TextAlign.center),
+        actionsPadding: const EdgeInsets.all(16),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: Text(LocaleProvider.tr('ok')),
+            child: Text(
+              LocaleProvider.tr('ok'),
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: isAmoled && isDark
+                    ? Colors.white
+                    : Theme.of(context).colorScheme.primary,
+              ),
+            ),
           ),
         ],
       ),
@@ -400,10 +447,10 @@ class _EditMetadataScreenState extends State<EditMetadataScreen> {
               color: isDark
                   ? Theme.of(
                       context,
-                    ).colorScheme.onSecondary.withValues(alpha: 0.5)
+                    ).colorScheme.secondary.withValues(alpha: 0.06)
                   : Theme.of(
                       context,
-                    ).colorScheme.secondaryContainer.withValues(alpha: 0.5),
+                    ).colorScheme.secondary.withValues(alpha: 0.07),
             ),
             child: const Icon(Icons.arrow_back, size: 24),
           ),
@@ -422,19 +469,48 @@ class _EditMetadataScreenState extends State<EditMetadataScreen> {
             onPressed: () => showDialog(
               context: context,
               builder: (context) => AlertDialog(
+                backgroundColor: isAmoled && isDark
+                    ? Colors.black
+                    : Theme.of(context).colorScheme.surface,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(28),
                   side: isAmoled && isDark
-                      ? const BorderSide(color: Colors.white, width: 1)
+                      ? const BorderSide(color: Colors.white24, width: 1)
                       : BorderSide.none,
                 ),
-                title: Center(
-                  child: Text(
-                    LocaleProvider.tr('edit_song_info'),
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
+                contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
+                icon: Icon(
+                  Icons.info_rounded,
+                  size: 32,
+                  color: Theme.of(context).colorScheme.onSurface,
                 ),
-                content: Text(LocaleProvider.tr('edit_song_info_desc')),
+                title: Text(
+                  LocaleProvider.tr('edit_song_info'),
+                  style: const TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                content: Text(
+                  LocaleProvider.tr('edit_song_info_desc'),
+                  textAlign: TextAlign.center,
+                ),
+                actionsPadding: const EdgeInsets.all(16),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: Text(
+                      LocaleProvider.tr('ok'),
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: isAmoled && isDark
+                            ? Colors.white
+                            : Theme.of(context).colorScheme.primary,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
             icon: const Icon(Icons.info_outline, size: 26),
@@ -458,25 +534,32 @@ class _EditMetadataScreenState extends State<EditMetadataScreen> {
                         width: 200,
                         height: 200,
                         decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(24),
                           border: Border.all(
                             color: Theme.of(context).dividerColor,
                             width: 1,
                           ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.1),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
                         ),
                         child: ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(24),
                           child: _coverBytes != null
                               ? Image.memory(_coverBytes!, fit: BoxFit.cover)
                               : Container(
                                   color: Theme.of(
                                     context,
-                                  ).colorScheme.surfaceContainer,
+                                  ).colorScheme.surfaceContainerHighest,
                                   child: Column(
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
                                       Icon(
-                                        Icons.music_note,
+                                        Icons.music_note_rounded,
                                         size: 64,
                                         color: Theme.of(context)
                                             .colorScheme
@@ -503,8 +586,8 @@ class _EditMetadataScreenState extends State<EditMetadataScreen> {
                         top: 8,
                         right: 8,
                         child: Container(
-                          width: 32,
-                          height: 32,
+                          width: 36,
+                          height: 36,
                           decoration: BoxDecoration(
                             color: Colors.black.withValues(alpha: 0.6),
                             borderRadius: BorderRadius.circular(16),
@@ -527,30 +610,96 @@ class _EditMetadataScreenState extends State<EditMetadataScreen> {
                 controller: _titleController,
                 decoration: InputDecoration(
                   labelText: LocaleProvider.tr('song_title'),
-                  border: const OutlineInputBorder(),
-                  prefixIcon: const Icon(Icons.title),
+                  filled: true,
+                  fillColor: isAmoled && isDark
+                      ? Colors.white.withAlpha(35)
+                      : Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withValues(alpha: 0.07),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide.none,
+                  ),
+                  floatingLabelStyle: TextStyle(
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withValues(alpha: 0.7),
+                  ),
+                  labelStyle: TextStyle(
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withValues(alpha: 0.7),
+                  ),
+                  prefixIcon: const Icon(Icons.title_rounded),
+                  prefixIconColor: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withValues(alpha: 0.7),
                 ),
                 onChanged: (_) => _checkForChanges(),
               ),
-              const SizedBox(height: 26),
+              const SizedBox(height: 20),
 
               TextField(
                 controller: _artistController,
                 decoration: InputDecoration(
                   labelText: LocaleProvider.tr('song_artist'),
-                  border: const OutlineInputBorder(),
-                  prefixIcon: const Icon(Icons.person),
+                  filled: true,
+                  fillColor: isAmoled && isDark
+                      ? Colors.white.withAlpha(35)
+                      : Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withValues(alpha: 0.07),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide.none,
+                  ),
+                  floatingLabelStyle: TextStyle(
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withValues(alpha: 0.7),
+                  ),
+                  labelStyle: TextStyle(
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withValues(alpha: 0.7),
+                  ),
+                  prefixIcon: const Icon(Icons.person_rounded),
+                  prefixIconColor: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withValues(alpha: 0.7),
                 ),
                 onChanged: (_) => _checkForChanges(),
               ),
-              const SizedBox(height: 26),
+              const SizedBox(height: 20),
 
               TextField(
                 controller: _albumController,
                 decoration: InputDecoration(
                   labelText: LocaleProvider.tr('song_album'),
-                  border: const OutlineInputBorder(),
-                  prefixIcon: const Icon(Icons.album),
+                  filled: true,
+                  fillColor: isAmoled && isDark
+                      ? Colors.white.withAlpha(35)
+                      : Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withValues(alpha: 0.07),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide.none,
+                  ),
+                  floatingLabelStyle: TextStyle(
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withValues(alpha: 0.7),
+                  ),
+                  labelStyle: TextStyle(
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withValues(alpha: 0.7),
+                  ),
+                  prefixIcon: const Icon(Icons.album_rounded),
+                  prefixIconColor: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withValues(alpha: 0.7),
                 ),
                 onChanged: (_) => _checkForChanges(),
               ),
@@ -558,84 +707,49 @@ class _EditMetadataScreenState extends State<EditMetadataScreen> {
 
               // Botón de guardar
               Center(
-                child: Container(
-                  height: 60,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(8),
-                    color: _hasChanges && !_isLoading
-                        ? Theme.of(context).colorScheme.primaryContainer
-                        : Theme.of(context).colorScheme.surfaceContainer,
-                  ),
-                  child: Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(8),
-                      onTap: _hasChanges && !_isLoading ? _saveChanges : null,
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 24,
-                          vertical: 16,
-                        ),
-                        child: _isLoading
-                            ? Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  SizedBox(
-                                    width: 20,
-                                    height: 20,
-                                    child: LoadingIndicator(),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    LocaleProvider.tr('saving'),
-                                    style: TextStyle(
-                                      color: _hasChanges && !_isLoading
-                                          ? Theme.of(
-                                              context,
-                                            ).colorScheme.onPrimaryContainer
-                                          : Theme.of(context)
-                                                .colorScheme
-                                                .onSurface
-                                                .withValues(alpha: 0.5),
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ],
-                              )
-                            : Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    Icons.save,
-                                    color: _hasChanges && !_isLoading
-                                        ? Theme.of(
-                                            context,
-                                          ).colorScheme.onPrimaryContainer
-                                        : Theme.of(context)
-                                              .colorScheme
-                                              .onSurface
-                                              .withValues(alpha: 0.5),
-                                    size: 20,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    LocaleProvider.tr('save_changes'),
-                                    style: TextStyle(
-                                      color: _hasChanges && !_isLoading
-                                          ? Theme.of(
-                                              context,
-                                            ).colorScheme.onPrimaryContainer
-                                          : Theme.of(context)
-                                                .colorScheme
-                                                .onSurface
-                                                .withValues(alpha: 0.5),
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ],
-                              ),
+                child: SizedBox(
+                  width: double.infinity,
+                  height: 56,
+                  child: FilledButton.tonal(
+                    onPressed: _hasChanges && !_isLoading ? _saveChanges : null,
+                    style: FilledButton.styleFrom(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
                       ),
                     ),
+                    child: _isLoading
+                        ? Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: LoadingIndicator(),
+                              ),
+                              const SizedBox(width: 12),
+                              Text(
+                                LocaleProvider.tr('saving'),
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          )
+                        : Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(Icons.save_rounded, size: 20),
+                              const SizedBox(width: 12),
+                              Text(
+                                LocaleProvider.tr('save_changes'),
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
                   ),
                 ),
               ),

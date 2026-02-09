@@ -161,194 +161,93 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
     // Mostrar diálogo de confirmación
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => ValueListenableBuilder<AppColorScheme>(
-        valueListenable: colorSchemeNotifier,
-        builder: (context, colorScheme, child) {
-          final isAmoled = colorScheme == AppColorScheme.amoled;
-          final isDark = Theme.of(context).brightness == Brightness.dark;
-          return AlertDialog(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-              side: isAmoled && isDark
-                  ? const BorderSide(color: Colors.white, width: 1)
-                  : BorderSide.none,
-            ),
-            title: Center(
-              child: Text(
-                LocaleProvider.tr('select_lyrics'),
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+      builder: (context) {
+        return ValueListenableBuilder<AppColorScheme>(
+          valueListenable: colorSchemeNotifier,
+          builder: (context, colorScheme, child) {
+            final isAmoled = colorScheme == AppColorScheme.amoled;
+            final isDark = Theme.of(context).brightness == Brightness.dark;
+            final primaryColor = Theme.of(context).colorScheme.primary;
+
+            return AlertDialog(
+              backgroundColor: isAmoled && isDark
+                  ? Colors.black
+                  : Theme.of(context).colorScheme.surface,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(28),
+                side: isAmoled && isDark
+                    ? const BorderSide(color: Colors.white24, width: 1)
+                    : BorderSide.none,
               ),
-            ),
-            content: RichText(
-              text: TextSpan(
+              contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
+              icon: Icon(
+                Icons.lyrics_rounded,
+                size: 32,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
+              title: TranslatedText(
+                'select_lyrics',
                 style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w500,
                   color: Theme.of(context).colorScheme.onSurface,
-                  fontSize: 18,
                 ),
+                textAlign: TextAlign.center,
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  TextSpan(
-                    text: '${LocaleProvider.tr('confirm_apply_lyrics')} "',
+                  RichText(
+                    textAlign: TextAlign.center,
+                    text: TextSpan(
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withAlpha(200),
+                        height: 1.5,
+                      ),
+                      children: [
+                        TextSpan(
+                          text: '${LocaleProvider.tr('confirm_apply_lyrics')} ',
+                        ),
+                        TextSpan(
+                          text: '"${widget.currentSong.title}"',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Theme.of(context).colorScheme.onSurface,
+                          ),
+                        ),
+                        const TextSpan(text: '?'),
+                      ],
+                    ),
                   ),
-                  TextSpan(
-                    text: widget.currentSong.title,
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  const TextSpan(text: '"?'),
                 ],
               ),
-            ),
-            actions: [
-              SizedBox(
-                width: 400,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    SizedBox(height: 20),
-                    // Botón de seleccionar letra (AMOLED-aware)
-                    InkWell(
-                      onTap: () => Navigator.of(context).pop(true),
-                      borderRadius: BorderRadius.circular(16),
-                      child: Container(
-                        width: double.infinity,
-                        padding: EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: isAmoled && isDark
-                              ? Colors.white.withValues(alpha: 0.2)
-                              : Theme.of(context).colorScheme.primaryContainer,
-                          borderRadius: BorderRadius.only(
-                            topLeft: Radius.circular(16),
-                            topRight: Radius.circular(16),
-                            bottomLeft: Radius.circular(4),
-                            bottomRight: Radius.circular(4),
-                          ),
-                          border: Border.all(
-                            color: isAmoled && isDark
-                                ? Colors.white.withValues(alpha: 0.4)
-                                : Theme.of(
-                                    context,
-                                  ).colorScheme.primary.withValues(alpha: 0.3),
-                            width: 2,
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(12),
-                                color: isAmoled && isDark
-                                    ? Colors.white.withValues(alpha: 0.2)
-                                    : Theme.of(context).colorScheme.primary
-                                          .withValues(alpha: 0.1),
-                              ),
-                              child: Icon(
-                                Icons.check_rounded,
-                                size: 30,
-                                color: isAmoled && isDark
-                                    ? Colors.white
-                                    : Theme.of(context).colorScheme.primary,
-                              ),
-                            ),
-                            SizedBox(width: 8),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    LocaleProvider.tr('apply'),
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w600,
-                                      color: isAmoled && isDark
-                                          ? Colors.white
-                                          : Theme.of(
-                                              context,
-                                            ).colorScheme.primary,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
+              actionsPadding: EdgeInsets.only(right: 16, bottom: 16),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: TranslatedText(
+                    'cancel',
+                    style: TextStyle(
+                      color: primaryColor,
+                      fontWeight: FontWeight.bold,
                     ),
-                    SizedBox(height: 4),
-                    // Botón de cancelar (AMOLED-aware)
-                    InkWell(
-                      onTap: () => Navigator.of(context).pop(false),
-                      borderRadius: BorderRadius.circular(16),
-                      child: Container(
-                        width: double.infinity,
-                        padding: EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: isAmoled && isDark
-                              ? Colors.white.withValues(alpha: 0.1)
-                              : Theme.of(
-                                  context,
-                                ).colorScheme.secondaryContainer,
-                          borderRadius: BorderRadius.only(
-                            bottomLeft: Radius.circular(16),
-                            bottomRight: Radius.circular(16),
-                            topLeft: Radius.circular(4),
-                            topRight: Radius.circular(4),
-                          ),
-                          border: Border.all(
-                            color: isAmoled && isDark
-                                ? Colors.white.withValues(alpha: 0.2)
-                                : Theme.of(
-                                    context,
-                                  ).colorScheme.outline.withValues(alpha: 0.1),
-                            width: 1,
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(12),
-                                color: Colors.transparent,
-                              ),
-                              child: Icon(
-                                Icons.cancel,
-                                size: 30,
-                                color: isAmoled && isDark
-                                    ? Colors.white
-                                    : Theme.of(context).colorScheme.onSurface,
-                              ),
-                            ),
-                            SizedBox(width: 8),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    LocaleProvider.tr('cancel'),
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w600,
-                                      color: isAmoled && isDark
-                                          ? Colors.white
-                                          : Theme.of(
-                                              context,
-                                            ).colorScheme.onSurface,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
-              ),
-            ],
-          );
-        },
-      ),
+                FilledButton.tonal(
+                  onPressed: () => Navigator.of(context).pop(true),
+                  child: TranslatedText(
+                    'apply',
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
 
     if (confirmed == true) {
@@ -400,188 +299,145 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
   }) async {
     await showDialog(
       context: context,
-      builder: (context) => ValueListenableBuilder<AppColorScheme>(
-        valueListenable: colorSchemeNotifier,
-        builder: (context, colorScheme, child) {
-          final isAmoled = colorScheme == AppColorScheme.amoled;
-          final isDark = Theme.of(context).brightness == Brightness.dark;
-          return AlertDialog(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-              side: isAmoled && isDark
-                  ? const BorderSide(color: Colors.white, width: 1)
-                  : BorderSide.none,
-            ),
-            title: Center(
-              child: Text(
-                title,
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+      builder: (context) {
+        return ValueListenableBuilder<AppColorScheme>(
+          valueListenable: colorSchemeNotifier,
+          builder: (context, colorScheme, child) {
+            final isAmoled = colorScheme == AppColorScheme.amoled;
+            final isDark = Theme.of(context).brightness == Brightness.dark;
+
+            return AlertDialog(
+              backgroundColor: isAmoled && isDark
+                  ? Colors.black
+                  : Theme.of(context).colorScheme.surface,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(28),
+                side: isAmoled && isDark
+                    ? const BorderSide(color: Colors.white24, width: 1)
+                    : BorderSide.none,
               ),
-            ),
-            content: Text(description, style: TextStyle(fontSize: 16)),
-            actions: [
-              SizedBox(
-                width: 400,
-                child: InkWell(
-                  onTap: () => Navigator.of(context).pop(),
-                  borderRadius: BorderRadius.circular(16),
-                  child: Container(
-                    width: double.infinity,
-                    padding: EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: isAmoled && isDark
-                          ? Colors.white.withValues(alpha: 0.2)
-                          : Theme.of(context).colorScheme.primaryContainer,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: isAmoled && isDark
-                            ? Colors.white.withValues(alpha: 0.4)
-                            : Theme.of(
-                                context,
-                              ).colorScheme.primary.withValues(alpha: 0.3),
-                        width: 2,
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(12),
-                            color: isAmoled && isDark
-                                ? Colors.white.withValues(alpha: 0.2)
-                                : Theme.of(
-                                    context,
-                                  ).colorScheme.primary.withValues(alpha: 0.1),
-                          ),
-                          child: Icon(
-                            Icons.check_rounded,
-                            size: 30,
-                            color: isAmoled && isDark
-                                ? Colors.white
-                                : Theme.of(context).colorScheme.primary,
-                          ),
-                        ),
-                        SizedBox(width: 8),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                LocaleProvider.tr('ok'),
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                  color: isAmoled && isDark
-                                      ? Colors.white
-                                      : Theme.of(context).colorScheme.primary,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
+              contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
+              icon: Icon(
+                Icons.task_alt_rounded,
+                size: 32,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
+              title: Text(
+                title,
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w500,
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              content: Text(
+                description,
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              actionsPadding: EdgeInsets.all(16),
+              actions: [
+                FilledButton.tonal(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: TranslatedText(
+                    'ok',
+                    style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
                 ),
-              ),
-            ],
-          );
-        },
-      ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 
   Future<void> _showInfoDialog() async {
     await showDialog(
       context: context,
-      builder: (context) => ValueListenableBuilder<AppColorScheme>(
-        valueListenable: colorSchemeNotifier,
-        builder: (context, colorScheme, child) {
-          final isAmoled = colorScheme == AppColorScheme.amoled;
-          final isDark = Theme.of(context).brightness == Brightness.dark;
-          return AlertDialog(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-              side: isAmoled && isDark
-                  ? const BorderSide(color: Colors.white, width: 1)
-                  : BorderSide.none,
-            ),
-            title: Center(
-              child: Text(
-                LocaleProvider.tr('info'),
-                style: TextStyle(fontWeight: FontWeight.bold),
+      builder: (context) {
+        return ValueListenableBuilder<AppColorScheme>(
+          valueListenable: colorSchemeNotifier,
+          builder: (context, colorScheme, child) {
+            final isAmoled = colorScheme == AppColorScheme.amoled;
+            final isDark = Theme.of(context).brightness == Brightness.dark;
+            final primaryColor = Theme.of(context).colorScheme.primary;
+
+            return AlertDialog(
+              backgroundColor: isAmoled && isDark
+                  ? Colors.black
+                  : Theme.of(context).colorScheme.surface,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(28),
+                side: isAmoled && isDark
+                    ? const BorderSide(color: Colors.white24, width: 1)
+                    : BorderSide.none,
               ),
-            ),
-            content: Text(LocaleProvider.tr('lyrics_search_info')),
-            actions: [
-              SizedBox(height: 16),
-              InkWell(
-                onTap: () => Navigator.of(context).pop(),
-                borderRadius: BorderRadius.circular(16),
-                child: Container(
-                  width: double.infinity,
-                  padding: EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: isAmoled && isDark
-                        ? Colors.white.withValues(alpha: 0.2)
-                        : Theme.of(context).colorScheme.primaryContainer,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: isAmoled && isDark
-                          ? Colors.white.withValues(alpha: 0.4)
-                          : Theme.of(
-                              context,
-                            ).colorScheme.primary.withValues(alpha: 0.3),
-                      width: 2,
+              contentPadding: const EdgeInsets.fromLTRB(0, 24, 0, 8),
+              content: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: 400,
+                  maxHeight: MediaQuery.of(context).size.height * 0.8,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.info_rounded,
+                      size: 32,
+                      color: Theme.of(context).colorScheme.onSurface,
                     ),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(12),
-                          color: isAmoled && isDark
-                              ? Colors.white.withValues(alpha: 0.2)
-                              : Theme.of(
-                                  context,
-                                ).colorScheme.primary.withValues(alpha: 0.1),
-                        ),
-                        child: Icon(
-                          Icons.check_circle,
-                          size: 30,
-                          color: isAmoled && isDark
-                              ? Colors.white
-                              : Theme.of(context).colorScheme.primary,
-                        ),
+                    const SizedBox(height: 16),
+                    TranslatedText(
+                      'info',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w500,
+                        color: Theme.of(context).colorScheme.onSurface,
                       ),
-                      SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              LocaleProvider.tr('ok'),
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                color: isAmoled && isDark
-                                    ? Colors.white
-                                    : Theme.of(context).colorScheme.primary,
-                              ),
+                    ),
+                    const SizedBox(height: 16),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: TranslatedText(
+                        'lyrics_search_info',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onSurface.withAlpha(180),
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    Padding(
+                      padding: const EdgeInsets.only(right: 24, bottom: 8),
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          child: TranslatedText(
+                            'ok',
+                            style: TextStyle(
+                              color: primaryColor,
+                              fontWeight: FontWeight.bold,
                             ),
-                          ],
+                          ),
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
-            ],
-          );
-        },
-      ),
+            );
+          },
+        );
+      },
     );
   }
 
@@ -614,10 +470,10 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
               color: isDark
                   ? Theme.of(
                       context,
-                    ).colorScheme.onSecondary.withValues(alpha: 0.5)
+                    ).colorScheme.secondary.withValues(alpha: 0.06)
                   : Theme.of(
                       context,
-                    ).colorScheme.secondaryContainer.withValues(alpha: 0.5),
+                    ).colorScheme.secondary.withValues(alpha: 0.07),
             ),
             child: const Icon(Icons.arrow_back, size: 24),
           ),
@@ -655,9 +511,10 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
                         : isDark
                         ? Theme.of(
                             context,
-                          ).colorScheme.onSecondary.withValues(alpha: 0.5)
-                        : Theme.of(context).colorScheme.secondaryContainer
-                              .withValues(alpha: 0.5);
+                          ).colorScheme.secondary.withValues(alpha: 0.06)
+                        : Theme.of(
+                            context,
+                          ).colorScheme.secondary.withValues(alpha: 0.07);
 
                     return TextField(
                       controller: _searchController,
@@ -837,174 +694,168 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
   }
 
   Widget _buildResultCard(LyricsSearchResult result, int index) {
-    final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
+    final colorScheme = colorSchemeNotifier.value;
+    final isAmoled = colorScheme == AppColorScheme.amoled;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final isSystem = colorSchemeNotifier.value == AppColorScheme.system;
+    final primaryColor = Theme.of(context).colorScheme.primary;
+
     final isExpanded = _expandedCards.contains(index);
     final fullLyrics = _getFullLyrics(result.syncedLyrics);
     final previewLyrics = _getLyricsPreview(result.syncedLyrics);
 
+    final cardColor = isAmoled && isDark
+        ? Colors.white.withAlpha(20)
+        : isDark
+        ? Theme.of(context).colorScheme.secondary.withValues(alpha: 0.05)
+        : Theme.of(context).colorScheme.secondary.withValues(alpha: 0.07);
+
     return Card(
-      shadowColor: Colors.transparent,
-      color: Colors.white.withAlpha(20),
+      elevation: 0,
+      color: cardColor,
+      margin: const EdgeInsets.only(bottom: 12),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(20),
         side: BorderSide.none,
       ),
-      margin: const EdgeInsets.only(bottom: 8),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        result.title,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        result.artist,
-                        style: TextStyle(fontSize: 14),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 12),
-                // Botón de aplicar mejorado
-                Tooltip(
-                  message: LocaleProvider.tr('apply'),
-                  child: ElevatedButton(
-                    onPressed: () => _selectLyrics(result),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: isAmoled && isDark
+      child: InkWell(
+        onTap: () {
+          if (mounted) {
+            setState(() {
+              if (isExpanded) {
+                _expandedCards.remove(index);
+              } else {
+                _expandedCards.add(index);
+              }
+            });
+          }
+        },
+        borderRadius: BorderRadius.circular(20),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: isAmoled
                           ? Colors.white
-                          : Theme.of(context).colorScheme.onPrimaryContainer,
-                      foregroundColor: isAmoled && isDark
-                          ? Colors.black
-                          : Theme.of(context).colorScheme.onPrimary,
-                      padding: const EdgeInsets.all(16),
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
+                          : Theme.of(
+                              context,
+                            ).colorScheme.primaryContainer.withAlpha(100),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Center(
+                      child: Icon(
+                        Icons.lyrics_rounded,
+                        color: isAmoled ? Colors.black : primaryColor,
+                        size: 24,
                       ),
                     ),
-                    child: const Icon(Icons.check_rounded, size: 28),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            // Mostrar preview de la letra con botón de expandir
-            if (fullLyrics.length > previewLyrics.length)
-              InkWell(
-                onTap: () {
-                  if (mounted) {
-                    setState(() {
-                      if (isExpanded) {
-                        _expandedCards.remove(index);
-                      } else {
-                        _expandedCards.add(index);
-                      }
-                    });
-                  }
-                },
-                borderRadius: BorderRadius.circular(8),
-                child: Container(
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          result.title,
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.bold),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          result.artist,
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurfaceVariant,
+                              ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton.filledTonal(
+                    // Botón de acción más prominente
+                    onPressed: () => _selectLyrics(result),
+                    icon: Icon(
+                      Icons.download_rounded,
+                      color: isAmoled
+                          ? Colors.black
+                          : isDark
+                          ? null
+                          : primaryColor,
+                    ),
+                    style: IconButton.styleFrom(
+                      padding: const EdgeInsets.all(12),
+                      backgroundColor: isAmoled ? Colors.white : null,
+                    ),
+                    tooltip: LocaleProvider.tr('apply'),
+                  ),
+                ],
+              ),
+              if (fullLyrics.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                Container(
+                  width: double.infinity,
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: isSystem
-                        ? Theme.of(context).colorScheme.secondaryContainer
-                              .withValues(alpha: 0.5)
-                        : Theme.of(context).colorScheme.surfaceContainer,
-                    borderRadius: BorderRadius.circular(8),
-                    border: null,
+                    color: isAmoled
+                        ? Colors.black.withAlpha(100)
+                        : Theme.of(context).colorScheme.surface.withAlpha(150),
+                    borderRadius: BorderRadius.circular(12),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
                         children: [
+                          Icon(
+                            Icons.text_snippet_rounded,
+                            size: 16,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                          const SizedBox(width: 8),
                           Text(
                             LocaleProvider.tr('preview'),
                             style: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.bold,
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.onSurface.withValues(alpha: 0.7),
+                              color: Theme.of(context).colorScheme.primary,
                             ),
                           ),
                           const Spacer(),
-                          Container(
-                            width: 32,
-                            height: 32,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .surfaceContainerHighest
-                                  .withValues(alpha: 0.5),
-                            ),
-                            child: Icon(
-                              isExpanded
-                                  ? Icons.keyboard_arrow_up
-                                  : Icons.keyboard_arrow_down,
-                              size: 20,
-                              color: Theme.of(context).colorScheme.onSurface,
-                            ),
+                          Icon(
+                            isExpanded
+                                ? Icons.keyboard_arrow_up_rounded
+                                : Icons.keyboard_arrow_down_rounded,
+                            size: 20,
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onSurfaceVariant,
                           ),
                         ],
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 8),
                       isExpanded
                           ? _buildFullLyricsDisplay(fullLyrics)
                           : _buildPreviewLyricsDisplay(previewLyrics),
                     ],
                   ),
                 ),
-              )
-            else
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Theme.of(
-                    context,
-                  ).colorScheme.surfaceContainer.withValues(alpha: 0.5),
-                  borderRadius: BorderRadius.circular(8),
-                  border: null,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      LocaleProvider.tr('preview'),
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                        color: Theme.of(
-                          context,
-                        ).colorScheme.onSurface.withValues(alpha: 0.7),
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    _buildPreviewLyricsDisplay(previewLyrics),
-                  ],
-                ),
-              ),
-          ],
+              ],
+            ],
+          ),
         ),
       ),
     );

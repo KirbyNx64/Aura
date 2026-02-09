@@ -229,36 +229,58 @@ class _EqualizerScreenState extends State<EqualizerScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
+        backgroundColor: isAmoled && isDark
+            ? Colors.black
+            : Theme.of(context).colorScheme.surface,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(28),
           side: isAmoled && isDark
-              ? const BorderSide(color: Colors.white, width: 1)
+              ? const BorderSide(color: Colors.white24, width: 1)
               : BorderSide.none,
         ),
-        title: Row(
-          children: [
-            Icon(Icons.refresh, color: Theme.of(context).colorScheme.primary),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                LocaleProvider.tr('reset_equalizer'),
-                style: TextStyle(
-                  fontSize: 18,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
+        contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
+        icon: Icon(
+          Icons.refresh_rounded,
+          size: 32,
+          color: Theme.of(context).colorScheme.onSurface,
+        ),
+        title: Text(
+          LocaleProvider.tr('reset_equalizer'),
+          style: TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.w500,
+            color: Theme.of(context).colorScheme.onSurface,
+          ),
+          textAlign: TextAlign.center,
+        ),
+        content: Text(
+          LocaleProvider.tr('reset_equalizer_confirm'),
+          style: TextStyle(
+            fontSize: 16,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+          textAlign: TextAlign.center,
+        ),
+        actionsPadding: const EdgeInsets.all(16),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(
+              LocaleProvider.tr('cancel'),
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: isAmoled && isDark
+                    ? Colors.white
+                    : Theme.of(context).colorScheme.primary,
               ),
             ),
-          ],
-        ),
-        content: Text(LocaleProvider.tr('reset_equalizer_confirm')),
-        actions: [
-          OutlinedButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: Text(LocaleProvider.tr('cancel')),
           ),
-          FilledButton(
+          FilledButton.tonal(
             onPressed: () => Navigator.of(context).pop(true),
-            child: Text(LocaleProvider.tr('reset')),
+            child: Text(
+              LocaleProvider.tr('reset'),
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
           ),
         ],
       ),
@@ -299,119 +321,52 @@ class _EqualizerScreenState extends State<EqualizerScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
+        backgroundColor: isAmoled && isDark
+            ? Colors.black
+            : Theme.of(context).colorScheme.surface,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(28),
           side: isAmoled && isDark
-              ? const BorderSide(color: Colors.white, width: 1)
+              ? const BorderSide(color: Colors.white24, width: 1)
               : BorderSide.none,
         ),
-        title: Row(
-          children: [
-            Icon(
-              Icons.info_outline,
-              color: Theme.of(context).colorScheme.primary,
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                LocaleProvider.tr('important_information'),
-                style: TextStyle(
-                  fontSize: 18,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-              ),
-            ),
-          ],
+        contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
+        icon: Icon(
+          Icons.info_rounded,
+          size: 32,
+          color: Theme.of(context).colorScheme.onSurface,
+        ),
+        title: Text(
+          LocaleProvider.tr('important_information'),
+          style: TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.w500,
+            color: Theme.of(context).colorScheme.onSurface,
+          ),
+          textAlign: TextAlign.center,
         ),
         content: SingleChildScrollView(
-          child: SizedBox(
-            width: MediaQuery.of(context).size.width * 0.8,
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Theme.of(
-                  context,
-                ).colorScheme.surfaceContainer.withValues(alpha: 0.5),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                  color: Theme.of(
-                    context,
-                  ).colorScheme.outline.withValues(alpha: 0.3),
-                ),
-              ),
-              child: Text(
-                LocaleProvider.tr('volume_boost_info'),
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(
-                    context,
-                  ).colorScheme.onSurface.withValues(alpha: 0.7),
-                  height: 1.3,
-                ),
-              ),
+          child: Text(
+            LocaleProvider.tr('volume_boost_info'),
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+              height: 1.5,
+              fontSize: 16,
             ),
+            textAlign: TextAlign.start,
           ),
         ),
+        actionsPadding: const EdgeInsets.all(16),
         actions: [
-          SizedBox(height: 16),
-          InkWell(
-            onTap: () => Navigator.of(context).pop(),
-            borderRadius: BorderRadius.circular(16),
-            child: Container(
-              width: double.infinity,
-              padding: EdgeInsets.all(16),
-              decoration: BoxDecoration(
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(
+              LocaleProvider.tr('ok'),
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
                 color: isAmoled && isDark
-                    ? Colors.white.withValues(alpha: 0.2)
-                    : Theme.of(context).colorScheme.primaryContainer,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: isAmoled && isDark
-                      ? Colors.white.withValues(alpha: 0.4)
-                      : Theme.of(
-                          context,
-                        ).colorScheme.primary.withValues(alpha: 0.3),
-                  width: 2,
-                ),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    padding: EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(12),
-                      color: isAmoled && isDark
-                          ? Colors.white.withValues(alpha: 0.2)
-                          : Theme.of(
-                              context,
-                            ).colorScheme.primary.withValues(alpha: 0.1),
-                    ),
-                    child: Icon(
-                      Icons.check_circle,
-                      size: 30,
-                      color: isAmoled && isDark
-                          ? Colors.white
-                          : Theme.of(context).colorScheme.primary,
-                    ),
-                  ),
-                  SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          LocaleProvider.tr('ok'),
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: isAmoled && isDark
-                                ? Colors.white
-                                : Theme.of(context).colorScheme.primary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+                    ? Colors.white
+                    : Theme.of(context).colorScheme.primary,
               ),
             ),
           ),
@@ -449,8 +404,12 @@ class _EqualizerScreenState extends State<EqualizerScreen> {
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: isDark
-                  ? theme.colorScheme.onSecondary.withValues(alpha: 0.5)
-                  : theme.colorScheme.secondaryContainer.withValues(alpha: 0.5),
+                  ? Theme.of(
+                      context,
+                    ).colorScheme.secondary.withValues(alpha: 0.06)
+                  : Theme.of(
+                      context,
+                    ).colorScheme.secondary.withValues(alpha: 0.07),
             ),
             child: const Icon(Icons.arrow_back, size: 24),
           ),
@@ -474,9 +433,10 @@ class _EqualizerScreenState extends State<EqualizerScreen> {
   }
 
   Widget _buildBody(ThemeData theme) {
-    final isSystem = colorSchemeNotifier.value == AppColorScheme.system;
     final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final colorScheme = theme.colorScheme;
+
     if (_isLoading) {
       return Center(child: LoadingIndicator());
     }
@@ -489,21 +449,23 @@ class _EqualizerScreenState extends State<EqualizerScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(
-                Icons.equalizer,
+                Icons.equalizer_rounded,
                 size: 64,
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.8),
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
               ),
               const SizedBox(height: 16),
               Text(
                 LocaleProvider.tr('equalizer_not_available'),
-                style: theme.textTheme.titleLarge,
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 8),
               Text(
                 LocaleProvider.tr('equalizer_not_available_desc'),
                 style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                  color: theme.colorScheme.onSurfaceVariant,
                 ),
                 textAlign: TextAlign.center,
               ),
@@ -523,19 +485,21 @@ class _EqualizerScreenState extends State<EqualizerScreen> {
               Icon(
                 Icons.equalizer_rounded,
                 size: 64,
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.8),
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
               ),
               const SizedBox(height: 16),
               Text(
                 LocaleProvider.tr('equalizer_not_prossessing'),
-                style: theme.textTheme.titleLarge,
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 8),
               Text(
                 LocaleProvider.tr('equalizer_not_prossessing_desc'),
                 style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                  color: theme.colorScheme.onSurfaceVariant,
                 ),
                 textAlign: TextAlign.center,
               ),
@@ -559,75 +523,106 @@ class _EqualizerScreenState extends State<EqualizerScreen> {
           Card(
             color: isAmoled && isDark
                 ? Colors.white.withAlpha(20)
-                : (isSystem && isDark
-                      ? Theme.of(context).colorScheme.onSecondaryFixed
-                      : Theme.of(context).colorScheme.secondaryContainer),
+                : colorScheme.primary.withValues(alpha: 0.3),
             margin: EdgeInsets.zero,
             elevation: 0,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(24),
               side: BorderSide.none,
             ),
-            child: SwitchListTile(
-              title: Text(
-                LocaleProvider.tr('equalizer'),
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+              child: SwitchListTile(
+                tileColor: Colors.transparent,
+                title: Text(
+                  LocaleProvider.tr('equalizer'),
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                value: _isEnabled,
+                onChanged: _toggleEqualizer,
+                thumbIcon: WidgetStateProperty.resolveWith<Icon?>((
+                  Set<WidgetState> states,
+                ) {
+                  final isAmoled =
+                      colorSchemeNotifier.value == AppColorScheme.amoled;
+                  final isDark =
+                      Theme.of(context).brightness == Brightness.dark;
+                  final iconColor = isAmoled && isDark ? Colors.white : null;
+                  if (states.contains(WidgetState.selected)) {
+                    return Icon(Icons.check, size: 20, color: iconColor);
+                  } else {
+                    return const Icon(Icons.close, size: 20);
+                  }
+                }),
               ),
-              value: _isEnabled,
-              onChanged: _toggleEqualizer,
-              thumbIcon: WidgetStateProperty.resolveWith<Icon?>((
-                Set<WidgetState> states,
-              ) {
-                final iconColor = isAmoled && isDark ? Colors.white : null;
-                if (states.contains(WidgetState.selected)) {
-                  return Icon(Icons.check, size: 20, color: iconColor);
-                } else {
-                  return const Icon(Icons.close, size: 20);
-                }
-              }),
             ),
           ),
 
           // Bandas del ecualizador
           if (_parameters!.bands.isNotEmpty) ...[
-            const SizedBox(height: 24),
+            const SizedBox(height: 16),
 
             Card(
               color: isAmoled && isDark
-                  ? Colors.white.withAlpha(20)
-                  : (isSystem && isDark
-                        ? Theme.of(
-                            context,
-                          ).colorScheme.onSecondary.withValues(alpha: 0.5)
-                        : theme.colorScheme.secondaryContainer.withValues(
-                            alpha: 0.5,
-                          )),
+                  ? Theme.of(
+                      context,
+                    ).colorScheme.secondary.withValues(alpha: 0.06)
+                  : Theme.of(
+                      context,
+                    ).colorScheme.secondary.withValues(alpha: 0.07),
               margin: EdgeInsets.zero,
               elevation: 0,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(28),
                 side: BorderSide.none,
               ),
               child: Padding(
-                padding: const EdgeInsets.all(16.0),
+                padding: const EdgeInsets.symmetric(
+                  vertical: 24.0,
+                  horizontal: 16.0,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const SizedBox(height: 16),
-                    Text(
-                      LocaleProvider.tr('equalizer_bands'),
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                      ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          LocaleProvider.tr('equalizer_bands'),
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: colorScheme.primary.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            "${_parameters!.bands.length} Bandas",
+                            style: TextStyle(
+                              color: colorScheme.primary,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 32),
 
                     // Sliders verticales en horizontal
                     SizedBox(
-                      height: 280,
+                      height: 300,
                       child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        mainAxisAlignment: MainAxisAlignment
+                            .spaceEvenly, // Changed to spaceBetween for better distribution if needed
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: _parameters!.bands.asMap().entries.map((
                           entry,
@@ -639,19 +634,38 @@ class _EqualizerScreenState extends State<EqualizerScreen> {
                               : 0.0;
 
                           return Expanded(
+                            // Ensure equal width distribution
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.end,
                               children: [
                                 // Valor actual en dB
-                                Text(
-                                  currentGain.toStringAsFixed(1),
-                                  style: theme.textTheme.bodySmall?.copyWith(
-                                    color: theme.colorScheme.primary,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 14,
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                    vertical: 4,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: colorScheme.surface,
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(
+                                      color: colorScheme.outline.withValues(
+                                        alpha: 0.2,
+                                      ),
+                                      width: 1,
+                                    ),
+                                  ),
+                                  child: Text(
+                                    "${currentGain > 0 ? '+' : ''}${currentGain.toStringAsFixed(1)}",
+                                    style: theme.textTheme.labelSmall?.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 10,
+                                      color: currentGain != 0
+                                          ? colorScheme.primary
+                                          : colorScheme.onSurfaceVariant,
+                                    ),
                                   ),
                                 ),
-                                const SizedBox(height: 8),
+                                const SizedBox(height: 12),
 
                                 // Slider vertical
                                 Expanded(
@@ -659,24 +673,26 @@ class _EqualizerScreenState extends State<EqualizerScreen> {
                                     quarterTurns: -1,
                                     child: SliderTheme(
                                       data: SliderTheme.of(context).copyWith(
-                                        trackHeight: 3,
+                                        trackHeight: 6, // Thicker track
                                         thumbShape: const RoundSliderThumbShape(
-                                          enabledThumbRadius: 8,
+                                          enabledThumbRadius:
+                                              0, // Hidden thumb for cleaner look or keep it small
+                                          elevation: 0,
                                         ),
+                                        overlayShape:
+                                            const RoundSliderOverlayShape(
+                                              overlayRadius: 10,
+                                            ),
+                                        activeTrackColor: colorScheme.primary,
+                                        inactiveTrackColor:
+                                            colorScheme.surfaceContainerHighest,
+                                        trackShape:
+                                            _RoundedRectSliderTrackShape(),
                                       ),
                                       child: Slider(
-                                        activeColor: theme.colorScheme.primary,
-                                        inactiveColor:
-                                            theme.colorScheme.surface,
                                         value: currentGain,
                                         min: _parameters!.minDecibels,
                                         max: _parameters!.maxDecibels,
-                                        divisions:
-                                            ((_parameters!.maxDecibels -
-                                                        _parameters!
-                                                            .minDecibels) *
-                                                    10)
-                                                .toInt(),
                                         onChanged: _isEnabled
                                             ? (value) =>
                                                   _updateBandGain(index, value)
@@ -686,17 +702,17 @@ class _EqualizerScreenState extends State<EqualizerScreen> {
                                   ),
                                 ),
 
-                                const SizedBox(height: 8),
+                                const SizedBox(height: 12),
 
                                 // Frecuencia
                                 Text(
                                   _formatFrequency(band.centerFrequency),
-                                  style: theme.textTheme.bodySmall?.copyWith(
-                                    fontWeight: FontWeight.w500,
-                                    fontSize: 12,
+                                  style: theme.textTheme.labelSmall?.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                    color: colorScheme.onSurfaceVariant,
                                   ),
                                   textAlign: TextAlign.center,
-                                  maxLines: 2,
+                                  maxLines: 1,
                                 ),
                               ],
                             ),
@@ -708,128 +724,250 @@ class _EqualizerScreenState extends State<EqualizerScreen> {
                 ),
               ),
             ),
+          ],
 
-            // Volume Boost
-            const SizedBox(height: 16),
-            Card(
-              color: isAmoled && isDark
-                  ? Colors.white.withAlpha(20)
-                  : (isSystem && isDark
-                        ? Theme.of(
-                            context,
-                          ).colorScheme.onSecondary.withValues(alpha: 0.5)
-                        : theme.colorScheme.secondaryContainer.withValues(
-                            alpha: 0.5,
-                          )),
-              margin: EdgeInsets.zero,
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-                side: BorderSide.none,
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      LocaleProvider.tr('volume_boost'),
-                      style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      LocaleProvider.tr('volume_boost_desc'),
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurface.withValues(
-                          alpha: 0.7,
+          // Volume Boost
+          const SizedBox(height: 16),
+          Card(
+            color: isAmoled && isDark
+                ? Colors.white.withAlpha(15)
+                : Theme.of(
+                    context,
+                  ).colorScheme.secondary.withValues(alpha: 0.06),
+            margin: EdgeInsets.zero,
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(28),
+              side: BorderSide.none,
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(20.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: colorScheme.secondaryContainer,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(
+                          Icons.volume_up_rounded,
+                          color: colorScheme.onSecondaryContainer,
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 24),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              LocaleProvider.tr('volume_boost'),
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            Text(
+                              LocaleProvider.tr('volume_boost_desc'),
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
 
-                    // Indicador de valor actual
-                    Row(
+                  // Indicador de valor actual
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        LocaleProvider.tr('multiplier'),
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w500,
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: colorScheme.primaryContainer,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          '${_volumeBoost.toStringAsFixed(1)}x',
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            color: colorScheme.onPrimaryContainer,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Slider
+                  SliderTheme(
+                    data: SliderTheme.of(context).copyWith(
+                      trackHeight: 12,
+                      thumbShape: const RoundSliderThumbShape(
+                        enabledThumbRadius: 12,
+                        elevation: 2,
+                      ),
+                      overlayShape: const RoundSliderOverlayShape(
+                        overlayRadius: 24,
+                      ),
+                      activeTrackColor: colorScheme.primary,
+                      inactiveTrackColor: colorScheme.surfaceContainerHighest,
+                      trackShape: _RoundedRectSliderTrackShape(),
+                    ),
+                    child: Slider(
+                      value: _volumeBoost,
+                      min: 1.0,
+                      max: 3.0,
+                      divisions: 20,
+                      label: '${_volumeBoost.toStringAsFixed(1)}x',
+                      onChanged: (value) => _updateVolumeBoost(value),
+                    ),
+                  ),
+
+                  // Indicadores de rango
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          LocaleProvider.tr('multiplier'),
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            fontWeight: FontWeight.w500,
+                          '1.0x',
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
                           ),
                         ),
                         Text(
-                          '${_volumeBoost.toStringAsFixed(1)}x',
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            color: theme.colorScheme.primary,
+                          '2.0x',
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
                             fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        Text(
+                          '3.0x',
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 16),
-
-                    // Slider
-                    SliderTheme(
-                      data: SliderTheme.of(context).copyWith(
-                        trackHeight: 4,
-                        thumbShape: const RoundSliderThumbShape(
-                          enabledThumbRadius: 10,
-                        ),
-                      ),
-                      child: Slider(
-                        value: _volumeBoost,
-                        min: 1.0,
-                        max: 3.0,
-                        divisions: 20,
-                        label: '${_volumeBoost.toStringAsFixed(1)}x',
-                        onChanged: (value) => _updateVolumeBoost(value),
-                      ),
-                    ),
-
-                    // Indicadores de rango
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            '1.0x',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.onSurface.withValues(
-                                alpha: 0.6,
-                              ),
-                            ),
-                          ),
-                          Text(
-                            '2.0x',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.onSurface.withValues(
-                                alpha: 0.6,
-                              ),
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          Text(
-                            '3.0x',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.onSurface.withValues(
-                                alpha: 0.6,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
-          ],
+          ),
         ],
       ),
     );
+  }
+}
+
+class _RoundedRectSliderTrackShape extends SliderTrackShape {
+  @override
+  void paint(
+    PaintingContext context,
+    Offset offset, {
+    required RenderBox parentBox,
+    required SliderThemeData sliderTheme,
+    required Animation<double> enableAnimation,
+    required TextDirection textDirection,
+    required Offset thumbCenter,
+    Offset? secondaryOffset,
+    bool isDiscrete = false,
+    bool isEnabled = false,
+    double additionalActiveTrackHeight = 0,
+  }) {
+    if (sliderTheme.trackHeight == null) {
+      return;
+    }
+
+    final ColorTween activeTrackColorTween = ColorTween(
+      begin: sliderTheme.disabledActiveTrackColor,
+      end: sliderTheme.activeTrackColor,
+    );
+    final ColorTween inactiveTrackColorTween = ColorTween(
+      begin: sliderTheme.disabledInactiveTrackColor,
+      end: sliderTheme.inactiveTrackColor,
+    );
+    final Paint activePaint = Paint()
+      ..color = activeTrackColorTween.evaluate(enableAnimation)!;
+    final Paint inactivePaint = Paint()
+      ..color = inactiveTrackColorTween.evaluate(enableAnimation)!;
+    final Paint leftTrackPaint;
+    final Paint rightTrackPaint;
+    switch (textDirection) {
+      case TextDirection.ltr:
+        leftTrackPaint = activePaint;
+        rightTrackPaint = inactivePaint;
+        break;
+      case TextDirection.rtl:
+        leftTrackPaint = inactivePaint;
+        rightTrackPaint = activePaint;
+        break;
+    }
+
+    final Rect trackRect = getPreferredRect(
+      parentBox: parentBox,
+      offset: offset,
+      sliderTheme: sliderTheme,
+      isEnabled: isEnabled,
+      isDiscrete: isDiscrete,
+    );
+
+    final Radius trackRadius = Radius.circular(trackRect.height / 2);
+
+    context.canvas.drawRRect(
+      RRect.fromLTRBAndCorners(
+        trackRect.left,
+        trackRect.top,
+        thumbCenter.dx,
+        trackRect.bottom,
+        topLeft: trackRadius,
+        bottomLeft: trackRadius,
+      ),
+      leftTrackPaint,
+    );
+    context.canvas.drawRRect(
+      RRect.fromLTRBAndCorners(
+        thumbCenter.dx,
+        trackRect.top,
+        trackRect.right,
+        trackRect.bottom,
+        topRight: trackRadius,
+        bottomRight: trackRadius,
+      ),
+      rightTrackPaint,
+    );
+  }
+
+  @override
+  Rect getPreferredRect({
+    required RenderBox parentBox,
+    Offset offset = Offset.zero,
+    required SliderThemeData sliderTheme,
+    bool isEnabled = false,
+    bool isDiscrete = false,
+  }) {
+    final double trackHeight = sliderTheme.trackHeight!;
+    final double trackLeft = offset.dx;
+    final double trackTop =
+        offset.dy + (parentBox.size.height - trackHeight) / 2;
+    final double trackWidth = parentBox.size.width;
+    return Rect.fromLTWH(trackLeft, trackTop, trackWidth, trackHeight);
   }
 }

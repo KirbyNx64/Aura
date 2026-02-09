@@ -7413,6 +7413,54 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
+  Widget _buildActionOption({
+    required BuildContext context,
+    required String title,
+    required VoidCallback onTap,
+    IconData? icon,
+    Widget? leading,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(28),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.primary,
+            borderRadius: BorderRadius.circular(28),
+          ),
+          child: Row(
+            children: [
+              if (leading != null)
+                SizedBox(width: 24, height: 24, child: Center(child: leading))
+              else if (icon != null)
+                Icon(
+                  icon,
+                  color: Theme.of(context).colorScheme.onPrimary,
+                  size: 24,
+                ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: Theme.of(context).colorScheme.onPrimary,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   // Función para mostrar opciones de búsqueda
   Future<void> _showSearchOptions(SongModel song) async {
     showDialog(
@@ -7423,172 +7471,93 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           builder: (context, colorScheme, child) {
             final isAmoled = colorScheme == AppColorScheme.amoled;
             final isDark = Theme.of(context).brightness == Brightness.dark;
+            final primaryColor = Theme.of(context).colorScheme.primary;
 
             return AlertDialog(
+              backgroundColor: isAmoled && isDark
+                  ? Colors.black
+                  : Theme.of(context).colorScheme.surface,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(28),
                 side: isAmoled && isDark
-                    ? const BorderSide(color: Colors.white, width: 1)
+                    ? const BorderSide(color: Colors.white24, width: 1)
                     : BorderSide.none,
               ),
-              title: Center(
-                child: TranslatedText(
-                  'search_song',
-                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
+              contentPadding: const EdgeInsets.fromLTRB(0, 24, 0, 8),
+              content: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: 400,
+                  maxHeight: MediaQuery.of(context).size.height * 0.8,
                 ),
-              ),
-              content: SizedBox(
-                width: double.maxFinite,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    SizedBox(height: 18),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Row(
-                        children: [
-                          SizedBox(width: 4),
-                          TranslatedText(
-                            'search_options',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Theme.of(context).colorScheme.onSurface,
-                            ),
-                          ),
-                        ],
+                    Icon(Icons.search_rounded, size: 32),
+                    const SizedBox(height: 16),
+                    TranslatedText(
+                      'search_song',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w500,
+                        color: Theme.of(context).colorScheme.onSurface,
                       ),
                     ),
-                    SizedBox(height: 20),
-                    // Tarjeta de YouTube
-                    InkWell(
+                    const SizedBox(height: 16),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: TranslatedText(
+                        'search_options',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onSurface.withAlpha(180),
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    _buildActionOption(
+                      context: context,
+                      title: 'YouTube',
+                      leading: Image.asset(
+                        'assets/icon/Youtube_logo.png',
+                        width: 24,
+                        height: 24,
+                      ),
                       onTap: () {
                         Navigator.of(context).pop();
                         _searchSongOnYouTube(song);
                       },
-                      borderRadius: BorderRadius.circular(16),
-                      child: Container(
-                        width: double.infinity,
-                        padding: EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: isAmoled && isDark
-                              ? Colors.white.withValues(
-                                  alpha: 0.1,
-                                ) // Color personalizado para amoled
-                              : Theme.of(
-                                  context,
-                                ).colorScheme.secondaryContainer,
-                          borderRadius: BorderRadius.only(
-                            topLeft: Radius.circular(20),
-                            topRight: Radius.circular(20),
-                            bottomLeft: Radius.circular(4),
-                            bottomRight: Radius.circular(4),
-                          ),
-                          border: Border.all(
-                            color: isAmoled && isDark
-                                ? Colors.white.withValues(
-                                    alpha: 0.2,
-                                  ) // Borde personalizado para amoled
-                                : Theme.of(
-                                    context,
-                                  ).colorScheme.outline.withValues(alpha: 0.1),
-                            width: 1,
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Image.asset(
-                                'assets/icon/Youtube_logo.png',
-                                width: 30,
-                                height: 30,
-                              ),
-                            ),
-                            SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                'YouTube',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                  color: isAmoled && isDark
-                                      ? Colors
-                                            .white // Texto blanco para amoled
-                                      : Theme.of(context).colorScheme.onSurface,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
                     ),
-                    SizedBox(height: 4),
-                    // Tarjeta de YouTube Music
-                    InkWell(
+                    const SizedBox(height: 8),
+                    _buildActionOption(
+                      context: context,
+                      title: 'YT Music',
+                      leading: Image.asset(
+                        'assets/icon/Youtube_Music_icon.png',
+                        width: 24,
+                        height: 24,
+                      ),
                       onTap: () {
                         Navigator.of(context).pop();
                         _searchSongOnYouTubeMusic(song);
                       },
-                      borderRadius: BorderRadius.circular(16),
-                      child: Container(
-                        width: double.infinity,
-                        padding: EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: isAmoled && isDark
-                              ? Colors.white.withValues(
-                                  alpha: 0.1,
-                                ) // Color personalizado para amoled
-                              : Theme.of(
-                                  context,
-                                ).colorScheme.secondaryContainer,
-                          borderRadius: BorderRadius.only(
-                            topLeft: Radius.circular(4),
-                            topRight: Radius.circular(4),
-                            bottomLeft: Radius.circular(20),
-                            bottomRight: Radius.circular(20),
-                          ),
-                          border: Border.all(
-                            color: isAmoled && isDark
-                                ? Colors.white.withValues(
-                                    alpha: 0.2,
-                                  ) // Borde personalizado para amoled
-                                : Theme.of(
-                                    context,
-                                  ).colorScheme.outline.withValues(alpha: 0.1),
-                            width: 1,
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Image.asset(
-                                'assets/icon/Youtube_Music_icon.png',
-                                width: 30,
-                                height: 30,
-                              ),
+                    ),
+                    const SizedBox(height: 16),
+                    Padding(
+                      padding: const EdgeInsets.only(right: 24, bottom: 8),
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          child: TranslatedText(
+                            'cancel',
+                            style: TextStyle(
+                              color: primaryColor,
+                              fontWeight: FontWeight.bold,
                             ),
-                            SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                'YT Music',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                  color: isAmoled && isDark
-                                      ? Colors
-                                            .white // Texto blanco para amoled
-                                      : Theme.of(context).colorScheme.onSurface,
-                                ),
-                              ),
-                            ),
-                          ],
+                          ),
                         ),
                       ),
                     ),

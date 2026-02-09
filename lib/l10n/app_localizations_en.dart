@@ -690,9 +690,16 @@ const Map<String, String> appLocalizationsEn = {
   'file_path': 'Path',
   'playlist_processing_time_info':
       'Processing time may vary depending on the list size',
-  'view_on_github': 'View on GitHub',
+  'view_on_github': 'Source code repository',
+  'report_issues': 'Report issues',
+  'contact_telegram': 'Contact on Telegram',
+  'dependencies': 'Dependencies',
+  'view_dependencies': 'View app dependencies',
   'view_artist': 'View artist',
+  'issues': 'Issues',
+  'developer': 'Developer',
   'filters': 'Filters',
+  'flutter_version': 'Flutter Version',
 
   // Download messages
   'download_started_for_elements': 'Download started for @count elements',

@@ -723,9 +723,16 @@ const Map<String, String> appLocalizationsEs = {
   'file_path': 'Ruta',
   'playlist_processing_time_info':
       'El tiempo de procesamiento puede variar según el tamaño de la lista',
-  'view_on_github': 'Ver en GitHub',
+  'view_on_github': 'Repositorio del codigo fuente',
+  'report_issues': 'Reportar errores',
+  'contact_telegram': 'Contactar por Telegram',
+  'dependencies': 'Dependencias',
+  'view_dependencies': 'Ver dependencias de la aplicación',
   'view_artist': 'Ver artista',
   'filters': 'Filtros',
+  'flutter_version': 'Versión de Flutter',
+  'issues': 'Errores',
+  'developer': 'Desarrollador',
 
   // Download messages
   'download_started_for_elements': 'Descarga iniciada para @count elementos',

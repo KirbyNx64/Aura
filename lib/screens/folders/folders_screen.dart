@@ -1621,7 +1621,7 @@ class _FoldersScreenState extends State<FoldersScreen>
   }
 
   Future<void> _showDeleteConfirmation(SongModel song) async {
-    showDialog(
+    final confirmed = await showDialog<bool>(
       context: context,
       builder: (BuildContext context) {
         return ValueListenableBuilder<AppColorScheme>(
@@ -1629,137 +1629,6 @@ class _FoldersScreenState extends State<FoldersScreen>
           builder: (context, colorScheme, child) {
             final isAmoled = colorScheme == AppColorScheme.amoled;
             final isDark = Theme.of(context).brightness == Brightness.dark;
-            final primaryColor = Theme.of(context).colorScheme.primary;
-
-            return AlertDialog(
-              backgroundColor: isAmoled && isDark
-                  ? Colors.black
-                  : Theme.of(context).colorScheme.surface,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(28),
-                side: isAmoled && isDark
-                    ? const BorderSide(color: Colors.white24, width: 1)
-                    : BorderSide.none,
-              ),
-              contentPadding: const EdgeInsets.fromLTRB(0, 24, 0, 8),
-              content: ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxWidth: 400,
-                  maxHeight: MediaQuery.of(context).size.height * 0.8,
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.delete_sweep_rounded,
-                      size: 32,
-                      color: Theme.of(context).colorScheme.error,
-                    ),
-                    const SizedBox(height: 16),
-                    TranslatedText(
-                      'delete_song',
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w500,
-                        color: Theme.of(context).colorScheme.onSurface,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 24),
-                      child: TranslatedText(
-                        'delete_song_confirm',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.onSurface.withAlpha(180),
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    _buildDestructiveOption(
-                      context: context,
-                      title: LocaleProvider.tr('delete'),
-                      icon: Icons.delete_forever_rounded,
-                      onTap: () async {
-                        Navigator.of(context).pop();
-                        final success = await _deleteSongFromDevice(song);
-                        if (!success && context.mounted) {
-                          showDialog(
-                            context: context,
-                            builder: (context) => AlertDialog(
-                              backgroundColor: isAmoled && isDark
-                                  ? Colors.black
-                                  : Theme.of(context).colorScheme.surface,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(28),
-                                side: isAmoled && isDark
-                                    ? const BorderSide(
-                                        color: Colors.white24,
-                                        width: 1,
-                                      )
-                                    : BorderSide.none,
-                              ),
-                              title: TranslatedText('error'),
-                              content: TranslatedText('could_not_delete_song'),
-                              actions: [
-                                TextButton(
-                                  onPressed: () => Navigator.of(context).pop(),
-                                  child: TranslatedText('ok'),
-                                ),
-                              ],
-                            ),
-                          );
-                        }
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    Padding(
-                      padding: const EdgeInsets.only(right: 24, bottom: 8),
-                      child: Align(
-                        alignment: Alignment.centerRight,
-                        child: TextButton(
-                          onPressed: () => Navigator.of(context).pop(),
-                          child: TranslatedText(
-                            'cancel',
-                            style: TextStyle(
-                              color: primaryColor,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
-  // Función para mostrar diálogo de renombrado de carpeta
-  Future<void> _showRenameFolderDialog(
-    String folderKey,
-    String currentName,
-  ) async {
-    final TextEditingController nameController = TextEditingController(
-      text: currentName,
-    );
-
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return ValueListenableBuilder<AppColorScheme>(
-          valueListenable: colorSchemeNotifier,
-          builder: (context, colorScheme, child) {
-            final isAmoled = colorScheme == AppColorScheme.amoled;
-            final isDark = Theme.of(context).brightness == Brightness.dark;
-            final primaryColor = Theme.of(context).colorScheme.primary;
 
             return AlertDialog(
               backgroundColor: isAmoled && isDark
@@ -1772,78 +1641,45 @@ class _FoldersScreenState extends State<FoldersScreen>
                     : BorderSide.none,
               ),
               contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
-              content: ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxWidth: 400,
-                  maxHeight: MediaQuery.of(context).size.height * 0.8,
+              icon: Icon(
+                Icons.delete_sweep_rounded,
+                size: 32,
+                color: Theme.of(context).colorScheme.error,
+              ),
+              title: Text(
+                LocaleProvider.tr('delete_song'),
+                style: const TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w500,
                 ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.drive_file_rename_outline_rounded, size: 32),
-                    const SizedBox(height: 16),
-                    TranslatedText(
-                      'rename_folder',
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w500,
-                        color: Theme.of(context).colorScheme.onSurface,
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    TextField(
-                      controller: nameController,
-                      autofocus: true,
-                      decoration: InputDecoration(
-                        labelText: LocaleProvider.tr('folder_name'),
-                        hintText: LocaleProvider.tr('enter_folder_name'),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        filled: true,
-                        fillColor: isAmoled && isDark
-                            ? Colors.white.withAlpha(10)
-                            : Theme.of(context)
-                                  .colorScheme
-                                  .surfaceContainerHighest
-                                  .withAlpha(100),
-                      ),
-                    ),
-                  ],
+                textAlign: TextAlign.center,
+              ),
+              content: Text(
+                LocaleProvider.tr('delete_song_confirm'),
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
               ),
+              actionsPadding: const EdgeInsets.all(16),
               actions: [
                 TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: TranslatedText(
-                    'cancel',
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: Text(
+                    LocaleProvider.tr('cancel'),
                     style: TextStyle(
-                      color: primaryColor,
                       fontWeight: FontWeight.bold,
+                      color: Theme.of(context).colorScheme.primary,
                     ),
                   ),
                 ),
                 TextButton(
-                  onPressed: () async {
-                    final newName = nameController.text.trim();
-                    if (newName.isNotEmpty && newName != currentName) {
-                      if (context.mounted) {
-                        Navigator.of(context).pop();
-                      }
-                      await _renameFolder(folderKey, newName);
-                    } else if (newName.isEmpty) {
-                      _showMessage(
-                        LocaleProvider.tr('error'),
-                        description: LocaleProvider.tr('folder_name_required'),
-                        isError: true,
-                      );
-                    }
-                  },
-                  child: TranslatedText(
-                    'rename',
+                  onPressed: () => Navigator.of(context).pop(true),
+                  child: Text(
+                    LocaleProvider.tr('delete'),
                     style: TextStyle(
-                      color: primaryColor,
                       fontWeight: FontWeight.bold,
+                      color: Theme.of(context).colorScheme.error,
                     ),
                   ),
                 ),
@@ -1853,6 +1689,126 @@ class _FoldersScreenState extends State<FoldersScreen>
         );
       },
     );
+
+    if (confirmed == true && mounted) {
+      final success = await _deleteSongFromDevice(song);
+      if (!success && mounted) {
+        _showMessage(
+          LocaleProvider.tr('error'),
+          description: LocaleProvider.tr('could_not_delete_song'),
+          isError: true,
+        );
+      }
+    }
+  }
+
+  // Función para mostrar diálogo de renombrado de carpeta
+  Future<void> _showRenameFolderDialog(
+    String folderKey,
+    String currentName,
+  ) async {
+    final TextEditingController nameController = TextEditingController(
+      text: currentName,
+    );
+
+    final String? newName = await showDialog<String>(
+      context: context,
+      builder: (BuildContext context) {
+        return ValueListenableBuilder<AppColorScheme>(
+          valueListenable: colorSchemeNotifier,
+          builder: (context, colorScheme, child) {
+            final isAmoled = colorScheme == AppColorScheme.amoled;
+            final isDark = Theme.of(context).brightness == Brightness.dark;
+
+            return AlertDialog(
+              backgroundColor: isAmoled && isDark
+                  ? Colors.black
+                  : Theme.of(context).colorScheme.surface,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(28),
+                side: isAmoled && isDark
+                    ? const BorderSide(color: Colors.white24, width: 1)
+                    : BorderSide.none,
+              ),
+              contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
+              icon: Icon(
+                Icons.drive_file_rename_outline_rounded,
+                size: 32,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
+              title: Text(
+                LocaleProvider.tr('rename_folder'),
+                style: const TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w500,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: nameController,
+                    autofocus: true,
+                    decoration: InputDecoration(
+                      labelText: LocaleProvider.tr('folder_name'),
+                      hintText: LocaleProvider.tr('enter_folder_name'),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      filled: true,
+                      fillColor: isAmoled && isDark
+                          ? Colors.white.withAlpha(10)
+                          : Theme.of(context)
+                                .colorScheme
+                                .surfaceContainerHighest
+                                .withAlpha(100),
+                    ),
+                    onSubmitted: (value) =>
+                        Navigator.of(context).pop(value.trim()),
+                  ),
+                ],
+              ),
+              actionsPadding: const EdgeInsets.all(16),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: Text(
+                    LocaleProvider.tr('cancel'),
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () =>
+                      Navigator.of(context).pop(nameController.text.trim()),
+                  child: Text(
+                    LocaleProvider.tr('rename'),
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (newName != null && newName.isNotEmpty && newName != currentName) {
+      await _renameFolder(folderKey, newName);
+    } else if (newName != null && newName.isEmpty) {
+      _showMessage(
+        LocaleProvider.tr('error'),
+        description: LocaleProvider.tr('folder_name_required'),
+        isError: true,
+      );
+    }
   }
 
   // Función para renombrar la carpeta
@@ -1962,11 +1918,12 @@ class _FoldersScreenState extends State<FoldersScreen>
   }
 
   // Función para mostrar confirmación de borrado de carpeta con el mismo diseño
+  // Función para mostrar confirmación de borrado de carpeta con el mismo diseño
   Future<void> _showDeleteFolderConfirmation(
     String folderKey,
     String folderName,
   ) async {
-    showDialog(
+    final confirmed = await showDialog<bool>(
       context: context,
       builder: (BuildContext context) {
         return ValueListenableBuilder<AppColorScheme>(
@@ -1974,7 +1931,6 @@ class _FoldersScreenState extends State<FoldersScreen>
           builder: (context, colorScheme, child) {
             final isAmoled = colorScheme == AppColorScheme.amoled;
             final isDark = Theme.of(context).brightness == Brightness.dark;
-            final primaryColor = Theme.of(context).colorScheme.primary;
 
             return AlertDialog(
               backgroundColor: isAmoled && isDark
@@ -1986,104 +1942,66 @@ class _FoldersScreenState extends State<FoldersScreen>
                     ? const BorderSide(color: Colors.white24, width: 1)
                     : BorderSide.none,
               ),
-              contentPadding: const EdgeInsets.fromLTRB(0, 24, 0, 8),
-              content: ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxWidth: 400,
-                  maxHeight: MediaQuery.of(context).size.height * 0.8,
+              contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
+              icon: Icon(
+                Icons.folder_delete_rounded,
+                size: 32,
+                color: Theme.of(context).colorScheme.error,
+              ),
+              title: Text(
+                LocaleProvider.tr('delete_folder'),
+                style: const TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w500,
                 ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.folder_delete_rounded,
-                      size: 32,
-                      color: Theme.of(context).colorScheme.error,
-                    ),
-                    const SizedBox(height: 16),
-                    TranslatedText(
-                      'delete_folder',
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w500,
-                        color: Theme.of(context).colorScheme.onSurface,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 24),
-                      child: TranslatedText(
-                        'delete_folder_confirm',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.onSurface.withAlpha(180),
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    _buildDestructiveOption(
-                      context: context,
-                      title: LocaleProvider.tr('delete'),
-                      icon: Icons.delete_forever_rounded,
-                      onTap: () async {
-                        Navigator.of(context).pop();
-                        final success = await _deleteFolderAndSongs(folderKey);
-                        if (!success && context.mounted) {
-                          showDialog(
-                            context: context,
-                            builder: (context) => AlertDialog(
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
-                                side: isAmoled && isDark
-                                    ? const BorderSide(
-                                        color: Colors.white,
-                                        width: 1,
-                                      )
-                                    : BorderSide.none,
-                              ),
-                              title: TranslatedText('error'),
-                              content: TranslatedText(
-                                'could_not_delete_folder',
-                              ),
-                              actions: [
-                                TextButton(
-                                  onPressed: () => Navigator.of(context).pop(),
-                                  child: TranslatedText('ok'),
-                                ),
-                              ],
-                            ),
-                          );
-                        }
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    Padding(
-                      padding: const EdgeInsets.only(right: 24, bottom: 8),
-                      child: Align(
-                        alignment: Alignment.centerRight,
-                        child: TextButton(
-                          onPressed: () => Navigator.of(context).pop(),
-                          child: TranslatedText(
-                            'cancel',
-                            style: TextStyle(
-                              color: primaryColor,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
+                textAlign: TextAlign.center,
+              ),
+              content: Text(
+                LocaleProvider.tr('delete_folder_confirm'),
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
               ),
+              actionsPadding: const EdgeInsets.all(16),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: Text(
+                    LocaleProvider.tr('cancel'),
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(true),
+                  child: Text(
+                    LocaleProvider.tr('delete'),
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+                ),
+              ],
             );
           },
         );
       },
     );
+
+    if (confirmed == true && mounted) {
+      final success = await _deleteFolderAndSongs(folderKey);
+      if (!success && mounted) {
+        _showMessage(
+          LocaleProvider.tr('error'),
+          description: LocaleProvider.tr('could_not_delete_folder'),
+          isError: true,
+        );
+      }
+    }
   }
 
   Widget _buildDestructiveOption({
@@ -2537,6 +2455,7 @@ class _FoldersScreenState extends State<FoldersScreen>
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
 
     if (_isLoading) {
       return Scaffold(body: Center(child: LoadingIndicator()));
@@ -3368,8 +3287,26 @@ class _FoldersScreenState extends State<FoldersScreen>
                 },
               ),
               PopupMenuButton<String>(
+                surfaceTintColor: isAmoled
+                    ? Colors.white.withAlpha(20)
+                    : isDark
+                    ? Theme.of(
+                        context,
+                      ).colorScheme.secondary.withValues(alpha: 0.06)
+                    : Theme.of(
+                        context,
+                      ).colorScheme.secondary.withValues(alpha: 0.07),
                 icon: const Icon(Icons.more_vert),
                 tooltip: LocaleProvider.tr('options'),
+                elevation: 3,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                color:
+                    (colorSchemeNotifier.value == AppColorScheme.amoled &&
+                        Theme.of(context).brightness == Brightness.dark)
+                    ? const Color(0xFF1E1E1E)
+                    : null,
                 onSelected: (String value) async {
                   switch (value) {
                     case 'add_to_favorites':
@@ -3416,8 +3353,8 @@ class _FoldersScreenState extends State<FoldersScreen>
                     enabled: _selectedSongPaths.isNotEmpty,
                     child: Row(
                       children: [
-                        const Icon(Icons.favorite_outline_rounded, weight: 600),
-                        const SizedBox(width: 8),
+                        const Icon(Icons.favorite_border_rounded),
+                        const SizedBox(width: 12),
                         Expanded(
                           child: Text(LocaleProvider.tr('add_to_favorites')),
                         ),
@@ -3429,8 +3366,8 @@ class _FoldersScreenState extends State<FoldersScreen>
                     enabled: _selectedSongPaths.isNotEmpty,
                     child: Row(
                       children: [
-                        const Icon(Icons.playlist_add),
-                        const SizedBox(width: 8),
+                        const Icon(Icons.playlist_add_rounded),
+                        const SizedBox(width: 12),
                         Expanded(
                           child: Text(LocaleProvider.tr('add_to_playlist')),
                         ),
@@ -3443,8 +3380,8 @@ class _FoldersScreenState extends State<FoldersScreen>
                       enabled: _selectedSongPaths.isNotEmpty,
                       child: Row(
                         children: [
-                          const Icon(Icons.copy),
-                          const SizedBox(width: 8),
+                          const Icon(Icons.copy_rounded),
+                          const SizedBox(width: 12),
                           Expanded(
                             child: Text(LocaleProvider.tr('copy_to_folder')),
                           ),
@@ -3457,8 +3394,8 @@ class _FoldersScreenState extends State<FoldersScreen>
                       enabled: _selectedSongPaths.isNotEmpty,
                       child: Row(
                         children: [
-                          const Icon(Icons.drive_file_move),
-                          const SizedBox(width: 8),
+                          const Icon(Icons.drive_file_move_rounded),
+                          const SizedBox(width: 12),
                           Expanded(
                             child: Text(LocaleProvider.tr('move_to_folder')),
                           ),
@@ -3470,8 +3407,8 @@ class _FoldersScreenState extends State<FoldersScreen>
                     enabled: _selectedSongPaths.isNotEmpty,
                     child: Row(
                       children: [
-                        const Icon(Icons.delete),
-                        const SizedBox(width: 8),
+                        const Icon(Icons.delete_outline_rounded),
+                        const SizedBox(width: 12),
                         Expanded(
                           child: Text(LocaleProvider.tr('delete_songs')),
                         ),
@@ -4223,175 +4160,70 @@ class _FoldersScreenState extends State<FoldersScreen>
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) {
-        final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
-        final isDark = Theme.of(context).brightness == Brightness.dark;
+        return ValueListenableBuilder<AppColorScheme>(
+          valueListenable: colorSchemeNotifier,
+          builder: (context, colorScheme, child) {
+            final isAmoled = colorScheme == AppColorScheme.amoled;
+            final isDark = Theme.of(context).brightness == Brightness.dark;
 
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-            side: isAmoled && isDark
-                ? const BorderSide(color: Colors.white, width: 1)
-                : BorderSide.none,
-          ),
-          title: Center(
-            child: Text(
-              LocaleProvider.tr('delete_songs'),
-              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
-            ),
-          ),
-          content: SizedBox(
-            width: 400,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const SizedBox(height: 18),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    child: Text(
-                      LocaleProvider.tr(
-                        'delete_songs_confirm',
-                      ).replaceAll('{count}', selectedSongs.length.toString()),
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Theme.of(context).colorScheme.onSurface,
-                      ),
-                      textAlign: TextAlign.left,
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
+            return AlertDialog(
+              backgroundColor: isAmoled && isDark
+                  ? Colors.black
+                  : Theme.of(context).colorScheme.surface,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(28),
+                side: isAmoled && isDark
+                    ? const BorderSide(color: Colors.white24, width: 1)
+                    : BorderSide.none,
+              ),
+              contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
+              icon: Icon(
+                Icons.delete_sweep_rounded,
+                size: 32,
+                color: Theme.of(context).colorScheme.error,
+              ),
+              title: Text(
+                LocaleProvider.tr('delete_songs'),
+                style: const TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w500,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              content: Text(
+                LocaleProvider.tr(
+                  'delete_songs_confirm',
+                ).replaceAll('{count}', selectedSongs.length.toString()),
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+              actionsPadding: const EdgeInsets.all(16),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: Text(
+                    LocaleProvider.tr('cancel'),
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).colorScheme.primary,
                     ),
                   ),
                 ),
-                const SizedBox(height: 20),
-                // Tarjeta de confirmar borrado
-                InkWell(
-                  onTap: () {
-                    Navigator.of(context).pop(true);
-                  },
-                  borderRadius: BorderRadius.circular(20),
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: isAmoled && isDark
-                          ? Colors.red.withValues(alpha: 0.2)
-                          : Theme.of(context).colorScheme.errorContainer,
-                      borderRadius: const BorderRadius.only(
-                        topLeft: Radius.circular(20),
-                        topRight: Radius.circular(20),
-                        bottomLeft: Radius.circular(4),
-                        bottomRight: Radius.circular(4),
-                      ),
-                      border: Border.all(
-                        color: isAmoled && isDark
-                            ? Colors.red.withValues(alpha: 0.4)
-                            : Theme.of(
-                                context,
-                              ).colorScheme.outline.withValues(alpha: 0.1),
-                        width: 1,
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Icon(
-                            Icons.delete_forever,
-                            size: 30,
-                            color: isAmoled && isDark
-                                ? Colors.red
-                                : Theme.of(
-                                    context,
-                                  ).colorScheme.onErrorContainer,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            LocaleProvider.tr('delete'),
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              color: isAmoled && isDark
-                                  ? Colors.red
-                                  : Theme.of(
-                                      context,
-                                    ).colorScheme.onErrorContainer,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 4),
-                // Tarjeta de cancelar
-                InkWell(
-                  onTap: () {
-                    Navigator.of(context).pop(false);
-                  },
-                  borderRadius: BorderRadius.circular(20),
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: isAmoled && isDark
-                          ? Colors.white.withValues(alpha: 0.1)
-                          : Theme.of(context).colorScheme.secondaryContainer,
-                      borderRadius: const BorderRadius.only(
-                        bottomLeft: Radius.circular(20),
-                        bottomRight: Radius.circular(20),
-                        topLeft: Radius.circular(4),
-                        topRight: Radius.circular(4),
-                      ),
-                      border: Border.all(
-                        color: isAmoled && isDark
-                            ? Colors.white.withValues(alpha: 0.2)
-                            : Theme.of(
-                                context,
-                              ).colorScheme.outline.withValues(alpha: 0.1),
-                        width: 1,
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Icon(
-                            Icons.cancel_outlined,
-                            size: 30,
-                            color: isAmoled && isDark
-                                ? Colors.white
-                                : Theme.of(context).colorScheme.onSurface,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            LocaleProvider.tr('cancel'),
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              color: isAmoled && isDark
-                                  ? Colors.white
-                                  : Theme.of(context).colorScheme.onSurface,
-                            ),
-                          ),
-                        ),
-                      ],
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(true),
+                  child: Text(
+                    LocaleProvider.tr('delete'),
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).colorScheme.error,
                     ),
                   ),
                 ),
               ],
-            ),
-          ),
+            );
+          },
         );
       },
     );
@@ -4684,26 +4516,42 @@ class _FoldersScreenState extends State<FoldersScreen>
           child: ValueListenableBuilder<String>(
             valueListenable: progressNotifier,
             builder: (context, progress, child) {
+              final isAmoled =
+                  colorSchemeNotifier.value == AppColorScheme.amoled;
+              final isDark = Theme.of(context).brightness == Brightness.dark;
               return AlertDialog(
+                backgroundColor: isAmoled && isDark
+                    ? Colors.black
+                    : Theme.of(context).colorScheme.surface,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: BorderRadius.circular(28),
+                  side: isAmoled && isDark
+                      ? const BorderSide(color: Colors.white24, width: 1)
+                      : BorderSide.none,
                 ),
+                contentPadding: const EdgeInsets.fromLTRB(24, 32, 24, 24),
                 content: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    LoadingIndicator(),
+                    SizedBox(width: 40, height: 40, child: LoadingIndicator()),
                     const SizedBox(height: 24),
                     Text(
                       isMove
                           ? LocaleProvider.tr('moving_songs')
                           : LocaleProvider.tr('copying_songs'),
-                      style: const TextStyle(fontSize: 16),
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w500,
+                      ),
                       textAlign: TextAlign.center,
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 8),
                     Text(
                       progress,
-                      style: const TextStyle(fontSize: 14),
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
                       textAlign: TextAlign.center,
                     ),
                   ],
@@ -6495,20 +6343,32 @@ class _FoldersScreenState extends State<FoldersScreen>
       context: context,
       barrierDismissible: false,
       builder: (BuildContext context) {
+        final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
+        final isDark = Theme.of(context).brightness == Brightness.dark;
         return PopScope(
           canPop: false,
           child: AlertDialog(
+            backgroundColor: isAmoled && isDark
+                ? Colors.black
+                : Theme.of(context).colorScheme.surface,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(28),
+              side: isAmoled && isDark
+                  ? const BorderSide(color: Colors.white24, width: 1)
+                  : BorderSide.none,
             ),
+            contentPadding: const EdgeInsets.fromLTRB(24, 32, 24, 24),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                LoadingIndicator(),
+                SizedBox(width: 40, height: 40, child: LoadingIndicator()),
                 const SizedBox(height: 24),
                 Text(
                   LocaleProvider.tr('moving_song'),
-                  style: const TextStyle(fontSize: 16),
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w500,
+                  ),
                   textAlign: TextAlign.center,
                 ),
               ],
@@ -6645,20 +6505,32 @@ class _FoldersScreenState extends State<FoldersScreen>
       context: context,
       barrierDismissible: false,
       builder: (BuildContext context) {
+        final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
+        final isDark = Theme.of(context).brightness == Brightness.dark;
         return PopScope(
           canPop: false,
           child: AlertDialog(
+            backgroundColor: isAmoled && isDark
+                ? Colors.black
+                : Theme.of(context).colorScheme.surface,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(28),
+              side: isAmoled && isDark
+                  ? const BorderSide(color: Colors.white24, width: 1)
+                  : BorderSide.none,
             ),
+            contentPadding: const EdgeInsets.fromLTRB(24, 32, 24, 24),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                LoadingIndicator(),
+                SizedBox(width: 40, height: 40, child: LoadingIndicator()),
                 const SizedBox(height: 24),
                 Text(
                   LocaleProvider.tr('copying_song'),
-                  style: const TextStyle(fontSize: 16),
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w500,
+                  ),
                   textAlign: TextAlign.center,
                 ),
               ],
@@ -6799,107 +6671,55 @@ class _FoldersScreenState extends State<FoldersScreen>
             final isDark = Theme.of(context).brightness == Brightness.dark;
 
             return AlertDialog(
+              backgroundColor: isAmoled && isDark
+                  ? Colors.black
+                  : Theme.of(context).colorScheme.surface,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.circular(28),
                 side: isAmoled && isDark
-                    ? const BorderSide(color: Colors.white, width: 1)
+                    ? const BorderSide(color: Colors.white24, width: 1)
                     : BorderSide.none,
               ),
-              title: Center(
-                child: Text(
-                  title,
-                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
-                ),
+              contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
+              icon: Icon(
+                isError
+                    ? Icons.error_outline_rounded
+                    : Icons.check_circle_outline_rounded,
+                size: 32,
+                color: isError
+                    ? Theme.of(context).colorScheme.error
+                    : Theme.of(context).colorScheme.onSurface,
               ),
-              content: SizedBox(
-                width: 400,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (description != null) ...[
-                      SizedBox(height: 18),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 4),
-                          child: Text(
-                            description,
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Theme.of(context).colorScheme.onSurface,
-                            ),
-                            textAlign: TextAlign.left,
-                            maxLines: 3,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
+              title: Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w500,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              content: description != null
+                  ? Text(
+                      description,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
-                      SizedBox(height: 20),
-                    ],
-                    // Tarjeta de aceptar
-                    InkWell(
-                      onTap: () => Navigator.of(context).pop(),
-                      borderRadius: BorderRadius.circular(20),
-                      child: Container(
-                        width: double.infinity,
-                        padding: EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: isAmoled && isDark
-                              ? Colors.white.withValues(alpha: 0.2)
-                              : Theme.of(context).colorScheme.primaryContainer,
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                            color: isAmoled && isDark
-                                ? Colors.white.withValues(alpha: 0.4)
-                                : Theme.of(
-                                    context,
-                                  ).colorScheme.primary.withValues(alpha: 0.3),
-                            width: 2,
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(12),
-                                color: isError
-                                    ? null
-                                    : (isAmoled && isDark
-                                          ? Colors.white.withValues(alpha: 0.2)
-                                          : Theme.of(context)
-                                                .colorScheme
-                                                .primary
-                                                .withValues(alpha: 0.1)),
-                              ),
-                              child: Icon(
-                                isError ? Icons.error : Icons.check_circle,
-                                size: 30,
-                                color: isAmoled && isDark
-                                    ? Colors.white
-                                    : Theme.of(context).colorScheme.primary,
-                              ),
-                            ),
-                            SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                LocaleProvider.tr('ok'),
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                  color: isAmoled && isDark
-                                      ? Colors.white
-                                      : Theme.of(context).colorScheme.primary,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
+                    )
+                  : null,
+              actionsPadding: const EdgeInsets.all(16),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: Text(
+                    LocaleProvider.tr('ok'),
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).colorScheme.primary,
                     ),
-                  ],
+                  ),
                 ),
-              ),
+              ],
             );
           },
         );

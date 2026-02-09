@@ -885,6 +885,35 @@ class _ArtistScreenState extends State<ArtistScreen> {
     }
   }
 
+  String _cleanDescription(String text) {
+    if (text.isEmpty) return text;
+
+    // Patrones para detectar y eliminar la atribución de fuente al final
+    final patterns = [
+      RegExp(
+        r'\s*(?:Fuente|Source|Data from):\s+Wikipedia.*$',
+        caseSensitive: false,
+        dotAll: true,
+      ),
+      RegExp(
+        r'\s*Description summary from Wikipedia.*$',
+        caseSensitive: false,
+        dotAll: true,
+      ),
+      RegExp(
+        r'\n?\s*https?://[a-zA-Z]{2}\.wikipedia\.org\S*',
+        caseSensitive: false,
+      ),
+    ];
+
+    String cleaned = text;
+    for (var pattern in patterns) {
+      cleaned = cleaned.replaceFirst(pattern, '');
+    }
+
+    return cleaned.trim();
+  }
+
   @override
   Widget build(BuildContext context) {
     final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
@@ -929,10 +958,10 @@ class _ArtistScreenState extends State<ArtistScreen> {
                 color: isDark
                     ? Theme.of(
                         context,
-                      ).colorScheme.onSecondary.withValues(alpha: 0.5)
+                      ).colorScheme.secondary.withValues(alpha: 0.06)
                     : Theme.of(
                         context,
-                      ).colorScheme.secondaryContainer.withValues(alpha: 0.5),
+                      ).colorScheme.secondary.withValues(alpha: 0.07),
               ),
               child: const Icon(Icons.arrow_back, size: 24),
             ),
@@ -970,87 +999,63 @@ class _ArtistScreenState extends State<ArtistScreen> {
                     context: context,
                     builder: (context) {
                       return AlertDialog(
+                        backgroundColor: isAmoled && isDark
+                            ? Colors.black
+                            : Theme.of(context).colorScheme.surface,
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
+                          borderRadius: BorderRadius.circular(28),
                           side: isAmoled && isDark
-                              ? const BorderSide(color: Colors.white, width: 1)
+                              ? const BorderSide(
+                                  color: Colors.white24,
+                                  width: 1,
+                                )
                               : BorderSide.none,
                         ),
-                        title: Center(
+                        contentPadding: const EdgeInsets.fromLTRB(
+                          24,
+                          24,
+                          24,
+                          8,
+                        ),
+                        icon: Icon(
+                          Icons.info_rounded,
+                          size: 32,
+                          color: Theme.of(context).colorScheme.onSurface,
+                        ),
+                        title: Text(
+                          LocaleProvider.tr('info'),
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.w500,
+                            color: Theme.of(context).colorScheme.onSurface,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        content: SingleChildScrollView(
                           child: Text(
-                            LocaleProvider.tr('info'),
-                            style: TextStyle(fontWeight: FontWeight.bold),
+                            LocaleProvider.tr('artist_info'),
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onSurfaceVariant,
+                                  height: 1.5,
+                                  fontSize: 16,
+                                ),
+                            textAlign: TextAlign.start,
                           ),
                         ),
-                        content: Text(LocaleProvider.tr('artist_info')),
+                        actionsPadding: const EdgeInsets.all(16),
                         actions: [
-                          SizedBox(height: 16),
-                          InkWell(
-                            onTap: () => Navigator.of(context).pop(),
-                            borderRadius: BorderRadius.circular(16),
-                            child: Container(
-                              width: double.infinity,
-                              padding: EdgeInsets.all(16),
-                              decoration: BoxDecoration(
+                          TextButton(
+                            onPressed: () => Navigator.of(context).pop(),
+                            child: Text(
+                              LocaleProvider.tr('ok'),
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
                                 color: isAmoled && isDark
-                                    ? Colors.white.withValues(alpha: 0.2)
-                                    : Theme.of(
-                                        context,
-                                      ).colorScheme.primaryContainer,
-                                borderRadius: BorderRadius.circular(16),
-                                border: Border.all(
-                                  color: isAmoled && isDark
-                                      ? Colors.white.withValues(alpha: 0.4)
-                                      : Theme.of(context).colorScheme.primary
-                                            .withValues(alpha: 0.3),
-                                  width: 2,
-                                ),
-                              ),
-                              child: Row(
-                                children: [
-                                  Container(
-                                    padding: EdgeInsets.all(8),
-                                    decoration: BoxDecoration(
-                                      borderRadius: BorderRadius.circular(12),
-                                      color: isAmoled && isDark
-                                          ? Colors.white.withValues(alpha: 0.2)
-                                          : Theme.of(context)
-                                                .colorScheme
-                                                .primary
-                                                .withValues(alpha: 0.1),
-                                    ),
-                                    child: Icon(
-                                      Icons.check_circle,
-                                      size: 30,
-                                      color: isAmoled && isDark
-                                          ? Colors.white
-                                          : Theme.of(
-                                              context,
-                                            ).colorScheme.primary,
-                                    ),
-                                  ),
-                                  SizedBox(width: 12),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          LocaleProvider.tr('ok'),
-                                          style: TextStyle(
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.w600,
-                                            color: isAmoled && isDark
-                                                ? Colors.white
-                                                : Theme.of(
-                                                    context,
-                                                  ).colorScheme.primary,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
+                                    ? Colors.white
+                                    : Theme.of(context).colorScheme.primary,
                               ),
                             ),
                           ),
@@ -1417,7 +1422,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                           .colorScheme
                                           .secondaryContainer
                                           .withValues(alpha: 0.4),
-                                borderRadius: BorderRadius.circular(12),
+                                borderRadius: BorderRadius.circular(20),
                               ),
                               child: Row(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1429,7 +1434,10 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                                   .toString()
                                                   .trim()
                                                   .isNotEmpty)
-                                          ? _artist!['description'].toString()
+                                          ? _cleanDescription(
+                                              _artist!['description']
+                                                  .toString(),
+                                            )
                                           : LocaleProvider.tr('no_description'),
                                       style: Theme.of(
                                         context,
@@ -1508,12 +1516,12 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                           color: isDark
                                               ? Theme.of(context)
                                                     .colorScheme
-                                                    .onSecondary
-                                                    .withValues(alpha: 0.5)
+                                                    .secondary
+                                                    .withValues(alpha: 0.06)
                                               : Theme.of(context)
                                                     .colorScheme
-                                                    .secondaryContainer
-                                                    .withValues(alpha: 0.5),
+                                                    .secondary
+                                                    .withValues(alpha: 0.07),
                                         ),
                                         child: const Icon(
                                           Icons.arrow_back,
@@ -1531,10 +1539,13 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                     const SizedBox(width: 8),
                                     Text(
                                       LocaleProvider.tr('songs_search'),
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .titleMedium
-                                          ?.copyWith(fontSize: 20),
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600,
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.primary,
+                                      ),
                                     ),
                                   ],
                                 ),
@@ -1581,17 +1592,17 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                           'song-$videoId',
                                         );
 
-                                    final cardColor = isAmoled && isDark
+                                    final cardColor = isAmoled
                                         ? Colors.white.withAlpha(20)
                                         : isDark
                                         ? Theme.of(context)
                                               .colorScheme
-                                              .onSecondary
-                                              .withValues(alpha: 0.5)
+                                              .secondary
+                                              .withValues(alpha: 0.06)
                                         : Theme.of(context)
                                               .colorScheme
-                                              .secondaryContainer
-                                              .withValues(alpha: 0.5);
+                                              .secondary
+                                              .withValues(alpha: 0.07);
 
                                     final bool isFirst = index == 0;
                                     final bool isLast =
@@ -1602,11 +1613,11 @@ class _ArtistScreenState extends State<ArtistScreen> {
 
                                     BorderRadius borderRadius;
                                     if (isOnly) {
-                                      borderRadius = BorderRadius.circular(16);
+                                      borderRadius = BorderRadius.circular(20);
                                     } else if (isFirst) {
                                       borderRadius = const BorderRadius.only(
-                                        topLeft: Radius.circular(16),
-                                        topRight: Radius.circular(16),
+                                        topLeft: Radius.circular(20),
+                                        topRight: Radius.circular(20),
                                         bottomLeft: Radius.circular(4),
                                         bottomRight: Radius.circular(4),
                                       );
@@ -1614,8 +1625,8 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                       borderRadius = const BorderRadius.only(
                                         topLeft: Radius.circular(4),
                                         topRight: Radius.circular(4),
-                                        bottomLeft: Radius.circular(16),
-                                        bottomRight: Radius.circular(16),
+                                        bottomLeft: Radius.circular(20),
+                                        bottomRight: Radius.circular(20),
                                       );
                                     } else {
                                       borderRadius = BorderRadius.circular(4);
@@ -1814,12 +1825,12 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                           color: isDark
                                               ? Theme.of(context)
                                                     .colorScheme
-                                                    .onSecondary
-                                                    .withValues(alpha: 0.5)
+                                                    .secondary
+                                                    .withValues(alpha: 0.06)
                                               : Theme.of(context)
                                                     .colorScheme
-                                                    .secondaryContainer
-                                                    .withValues(alpha: 0.5),
+                                                    .secondary
+                                                    .withValues(alpha: 0.07),
                                         ),
                                         child: const Icon(
                                           Icons.arrow_back,
@@ -1935,17 +1946,17 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                             'album-$videoId',
                                           );
 
-                                      final cardColor = isAmoled && isDark
+                                      final cardColor = isAmoled
                                           ? Colors.white.withAlpha(20)
                                           : isDark
                                           ? Theme.of(context)
                                                 .colorScheme
-                                                .onSecondary
-                                                .withValues(alpha: 0.5)
+                                                .secondary
+                                                .withValues(alpha: 0.06)
                                           : Theme.of(context)
                                                 .colorScheme
-                                                .secondaryContainer
-                                                .withValues(alpha: 0.5);
+                                                .secondary
+                                                .withValues(alpha: 0.07);
 
                                       final bool isFirst = index == 0;
                                       final bool isLast =
@@ -1956,12 +1967,12 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                       BorderRadius borderRadius;
                                       if (isOnly) {
                                         borderRadius = BorderRadius.circular(
-                                          16,
+                                          20,
                                         );
                                       } else if (isFirst) {
                                         borderRadius = const BorderRadius.only(
-                                          topLeft: Radius.circular(16),
-                                          topRight: Radius.circular(16),
+                                          topLeft: Radius.circular(20),
+                                          topRight: Radius.circular(20),
                                           bottomLeft: Radius.circular(4),
                                           bottomRight: Radius.circular(4),
                                         );
@@ -1969,8 +1980,8 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                         borderRadius = const BorderRadius.only(
                                           topLeft: Radius.circular(4),
                                           topRight: Radius.circular(4),
-                                          bottomLeft: Radius.circular(16),
-                                          bottomRight: Radius.circular(16),
+                                          bottomLeft: Radius.circular(20),
+                                          bottomRight: Radius.circular(20),
                                         );
                                       } else {
                                         borderRadius = BorderRadius.circular(4);
@@ -2200,12 +2211,12 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                           color: isDark
                                               ? Theme.of(context)
                                                     .colorScheme
-                                                    .onSecondary
-                                                    .withValues(alpha: 0.5)
+                                                    .secondary
+                                                    .withValues(alpha: 0.06)
                                               : Theme.of(context)
                                                     .colorScheme
-                                                    .secondaryContainer
-                                                    .withValues(alpha: 0.5),
+                                                    .secondary
+                                                    .withValues(alpha: 0.07),
                                         ),
                                         child: const Icon(
                                           Icons.arrow_back,
@@ -2223,10 +2234,13 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                     const SizedBox(width: 8),
                                     Text(
                                       LocaleProvider.tr('videos'),
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .titleMedium
-                                          ?.copyWith(fontSize: 20),
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600,
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.primary,
+                                      ),
                                     ),
                                   ],
                                 ),
@@ -2273,17 +2287,17 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                           'video-$videoId',
                                         );
 
-                                    final cardColor = isAmoled && isDark
+                                    final cardColor = isAmoled
                                         ? Colors.white.withAlpha(20)
                                         : isDark
                                         ? Theme.of(context)
                                               .colorScheme
-                                              .onSecondary
-                                              .withValues(alpha: 0.5)
+                                              .secondary
+                                              .withValues(alpha: 0.06)
                                         : Theme.of(context)
                                               .colorScheme
-                                              .secondaryContainer
-                                              .withValues(alpha: 0.5);
+                                              .secondary
+                                              .withValues(alpha: 0.07);
 
                                     final bool isFirst = index == 0;
                                     final bool isLast =
@@ -2294,11 +2308,11 @@ class _ArtistScreenState extends State<ArtistScreen> {
 
                                     BorderRadius borderRadius;
                                     if (isOnly) {
-                                      borderRadius = BorderRadius.circular(16);
+                                      borderRadius = BorderRadius.circular(20);
                                     } else if (isFirst) {
                                       borderRadius = const BorderRadius.only(
-                                        topLeft: Radius.circular(16),
-                                        topRight: Radius.circular(16),
+                                        topLeft: Radius.circular(20),
+                                        topRight: Radius.circular(20),
                                         bottomLeft: Radius.circular(4),
                                         bottomRight: Radius.circular(4),
                                       );
@@ -2306,8 +2320,8 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                       borderRadius = const BorderRadius.only(
                                         topLeft: Radius.circular(4),
                                         topRight: Radius.circular(4),
-                                        bottomLeft: Radius.circular(16),
-                                        bottomRight: Radius.circular(16),
+                                        bottomLeft: Radius.circular(20),
+                                        bottomRight: Radius.circular(20),
                                       );
                                     } else {
                                       borderRadius = BorderRadius.circular(4);
@@ -2506,12 +2520,12 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                           color: isDark
                                               ? Theme.of(context)
                                                     .colorScheme
-                                                    .onSecondary
-                                                    .withValues(alpha: 0.5)
+                                                    .secondary
+                                                    .withValues(alpha: 0.06)
                                               : Theme.of(context)
                                                     .colorScheme
-                                                    .secondaryContainer
-                                                    .withValues(alpha: 0.5),
+                                                    .secondary
+                                                    .withValues(alpha: 0.07),
                                         ),
                                         child: const Icon(
                                           Icons.arrow_back,
@@ -2529,10 +2543,13 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                     const SizedBox(width: 8),
                                     Text(
                                       LocaleProvider.tr('albums'),
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .titleMedium
-                                          ?.copyWith(fontSize: 20),
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600,
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.primary,
+                                      ),
                                     ),
                                   ],
                                 ),
@@ -2547,17 +2564,17 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                     final isSelected = _selectedIndexes
                                         .contains('album-$index');
 
-                                    final cardColor = isAmoled && isDark
+                                    final cardColor = isAmoled
                                         ? Colors.white.withAlpha(20)
                                         : isDark
                                         ? Theme.of(context)
                                               .colorScheme
-                                              .onSecondary
-                                              .withValues(alpha: 0.5)
+                                              .secondary
+                                              .withValues(alpha: 0.06)
                                         : Theme.of(context)
                                               .colorScheme
-                                              .secondaryContainer
-                                              .withValues(alpha: 0.5);
+                                              .secondary
+                                              .withValues(alpha: 0.07);
 
                                     final bool isFirst = index == 0;
                                     final bool isLast =
@@ -2566,11 +2583,11 @@ class _ArtistScreenState extends State<ArtistScreen> {
 
                                     BorderRadius borderRadius;
                                     if (isOnly) {
-                                      borderRadius = BorderRadius.circular(16);
+                                      borderRadius = BorderRadius.circular(20);
                                     } else if (isFirst) {
                                       borderRadius = const BorderRadius.only(
-                                        topLeft: Radius.circular(16),
-                                        topRight: Radius.circular(16),
+                                        topLeft: Radius.circular(20),
+                                        topRight: Radius.circular(20),
                                         bottomLeft: Radius.circular(4),
                                         bottomRight: Radius.circular(4),
                                       );
@@ -2578,8 +2595,8 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                       borderRadius = const BorderRadius.only(
                                         topLeft: Radius.circular(4),
                                         topRight: Radius.circular(4),
-                                        bottomLeft: Radius.circular(16),
-                                        bottomRight: Radius.circular(16),
+                                        bottomLeft: Radius.circular(20),
+                                        bottomRight: Radius.circular(20),
                                       );
                                     } else {
                                       borderRadius = BorderRadius.circular(4);
@@ -2766,18 +2783,29 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                         mainAxisAlignment:
                                             MainAxisAlignment.spaceBetween,
                                         children: [
-                                          Text(
-                                            LocaleProvider.tr('songs_search'),
-                                            style: Theme.of(context)
-                                                .textTheme
-                                                .titleMedium
-                                                ?.copyWith(fontSize: 20),
+                                          Row(
+                                            children: [
+                                              SizedBox(width: 14),
+                                              Text(
+                                                LocaleProvider.tr(
+                                                  'songs_search',
+                                                ),
+                                                style: TextStyle(
+                                                  fontSize: 16,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: Theme.of(
+                                                    context,
+                                                  ).colorScheme.primary,
+                                                ),
+                                              ),
+                                            ],
                                           ),
                                           Icon(Icons.chevron_right),
                                         ],
                                       ),
                                     ),
                                   ),
+                                  const SizedBox(height: 12),
                                   Column(
                                     children: [
                                       ..._songs.take(3).map((item) {
@@ -2789,17 +2817,17 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                               'song-$videoId',
                                             );
 
-                                        final cardColor = isAmoled && isDark
+                                        final cardColor = isAmoled
                                             ? Colors.white.withAlpha(20)
                                             : isDark
                                             ? Theme.of(context)
                                                   .colorScheme
-                                                  .onSecondary
-                                                  .withValues(alpha: 0.5)
+                                                  .secondary
+                                                  .withValues(alpha: 0.06)
                                             : Theme.of(context)
                                                   .colorScheme
-                                                  .secondaryContainer
-                                                  .withValues(alpha: 0.5);
+                                                  .secondary
+                                                  .withValues(alpha: 0.07);
 
                                         final int totalToShow =
                                             _songs.length < 3
@@ -2813,13 +2841,13 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                         BorderRadius borderRadius;
                                         if (isOnly) {
                                           borderRadius = BorderRadius.circular(
-                                            16,
+                                            20,
                                           );
                                         } else if (isFirst) {
                                           borderRadius =
                                               const BorderRadius.only(
-                                                topLeft: Radius.circular(16),
-                                                topRight: Radius.circular(16),
+                                                topLeft: Radius.circular(20),
+                                                topRight: Radius.circular(20),
                                                 bottomLeft: Radius.circular(4),
                                                 bottomRight: Radius.circular(4),
                                               );
@@ -2828,9 +2856,9 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                               const BorderRadius.only(
                                                 topLeft: Radius.circular(4),
                                                 topRight: Radius.circular(4),
-                                                bottomLeft: Radius.circular(16),
+                                                bottomLeft: Radius.circular(20),
                                                 bottomRight: Radius.circular(
-                                                  16,
+                                                  20,
                                                 ),
                                               );
                                         } else {
@@ -3049,7 +3077,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
 
                             // Sección Álbumes
                             if (_albums.isNotEmpty) ...[
-                              const SizedBox(height: 16),
+                              const SizedBox(height: 24),
                               Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
@@ -3069,19 +3097,27 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                         mainAxisAlignment:
                                             MainAxisAlignment.spaceBetween,
                                         children: [
-                                          Text(
-                                            LocaleProvider.tr('albums'),
-                                            style: Theme.of(context)
-                                                .textTheme
-                                                .titleMedium
-                                                ?.copyWith(fontSize: 20),
+                                          Row(
+                                            children: [
+                                              SizedBox(width: 14),
+                                              Text(
+                                                LocaleProvider.tr('albums'),
+                                                style: TextStyle(
+                                                  fontSize: 16,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: Theme.of(
+                                                    context,
+                                                  ).colorScheme.primary,
+                                                ),
+                                              ),
+                                            ],
                                           ),
                                           Icon(Icons.chevron_right),
                                         ],
                                       ),
                                     ),
                                   ),
-                                  const SizedBox(height: 8),
+                                  const SizedBox(height: 12),
                                   SizedBox(
                                     height:
                                         180, // Aumentar altura para evitar overflow
@@ -3183,7 +3219,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
 
                             // Sección Videos
                             if (_videos.isNotEmpty) ...[
-                              const SizedBox(height: 16),
+                              const SizedBox(height: 24),
                               Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
@@ -3203,18 +3239,27 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                         mainAxisAlignment:
                                             MainAxisAlignment.spaceBetween,
                                         children: [
-                                          Text(
-                                            LocaleProvider.tr('videos'),
-                                            style: Theme.of(context)
-                                                .textTheme
-                                                .titleMedium
-                                                ?.copyWith(fontSize: 20),
+                                          Row(
+                                            children: [
+                                              SizedBox(width: 14),
+                                              Text(
+                                                LocaleProvider.tr('videos'),
+                                                style: TextStyle(
+                                                  fontSize: 16,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: Theme.of(
+                                                    context,
+                                                  ).colorScheme.primary,
+                                                ),
+                                              ),
+                                            ],
                                           ),
                                           Icon(Icons.chevron_right),
                                         ],
                                       ),
                                     ),
                                   ),
+                                  const SizedBox(height: 12),
                                   Column(
                                     children: [
                                       ..._videos.take(3).map((item) {
@@ -3226,17 +3271,17 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                               'video-$videoId',
                                             );
 
-                                        final cardColor = isAmoled && isDark
+                                        final cardColor = isAmoled
                                             ? Colors.white.withAlpha(20)
                                             : isDark
                                             ? Theme.of(context)
                                                   .colorScheme
-                                                  .onSecondary
-                                                  .withValues(alpha: 0.5)
+                                                  .secondary
+                                                  .withValues(alpha: 0.06)
                                             : Theme.of(context)
                                                   .colorScheme
-                                                  .secondaryContainer
-                                                  .withValues(alpha: 0.5);
+                                                  .secondary
+                                                  .withValues(alpha: 0.07);
 
                                         final int totalToShow =
                                             _videos.length < 3
@@ -3250,13 +3295,13 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                         BorderRadius borderRadius;
                                         if (isOnly) {
                                           borderRadius = BorderRadius.circular(
-                                            16,
+                                            20,
                                           );
                                         } else if (isFirst) {
                                           borderRadius =
                                               const BorderRadius.only(
-                                                topLeft: Radius.circular(16),
-                                                topRight: Radius.circular(16),
+                                                topLeft: Radius.circular(20),
+                                                topRight: Radius.circular(20),
                                                 bottomLeft: Radius.circular(4),
                                                 bottomRight: Radius.circular(4),
                                               );
@@ -3265,9 +3310,9 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                               const BorderRadius.only(
                                                 topLeft: Radius.circular(4),
                                                 topRight: Radius.circular(4),
-                                                bottomLeft: Radius.circular(16),
+                                                bottomLeft: Radius.circular(20),
                                                 bottomRight: Radius.circular(
-                                                  16,
+                                                  20,
                                                 ),
                                               );
                                         } else {
@@ -3548,7 +3593,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
                         Navigator.of(context).pop();
                         _searchArtistOnYouTube(artistName);
                       },
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: BorderRadius.circular(20),
                       child: Container(
                         width: double.infinity,
                         padding: EdgeInsets.all(16),
@@ -3559,8 +3604,8 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                   context,
                                 ).colorScheme.secondaryContainer,
                           borderRadius: BorderRadius.only(
-                            topLeft: Radius.circular(16),
-                            topRight: Radius.circular(16),
+                            topLeft: Radius.circular(20),
+                            topRight: Radius.circular(20),
                             bottomLeft: Radius.circular(4),
                             bottomRight: Radius.circular(4),
                           ),
@@ -3610,7 +3655,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
                         Navigator.of(context).pop();
                         _searchArtistOnYouTubeMusic(artistName);
                       },
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: BorderRadius.circular(20),
                       child: Container(
                         width: double.infinity,
                         padding: EdgeInsets.all(16),
@@ -3623,8 +3668,8 @@ class _ArtistScreenState extends State<ArtistScreen> {
                           borderRadius: BorderRadius.only(
                             topLeft: Radius.circular(4),
                             topRight: Radius.circular(4),
-                            bottomLeft: Radius.circular(16),
-                            bottomRight: Radius.circular(16),
+                            bottomLeft: Radius.circular(20),
+                            bottomRight: Radius.circular(20),
                           ),
                           border: Border.all(
                             color: isAmoled && isDark
@@ -3778,114 +3823,56 @@ class _ArtistScreenState extends State<ArtistScreen> {
           final isDark = Theme.of(context).brightness == Brightness.dark;
 
           return AlertDialog(
+            backgroundColor: isAmoled && isDark
+                ? Colors.black
+                : Theme.of(context).colorScheme.surface,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(28),
               side: isAmoled && isDark
-                  ? const BorderSide(color: Colors.white, width: 1)
+                  ? const BorderSide(color: Colors.white24, width: 1)
                   : BorderSide.none,
             ),
-            title: Center(
+            contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
+            icon: Icon(
+              Icons.task_alt_rounded,
+              size: 32,
+              color: Theme.of(context).colorScheme.onSurface,
+            ),
+            title: Text(
+              title,
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.w500,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            content: SingleChildScrollView(
               child: Text(
-                title,
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
+                message,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  height: 1.5,
+                  fontSize: 16,
+                ),
+                textAlign: TextAlign.start,
               ),
             ),
-            content: SizedBox(
-              width: 400,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  SizedBox(height: 18),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 4),
-                      child: Text(
-                        message,
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Theme.of(context).colorScheme.onSurface,
-                        ),
-                        textAlign: TextAlign.left,
-                        maxLines: 3,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
+            actionsPadding: const EdgeInsets.all(16),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: Text(
+                  LocaleProvider.tr('ok'),
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: isAmoled && isDark
+                        ? Colors.white
+                        : Theme.of(context).colorScheme.primary,
                   ),
-                  SizedBox(height: 20),
-                  // Tarjeta de aceptar
-                  InkWell(
-                    onTap: () => Navigator.of(context).pop(),
-                    borderRadius: BorderRadius.circular(16),
-                    child: Container(
-                      width: double.infinity,
-                      padding: EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: isAmoled && isDark
-                            ? Colors.white.withValues(
-                                alpha: 0.2,
-                              ) // Color personalizado para amoled
-                            : Theme.of(context).colorScheme.primaryContainer,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: isAmoled && isDark
-                              ? Colors.white.withValues(
-                                  alpha: 0.4,
-                                ) // Borde personalizado para amoled
-                              : Theme.of(
-                                  context,
-                                ).colorScheme.primary.withValues(alpha: 0.3),
-                          width: 2,
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            padding: EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(12),
-                              color: isAmoled && isDark
-                                  ? Colors.white.withValues(
-                                      alpha: 0.2,
-                                    ) // Fondo del ícono para amoled
-                                  : Theme.of(context).colorScheme.primary
-                                        .withValues(alpha: 0.1),
-                            ),
-                            child: Icon(
-                              Icons.check_circle,
-                              size: 30,
-                              color: isAmoled && isDark
-                                  ? Colors
-                                        .white // Ícono blanco para amoled
-                                  : Theme.of(context).colorScheme.primary,
-                            ),
-                          ),
-                          SizedBox(width: 8),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  LocaleProvider.tr('ok'),
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600,
-                                    color: isAmoled && isDark
-                                        ? Colors
-                                              .white // Texto blanco para amoled
-                                        : Theme.of(context).colorScheme.primary,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
+                ),
               ),
-            ),
+            ],
           );
         },
       ),

@@ -494,60 +494,70 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       // Cancelar suscripciones anteriores si existen
       await _disposeListeners();
 
-      _playbackEventSubscription = _player.playbackEventStream.listen((event) {
-        // Transformar el evento de just_audio a audio_service siguiendo la documentación
-        final transformedState = _transformPlaybackEvent(event);
-        playbackState.add(transformedState);
+      _playbackEventSubscription = _player.playbackEventStream.listen(
+        (event) {
+          // Transformar el evento de just_audio a audio_service siguiendo la documentación
+          final transformedState = _transformPlaybackEvent(event);
+          playbackState.add(transformedState);
 
-        // Si se completó y está en loop one, lanza el seek/play en segundo plano
-        if (event.processingState == ProcessingState.completed &&
-            _player.loopMode == LoopMode.one) {
-          unawaited(_player.seek(Duration.zero));
-          unawaited(_player.play());
-        }
-
-        // Precarga inteligente: cuando quedan pocos segundos, precargar la siguiente
-        _preloadNextSongArtwork();
-
-        // Si se completó y es la última canción de la lista, pausar automáticamente
-        if (event.processingState == ProcessingState.completed) {
-          final currentIndex = _player.currentIndex;
-          // print('🔍 DEBUG: Canción completada - Index: $currentIndex, Queue length: ${_mediaQueue.length}, Loop mode: ${_player.loopMode}');
-
-          if (currentIndex != null &&
-              currentIndex >= 0 &&
-              currentIndex >= _mediaQueue.length - 1 &&
-              _player.loopMode != LoopMode.all &&
-              _mediaQueue.isNotEmpty) {
-            // Debug: verificar que estamos en la última canción
-            // print('❤️ DEBUG: Última canción completada - Index: $currentIndex, Queue length: ${_mediaQueue.length}, Loop mode: ${_player.loopMode}');
-
-            // Es la última canción y no está en modo repeat all, pausar
-            // Agregar un pequeño delay para asegurar que el estado se procese correctamente
-            Timer(const Duration(milliseconds: 100), () {
-              // No pausar si el usuario acaba de seleccionar una canción
-              if (mounted && _player.playing && !_userInitiatedPlayback) {
-                // print('❤️ DEBUG: Pausando automáticamente la última canción');
-                unawaited(pause());
-              }
-            });
-          } else {
-            // print('❌ DEBUG: No se cumplen las condiciones para pausar - Index válido: ${currentIndex != null}, Índice >= 0: ${currentIndex != null && currentIndex >= 0}, Es último: ${currentIndex != null && currentIndex >= _mediaQueue.length - 1}, No es loop all: ${_player.loopMode != LoopMode.all}, Queue no vacía: ${_mediaQueue.isNotEmpty}');
+          // Si se completó y está en loop one, lanza el seek/play en segundo plano
+          if (event.processingState == ProcessingState.completed &&
+              _player.loopMode == LoopMode.one) {
+            unawaited(_player.seek(Duration.zero));
+            unawaited(_player.play());
           }
-        }
 
-        // Verificar también cuando el estado cambia a completed y el player se detiene automáticamente
-        if (event.processingState == ProcessingState.completed &&
-            !_player.playing &&
-            _player.loopMode == LoopMode.off) {
-          final currentIndex = _player.currentIndex;
-          if (currentIndex != null && currentIndex >= _mediaQueue.length - 1) {
-            // print('DEBUG: Player se detuvo automáticamente al final de la lista');
-            // El player ya se pausó automáticamente, solo actualizar el estado
-            playbackState.add(playbackState.value.copyWith(playing: false));
+          // Precarga inteligente: cuando quedan pocos segundos, precargar la siguiente
+          _preloadNextSongArtwork();
+
+          // Si se completó y es la última canción de la lista, pausar automáticamente
+          if (event.processingState == ProcessingState.completed) {
+            final currentIndex = _player.currentIndex;
+            // print('🔍 DEBUG: Canción completada - Index: $currentIndex, Queue length: ${_mediaQueue.length}, Loop mode: ${_player.loopMode}');
+
+            if (currentIndex != null &&
+                currentIndex >= 0 &&
+                currentIndex >= _mediaQueue.length - 1 &&
+                _player.loopMode != LoopMode.all &&
+                _mediaQueue.isNotEmpty) {
+              // Debug: verificar que estamos en la última canción
+              // print('❤️ DEBUG: Última canción completada - Index: $currentIndex, Queue length: ${_mediaQueue.length}, Loop mode: ${_player.loopMode}');
+
+              // Es la última canción y no está en modo repeat all, pausar
+              // Agregar un pequeño delay para asegurar que el estado se procese correctamente
+              Timer(const Duration(milliseconds: 100), () {
+                // No pausar si el usuario acaba de seleccionar una canción
+                if (mounted && _player.playing && !_userInitiatedPlayback) {
+                  // print('❤️ DEBUG: Pausando automáticamente la última canción');
+                  unawaited(pause());
+                }
+              });
+            } else {
+              // print('❌ DEBUG: No se cumplen las condiciones para pausar - Index válido: ${currentIndex != null}, Índice >= 0: ${currentIndex != null && currentIndex >= 0}, Es último: ${currentIndex != null && currentIndex >= _mediaQueue.length - 1}, No es loop all: ${_player.loopMode != LoopMode.all}, Queue no vacía: ${_mediaQueue.isNotEmpty}');
+            }
           }
-        }
-      });
+
+          // Verificar también cuando el estado cambia a completed y el player se detiene automáticamente
+          if (event.processingState == ProcessingState.completed &&
+              !_player.playing &&
+              _player.loopMode == LoopMode.off) {
+            final currentIndex = _player.currentIndex;
+            if (currentIndex != null &&
+                currentIndex >= _mediaQueue.length - 1) {
+              // print('DEBUG: Player se detuvo automáticamente al final de la lista');
+              // El player ya se pausó automáticamente, solo actualizar el estado
+              playbackState.add(playbackState.value.copyWith(playing: false));
+            }
+          }
+        },
+        onError: (Object e, StackTrace stackTrace) {
+          // print('❌ Error en playbackStream: $e');
+          // Intentar recuperar saltando a la siguiente canción si es posible
+          if (mounted && _mediaQueue.isNotEmpty) {
+            skipToNext();
+          }
+        },
+      );
 
       _currentIndexSubscription = _player.currentIndexStream.listen((index) {
         if (_initializing) return;
@@ -1388,7 +1398,8 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       } catch (e) {
         // Si falla, intentar con una sola canción
         try {
-          await SongsIndexDB().cleanNonExistentFiles();
+          // No esperar la limpieza de DB para no bloquear la recuperación
+          unawaited(SongsIndexDB().cleanNonExistentFiles());
         } catch (_) {}
         if (validSongs.isNotEmpty) {
           try {
@@ -1608,6 +1619,20 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
       await _player.play();
     } catch (e) {
+      // Intentar saltar a la siguiente canción si la actual falla (e.g. archivo corrupto)
+      try {
+        if (_mediaQueue.isNotEmpty &&
+            _player.currentIndex != null &&
+            _player.currentIndex! < _mediaQueue.length - 1) {
+          // print('⚠️ Error al reproducir, intentando saltar a la siguiente...');
+          await skipToNext();
+          await _player.play();
+          return;
+        }
+      } catch (_) {
+        // Si falla el salto, continuar con la reinicialización
+      }
+
       // Reintentar una vez tras pequeña espera si seguía inicializando
       if (_initializing) {
         await Future.delayed(const Duration(milliseconds: 200));
@@ -1620,11 +1645,19 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       // Último recurso: re-crear el player y reconstruir la cola actual
       try {
         final int fallbackIndex = _player.currentIndex ?? 0;
+
+        // Si falló la reproducción, intentar avanzar el índice para el fallback
+        // para no quedar atascado en la misma canción corrupta
+        int nextIndex = fallbackIndex;
+        if (fallbackIndex < _currentSongList.length - 1) {
+          nextIndex = fallbackIndex + 1;
+        }
+
         await _reinitializePlayer();
         if (_currentSongList.isNotEmpty) {
           await setQueueFromSongsWithPosition(
             _currentSongList,
-            initialIndex: fallbackIndex.clamp(0, _currentSongList.length - 1),
+            initialIndex: nextIndex.clamp(0, _currentSongList.length - 1),
             autoPlay: true,
             resetShuffle: false,
           );
@@ -1716,6 +1749,13 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
   @override
   Future<void> skipToNext() async {
+    // Safety check: Si está reproduciendo, no debería estar inicializando.
+    // Esto corrige el estado "zombie" donde _initializing se queda pegado.
+    if (_player.playing && _initializing) {
+      _initializing = false;
+      initializingNotifier.value = false;
+    }
+
     if (_initializing || _isSkipping) return;
 
     _isSkipping = true;
@@ -1728,12 +1768,13 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       _pendingArtworkOperations.clear();
       cancelAllArtworkLoads();
 
-      await _player.seekToNext();
+      // Timeout para evitar que se quede pegado si el codec falla
+      await _player.seekToNext().timeout(const Duration(seconds: 2));
       _updateSleepTimer();
 
       // La nueva carátula se cargará automáticamente por el currentIndexStream listener
     } catch (e) {
-      // Error silencioso
+      // print('⚠️ Error en skipToNext: $e');
     } finally {
       _isSkipping = false;
     }
@@ -1741,6 +1782,12 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
   @override
   Future<void> skipToPrevious() async {
+    // Safety check
+    if (_player.playing && _initializing) {
+      _initializing = false;
+      initializingNotifier.value = false;
+    }
+
     if (_initializing || _isSkipping) return;
 
     _isSkipping = true;
@@ -1753,15 +1800,15 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       cancelAllArtworkLoads();
 
       if (_player.position.inMilliseconds > 5000) {
-        await _player.seek(Duration.zero);
+        await _player.seek(Duration.zero).timeout(const Duration(seconds: 2));
       } else {
-        await _player.seekToPrevious();
+        await _player.seekToPrevious().timeout(const Duration(seconds: 2));
       }
       _updateSleepTimer();
 
       // La nueva carátula se cargará automáticamente por el currentIndexStream listener
     } catch (e) {
-      // Error silencioso
+      // print('⚠️ Error en skipToPrevious: $e');
     } finally {
       _isSkipping = false;
     }
@@ -1769,6 +1816,12 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
   @override
   Future<void> skipToQueueItem(int index) async {
+    // Safety check
+    if (_player.playing && _initializing) {
+      _initializing = false;
+      initializingNotifier.value = false;
+    }
+
     if (_initializing) return;
     if (index >= 0 && index < _mediaQueue.length) {
       try {
@@ -1782,7 +1835,9 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         // Ejecutar el seek de forma asíncrona
         unawaited(() async {
           try {
-            await _player.seek(Duration.zero, index: index);
+            await _player
+                .seek(Duration.zero, index: index)
+                .timeout(const Duration(seconds: 3));
             _updateSleepTimer();
 
             // Siempre iniciar reproducción cuando el usuario selecciona una canción

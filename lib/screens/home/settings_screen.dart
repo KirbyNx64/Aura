@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:music/screens/home/ota_update_screen.dart';
+import 'package:music/screens/home/about_screen.dart';
 import 'package:music/screens/home/equalizer_screen.dart';
 import 'package:music/utils/theme_preferences.dart';
 import 'package:android_intent_plus/android_intent.dart';
@@ -24,9 +25,7 @@ import 'package:music/l10n/locale_provider.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'dart:convert';
 import 'package:music/utils/db/playlist_model.dart' as hive_model;
-import 'package:url_launcher/url_launcher.dart';
 import 'package:music/widgets/gesture_settings_dialog.dart';
-import 'package:package_info_plus/package_info_plus.dart';
 
 class SettingsScreen extends StatefulWidget {
   final void Function(AppThemeMode)? setThemeMode;
@@ -4204,209 +4203,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                     ),
                     onTap: () {
-                      showDialog(
-                        context: context,
-                        builder: (context) => AlertDialog(
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                            side: isAmoled && isDark
-                                ? const BorderSide(
-                                    color: Colors.white,
-                                    width: 1,
-                                  )
-                                : BorderSide.none,
-                          ),
-                          contentPadding: const EdgeInsets.fromLTRB(
-                            24,
-                            24,
-                            24,
-                            8,
-                          ),
-                          content: Stack(
-                            children: [
-                              Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  ClipRRect(
-                                    borderRadius: BorderRadius.circular(16),
-                                    child: Image.asset(
-                                      'assets/icon.png',
-                                      width: 64,
-                                      height: 64,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 16),
-                                  const Text(
-                                    'Aura Music',
-                                    style: TextStyle(
-                                      fontSize: 22,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                    textAlign: TextAlign.center,
-                                  ),
-                                  const SizedBox(height: 4),
-                                  FutureBuilder<PackageInfo>(
-                                    future: PackageInfo.fromPlatform(),
-                                    builder: (context, snapshot) {
-                                      final version =
-                                          snapshot.data?.version ?? 'Error';
-                                      return Text(
-                                        '${LocaleProvider.tr('version')}: $version',
-                                        style: const TextStyle(fontSize: 15),
-                                        textAlign: TextAlign.center,
-                                      );
-                                    },
-                                  ),
-                                  const SizedBox(height: 12),
-                                  Container(
-                                    padding: const EdgeInsets.all(16),
-                                    decoration: BoxDecoration(
-                                      color: Theme.of(
-                                        context,
-                                      ).colorScheme.surfaceContainer,
-                                      borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .outline
-                                            .withValues(alpha: 0.2),
-                                        width: 1,
-                                      ),
-                                    ),
-                                    child: Text(
-                                      LocaleProvider.tr('app_description'),
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        height: 1.5,
-                                        color: Theme.of(
-                                          context,
-                                        ).colorScheme.onSurface,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              // Ícono de GitHub en la esquina superior derecha
-                              Positioned(
-                                top: 0,
-                                right: 0,
-                                child: IconButton(
-                                  onPressed: () async {
-                                    final Uri url = Uri.parse(
-                                      'https://github.com/KirbyNx64/Aura',
-                                    );
-                                    if (await canLaunchUrl(url)) {
-                                      await launchUrl(
-                                        url,
-                                        mode: LaunchMode.externalApplication,
-                                      );
-                                    }
-                                  },
-                                  icon: Icon(Icons.code, size: 44),
-                                  tooltip: LocaleProvider.tr('view_on_github'),
-                                ),
-                              ),
-                            ],
-                          ),
-                          actions: [
-                            SizedBox(height: 8),
-                            // Tarjeta de cancelar
-                            InkWell(
-                              onTap: () => Navigator.of(context).pop(),
-                              borderRadius: BorderRadius.circular(16),
-                              child: Container(
-                                width: double.infinity,
-                                padding: EdgeInsets.all(16),
-                                decoration: BoxDecoration(
-                                  color:
-                                      (colorSchemeNotifier.value ==
-                                              AppColorScheme.amoled &&
-                                          Theme.of(context).brightness ==
-                                              Brightness.dark)
-                                      ? Colors.white.withValues(alpha: 0.2)
-                                      : Theme.of(
-                                          context,
-                                        ).colorScheme.primaryContainer,
-                                  borderRadius: BorderRadius.circular(16),
-                                  border: Border.all(
-                                    color:
-                                        (colorSchemeNotifier.value ==
-                                                AppColorScheme.amoled &&
-                                            Theme.of(context).brightness ==
-                                                Brightness.dark)
-                                        ? Colors.white.withValues(alpha: 0.4)
-                                        : Theme.of(context).colorScheme.primary
-                                              .withValues(alpha: 0.3),
-                                    width: 2,
-                                  ),
-                                ),
-                                child: Row(
-                                  children: [
-                                    Container(
-                                      padding: EdgeInsets.all(8),
-                                      decoration: BoxDecoration(
-                                        borderRadius: BorderRadius.circular(12),
-                                        color:
-                                            (colorSchemeNotifier.value ==
-                                                    AppColorScheme.amoled &&
-                                                Theme.of(context).brightness ==
-                                                    Brightness.dark)
-                                            ? Colors.white.withValues(
-                                                alpha: 0.2,
-                                              )
-                                            : Theme.of(context)
-                                                  .colorScheme
-                                                  .primary
-                                                  .withValues(alpha: 0.1),
-                                      ),
-                                      child: Icon(
-                                        Icons.check_circle,
-                                        size: 30,
-                                        color:
-                                            (colorSchemeNotifier.value ==
-                                                    AppColorScheme.amoled &&
-                                                Theme.of(context).brightness ==
-                                                    Brightness.dark)
-                                            ? Colors.white
-                                            : Theme.of(
-                                                context,
-                                              ).colorScheme.primary,
-                                      ),
-                                    ),
-                                    SizedBox(width: 12),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            LocaleProvider.tr('ok'),
-                                            style: TextStyle(
-                                              fontSize: 16,
-                                              fontWeight: FontWeight.w600,
-                                              color:
-                                                  (colorSchemeNotifier.value ==
-                                                          AppColorScheme
-                                                              .amoled &&
-                                                      Theme.of(
-                                                            context,
-                                                          ).brightness ==
-                                                          Brightness.dark)
-                                                  ? Colors.white
-                                                  : Theme.of(
-                                                      context,
-                                                    ).colorScheme.primary,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ],
+                      Navigator.of(context).push(
+                        PageRouteBuilder(
+                          pageBuilder:
+                              (context, animation, secondaryAnimation) =>
+                                  const AboutScreen(),
+                          transitionsBuilder:
+                              (context, animation, secondaryAnimation, child) {
+                                const begin = Offset(1.0, 0.0);
+                                const end = Offset.zero;
+                                const curve = Curves.ease;
+                                final tween = Tween(
+                                  begin: begin,
+                                  end: end,
+                                ).chain(CurveTween(curve: curve));
+                                return SlideTransition(
+                                  position: animation.drive(tween),
+                                  child: child,
+                                );
+                              },
                         ),
                       );
                     },
