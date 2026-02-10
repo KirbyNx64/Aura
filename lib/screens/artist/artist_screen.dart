@@ -1426,74 +1426,85 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                 });
                               }
                             },
-                            child: Container(
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: isAmoled
-                                    ? Colors.white.withAlpha(30)
-                                    : Theme.of(context)
-                                          .colorScheme
-                                          .secondaryContainer
-                                          .withValues(alpha: 0.4),
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      (_artist!['description'] != null &&
-                                              _artist!['description']
-                                                  .toString()
-                                                  .trim()
-                                                  .isNotEmpty)
-                                          ? _cleanDescription(
-                                              _artist!['description']
-                                                  .toString(),
-                                            )
-                                          : LocaleProvider.tr('no_description'),
-                                      style: Theme.of(
-                                        context,
-                                      ).textTheme.bodyLarge,
-                                      maxLines: _descExpanded ? null : 3,
-                                      overflow: _descExpanded
-                                          ? TextOverflow.visible
-                                          : TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                  if (_artist!['description'] != null &&
-                                      _artist!['description']
-                                          .toString()
-                                          .trim()
-                                          .isNotEmpty)
-                                    Container(
-                                      width: 32,
-                                      height: 32,
-                                      decoration: BoxDecoration(
-                                        shape: BoxShape.circle,
-                                        color: isAmoled
-                                            ? Colors.white.withAlpha(30)
-                                            : isSystem
-                                            ? Theme.of(context)
-                                                  .colorScheme
-                                                  .secondaryContainer
-                                                  .withValues(alpha: 0.5)
-                                            : Theme.of(context)
-                                                  .colorScheme
-                                                  .secondaryContainer
-                                                  .withValues(alpha: 0.5),
-                                      ),
-                                      child: Icon(
-                                        _descExpanded
-                                            ? Icons.expand_less
-                                            : Icons.expand_more,
-                                        size: 20,
-                                        color: Theme.of(
+                            child: AnimatedSize(
+                              duration: const Duration(milliseconds: 300),
+                              curve: Curves.easeInOut,
+                              alignment: Alignment.topCenter,
+                              child: Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: isAmoled
+                                      ? Colors.white.withAlpha(30)
+                                      : Theme.of(context)
+                                            .colorScheme
+                                            .secondaryContainer
+                                            .withValues(alpha: 0.4),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        (_artist!['description'] != null &&
+                                                _artist!['description']
+                                                    .toString()
+                                                    .trim()
+                                                    .isNotEmpty)
+                                            ? _cleanDescription(
+                                                _artist!['description']
+                                                    .toString(),
+                                              )
+                                            : LocaleProvider.tr(
+                                                'no_description',
+                                              ),
+                                        style: Theme.of(
                                           context,
-                                        ).colorScheme.onSurface,
+                                        ).textTheme.bodyLarge,
+                                        maxLines: _descExpanded ? null : 3,
+                                        overflow: _descExpanded
+                                            ? TextOverflow.visible
+                                            : TextOverflow.ellipsis,
                                       ),
                                     ),
-                                ],
+                                    if (_artist!['description'] != null &&
+                                        _artist!['description']
+                                            .toString()
+                                            .trim()
+                                            .isNotEmpty)
+                                      Container(
+                                        width: 32,
+                                        height: 32,
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          color: isAmoled
+                                              ? Colors.white.withAlpha(30)
+                                              : isSystem
+                                              ? Theme.of(context)
+                                                    .colorScheme
+                                                    .secondaryContainer
+                                                    .withValues(alpha: 0.5)
+                                              : Theme.of(context)
+                                                    .colorScheme
+                                                    .secondaryContainer
+                                                    .withValues(alpha: 0.5),
+                                        ),
+                                        child: AnimatedRotation(
+                                          turns: _descExpanded ? 0.5 : 0,
+                                          duration: const Duration(
+                                            milliseconds: 300,
+                                          ),
+                                          child: Icon(
+                                            Icons.expand_more,
+                                            size: 20,
+                                            color: Theme.of(
+                                              context,
+                                            ).colorScheme.onSurface,
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
                               ),
                             ),
                           ),

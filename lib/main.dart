@@ -28,6 +28,7 @@ import 'package:music/utils/yt_preview_modal.dart';
 import 'package:music/services/download_history_service.dart';
 import 'package:material_loading_indicator/loading_indicator.dart';
 import 'package:music/screens/onboarding/onboarding_screen.dart';
+import 'package:music/utils/theme_controller.dart';
 import 'dart:async';
 
 // Cambiar de late final a nullable para mejor manejo de errores
@@ -763,6 +764,26 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _updateSystemNavigationBar();
       });
+
+      // Iniciar el listener del ThemeController cuando el audioHandler esté listo
+      _initThemeControllerListener();
+    }
+  }
+
+  /// Inicia el listener del ThemeController para escuchar cambios de canción
+  void _initThemeControllerListener() {
+    if (audioHandler != null) {
+      ThemeController.instance.startListening(audioHandler!.mediaItem);
+    } else {
+      // Esperar a que el audioHandler esté listo
+      void listener() {
+        if (audioServiceReady.value && audioHandler != null) {
+          ThemeController.instance.startListening(audioHandler!.mediaItem);
+          audioServiceReady.removeListener(listener);
+        }
+      }
+
+      audioServiceReady.addListener(listener);
     }
   }
 
@@ -806,6 +827,7 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
   ThemeData _buildTheme(
     Brightness brightness, [
     ColorScheme? dynamicColorScheme,
+    Color? artworkColor,
   ]) {
     final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
     if (isAmoled && brightness == Brightness.dark) {
@@ -853,12 +875,15 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
       );
     }
 
-    // Usar color personalizado
+    // Si el esquema es dinámico y hay color de carátula, usarlo
+    final isDynamic = colorSchemeNotifier.value == AppColorScheme.dynamic;
+    final seedColor = (isDynamic && artworkColor != null)
+        ? artworkColor
+        : ThemePreferences.getColorFromScheme(colorSchemeNotifier.value);
+
     return ThemeData(
       useMaterial3: true,
-      colorSchemeSeed: ThemePreferences.getColorFromScheme(
-        colorSchemeNotifier.value,
-      ),
+      colorSchemeSeed: seedColor,
       brightness: brightness,
     );
   }
@@ -895,37 +920,53 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
               _updateSystemNavigationBar(lightDynamic, darkDynamic);
             });
 
-            return MaterialApp(
-              title: 'Mi App de Música',
-              debugShowCheckedModeBanner: false,
-              localizationsDelegates: const [
-                GlobalMaterialLocalizations.delegate,
-                GlobalWidgetsLocalizations.delegate,
-                GlobalCupertinoLocalizations.delegate,
-              ],
-              supportedLocales: const [Locale('es', ''), Locale('en', '')],
-              locale: Locale(languageNotifier.value, ''),
-              themeMode: _themeMode == AppThemeMode.system
-                  ? ThemeMode.system
-                  : _themeMode == AppThemeMode.dark
-                  ? ThemeMode.dark
-                  : ThemeMode.light,
-              theme: _buildTheme(Brightness.light, lightDynamic),
-              darkTheme: _buildTheme(Brightness.dark, darkDynamic),
-              home: _showOnboarding
-                  ? OnboardingScreen(
-                      onFinish: () {
-                        setState(() {
-                          _showOnboarding = false;
-                        });
-                        // Después de terminar el onboarding y tener permisos, indexar la música
-                        performIndexingIfNeeded();
-                      },
-                    )
-                  : MainNavRoot(
-                      setThemeMode: _setThemeMode,
-                      setColorScheme: _setColorScheme,
-                    ),
+            // Escuchar cambios del color dominante extraído de la carátula
+            return ValueListenableBuilder<Color?>(
+              valueListenable: ThemeController.instance.dominantColor,
+              builder: (context, artworkColor, _) {
+                return MaterialApp(
+                  title: 'Mi App de Música',
+                  debugShowCheckedModeBanner: false,
+                  themeAnimationDuration: const Duration(milliseconds: 500),
+                  themeAnimationCurve: Curves.easeInOut,
+                  localizationsDelegates: const [
+                    GlobalMaterialLocalizations.delegate,
+                    GlobalWidgetsLocalizations.delegate,
+                    GlobalCupertinoLocalizations.delegate,
+                  ],
+                  supportedLocales: const [Locale('es', ''), Locale('en', '')],
+                  locale: Locale(languageNotifier.value, ''),
+                  themeMode: _themeMode == AppThemeMode.system
+                      ? ThemeMode.system
+                      : _themeMode == AppThemeMode.dark
+                      ? ThemeMode.dark
+                      : ThemeMode.light,
+                  theme: _buildTheme(
+                    Brightness.light,
+                    lightDynamic,
+                    artworkColor,
+                  ),
+                  darkTheme: _buildTheme(
+                    Brightness.dark,
+                    darkDynamic,
+                    artworkColor,
+                  ),
+                  home: _showOnboarding
+                      ? OnboardingScreen(
+                          onFinish: () {
+                            setState(() {
+                              _showOnboarding = false;
+                            });
+                            // Después de terminar el onboarding y tener permisos, indexar la música
+                            performIndexingIfNeeded();
+                          },
+                        )
+                      : MainNavRoot(
+                          setThemeMode: _setThemeMode,
+                          setColorScheme: _setColorScheme,
+                        ),
+                );
+              },
             );
           },
         );

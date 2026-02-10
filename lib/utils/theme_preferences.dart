@@ -22,6 +22,7 @@ enum AppColorScheme {
   amber,
   lime,
   amoled,
+  dynamic, // Tema dinámico basado en la carátula
 }
 
 class ThemePreferences {
@@ -101,7 +102,8 @@ class ThemePreferences {
   static Color getColorFromScheme(AppColorScheme scheme) {
     switch (scheme) {
       case AppColorScheme.system:
-        return Colors.deepPurple; // Color por defecto cuando no hay colores dinámicos disponibles
+        return Colors
+            .deepPurple; // Color por defecto cuando no hay colores dinámicos disponibles
       case AppColorScheme.deepPurple:
         return Colors.deepPurple;
       case AppColorScheme.purple:
@@ -136,6 +138,8 @@ class ThemePreferences {
         return Colors.lime;
       case AppColorScheme.amoled:
         return Colors.black;
+      case AppColorScheme.dynamic:
+        return Colors.deepPurple;
     }
   }
 
@@ -178,6 +182,8 @@ class ThemePreferences {
         return 'Lime';
       case AppColorScheme.amoled:
         return 'AMOLED Black';
+      case AppColorScheme.dynamic:
+        return 'Dinámico';
     }
   }
 }

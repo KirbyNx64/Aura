@@ -238,14 +238,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       color: Theme.of(context).colorScheme.onSurface,
                     ),
                     const SizedBox(height: 16),
-                    TranslatedText(
-                      'info',
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w500,
-                        color: Theme.of(context).colorScheme.onSurface,
-                      ),
-                    ),
+                    _buildDialogTitle(context, 'info'),
                     const SizedBox(height: 16),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -324,14 +317,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         color: Theme.of(context).colorScheme.onSurface,
                       ),
                       const SizedBox(height: 16),
-                      TranslatedText(
-                        'artwork_quality',
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.w500,
-                          color: Theme.of(context).colorScheme.onSurface,
-                        ),
-                      ),
+                      _buildDialogTitle(context, 'artwork_quality'),
                       const SizedBox(height: 16),
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -543,14 +529,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         color: Theme.of(context).colorScheme.onSurface,
                       ),
                       const SizedBox(height: 16),
-                      TranslatedText(
-                        'information',
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.w500,
-                          color: Theme.of(context).colorScheme.onSurface,
-                        ),
-                      ),
+                      _buildDialogTitle(context, 'information'),
                       const SizedBox(height: 16),
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -629,14 +608,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       color: Theme.of(context).colorScheme.onSurface,
                     ),
                     const SizedBox(height: 16),
-                    TranslatedText(
-                      'select_theme',
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w500,
-                        color: Theme.of(context).colorScheme.onSurface,
-                      ),
-                    ),
+                    _buildDialogTitle(context, 'select_theme'),
                     const SizedBox(height: 24),
                     _buildThemeOption(
                       context: context,
@@ -2194,14 +2166,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       color: Theme.of(context).colorScheme.error,
                     ),
                     const SizedBox(height: 16),
-                    TranslatedText(
-                      'delete_lyrics',
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w500,
-                        color: Theme.of(context).colorScheme.onSurface,
-                      ),
-                    ),
+                    _buildDialogTitle(context, 'delete_lyrics'),
                     const SizedBox(height: 16),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -2256,6 +2221,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  Widget _buildDialogTitle(
+    BuildContext context,
+    String key, {
+    double fontSize = 24,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: TranslatedText(
+        key,
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          fontSize: fontSize,
+          fontWeight: FontWeight.w600,
+          color: Theme.of(context).colorScheme.onSurface,
+        ),
+      ),
+    );
+  }
+
   Widget _buildDestructiveOption({
     required BuildContext context,
     required String title,
@@ -2285,7 +2269,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 child: Text(
                   title,
                   style: TextStyle(
-                    fontSize: 18,
+                    fontSize: 16,
                     fontWeight: FontWeight.w600,
                     color: onErrorContainer,
                   ),
@@ -2336,14 +2320,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       color: Theme.of(context).colorScheme.onSurface,
                     ),
                     const SizedBox(height: 16),
-                    TranslatedText(
-                      'lyrics_deleted',
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w500,
-                        color: Theme.of(context).colorScheme.onSurface,
-                      ),
-                    ),
+                    _buildDialogTitle(context, 'lyrics_deleted'),
                     const SizedBox(height: 16),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -2396,6 +2373,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
+    final orderedSchemes = [
+      AppColorScheme.system,
+      AppColorScheme.dynamic,
+      AppColorScheme.amoled,
+      ...AppColorScheme.values.where(
+        (s) =>
+            s != AppColorScheme.system &&
+            s != AppColorScheme.dynamic &&
+            s != AppColorScheme.amoled,
+      ),
+    ];
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -2430,9 +2419,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
               mainAxisSpacing: 8,
               childAspectRatio: 1,
             ),
-            itemCount: AppColorScheme.values.length,
+            itemCount: orderedSchemes.length,
             itemBuilder: (context, index) {
-              final colorScheme = AppColorScheme.values[index];
+              final colorScheme = orderedSchemes[index];
               final isSelected = colorScheme == _currentColorScheme;
 
               // Para el color del sistema, mostrar un gradiente multicolor
@@ -2464,9 +2453,59 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   child: isSelected
                       ? const Icon(Icons.check, color: Colors.white, size: 24)
                       : const Icon(
-                          Icons.auto_awesome,
+                          Icons.color_lens,
                           color: Colors.white,
                           size: 20,
+                        ),
+                );
+              } else if (colorScheme == AppColorScheme.dynamic) {
+                circleWidget = Container(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: const LinearGradient(
+                      colors: [
+                        Color(0xFF1A237E),
+                        Color(0xFF4527A0),
+                        Color(0xFF6A1B9A),
+                        Color(0xFFAD1457),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    border: Border.all(
+                      color: isSelected ? Colors.white : Colors.transparent,
+                      width: 3,
+                    ),
+                  ),
+                  child: isSelected
+                      ? const Icon(Icons.check, color: Colors.white, size: 24)
+                      : const Icon(
+                          Icons.music_note_rounded,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                );
+              } else if (colorScheme == AppColorScheme.amoled) {
+                circleWidget = Container(
+                  decoration: BoxDecoration(
+                    color: Colors.black,
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: isSelected ? Colors.white : Colors.transparent,
+                      width: 3,
+                    ),
+                  ),
+                  child: isSelected
+                      ? const Icon(Icons.check, color: Colors.white, size: 24)
+                      : const Center(
+                          child: Text(
+                            'A',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 18,
+                            ),
+                          ),
                         ),
                 );
               } else {
@@ -4498,13 +4537,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         color: Theme.of(context).colorScheme.error,
                       ),
                       const SizedBox(height: 16),
-                      TranslatedText(
+                      _buildDialogTitle(
+                        context,
                         'reset_app_confirm',
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.w500,
-                          color: Theme.of(context).colorScheme.onSurface,
-                        ),
+                        fontSize: 22,
                       ),
                       const SizedBox(height: 16),
                       Padding(
@@ -4629,14 +4665,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         color: Theme.of(context).colorScheme.primary,
                       ),
                       const SizedBox(height: 16),
-                      TranslatedText(
-                        'success',
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.w500,
-                          color: Theme.of(context).colorScheme.onSurface,
-                        ),
-                      ),
+                      _buildDialogTitle(context, 'success'),
                       const SizedBox(height: 16),
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 24),

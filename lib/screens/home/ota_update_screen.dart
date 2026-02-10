@@ -75,219 +75,184 @@ class _UpdateScreenState extends State<UpdateScreen> {
 
             return AlertDialog(
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(28),
                 side: isAmoled && isDark
-                    ? const BorderSide(color: Colors.white, width: 1)
+                    ? const BorderSide(color: Colors.white24, width: 1)
                     : BorderSide.none,
               ),
-              title: Center(
-                child: Text(
-                  LocaleProvider.tr('download_method'),
-                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
-                ),
+              backgroundColor: isAmoled && isDark
+                  ? Colors.black
+                  : Theme.of(context).colorScheme.surface,
+              surfaceTintColor: Colors.transparent,
+              title: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.download_rounded,
+                    size: 32,
+                    color: Theme.of(context).colorScheme.onSurface,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    LocaleProvider.tr('download_method'),
+                    style: const TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
               ),
+              contentPadding: const EdgeInsets.fromLTRB(0, 16, 0, 8),
               content: SizedBox(
                 width: 400,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    SizedBox(height: 18),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 4),
-                        child: Text(
-                          LocaleProvider.tr('select_download_method'),
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Theme.of(context).colorScheme.onSurface,
-                          ),
-                          textAlign: TextAlign.left,
-                          maxLines: 3,
-                          overflow: TextOverflow.ellipsis,
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: Text(
+                        LocaleProvider.tr('select_download_method'),
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onSurface.withAlpha(180),
                         ),
+                        textAlign: TextAlign.center,
                       ),
                     ),
-                    SizedBox(height: 20),
-                    // Tarjeta de Descargar en app
-                    InkWell(
+                    const SizedBox(height: 24),
+                    _buildDownloadOption(
+                      context: context,
+                      title: LocaleProvider.tr('download_in_app'),
+                      subtitle: LocaleProvider.tr('download_in_app_desc'),
+                      icon: Icons.download_rounded,
                       onTap: () {
                         Navigator.of(context).pop();
                         _startDownload();
                       },
-                      borderRadius: BorderRadius.circular(16),
-                      child: Container(
-                        width: double.infinity,
-                        padding: EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: isAmoled && isDark
-                              ? Colors.white.withValues(alpha: 0.1)
-                              : Theme.of(
-                                  context,
-                                ).colorScheme.secondaryContainer,
-                          borderRadius: BorderRadius.only(
-                            topLeft: Radius.circular(16),
-                            topRight: Radius.circular(16),
-                            bottomLeft: Radius.circular(4),
-                            bottomRight: Radius.circular(4),
-                          ),
-                          border: Border.all(
-                            color: isAmoled && isDark
-                                ? Colors.white.withValues(alpha: 0.2)
-                                : Theme.of(
-                                    context,
-                                  ).colorScheme.outline.withValues(alpha: 0.1),
-                            width: 1,
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(12),
-                                color: Colors.transparent,
-                              ),
-                              child: Icon(
-                                Icons.download,
-                                size: 30,
-                                color: isAmoled && isDark
-                                    ? Colors.white
-                                    : Theme.of(context).colorScheme.onSurface,
-                              ),
-                            ),
-                            SizedBox(width: 8),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    LocaleProvider.tr('download_in_app'),
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w600,
-                                      color: isAmoled && isDark
-                                          ? Colors.white
-                                          : Theme.of(
-                                              context,
-                                            ).colorScheme.onSurface,
-                                    ),
-                                  ),
-                                  SizedBox(height: 4),
-                                  Text(
-                                    LocaleProvider.tr('download_in_app_desc'),
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: isAmoled && isDark
-                                          ? Colors.white.withValues(alpha: 0.7)
-                                          : Theme.of(context)
-                                                .colorScheme
-                                                .onSurface
-                                                .withValues(alpha: 0.7),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
+                      isAmoled: isAmoled,
+                      isDark: isDark,
                     ),
-                    SizedBox(height: 4),
-                    // Tarjeta de Descargar en navegador
-                    InkWell(
+                    _buildDownloadOption(
+                      context: context,
+                      title: LocaleProvider.tr('download_in_browser'),
+                      subtitle: LocaleProvider.tr('download_in_browser_desc'),
+                      icon: Icons.open_in_browser_rounded,
                       onTap: () {
                         Navigator.of(context).pop();
                         _openInBrowser();
                       },
-                      borderRadius: BorderRadius.circular(16),
-                      child: Container(
-                        width: double.infinity,
-                        padding: EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: isAmoled && isDark
-                              ? Colors.white.withValues(alpha: 0.1)
-                              : Theme.of(
-                                  context,
-                                ).colorScheme.secondaryContainer,
-                          borderRadius: BorderRadius.only(
-                            bottomLeft: Radius.circular(16),
-                            bottomRight: Radius.circular(16),
-                            topLeft: Radius.circular(4),
-                            topRight: Radius.circular(4),
-                          ),
-                          border: Border.all(
-                            color: isAmoled && isDark
-                                ? Colors.white.withValues(alpha: 0.2)
-                                : Theme.of(
-                                    context,
-                                  ).colorScheme.outline.withValues(alpha: 0.1),
-                            width: 1,
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(12),
-                                color: Colors.transparent,
-                              ),
-                              child: Icon(
-                                Icons.open_in_browser_rounded,
-                                grade: 300,
-                                size: 30,
-                                color: isAmoled && isDark
-                                    ? Colors.white
-                                    : Theme.of(context).colorScheme.onSurface,
-                              ),
-                            ),
-                            SizedBox(width: 8),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    LocaleProvider.tr('download_in_browser'),
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w600,
-                                      color: isAmoled && isDark
-                                          ? Colors.white
-                                          : Theme.of(
-                                              context,
-                                            ).colorScheme.onSurface,
-                                    ),
-                                  ),
-                                  SizedBox(height: 4),
-                                  Text(
-                                    LocaleProvider.tr(
-                                      'download_in_browser_desc',
-                                    ),
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: isAmoled && isDark
-                                          ? Colors.white.withValues(alpha: 0.7)
-                                          : Theme.of(context)
-                                                .colorScheme
-                                                .onSurface
-                                                .withValues(alpha: 0.7),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
+                      isAmoled: isAmoled,
+                      isDark: isDark,
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+                ),
+              ),
+              actions: [
+                Padding(
+                  padding: const EdgeInsets.only(right: 16, bottom: 8),
+                  child: TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: Text(
+                      LocaleProvider.tr('cancel'),
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.primary,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildDownloadOption({
+    required BuildContext context,
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required VoidCallback onTap,
+    required bool isAmoled,
+    required bool isDark,
+  }) {
+    final onSurfaceColor = Theme.of(context).colorScheme.onSurface;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(24),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: isAmoled
+                ? Colors.white.withAlpha(20)
+                : isDark
+                ? Theme.of(
+                    context,
+                  ).colorScheme.secondary.withValues(alpha: 0.06)
+                : Theme.of(
+                    context,
+                  ).colorScheme.secondary.withValues(alpha: 0.07),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(
+              color: isAmoled && isDark
+                  ? Colors.white.withAlpha(30)
+                  : Theme.of(
+                      context,
+                    ).colorScheme.outline.withValues(alpha: 0.1),
+              width: 1,
+            ),
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primary.withAlpha(30),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  icon,
+                  color: Theme.of(context).colorScheme.primary,
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: onSurfaceColor,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: onSurfaceColor.withAlpha(150),
                       ),
                     ),
                   ],
                 ),
               ),
-            );
-          },
-        );
-      },
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -377,7 +342,6 @@ class _UpdateScreenState extends State<UpdateScreen> {
     // Para 16:9 (≈1.77)
     // final is16by9 = (aspectRatio < 1.85);
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final isLight = Theme.of(context).brightness == Brightness.light;
 
     return ValueListenableBuilder<AppColorScheme>(
       valueListenable: colorSchemeNotifier,
@@ -461,16 +425,14 @@ class _UpdateScreenState extends State<UpdateScreen> {
                           padding: const EdgeInsets.all(12),
                           margin: const EdgeInsets.only(bottom: 16),
                           decoration: BoxDecoration(
-                            color: isAmoled && isDark
+                            color: isAmoled
                                 ? Colors.white.withAlpha(20)
-                                : isLight
-                                ? Theme.of(
-                                    context,
-                                  ).colorScheme.secondaryContainer
-                                : Theme.of(
-                                    context,
-                                  ).colorScheme.onSecondaryFixed,
-                            borderRadius: BorderRadius.circular(12),
+                                : isDark
+                                ? Theme.of(context).colorScheme.secondary
+                                      .withValues(alpha: 0.06)
+                                : Theme.of(context).colorScheme.secondary
+                                      .withValues(alpha: 0.07),
+                            borderRadius: BorderRadius.circular(20),
                           ),
                           child: SingleChildScrollView(
                             child: Text(
@@ -724,16 +686,14 @@ class _UpdateScreenState extends State<UpdateScreen> {
                           padding: const EdgeInsets.all(12),
                           margin: const EdgeInsets.only(bottom: 16),
                           decoration: BoxDecoration(
-                            color: isAmoled && isDark
+                            color: isAmoled
                                 ? Colors.white.withAlpha(20)
-                                : isLight
-                                ? Theme.of(
-                                    context,
-                                  ).colorScheme.secondaryContainer
-                                : Theme.of(
-                                    context,
-                                  ).colorScheme.onSecondaryFixed,
-                            borderRadius: BorderRadius.circular(12),
+                                : isDark
+                                ? Theme.of(context).colorScheme.secondary
+                                      .withValues(alpha: 0.06)
+                                : Theme.of(context).colorScheme.secondary
+                                      .withValues(alpha: 0.07),
+                            borderRadius: BorderRadius.circular(20),
                           ),
                           child: SingleChildScrollView(
                             child: Text(

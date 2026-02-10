@@ -257,6 +257,13 @@ class _WelcomePage extends StatelessWidget {
           top: 16,
           right: 16,
           child: IconButton(
+            constraints: const BoxConstraints(
+              minWidth: 40,
+              minHeight: 40,
+              maxWidth: 40,
+              maxHeight: 40,
+            ),
+            padding: EdgeInsets.zero,
             onPressed: () {
               Navigator.of(context).push(
                 PageRouteBuilder(
@@ -281,7 +288,17 @@ class _WelcomePage extends StatelessWidget {
                 ),
               );
             },
-            icon: const Icon(Icons.info_outline_rounded, size: 24),
+            icon: Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Theme.of(
+                  context,
+                ).colorScheme.secondary.withValues(alpha: 0.06),
+              ),
+              child: const Icon(Icons.info_outline_rounded, size: 26),
+            ),
             tooltip: LocaleProvider.tr('about'),
           ),
         ),

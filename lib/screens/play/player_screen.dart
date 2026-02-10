@@ -4954,6 +4954,8 @@ class _LyricsModalListViewState extends State<_LyricsModalListView>
   bool _isManualScrolling = false;
 
   bool _isBackground = false;
+  int? _tappedLyricIndex;
+  Timer? _tappedLyricTimer;
 
   @override
   void initState() {
@@ -5010,6 +5012,7 @@ class _LyricsModalListViewState extends State<_LyricsModalListView>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _scrollTimer?.cancel();
+    _tappedLyricTimer?.cancel();
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
     super.dispose();
@@ -5147,10 +5150,21 @@ class _LyricsModalListViewState extends State<_LyricsModalListView>
                   // Set manual scrolling flag
                   _isManualScrolling = true;
 
-                  // Update current index immediately
+                  // Update current index immediately and show feedback background
+                  _tappedLyricTimer?.cancel();
                   setState(() {
                     _currentLyricIndex = index;
                     _lastCurrentIndex = index;
+                    _tappedLyricIndex = index;
+                  });
+
+                  // Clear tapped feedback after 2 seconds
+                  _tappedLyricTimer = Timer(const Duration(seconds: 2), () {
+                    if (mounted) {
+                      setState(() {
+                        _tappedLyricIndex = null;
+                      });
+                    }
                   });
 
                   // Reset manual scrolling flag after a delay
@@ -5158,8 +5172,21 @@ class _LyricsModalListViewState extends State<_LyricsModalListView>
                     _isManualScrolling = false;
                   });
                 },
-                child: Container(
-                  padding: EdgeInsets.symmetric(vertical: 8, horizontal: 32),
+                child: AnimatedContainer(
+                  duration: Duration(
+                    milliseconds: _tappedLyricIndex == index ? 100 : 400,
+                  ),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    color: _tappedLyricIndex == index
+                        ? (widget.isAmoled
+                                  ? Colors.white
+                                  : Theme.of(context).colorScheme.primary)
+                              .withValues(alpha: 0.05)
+                        : Colors.transparent,
+                  ),
+                  margin: EdgeInsets.symmetric(horizontal: 16),
+                  padding: EdgeInsets.symmetric(vertical: 8, horizontal: 16),
                   child:
                       widget.showTranslation &&
                           widget.translatedLines != null &&
