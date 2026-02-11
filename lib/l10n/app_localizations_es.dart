@@ -3,12 +3,21 @@
 const Map<String, String> appLocalizationsEs = {
   // General
   'settings': 'Ajustes',
+  'welcome': 'Bienvenido',
+  'to': 'a',
+  'lets_go': '¡Vamos!',
+  'onboarding_setup_desc': 'Vamos a configurar todo para ti.',
   'welcome_title': 'Bienvenido a Aura Music',
   'welcome_desc': 'Disfruta de tu música local con la mejor experiencia.',
   'get_started': 'Comenzar',
+  'step_of': 'Paso {current} de {total}',
   'permissions_title': 'Permisos necesarios',
+  'media_permission': 'Permiso de Multimedia',
+  'grant_media_permission': 'Conceder Permiso de Multimedia',
   'permissions_desc':
       'Para reproducir tu música, necesitamos acceso a tus archivos de audio.',
+  'notifications_active': 'Notificaciones Activas',
+  'optimization_ignored': 'Optimización Ignorada',
   'cancel': 'Cancelar',
   'delete': 'Eliminar',
   'remove': 'Quitar',
@@ -27,6 +36,9 @@ const Map<String, String> appLocalizationsEs = {
       'Para evitar que la música se detenga cuando la app está en segundo plano, necesitamos ignorar la optimización de batería.',
   'ignore_optimization': 'Desactivar optimización',
   'finish': 'Finalizar',
+  'all_set_title': '¡Todo listo!',
+  'all_set_desc':
+      'Has completado la configuración inicial. Ya puedes empezar a disfrutar de Aura Music.',
   'all_files_permission': 'Acceso a todos los archivos',
   'music_audio_permission': 'Música y Audio',
   'player': 'Reproductor',

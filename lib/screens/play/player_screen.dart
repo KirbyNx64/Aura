@@ -741,6 +741,9 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
       } else {
         _artworkLoadingNotifier.value = false;
       }
+
+      // Precargar la siguiente carátula en el caché de Flutter (Nivel 3)
+      _precacheNextInQueue();
     } else if (newMediaItem?.artUri != null && _artworkLoadingNotifier.value) {
       // La carátula acaba de llegar para la canción actual
       _artworkLoadingNotifier.value = false;
@@ -756,11 +759,45 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
         // Actualizar el estado si la carátula se cargó exitosamente
         if (mounted && _lastArtworkSongId == songId.toString()) {
           _artworkLoadingNotifier.value = false;
+          // Si es la actual y acaba de cargarse, precargar la siguiente
+          _precacheNextInQueue();
         }
       } catch (e) {
         // Error silencioso - no afectar la UI
       }
     });
+  }
+
+  /// Precarga la siguiente carátula en la cola directamente en el caché de Flutter
+  /// Esto evita el flicker/parpadeo al cambiar de canción ya que la imagen estará decodificada
+  void _precacheNextInQueue() {
+    if (!mounted) return;
+
+    final queue = audioHandler?.queue.value ?? [];
+    final currentItem = audioHandler?.mediaItem.value;
+    if (queue.isEmpty || currentItem == null) return;
+
+    final currentIndex = queue.indexWhere((item) => item.id == currentItem.id);
+    if (currentIndex != -1 && currentIndex < queue.length - 1) {
+      final nextItem = queue[currentIndex + 1];
+      final artUri = nextItem.artUri;
+
+      if (artUri != null) {
+        ImageProvider provider;
+        if (artUri.scheme == 'file') {
+          provider = FileImage(File(artUri.toFilePath()));
+        } else if (artUri.scheme == 'http' || artUri.scheme == 'https') {
+          provider = NetworkImage(artUri.toString());
+        } else {
+          return;
+        }
+
+        // Precargar en el caché de Flutter
+        precacheImage(provider, context).catchError((e) {
+          // Error silencioso
+        });
+      }
+    }
   }
 
   @override

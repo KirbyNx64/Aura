@@ -9,6 +9,8 @@ import 'dart:io';
 import 'package:music/l10n/locale_provider.dart';
 import 'package:material_loading_indicator/loading_indicator.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:flutter_m3shapes/flutter_m3shapes.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 class OnboardingScreen extends StatefulWidget {
   final VoidCallback onFinish;
@@ -157,6 +159,13 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     );
   }
 
+  void _previousPage() {
+    _pageController.previousPage(
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoadingInfo) {
@@ -167,75 +176,101 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     final bool canAdvanceFromPermissions =
         _mediaPermissionGranted && _allFilesPermissionGranted;
 
-    return Scaffold(
-      body: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
-              child: PageView(
-                controller: _pageController,
-                physics: const NeverScrollableScrollPhysics(),
-                onPageChanged: (index) {
-                  setState(() {
-                    _currentPage = index;
-                  });
-                },
-                children: [
-                  // Paso 1: Bienvenida
-                  _WelcomePage(onNext: _nextPage),
+    return PopScope(
+      canPop: _currentPage == 0,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        if (_currentPage > 0) {
+          _previousPage();
+        }
+      },
+      child: Scaffold(
+        body: SafeArea(
+          child: Column(
+            children: [
+              Expanded(
+                child: PageView(
+                  controller: _pageController,
+                  physics: const NeverScrollableScrollPhysics(),
+                  onPageChanged: (index) {
+                    setState(() {
+                      _currentPage = index;
+                    });
+                  },
+                  children: [
+                    // Paso 1: Bienvenida
+                    _WelcomePage(onNext: _nextPage),
 
-                  // Paso 2: Permisos de Archivos
-                  _PermissionsPage(
-                    androidSdkInt: _androidSdkInt,
-                    mediaGranted: _mediaPermissionGranted,
-                    allFilesGranted: _allFilesPermissionGranted,
-                    onRequestMedia: _requestMediaPermission,
-                    onRequestAllFiles: _requestAllFilesPermission,
-                    canAdvance: canAdvanceFromPermissions,
-                    onNext: _nextPage,
-                  ),
+                    // Paso 2: Permisos de Archivos
+                    _PermissionsPage(
+                      androidSdkInt: _androidSdkInt,
+                      mediaGranted: _mediaPermissionGranted,
+                      allFilesGranted: _allFilesPermissionGranted,
+                      onRequestMedia: _requestMediaPermission,
+                      onRequestAllFiles: _requestAllFilesPermission,
+                      canAdvance: canAdvanceFromPermissions,
+                      onNext: _nextPage,
+                      onBack: _previousPage,
+                      currentStep: 2,
+                      totalSteps: 5,
+                    ),
 
-                  // Paso 3: Notificaciones
-                  _NotificationsPage(
-                    notificationsGranted: _notificationPermissionGranted,
-                    onRequestNotifications: _requestNotificationPermission,
-                    onNext: _nextPage,
-                  ),
+                    // Paso 3: Notificaciones
+                    _NotificationsPage(
+                      notificationsGranted: _notificationPermissionGranted,
+                      onRequestNotifications: _requestNotificationPermission,
+                      onNext: _nextPage,
+                      onBack: _previousPage,
+                      currentStep: 3,
+                      totalSteps: 5,
+                    ),
 
-                  // Paso 4: Optimización de Batería (Final)
-                  _BatteryOptimizationPage(
-                    isIgnored: _batteryOptimizationIgnored,
-                    onRequestIgnore: _requestIgnoreBatteryOptimization,
-                    onFinish: _finishOnboarding,
-                  ),
-                ],
+                    // Paso 4: Optimización de Batería
+                    _BatteryOptimizationPage(
+                      isIgnored: _batteryOptimizationIgnored,
+                      onRequestIgnore: _requestIgnoreBatteryOptimization,
+                      onNext: _nextPage,
+                      onBack: _previousPage,
+                      currentStep: 4,
+                      totalSteps: 5,
+                    ),
+
+                    // Paso 5: Todo listo
+                    _AllSetPage(
+                      onFinish: _finishOnboarding,
+                      onBack: _previousPage,
+                      currentStep: 5,
+                      totalSteps: 5,
+                    ),
+                  ],
+                ),
               ),
-            ),
-            // Indicadores de página
-            Padding(
-              padding: const EdgeInsets.all(24.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(
-                  4, // Total de páginas ahora es 4
-                  (index) => AnimatedContainer(
-                    duration: const Duration(milliseconds: 300),
-                    margin: const EdgeInsets.symmetric(horizontal: 4),
-                    height: 8,
-                    width: _currentPage == index ? 24 : 8,
-                    decoration: BoxDecoration(
-                      color: _currentPage == index
-                          ? Theme.of(context).colorScheme.primary
-                          : Theme.of(
-                              context,
-                            ).colorScheme.outline.withValues(alpha: 0.3),
-                      borderRadius: BorderRadius.circular(4),
+              // Indicadores de página
+              Padding(
+                padding: const EdgeInsets.all(24.0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: List.generate(
+                    5, // Total de páginas ahora es 5
+                    (index) => AnimatedContainer(
+                      duration: const Duration(milliseconds: 300),
+                      margin: const EdgeInsets.symmetric(horizontal: 4),
+                      height: 8,
+                      width: _currentPage == index ? 24 : 8,
+                      decoration: BoxDecoration(
+                        color: _currentPage == index
+                            ? Theme.of(context).colorScheme.primary
+                            : Theme.of(
+                                context,
+                              ).colorScheme.outline.withValues(alpha: 0.3),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -250,6 +285,11 @@ class _WelcomePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final isAmoled =
+        Theme.of(context).brightness == Brightness.dark &&
+        Theme.of(context).colorScheme.surface == Colors.black;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Stack(
       children: [
@@ -293,9 +333,7 @@ class _WelcomePage extends StatelessWidget {
               height: 40,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: Theme.of(
-                  context,
-                ).colorScheme.secondary.withValues(alpha: 0.06),
+                color: colorScheme.secondary.withValues(alpha: 0.06),
               ),
               child: const Icon(Icons.info_outline_rounded, size: 26),
             ),
@@ -303,98 +341,194 @@ class _WelcomePage extends StatelessWidget {
           ),
         ),
         Padding(
-          padding: const EdgeInsets.all(26.0),
+          padding: const EdgeInsets.symmetric(horizontal: 28.0, vertical: 24.0),
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Spacer(),
-              // Icono principal
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: colorScheme.primary,
-                  shape: BoxShape.circle,
+              // Titulo Estilizado
+              TranslatedText(
+                'welcome',
+                style: textTheme.displaySmall?.copyWith(
+                  fontWeight: FontWeight.w900,
+                  color: colorScheme.onSurface,
+                  height: 1.1,
+                  letterSpacing: -1,
                 ),
-                child: SvgPicture.asset(
-                  'assets/icon/icon_foreground.svg',
-                  height: 120,
-                  colorFilter: ColorFilter.mode(
-                    colorScheme.onPrimary,
-                    BlendMode.srcIn,
+              ),
+              TranslatedText(
+                'to',
+                style: textTheme.displaySmall?.copyWith(
+                  fontWeight: FontWeight.w900,
+                  color: colorScheme.onSurface,
+                  height: 1.1,
+                  letterSpacing: -1,
+                ),
+              ),
+              Text(
+                'Aura',
+                style: textTheme.displayMedium?.copyWith(
+                  fontWeight: FontWeight.w900,
+                  color: colorScheme.primary,
+                  height: 1.1,
+                  letterSpacing: -1,
+                ),
+              ),
+              const SizedBox(height: 16),
+              // Badge de Beta
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: isAmoled
+                      ? Colors.white.withAlpha(20)
+                      : isDark
+                      ? colorScheme.secondary.withValues(alpha: 0.06)
+                      : colorScheme.secondary.withValues(alpha: 0.07),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: FutureBuilder<PackageInfo>(
+                  future: PackageInfo.fromPlatform(),
+                  builder: (context, snapshot) {
+                    final version = snapshot.data?.version ?? '1.8.1';
+                    return Text(
+                      'v$version',
+                      style: textTheme.labelLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: colorScheme.onSurface.withValues(alpha: 0.6),
+                      ),
+                    );
+                  },
+                ),
+              ),
+
+              const Spacer(),
+
+              // Icono Central (en lugar de dibujo)
+              Center(
+                child: M3Container.c7SidedCookie(
+                  color: isAmoled
+                      ? Colors.white.withAlpha(20)
+                      : isDark
+                      ? colorScheme.secondary.withValues(alpha: 0.06)
+                      : colorScheme.secondary.withValues(alpha: 0.07),
+                  width: 220,
+                  height: 220,
+                  child: Center(
+                    child: SvgPicture.asset(
+                      'assets/icon/icon_foreground.svg',
+                      height: 160,
+                      colorFilter: ColorFilter.mode(
+                        colorScheme.primary,
+                        BlendMode.srcIn,
+                      ),
+                    ),
                   ),
                 ),
               ),
-              const SizedBox(height: 36),
-
-              // Texto Bienvenida traducible
-              Text(
-                'Aura Music',
-                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: colorScheme.onSurface,
-                ),
-                textAlign: TextAlign.center,
-              ),
-
-              const SizedBox(height: 120),
-
-              // Selector de Idioma
-              Text(
-                LocaleProvider.tr('choose_language'),
-                style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  color: colorScheme.onSurface.withValues(alpha: 0.8),
-                ),
-              ),
-              const SizedBox(height: 16),
-              ValueListenableBuilder<String>(
-                valueListenable: languageNotifier,
-                builder: (context, currentLang, _) {
-                  return Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      _LanguageButton(
-                        label: 'Español',
-                        isSelected: currentLang == 'es',
-                        onTap: () {
-                          LocaleProvider.setLanguage('es');
-                          _saveLanguage('es');
-                        },
-                      ),
-                      const SizedBox(width: 16),
-                      _LanguageButton(
-                        label: 'English',
-                        isSelected: currentLang == 'en',
-                        onTap: () {
-                          LocaleProvider.setLanguage('en');
-                          _saveLanguage('en');
-                        },
-                      ),
-                    ],
-                  );
-                },
-              ),
 
               const Spacer(),
 
-              // Botón Siguiente
-              FilledButton(
-                onPressed: onNext,
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size(double.infinity, 56),
-                  foregroundColor: colorScheme.onPrimary,
-                  backgroundColor: colorScheme.primary,
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const TranslatedText('next'),
-                    const SizedBox(width: 8),
-                    const Icon(Icons.arrow_forward_rounded),
-                  ],
+              // Subtexto
+              Center(
+                child: TranslatedText(
+                  "onboarding_setup_desc",
+                  textAlign: TextAlign.center,
+                  style: textTheme.bodyLarge?.copyWith(
+                    color: colorScheme.onSurface.withValues(alpha: 0.6),
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ),
-              const SizedBox(height: 16),
+
+              const SizedBox(height: 32),
+
+              // Selector de Idioma (Sutil)
+              Center(
+                child: ValueListenableBuilder<String>(
+                  valueListenable: languageNotifier,
+                  builder: (context, currentLang, _) {
+                    return Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _LanguageButton(
+                          label: 'ES',
+                          isSelected: currentLang == 'es',
+                          onTap: () {
+                            LocaleProvider.setLanguage('es');
+                            _saveLanguage('es');
+                          },
+                        ),
+                        const SizedBox(width: 8),
+                        _LanguageButton(
+                          label: 'EN',
+                          isSelected: currentLang == 'en',
+                          onTap: () {
+                            LocaleProvider.setLanguage('en');
+                            _saveLanguage('en');
+                          },
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              ),
+
+              const SizedBox(height: 32),
+
+              // Card del Botón "Let's Go!"
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: isAmoled
+                      ? Colors.white.withAlpha(20)
+                      : isDark
+                      ? colorScheme.secondary.withValues(alpha: 0.06)
+                      : colorScheme.secondary.withValues(alpha: 0.07),
+                  borderRadius: BorderRadius.circular(28),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                  child: Row(
+                    children: [
+                      TranslatedText(
+                        "lets_go",
+                        style: textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.w900,
+                          color: colorScheme.onSurface,
+                          letterSpacing: -0.5,
+                        ),
+                      ),
+                      const Spacer(),
+                      Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: onNext,
+                          borderRadius: BorderRadius.circular(16),
+                          child: Container(
+                            width: 56,
+                            height: 56,
+                            decoration: BoxDecoration(
+                              color: colorScheme.primary,
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Icon(
+                              Icons.arrow_forward_rounded,
+                              color: colorScheme.onPrimary,
+                              size: 28,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ],
           ),
         ),
@@ -422,13 +556,23 @@ class _LanguageButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final isAmoled =
+        Theme.of(context).brightness == Brightness.dark &&
+        Theme.of(context).colorScheme.surface == Colors.black;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(16),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
         decoration: BoxDecoration(
-          color: isSelected ? colorScheme.primaryContainer : Colors.transparent,
+          color: isSelected
+              ? colorScheme.primaryContainer
+              : isAmoled
+              ? Colors.white.withAlpha(20)
+              : isDark
+              ? Theme.of(context).colorScheme.secondary.withValues(alpha: 0.06)
+              : Theme.of(context).colorScheme.secondary.withValues(alpha: 0.07),
           borderRadius: BorderRadius.circular(16),
         ),
         child: Text(
@@ -453,6 +597,9 @@ class _PermissionsPage extends StatelessWidget {
   final VoidCallback onRequestAllFiles;
   final bool canAdvance;
   final VoidCallback onNext;
+  final VoidCallback onBack;
+  final int currentStep;
+  final int totalSteps;
 
   const _PermissionsPage({
     required this.androidSdkInt,
@@ -462,131 +609,256 @@ class _PermissionsPage extends StatelessWidget {
     required this.onRequestAllFiles,
     required this.canAdvance,
     required this.onNext,
+    required this.onBack,
+    required this.currentStep,
+    required this.totalSteps,
   });
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final isAmoled =
+        Theme.of(context).brightness == Brightness.dark &&
+        Theme.of(context).colorScheme.surface == Colors.black;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final showAllFilesOption = Platform.isAndroid && androidSdkInt >= 30;
 
-    return Padding(
-      padding: const EdgeInsets.all(32.0),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Spacer(),
-          Icon(Icons.lock_open_rounded, size: 80, color: colorScheme.primary),
-          const SizedBox(height: 48),
-          TranslatedText(
-            'permissions_title',
-            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-              fontWeight: FontWeight.bold,
-              color: colorScheme.onSurface,
-            ),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 16),
-          TranslatedText(
-            'permissions_desc',
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-              color: colorScheme.onSurface.withValues(alpha: 0.7),
-              height: 1.5,
-            ),
-            textAlign: TextAlign.center,
-          ),
-
-          const SizedBox(height: 32),
-
-          // Lista de permisos
-          _PermissionItem(
-            title: 'music_audio_permission',
-            isGranted: mediaGranted,
-            onTap: onRequestMedia,
-            icon: Icons.music_note_rounded,
-          ),
-
-          if (showAllFilesOption) ...[
-            const SizedBox(height: 16),
-            _PermissionItem(
-              title: 'all_files_permission',
-              isGranted: allFilesGranted,
-              onTap: onRequestAllFiles,
-              icon: Icons.folder_special_rounded,
-            ),
-          ],
-
-          const Spacer(),
-
-          // Botón Siguiente
-          FilledButton(
-            onPressed: canAdvance ? onNext : null,
-            style: FilledButton.styleFrom(
-              minimumSize: const Size(double.infinity, 56),
-              // Si no puede avanzar, el estilo disabled por defecto de Flutter se encarga del color gris
-              backgroundColor: canAdvance ? colorScheme.primary : null,
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
+    return Column(
+      children: [
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 28.0),
+            child: Column(
               children: [
-                const TranslatedText('next'),
-                const SizedBox(width: 8),
-                const Icon(Icons.arrow_forward_rounded),
+                const SizedBox(height: 48),
+                // Título y Descripción
+                TranslatedText(
+                  'media_permission',
+                  style: textTheme.displaySmall?.copyWith(
+                    fontWeight: FontWeight.w900,
+                    color: colorScheme.onSurface,
+                    letterSpacing: -1,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 12),
+                TranslatedText(
+                  'permissions_desc',
+                  style: textTheme.bodyLarge?.copyWith(
+                    color: colorScheme.onSurface.withValues(alpha: 0.6),
+                    height: 1.4,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+
+                const Spacer(),
+
+                // Composición Visual Simplificada (M3 Shape)
+                SizedBox(
+                  height: 320,
+                  width: double.infinity,
+                  child: Center(
+                    child: M3Container.oval(
+                      color: isAmoled
+                          ? Colors.white.withAlpha(20)
+                          : isDark
+                          ? Theme.of(
+                              context,
+                            ).colorScheme.secondary.withValues(alpha: 0.06)
+                          : Theme.of(
+                              context,
+                            ).colorScheme.secondary.withValues(alpha: 0.07),
+                      width: 220,
+                      height: 220,
+                      child: Center(
+                        child: Transform.rotate(
+                          angle: 0.5,
+                          child: Icon(
+                            Icons.lock_open_rounded,
+                            size: 100,
+                            color: colorScheme.primary,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+
+                const Spacer(),
+
+                // Botón de Acción Principal (Dinámico)
+                if (!mediaGranted)
+                  _ActionCardButton(
+                    labelKey: 'grant_media_permission',
+                    onTap: onRequestMedia,
+                  )
+                else if (showAllFilesOption && !allFilesGranted)
+                  _ActionCardButton(
+                    labelKey: 'grant_all_files_permission',
+                    onTap: onRequestAllFiles,
+                  )
+                else
+                  _ActionCardButton(
+                    labelKey: 'permission_granted',
+                    onTap: onNext,
+                    isCompleted: true,
+                  ),
+
+                const SizedBox(height: 16),
               ],
             ),
           ),
+        ),
 
-          const SizedBox(height: 16),
-        ],
+        // Footer con Progreso
+        _OnboardingFooter(
+          currentStep: currentStep,
+          totalSteps: totalSteps,
+          onNext: onNext,
+          onBack: onBack,
+          isEnabled: canAdvance,
+        ),
+      ],
+    );
+  }
+}
+
+class _ActionCardButton extends StatelessWidget {
+  final String labelKey;
+  final VoidCallback onTap;
+  final bool isCompleted;
+
+  const _ActionCardButton({
+    required this.labelKey,
+    required this.onTap,
+    this.isCompleted = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: isCompleted
+            ? colorScheme.primary.withValues(alpha: 0.1)
+            : colorScheme.primaryContainer,
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(24),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 18),
+          child: Center(
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (isCompleted)
+                  Icon(
+                    Icons.check_circle_rounded,
+                    color: colorScheme.primary,
+                    size: 24,
+                  ),
+                if (isCompleted) const SizedBox(width: 8),
+                TranslatedText(
+                  labelKey,
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                    color: isCompleted
+                        ? colorScheme.primary
+                        : colorScheme.onPrimaryContainer,
+                    letterSpacing: -0.2,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
 }
 
-class _PermissionItem extends StatelessWidget {
-  final String title;
-  final bool isGranted;
-  final VoidCallback onTap;
-  final IconData icon;
+class _OnboardingFooter extends StatelessWidget {
+  final int currentStep;
+  final int totalSteps;
+  final VoidCallback onNext;
+  final VoidCallback? onBack;
+  final bool isEnabled;
 
-  const _PermissionItem({
-    required this.title,
-    required this.isGranted,
-    required this.onTap,
-    required this.icon,
+  const _OnboardingFooter({
+    required this.currentStep,
+    required this.totalSteps,
+    required this.onNext,
+    this.onBack,
+    required this.isEnabled,
   });
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    return Material(
-      color: Colors.transparent,
-      child: ListTile(
-        onTap: isGranted ? null : onTap,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: BorderSide(
-            color: isGranted
-                ? Colors.transparent
-                : colorScheme.outline.withValues(alpha: 0.3),
+    final textTheme = Theme.of(context).textTheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isAmoled = isDark && colorScheme.surface == Colors.black;
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: isAmoled
+            ? Colors.white.withAlpha(20)
+            : isDark
+            ? colorScheme.secondary.withValues(alpha: 0.06)
+            : colorScheme.secondary.withValues(alpha: 0.07),
+        borderRadius: BorderRadius.circular(32),
+      ),
+      child: Row(
+        children: [
+          const SizedBox(width: 20),
+          ValueListenableBuilder<String>(
+            valueListenable: languageNotifier,
+            builder: (context, lang, child) {
+              return Text(
+                LocaleProvider.tr('step_of')
+                    .replaceFirst('{current}', currentStep.toString())
+                    .replaceFirst('{total}', totalSteps.toString()),
+                style: textTheme.bodyLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: colorScheme.onSurface.withValues(alpha: 0.6),
+                ),
+              );
+            },
           ),
-        ),
-        tileColor: isGranted
-            ? colorScheme.primaryContainer.withValues(alpha: 0.3)
-            : null,
-        leading: Icon(
-          icon,
-          color: isGranted ? colorScheme.primary : colorScheme.onSurface,
-        ),
-        title: TranslatedText(
-          title,
-          style: TextStyle(
-            fontWeight: FontWeight.w600,
-            color: isGranted ? colorScheme.primary : colorScheme.onSurface,
+          const Spacer(),
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: isEnabled ? onNext : null,
+              borderRadius: BorderRadius.circular(22),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  color: isEnabled
+                      ? colorScheme.primary
+                      : colorScheme.outline.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(22),
+                ),
+                child: Icon(
+                  Icons.arrow_forward_rounded,
+                  color: isEnabled
+                      ? colorScheme.onPrimary
+                      : colorScheme.onSurface.withValues(alpha: 0.3),
+                  size: 32,
+                ),
+              ),
+            ),
           ),
-        ),
-        trailing: isGranted
-            ? Icon(Icons.check_circle_rounded, color: colorScheme.primary)
-            : const Icon(Icons.chevron_right_rounded),
+        ],
       ),
     );
   }
@@ -596,98 +868,117 @@ class _NotificationsPage extends StatelessWidget {
   final bool notificationsGranted;
   final VoidCallback onRequestNotifications;
   final VoidCallback onNext;
+  final VoidCallback onBack;
+  final int currentStep;
+  final int totalSteps;
 
   const _NotificationsPage({
     required this.notificationsGranted,
     required this.onRequestNotifications,
     required this.onNext,
+    required this.onBack,
+    required this.currentStep,
+    required this.totalSteps,
   });
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isAmoled =
+        Theme.of(context).brightness == Brightness.dark &&
+        Theme.of(context).colorScheme.surface == Colors.black;
 
-    return Padding(
-      padding: const EdgeInsets.all(32.0),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Spacer(),
-          Icon(
-            Icons.notifications_active_rounded,
-            size: 80,
-            color: colorScheme.primary,
-          ),
-          const SizedBox(height: 48),
-          TranslatedText(
-            'notifications_title',
-            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-              fontWeight: FontWeight.bold,
-              color: colorScheme.onSurface,
-            ),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 16),
-          TranslatedText(
-            'notifications_desc',
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-              color: colorScheme.onSurface.withValues(alpha: 0.7),
-              height: 1.5,
-            ),
-            textAlign: TextAlign.center,
-          ),
-
-          const SizedBox(height: 32),
-
-          if (!notificationsGranted)
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.tonalIcon(
-                onPressed: onRequestNotifications,
-                icon: const Icon(Icons.notifications_active_rounded),
-                label: const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 16.0),
-                  child: TranslatedText(
-                    'grant_notifications',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
-                ),
-                style: FilledButton.styleFrom(
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                ),
-              ),
-            )
-          else
-            Icon(
-              Icons.check_circle_rounded,
-              color: colorScheme.primary,
-              size: 64,
-            ),
-
-          const Spacer(),
-
-          // Botón Siguiente
-          FilledButton(
-            onPressed: onNext,
-            style: FilledButton.styleFrom(
-              minimumSize: const Size(double.infinity, 56),
-              // Habilitado siempre, ya que las notificaciones son opcionales
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
+    return Column(
+      children: [
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 28.0),
+            child: Column(
               children: [
-                const TranslatedText('next'),
-                const SizedBox(width: 8),
-                const Icon(Icons.arrow_forward_rounded),
+                const SizedBox(height: 48),
+                TranslatedText(
+                  'notifications_title',
+                  style: textTheme.displaySmall?.copyWith(
+                    fontWeight: FontWeight.w900,
+                    color: colorScheme.onSurface,
+                    letterSpacing: -1,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 12),
+                TranslatedText(
+                  'notifications_desc',
+                  style: textTheme.bodyLarge?.copyWith(
+                    color: colorScheme.onSurface.withValues(alpha: 0.6),
+                    height: 1.4,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+
+                const Spacer(),
+
+                // Composición Visual Simplificada
+                SizedBox(
+                  height: 320,
+                  width: double.infinity,
+                  child: Center(
+                    child: M3Container.triangle(
+                      color: isAmoled
+                          ? Colors.white.withAlpha(20)
+                          : isDark
+                          ? Theme.of(
+                              context,
+                            ).colorScheme.secondary.withValues(alpha: 0.06)
+                          : Theme.of(
+                              context,
+                            ).colorScheme.secondary.withValues(alpha: 0.07),
+                      width: 220,
+                      height: 200,
+                      child: Center(
+                        child: Column(
+                          children: [
+                            const SizedBox(height: 70),
+                            Icon(
+                              Icons.notifications_active_rounded,
+                              size: 100,
+                              color: colorScheme.primary,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+
+                const Spacer(),
+
+                if (!notificationsGranted)
+                  _ActionCardButton(
+                    labelKey: 'grant_notifications',
+                    onTap: onRequestNotifications,
+                  )
+                else
+                  _ActionCardButton(
+                    labelKey: 'notifications_active',
+                    onTap: onNext,
+                    isCompleted: true,
+                  ),
+
+                const SizedBox(height: 16),
               ],
             ),
           ),
-
-          const SizedBox(height: 16),
-        ],
-      ),
+        ),
+        _OnboardingFooter(
+          currentStep: currentStep,
+          totalSteps: totalSteps,
+          onNext: onNext,
+          onBack: onBack,
+          isEnabled: true, // Notificaciones opcionales
+        ),
+      ],
     );
   }
 }
@@ -695,92 +986,203 @@ class _NotificationsPage extends StatelessWidget {
 class _BatteryOptimizationPage extends StatelessWidget {
   final bool isIgnored;
   final VoidCallback onRequestIgnore;
-  final VoidCallback onFinish;
+  final VoidCallback onNext;
+  final VoidCallback onBack;
+  final int currentStep;
+  final int totalSteps;
 
   const _BatteryOptimizationPage({
     required this.isIgnored,
     required this.onRequestIgnore,
-    required this.onFinish,
+    required this.onNext,
+    required this.onBack,
+    required this.currentStep,
+    required this.totalSteps,
   });
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isAmoled =
+        Theme.of(context).brightness == Brightness.dark &&
+        Theme.of(context).colorScheme.surface == Colors.black;
 
-    return Padding(
-      padding: const EdgeInsets.all(32.0),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Spacer(),
-          Icon(
-            Icons.battery_saver_rounded,
-            size: 80,
-            color: colorScheme.primary,
-          ),
-          const SizedBox(height: 48),
-          TranslatedText(
-            'battery_optimization_onboarding_title',
-            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-              fontWeight: FontWeight.bold,
-              color: colorScheme.onSurface,
-            ),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 16),
-          TranslatedText(
-            'battery_optimization_onboarding_desc',
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-              color: colorScheme.onSurface.withValues(alpha: 0.7),
-              height: 1.5,
-            ),
-            textAlign: TextAlign.center,
-          ),
+    return Column(
+      children: [
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 28.0),
+            child: Column(
+              children: [
+                const SizedBox(height: 38),
+                TranslatedText(
+                  'battery_optimization_onboarding_title',
+                  style: textTheme.displaySmall?.copyWith(
+                    fontWeight: FontWeight.w900,
+                    color: colorScheme.onSurface,
+                    letterSpacing: -1,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 12),
+                TranslatedText(
+                  'battery_optimization_onboarding_desc',
+                  style: textTheme.bodyLarge?.copyWith(
+                    color: colorScheme.onSurface.withValues(alpha: 0.6),
+                    height: 1.4,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
 
-          const SizedBox(height: 32),
+                const Spacer(),
 
-          if (!isIgnored)
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.tonalIcon(
-                onPressed: onRequestIgnore,
-                icon: const Icon(Icons.battery_alert_rounded),
-                label: const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 16.0),
-                  child: TranslatedText(
-                    'ignore_optimization',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                // Composición Visual Simplificada
+                SizedBox(
+                  height: 280,
+                  width: double.infinity,
+                  child: Center(
+                    child: M3Container.arch(
+                      color: isAmoled
+                          ? Colors.white.withAlpha(20)
+                          : isDark
+                          ? Theme.of(
+                              context,
+                            ).colorScheme.secondary.withValues(alpha: 0.06)
+                          : Theme.of(
+                              context,
+                            ).colorScheme.secondary.withValues(alpha: 0.07),
+                      width: 200,
+                      height: 200,
+                      child: Center(
+                        child: Icon(
+                          Icons.battery_saver_rounded,
+                          size: 100,
+                          color: colorScheme.primary,
+                        ),
+                      ),
+                    ),
                   ),
                 ),
-                style: FilledButton.styleFrom(
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
+
+                const Spacer(),
+
+                if (!isIgnored)
+                  _ActionCardButton(
+                    labelKey: 'ignore_optimization',
+                    onTap: onRequestIgnore,
+                  )
+                else
+                  _ActionCardButton(
+                    labelKey: 'optimization_ignored',
+                    onTap: onNext,
+                    isCompleted: true,
                   ),
-                ),
-              ),
-            )
-          else
-            Icon(
-              Icons.check_circle_rounded,
-              color: colorScheme.primary,
-              size: 64,
-            ),
 
-          const Spacer(),
-
-          // Botón Finalizar
-          FilledButton.icon(
-            onPressed: onFinish,
-            icon: const Icon(Icons.check_rounded),
-            label: const TranslatedText('finish'),
-            style: FilledButton.styleFrom(
-              minimumSize: const Size(double.infinity, 56),
+                const Spacer(),
+              ],
             ),
           ),
+        ),
+        _OnboardingFooter(
+          currentStep: currentStep,
+          totalSteps: totalSteps,
+          onNext: onNext,
+          onBack: onBack,
+          isEnabled: true,
+        ),
+      ],
+    );
+  }
+}
 
-          const SizedBox(height: 16),
-        ],
-      ),
+class _AllSetPage extends StatelessWidget {
+  final VoidCallback onFinish;
+  final VoidCallback onBack;
+  final int currentStep;
+  final int totalSteps;
+
+  const _AllSetPage({
+    required this.onFinish,
+    required this.onBack,
+    required this.currentStep,
+    required this.totalSteps,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isAmoled = isDark && colorScheme.surface == Colors.black;
+
+    return Column(
+      children: [
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 28.0),
+            child: Column(
+              children: [
+                const SizedBox(height: 48),
+                TranslatedText(
+                  'all_set_title',
+                  style: textTheme.displaySmall?.copyWith(
+                    fontWeight: FontWeight.w900,
+                    color: colorScheme.onSurface,
+                    letterSpacing: -1,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 12),
+                TranslatedText(
+                  'all_set_desc',
+                  style: textTheme.bodyLarge?.copyWith(
+                    color: colorScheme.onSurface.withValues(alpha: 0.6),
+                    height: 1.4,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+
+                const Spacer(),
+
+                // Composición Visual (M3 Shape)
+                SizedBox(
+                  height: 320,
+                  width: double.infinity,
+                  child: Center(
+                    child: M3Container.pentagon(
+                      color: isAmoled
+                          ? Colors.white.withAlpha(20)
+                          : isDark
+                          ? colorScheme.secondary.withValues(alpha: 0.06)
+                          : colorScheme.secondary.withValues(alpha: 0.07),
+                      width: 220,
+                      height: 220,
+                      child: Center(
+                        child: Icon(
+                          Icons.done_all_rounded,
+                          size: 110,
+                          color: colorScheme.primary,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+
+                const Spacer(),
+              ],
+            ),
+          ),
+        ),
+        _OnboardingFooter(
+          currentStep: currentStep,
+          totalSteps: totalSteps,
+          onNext: onFinish,
+          onBack: onBack,
+          isEnabled: true,
+        ),
+      ],
     );
   }
 }

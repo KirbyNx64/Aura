@@ -58,6 +58,7 @@ dependencies:
   cached_network_image: ^3.4.1
   material_loading_indicator: ^1.0.0
   palette_generator: ^0.3.3+7
+  flutter_m3shapes: ^1.0.0+2
 
 dev_dependencies:
   flutter_test:

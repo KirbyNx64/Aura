@@ -21,7 +21,10 @@ class DependenciesScreen extends StatelessWidget {
       'https://pub.dev/packages/hive_flutter',
       '^1.1.0',
     ),
-    'on_audio_query': _DependencyInfo('', 'local'),
+    'on_audio_query': _DependencyInfo(
+      'https://pub.dev/packages/on_audio_query',
+      '2.9.0',
+    ),
     'just_audio': _DependencyInfo(
       'https://pub.dev/packages/just_audio',
       '^0.10.5',
@@ -92,6 +95,10 @@ class DependenciesScreen extends StatelessWidget {
     'smooth_page_indicator': _DependencyInfo(
       'https://pub.dev/packages/smooth_page_indicator',
       '^2.0.1',
+    ),
+    'squiggly_slider': _DependencyInfo(
+      'https://pub.dev/packages/squiggly_slider',
+      '^1.0.5',
     ),
     'android_intent_plus': _DependencyInfo(
       'https://pub.dev/packages/android_intent_plus',

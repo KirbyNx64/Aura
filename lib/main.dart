@@ -385,6 +385,29 @@ void main() async {
   final prefs = await SharedPreferences.getInstance();
   final isFirstRun = prefs.getBool('first_run') ?? true;
 
+  // Cargar preferencias de tema inmediatamente para evitar parpadeos
+  final themeIndex = prefs.getInt('theme_mode');
+  if (themeIndex != null &&
+      themeIndex >= 0 &&
+      themeIndex < AppThemeMode.values.length) {
+    themeModeNotifier.value = AppThemeMode.values[themeIndex];
+  } else {
+    // Intentar migración de formato antiguo si fuera necesario
+    final oldIsDarkMode = prefs.getBool('theme_mode');
+    if (oldIsDarkMode != null) {
+      themeModeNotifier.value = oldIsDarkMode
+          ? AppThemeMode.dark
+          : AppThemeMode.light;
+    }
+  }
+
+  final colorIndex = prefs.getInt('color_scheme');
+  if (colorIndex != null &&
+      colorIndex >= 0 &&
+      colorIndex < AppColorScheme.values.length) {
+    colorSchemeNotifier.value = AppColorScheme.values[colorIndex];
+  }
+
   bool permisosOk = false;
 
   if (!isFirstRun) {
@@ -432,7 +455,9 @@ void main() async {
         locale: Locale(languageNotifier.value, ''),
         theme: ThemeData(
           useMaterial3: true,
-          colorSchemeSeed: Colors.deepPurple,
+          colorSchemeSeed: ThemePreferences.getColorFromScheme(
+            colorSchemeNotifier.value,
+          ),
           brightness: Brightness.dark,
         ),
       ),
@@ -602,7 +627,6 @@ class MainApp extends StatefulWidget {
 }
 
 class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
-  AppThemeMode _themeMode = AppThemeMode.system;
   bool _isLoading = true;
   bool _showOnboarding = false;
 
@@ -653,8 +677,8 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
 
     try {
       final isDark =
-          _themeMode == AppThemeMode.dark ||
-          (_themeMode == AppThemeMode.system &&
+          themeModeNotifier.value == AppThemeMode.dark ||
+          (themeModeNotifier.value == AppThemeMode.system &&
               MediaQuery.of(context).platformBrightness == Brightness.dark);
 
       // Obtener el color correcto basado en el esquema de color actual
@@ -730,7 +754,7 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
   }
 
   Future<void> _loadThemePreferences() async {
-    final savedThemeMode = await ThemePreferences.getThemeMode();
+    await ThemePreferences.getThemeMode();
     final savedColorScheme = await ThemePreferences.getColorScheme();
     if (mounted) {
       // Inicializar el notifier con el color guardado
@@ -751,7 +775,6 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
 
       // Actualizar estado una sola vez
       setState(() {
-        _themeMode = savedThemeMode;
         _showOnboarding = isFirstRun;
         heroAnimationNotifier.value = useHero;
         overlayNextButtonEnabled.value = nextButtonEnabled;
@@ -788,9 +811,7 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
   }
 
   void _setThemeMode(AppThemeMode themeMode) async {
-    setState(() {
-      _themeMode = themeMode;
-    });
+    themeModeNotifier.value = themeMode;
     // Guardar la preferencia
     await ThemePreferences.setThemeMode(themeMode);
 
@@ -906,65 +927,72 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
       );
     }
 
-    return DynamicColorBuilder(
-      builder: (ColorScheme? lightDynamic, ColorScheme? darkDynamic) {
-        // Guardar los colores dinámicos actuales
-        _currentLightDynamic = lightDynamic;
-        _currentDarkDynamic = darkDynamic;
+    return ValueListenableBuilder<AppThemeMode>(
+      valueListenable: themeModeNotifier,
+      builder: (context, themeMode, child) {
+        return DynamicColorBuilder(
+          builder: (ColorScheme? lightDynamic, ColorScheme? darkDynamic) {
+            // Guardar los colores dinámicos actuales
+            _currentLightDynamic = lightDynamic;
+            _currentDarkDynamic = darkDynamic;
 
-        return ValueListenableBuilder<AppColorScheme>(
-          valueListenable: colorSchemeNotifier,
-          builder: (context, colorScheme, child) {
-            // Actualizar la barra de navegación cuando cambie el color
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              _updateSystemNavigationBar(lightDynamic, darkDynamic);
-            });
+            return ValueListenableBuilder<AppColorScheme>(
+              valueListenable: colorSchemeNotifier,
+              builder: (context, colorScheme, child) {
+                // Actualizar la barra de navegación cuando cambie el color
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  _updateSystemNavigationBar(lightDynamic, darkDynamic);
+                });
 
-            // Escuchar cambios del color dominante extraído de la carátula
-            return ValueListenableBuilder<Color?>(
-              valueListenable: ThemeController.instance.dominantColor,
-              builder: (context, artworkColor, _) {
-                return MaterialApp(
-                  title: 'Mi App de Música',
-                  debugShowCheckedModeBanner: false,
-                  themeAnimationDuration: const Duration(milliseconds: 500),
-                  themeAnimationCurve: Curves.easeInOut,
-                  localizationsDelegates: const [
-                    GlobalMaterialLocalizations.delegate,
-                    GlobalWidgetsLocalizations.delegate,
-                    GlobalCupertinoLocalizations.delegate,
-                  ],
-                  supportedLocales: const [Locale('es', ''), Locale('en', '')],
-                  locale: Locale(languageNotifier.value, ''),
-                  themeMode: _themeMode == AppThemeMode.system
-                      ? ThemeMode.system
-                      : _themeMode == AppThemeMode.dark
-                      ? ThemeMode.dark
-                      : ThemeMode.light,
-                  theme: _buildTheme(
-                    Brightness.light,
-                    lightDynamic,
-                    artworkColor,
-                  ),
-                  darkTheme: _buildTheme(
-                    Brightness.dark,
-                    darkDynamic,
-                    artworkColor,
-                  ),
-                  home: _showOnboarding
-                      ? OnboardingScreen(
-                          onFinish: () {
-                            setState(() {
-                              _showOnboarding = false;
-                            });
-                            // Después de terminar el onboarding y tener permisos, indexar la música
-                            performIndexingIfNeeded();
-                          },
-                        )
-                      : MainNavRoot(
-                          setThemeMode: _setThemeMode,
-                          setColorScheme: _setColorScheme,
-                        ),
+                // Escuchar cambios del color dominante extraído de la carátula
+                return ValueListenableBuilder<Color?>(
+                  valueListenable: ThemeController.instance.dominantColor,
+                  builder: (context, artworkColor, _) {
+                    return MaterialApp(
+                      title: 'Aura',
+                      debugShowCheckedModeBanner: false,
+                      themeAnimationDuration: Duration.zero,
+                      localizationsDelegates: const [
+                        GlobalMaterialLocalizations.delegate,
+                        GlobalWidgetsLocalizations.delegate,
+                        GlobalCupertinoLocalizations.delegate,
+                      ],
+                      supportedLocales: const [
+                        Locale('es', ''),
+                        Locale('en', ''),
+                      ],
+                      locale: Locale(languageNotifier.value, ''),
+                      themeMode: themeMode == AppThemeMode.system
+                          ? ThemeMode.system
+                          : themeMode == AppThemeMode.dark
+                          ? ThemeMode.dark
+                          : ThemeMode.light,
+                      theme: _buildTheme(
+                        Brightness.light,
+                        lightDynamic,
+                        artworkColor,
+                      ),
+                      darkTheme: _buildTheme(
+                        Brightness.dark,
+                        darkDynamic,
+                        artworkColor,
+                      ),
+                      home: _showOnboarding
+                          ? OnboardingScreen(
+                              onFinish: () {
+                                setState(() {
+                                  _showOnboarding = false;
+                                });
+                                // Después de terminar el onboarding y tener permisos, indexar la música
+                                performIndexingIfNeeded();
+                              },
+                            )
+                          : MainNavRoot(
+                              setThemeMode: _setThemeMode,
+                              setColorScheme: _setColorScheme,
+                            ),
+                    );
+                  },
                 );
               },
             );

@@ -20,8 +20,10 @@ final audioProcessorNotifier = ValueNotifier<bool>(
 ); // true: FFmpeg, false: AudioTags
 
 final colorSchemeNotifier = ValueNotifier<AppColorScheme>(
-  AppColorScheme.deepPurple,
+  AppColorScheme.system,
 );
+
+final themeModeNotifier = ValueNotifier<AppThemeMode>(AppThemeMode.system);
 
 final ValueNotifier<bool> shortcutsShouldReload = ValueNotifier(false);
 

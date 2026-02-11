@@ -32,11 +32,11 @@ class _ImageViewerState extends State<ImageViewer>
   late AnimationController _scaleController;
   late Animation<double> _fadeAnimation;
   late Animation<double> _scaleAnimation;
-  
+
   String? _highQualityImageUrl;
   bool _isLoadingHighQuality = false;
   bool _isDownloading = false;
-  
+
   final GlobalKey _imageKey = GlobalKey();
 
   @override
@@ -54,46 +54,42 @@ class _ImageViewerState extends State<ImageViewer>
     _fadeAnimation = Tween<double>(
       begin: 0.0,
       end: 1.0,
-    ).animate(CurvedAnimation(
-      parent: _fadeController,
-      curve: Curves.easeOut,
-    ));
+    ).animate(CurvedAnimation(parent: _fadeController, curve: Curves.easeOut));
 
     _scaleAnimation = Tween<double>(
       begin: 0.8,
       end: 1.0,
-    ).animate(CurvedAnimation(
-      parent: _scaleController,
-      curve: Curves.easeOut,
-    ));
+    ).animate(CurvedAnimation(parent: _scaleController, curve: Curves.easeOut));
 
     _fadeController.forward();
     _scaleController.forward();
-    
+
     // Cargar imagen de alta calidad si hay videoId
     if (widget.videoId != null) {
       _loadHighQualityImage();
     }
   }
-  
+
   void _loadHighQualityImage() async {
     if (widget.videoId == null) return;
-    
+
     setState(() {
       _isLoadingHighQuality = true;
     });
-    
+
     // Intentar cargar maxresdefault primero
-    final coverUrlMax = 'https://img.youtube.com/vi/${widget.videoId}/maxresdefault.jpg';
-    final coverUrlHQ = 'https://img.youtube.com/vi/${widget.videoId}/hqdefault.jpg';
-    
+    final coverUrlMax =
+        'https://img.youtube.com/vi/${widget.videoId}/maxresdefault.jpg';
+    final coverUrlHQ =
+        'https://img.youtube.com/vi/${widget.videoId}/hqdefault.jpg';
+
     try {
       // Verificar si maxresdefault existe
       final response = await Future.any([
         _checkImageExists(coverUrlMax),
         Future.delayed(const Duration(seconds: 2), () => false),
       ]);
-      
+
       if (response && mounted) {
         setState(() {
           _highQualityImageUrl = coverUrlMax;
@@ -101,7 +97,7 @@ class _ImageViewerState extends State<ImageViewer>
         });
         return;
       }
-      
+
       // Si maxresdefault no existe, usar hqdefault
       if (mounted) {
         setState(() {
@@ -119,7 +115,7 @@ class _ImageViewerState extends State<ImageViewer>
       }
     }
   }
-  
+
   Future<bool> _checkImageExists(String url) async {
     try {
       final response = await Future.any([
@@ -131,7 +127,7 @@ class _ImageViewerState extends State<ImageViewer>
       return false;
     }
   }
-  
+
   Future<bool> _makeHeadRequest(String url) async {
     try {
       final response = await http.head(Uri.parse(url));
@@ -141,17 +137,16 @@ class _ImageViewerState extends State<ImageViewer>
     }
   }
 
-
   Future<void> _downloadImage() async {
     if (_isDownloading) return;
-    
+
     setState(() {
       _isDownloading = true;
     });
 
     try {
       // Capturar la imagen tal como se muestra en el visor (recortada)
-      final RenderRepaintBoundary boundary = 
+      final RenderRepaintBoundary boundary =
           _imageKey.currentContext!.findRenderObject() as RenderRepaintBoundary;
       final image = await boundary.toImage(pixelRatio: 3.0);
       final byteData = await image.toByteData(format: ImageByteFormat.png);
@@ -161,7 +156,8 @@ class _ImageViewerState extends State<ImageViewer>
       final directory = Directory('/storage/emulated/0/Music');
 
       // Crear nombre de archivo único
-      final fileName = '${widget.title?.replaceAll(RegExp(r'[^\w\s-]'), '') ?? 'imagen'}_${DateTime.now().millisecondsSinceEpoch}.png';
+      final fileName =
+          '${widget.title?.replaceAll(RegExp(r'[^\w\s-]'), '') ?? 'imagen'}_${DateTime.now().millisecondsSinceEpoch}.png';
       final filePath = '${directory.path}/$fileName';
 
       // Guardar la imagen capturada del visor
@@ -171,10 +167,15 @@ class _ImageViewerState extends State<ImageViewer>
       // Indexar la imagen en el sistema (igual que las canciones)
       await MediaScanner.loadMedia(path: filePath);
 
-      _showMessage(LocaleProvider.tr('success'), LocaleProvider.tr('image_saved_desc'));
-      
+      _showMessage(
+        LocaleProvider.tr('success'),
+        LocaleProvider.tr('image_saved_desc'),
+      );
     } catch (e) {
-      _showMessage(LocaleProvider.tr('error'), '${LocaleProvider.tr('error')}: $e');
+      _showMessage(
+        LocaleProvider.tr('error'),
+        '${LocaleProvider.tr('error')}: $e',
+      );
     } finally {
       if (mounted) {
         setState(() {
@@ -192,15 +193,12 @@ class _ImageViewerState extends State<ImageViewer>
         builder: (context, colorScheme, child) {
           final isAmoled = colorScheme == AppColorScheme.amoled;
           final isDark = Theme.of(context).brightness == Brightness.dark;
-          
+
           return AlertDialog(
             title: Center(
               child: Text(
                 title,
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w600,
-                ),
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
               ),
             ),
             content: SizedBox(
@@ -235,13 +233,19 @@ class _ImageViewerState extends State<ImageViewer>
                       padding: EdgeInsets.all(16),
                       decoration: BoxDecoration(
                         color: isAmoled && isDark
-                            ? Colors.white.withValues(alpha: 0.2) // Color personalizado para amoled
+                            ? Colors.white.withValues(
+                                alpha: 0.2,
+                              ) // Color personalizado para amoled
                             : Theme.of(context).colorScheme.primaryContainer,
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(
                           color: isAmoled && isDark
-                              ? Colors.white.withValues(alpha: 0.4) // Borde personalizado para amoled
-                              : Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
+                              ? Colors.white.withValues(
+                                  alpha: 0.4,
+                                ) // Borde personalizado para amoled
+                              : Theme.of(
+                                  context,
+                                ).colorScheme.primary.withValues(alpha: 0.3),
                           width: 2,
                         ),
                       ),
@@ -252,14 +256,18 @@ class _ImageViewerState extends State<ImageViewer>
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(12),
                               color: isAmoled && isDark
-                                  ? Colors.white.withValues(alpha: 0.2) // Fondo del ícono para amoled
-                                  : Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                                  ? Colors.white.withValues(
+                                      alpha: 0.2,
+                                    ) // Fondo del ícono para amoled
+                                  : Theme.of(context).colorScheme.primary
+                                        .withValues(alpha: 0.1),
                             ),
                             child: Icon(
                               Icons.check_circle,
                               size: 30,
                               color: isAmoled && isDark
-                                  ? Colors.white // Ícono blanco para amoled
+                                  ? Colors
+                                        .white // Ícono blanco para amoled
                                   : Theme.of(context).colorScheme.primary,
                             ),
                           ),
@@ -274,7 +282,8 @@ class _ImageViewerState extends State<ImageViewer>
                                     fontSize: 16,
                                     fontWeight: FontWeight.w600,
                                     color: isAmoled && isDark
-                                        ? Colors.white // Texto blanco para amoled
+                                        ? Colors
+                                              .white // Texto blanco para amoled
                                         : Theme.of(context).colorScheme.primary,
                                   ),
                                 ),
@@ -316,11 +325,11 @@ class _ImageViewerState extends State<ImageViewer>
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-           // Imagen de fondo con blur
-           Positioned.fill(
-             child: Image.network(
-               _highQualityImageUrl ?? widget.imageUrl,
-               fit: BoxFit.cover,
+          // Imagen de fondo con blur
+          Positioned.fill(
+            child: Image.network(
+              _highQualityImageUrl ?? widget.imageUrl,
+              fit: BoxFit.cover,
               errorBuilder: (context, error, stackTrace) {
                 return Container(
                   color: Colors.black,
@@ -339,29 +348,27 @@ class _ImageViewerState extends State<ImageViewer>
           Positioned.fill(
             child: BackdropFilter(
               filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-              child: Container(
-                color: Colors.black.withValues(alpha: 0.3),
-              ),
+              child: Container(color: Colors.black.withValues(alpha: 0.3)),
             ),
           ),
           // Contenido principal
           SafeArea(
             child: Column(
               children: [
-                 // Barra superior con botón de cerrar
-                 Padding(
-                   padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 8.0),
+                // Barra superior con botón de cerrar
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 8.0),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                       IconButton(
-                         onPressed: _close,
-                         icon: const Icon(
-                           Icons.close,
-                           color: Colors.white,
-                           size: 28,
-                         ),
-                       ),
+                      IconButton(
+                        onPressed: _close,
+                        icon: const Icon(
+                          Icons.close,
+                          color: Colors.white,
+                          size: 28,
+                        ),
+                      ),
                       if (widget.title != null || widget.subtitle != null)
                         Expanded(
                           child: Column(
@@ -418,97 +425,106 @@ class _ImageViewerState extends State<ImageViewer>
                 Expanded(
                   child: Center(
                     child: AnimatedBuilder(
-                      animation: Listenable.merge([_fadeAnimation, _scaleAnimation]),
+                      animation: Listenable.merge([
+                        _fadeAnimation,
+                        _scaleAnimation,
+                      ]),
                       builder: (context, child) {
                         return FadeTransition(
                           opacity: _fadeAnimation,
                           child: ScaleTransition(
                             scale: _scaleAnimation,
-                               child: RepaintBoundary(
-                                 key: _imageKey,
-                                 child: SizedBox(
-                                   width: MediaQuery.of(context).size.width * 0.9,
-                                   height: MediaQuery.of(context).size.width * 0.9,
-                                   child: ClipRRect(
-                                     borderRadius: BorderRadius.circular(12),
-                                     child: Image.network(
-                                       _highQualityImageUrl ?? widget.imageUrl,
-                                       fit: BoxFit.cover,
-                                       errorBuilder: (context, error, stackTrace) {
-                                         return Container(
-                                           width: 200,
-                                           height: 200,
-                                           decoration: BoxDecoration(
-                                             color: Colors.grey[800],
-                                             borderRadius: BorderRadius.circular(12),
-                                           ),
-                                           child: const Center(
-                                             child: Icon(
-                                               Icons.music_note,
-                                               size: 80,
-                                               color: Colors.white54,
-                                             ),
-                                           ),
-                                         );
-                                       },
-                                       loadingBuilder: (context, child, loadingProgress) {
-                                         if (loadingProgress == null) return child;
-                                         return Container(
-                                           width: 200,
-                                           height: 200,
-                                           decoration: BoxDecoration(
-                                             color: Colors.grey[800],
-                                             borderRadius: BorderRadius.circular(12),
-                                           ),
-                                           child: Center(
-                                             child: CircularProgressIndicator(
-                                               value: loadingProgress.expectedTotalBytes != null
-                                                   ? loadingProgress.cumulativeBytesLoaded /
-                                                       loadingProgress.expectedTotalBytes!
-                                                   : null,
-                                               color: Colors.white,
-                                             ),
-                                           ),
-                                         );
-                                       },
-                                     ),
-                                   ),
-                                 ),
-                               ),
-                             ),
-                           );
+                            child: RepaintBoundary(
+                              key: _imageKey,
+                              child: SizedBox(
+                                width: MediaQuery.of(context).size.width * 0.9,
+                                height: MediaQuery.of(context).size.width * 0.9,
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: Image.network(
+                                    _highQualityImageUrl ?? widget.imageUrl,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (context, error, stackTrace) {
+                                      return Container(
+                                        width: 200,
+                                        height: 200,
+                                        decoration: BoxDecoration(
+                                          color: Colors.grey[800],
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                        ),
+                                        child: const Center(
+                                          child: Icon(
+                                            Icons.music_note,
+                                            size: 80,
+                                            color: Colors.white54,
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                    loadingBuilder: (context, child, loadingProgress) {
+                                      if (loadingProgress == null) return child;
+                                      return Container(
+                                        width: 200,
+                                        height: 200,
+                                        decoration: BoxDecoration(
+                                          color: Colors.grey[800],
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                        ),
+                                        child: Center(
+                                          child: CircularProgressIndicator(
+                                            value:
+                                                loadingProgress
+                                                        .expectedTotalBytes !=
+                                                    null
+                                                ? loadingProgress
+                                                          .cumulativeBytesLoaded /
+                                                      loadingProgress
+                                                          .expectedTotalBytes!
+                                                : null,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
                       },
                     ),
                   ),
                 ),
-                 // Indicador de carga de alta calidad
-                 if (_isLoadingHighQuality)
-                   const Padding(
-                     padding: EdgeInsets.all(16.0),
-                     child: Row(
-                       mainAxisAlignment: MainAxisAlignment.center,
-                       children: [
-                         SizedBox(
-                           width: 16,
-                           height: 16,
-                           child: CircularProgressIndicator(
-                             strokeWidth: 2,
-                             color: Colors.white70,
-                           ),
-                         ),
-                         SizedBox(width: 8),
-                         Text(
-                           'Cargando imagen de alta calidad...',
-                           style: TextStyle(
-                             color: Colors.white70,
-                             fontSize: 12,
-                           ),
-                         ),
-                       ],
-                     ),
-                   ),
-                 // Espaciador inferior
-                 const SizedBox(height: 8),
+                // Indicador de carga de alta calidad
+                if (_isLoadingHighQuality)
+                  const Padding(
+                    padding: EdgeInsets.all(16.0),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white70,
+                          ),
+                        ),
+                        SizedBox(width: 8),
+                        Text(
+                          'Cargando imagen de alta calidad...',
+                          style: TextStyle(color: Colors.white70, fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  ),
+                // Espaciador inferior
+                const SizedBox(height: 8),
               ],
             ),
           ),

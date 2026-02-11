@@ -713,6 +713,8 @@ class _EditMetadataScreenState extends State<EditMetadataScreen> {
                   child: FilledButton.tonal(
                     onPressed: _hasChanges && !_isLoading ? _saveChanges : null,
                     style: FilledButton.styleFrom(
+                      backgroundColor: isAmoled && isDark ? Colors.white : null,
+                      foregroundColor: isAmoled && isDark ? Colors.black : null,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(16),
                       ),
