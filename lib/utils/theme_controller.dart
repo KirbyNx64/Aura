@@ -23,6 +23,11 @@ class ThemeController {
   /// Flag para evitar procesamiento concurrente
   bool _processing = false;
 
+  Timer? _debounceTimer;
+  MediaItem? _pendingMediaItem;
+  String? _pendingSongId;
+  bool _retryPending = false;
+
   /// Suscripción al stream de mediaItem
   StreamSubscription<MediaItem?>? _subscription;
 
@@ -45,15 +50,46 @@ class ThemeController {
 
     final songId = (mediaItem.extras?['songId'] ?? mediaItem.id).toString();
 
-    // Si ya extrajimos el color para esta canción, no reprocesar
-    if (songId == _extractedSongId) return;
+    // Cancelar timer anterior
+    _debounceTimer?.cancel();
 
-    _resolveAndExtract(mediaItem, songId);
+    // Actualizar estado pendiente
+    _pendingMediaItem = mediaItem;
+    _pendingSongId = songId;
+    _retryPending = false;
+
+    // Iniciar nuevo timer (debounce de 300ms)
+    _debounceTimer = Timer(const Duration(milliseconds: 300), _processPending);
+  }
+
+  /// Procesa la canción pendiente si es necesario
+  Future<void> _processPending() async {
+    if (_processing) {
+      _retryPending = true;
+      return;
+    }
+
+    final item = _pendingMediaItem;
+    final id = _pendingSongId;
+
+    if (item == null || id == null) return;
+    if (id == _extractedSongId) return;
+
+    _processing = true;
+    try {
+      await _resolveAndExtract(item, id);
+    } finally {
+      _processing = false;
+      if (_retryPending) {
+        _retryPending = false;
+        _processPending();
+      }
+    }
   }
 
   /// Resuelve la imagen de la carátula y extrae el color
   Future<void> _resolveAndExtract(MediaItem mediaItem, String songId) async {
-    if (_processing) return;
+    // La guardia _processing ahora se maneja en _processPending
 
     ImageProvider? imageProvider;
 
@@ -113,8 +149,7 @@ class ThemeController {
 
   /// Extrae el color dominante de la imagen
   Future<void> _extractColor(ImageProvider imageProvider, String songId) async {
-    if (_processing) return;
-    _processing = true;
+    // La guardia y estado _processing se manejan en _processPending
 
     try {
       final generator = await PaletteGenerator.fromImageProvider(
@@ -135,8 +170,6 @@ class ThemeController {
       }
     } catch (_) {
       // Error silencioso — mantener el color anterior
-    } finally {
-      _processing = false;
     }
   }
 }

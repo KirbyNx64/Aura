@@ -3989,9 +3989,7 @@ class _FoldersScreenState extends State<FoldersScreen>
                           Icon(
                             Icons.playlist_add_rounded,
                             size: 48,
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.primary.withAlpha(150),
+                            color: Theme.of(context).colorScheme.onSurface,
                           ),
                           const SizedBox(height: 12),
                           Text(
@@ -4861,9 +4859,7 @@ class _FoldersScreenState extends State<FoldersScreen>
                           Icon(
                             Icons.playlist_add_rounded,
                             size: 48,
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.primary.withAlpha(150),
+                            color: Theme.of(context).colorScheme.onSurface,
                           ),
                           const SizedBox(height: 12),
                           Text(

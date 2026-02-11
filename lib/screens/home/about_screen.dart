@@ -201,7 +201,9 @@ class AboutScreen extends StatelessWidget {
                         vertical: 6,
                       ),
                       decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.tertiary,
+                        color: isAmoled
+                            ? Colors.white
+                            : Theme.of(context).colorScheme.tertiary,
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text(
@@ -209,7 +211,9 @@ class AboutScreen extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
-                          color: Theme.of(context).colorScheme.onTertiary,
+                          color: isAmoled
+                              ? Colors.black
+                              : Theme.of(context).colorScheme.onTertiary,
                         ),
                       ),
                     );

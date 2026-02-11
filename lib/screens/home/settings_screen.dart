@@ -2527,15 +2527,97 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 );
               }
 
-              return GestureDetector(
-                onTap: () {
-                  setState(() {
-                    _currentColorScheme = colorScheme;
-                  });
-                  widget.setColorScheme?.call(colorScheme);
-                  Navigator.of(context).pop();
-                },
-                child: circleWidget,
+              return Tooltip(
+                message: ThemePreferences.getColorName(colorScheme),
+                child: GestureDetector(
+                  onTap: () async {
+                    if (colorScheme == AppColorScheme.dynamic) {
+                      final accepted =
+                          await ThemePreferences.getDynamicThemeWarningAccepted();
+                      if (!accepted) {
+                        if (!context.mounted) return;
+                        final confirm = await showDialog<bool>(
+                          context: context,
+                          builder: (context) {
+                            final isDark =
+                                Theme.of(context).brightness == Brightness.dark;
+                            final isAmoled =
+                                colorSchemeNotifier.value ==
+                                AppColorScheme.amoled;
+                            return AlertDialog(
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(28),
+                                side: isAmoled && isDark
+                                    ? const BorderSide(
+                                        color: Colors.white24,
+                                        width: 1,
+                                      )
+                                    : BorderSide.none,
+                              ),
+                              title: Row(
+                                children: [
+                                  Icon(
+                                    Icons.warning_amber_rounded,
+                                    color: Theme.of(context).colorScheme.error,
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      LocaleProvider.tr('warning'),
+                                      style: TextStyle(
+                                        fontSize: 20,
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.error,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              content: Text(
+                                LocaleProvider.tr('dynamic_theme_warning'),
+                                style: const TextStyle(fontSize: 16),
+                              ),
+                              actions: [
+                                TextButton(
+                                  onPressed: () =>
+                                      Navigator.of(context).pop(false),
+                                  child: Text(LocaleProvider.tr('cancel')),
+                                ),
+                                TextButton(
+                                  onPressed: () =>
+                                      Navigator.of(context).pop(true),
+                                  child: Text(
+                                    LocaleProvider.tr('ok'),
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.primary,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            );
+                          },
+                        );
+
+                        if (confirm != true) return;
+                        await ThemePreferences.setDynamicThemeWarningAccepted(
+                          true,
+                        );
+                      }
+                    }
+
+                    if (!context.mounted) return;
+                    setState(() {
+                      _currentColorScheme = colorScheme;
+                    });
+                    widget.setColorScheme?.call(colorScheme);
+                    Navigator.of(context).pop();
+                  },
+                  child: circleWidget,
+                ),
               );
             },
           ),

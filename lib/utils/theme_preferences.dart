@@ -1,5 +1,6 @@
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/material.dart';
+import 'package:music/l10n/locale_provider.dart';
 
 enum AppThemeMode { system, light, dark }
 
@@ -28,6 +29,8 @@ enum AppColorScheme {
 class ThemePreferences {
   static const String _themeKey = 'theme_mode';
   static const String _colorKey = 'color_scheme';
+  static const String _dynamicThemeWarningKey =
+      'dynamic_theme_warning_accepted';
 
   // Guardar la preferencia del tema
   static Future<void> setThemeMode(AppThemeMode themeMode) async {
@@ -84,6 +87,18 @@ class ThemePreferences {
     }
     // Default to system (dynamic colors)
     return AppColorScheme.system;
+  }
+
+  // Guardar si se aceptó la advertencia de tema dinámico
+  static Future<void> setDynamicThemeWarningAccepted(bool accepted) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_dynamicThemeWarningKey, accepted);
+  }
+
+  // Obtener si se aceptó la advertencia de tema dinámico
+  static Future<bool> getDynamicThemeWarningAccepted() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_dynamicThemeWarningKey) ?? false;
   }
 
   // Limpiar la preferencia del tema (resetear a valores por defecto)
@@ -147,7 +162,7 @@ class ThemePreferences {
   static String getColorName(AppColorScheme scheme) {
     switch (scheme) {
       case AppColorScheme.system:
-        return 'Sistema';
+        return LocaleProvider.tr('system_default');
       case AppColorScheme.deepPurple:
         return 'Deep Purple';
       case AppColorScheme.purple:
@@ -183,7 +198,7 @@ class ThemePreferences {
       case AppColorScheme.amoled:
         return 'AMOLED Black';
       case AppColorScheme.dynamic:
-        return 'Dinámico';
+        return LocaleProvider.tr('dynamic_theme');
     }
   }
 }
