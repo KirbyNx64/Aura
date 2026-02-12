@@ -244,6 +244,8 @@ const Map<String, String> appLocalizationsEn = {
   'app_description':
       'Aura Music is an app to play your local music quickly and easily. Enjoy your favorite songs, create playlists, and more.',
   'dynamic_theme': 'Dynamic',
+  'monthly_audience_label': 'Monthly audience:',
+  'subscribers_label': 'subscribers',
 
   // Dialogs
   'confirm_clear_lyrics': 'Delete song lyrics?',

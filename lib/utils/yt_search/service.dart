@@ -3092,8 +3092,9 @@ Map<String, dynamic>? _parseArtistItem(Map<String, dynamic> item) {
   browseId ??= _findObjectByKey(renderer, 'browseId')?.toString();
   // print('🔍 BrowseId desde búsqueda recursiva: $browseId');
 
-  // Extraer información adicional (suscriptores, etc.)
-  String? subscribers;
+  // 3. EXTRAER AUDIENCIA O SUSCRIPTORES
+  // YouTube suele mandar: ["Artista", " • ", "15.9M monthly audience"]
+  String? listenersOrSubscribers;
   final subtitleRuns = nav(renderer, [
     'flexColumns',
     1,
@@ -3103,12 +3104,20 @@ Map<String, dynamic>? _parseArtistItem(Map<String, dynamic> item) {
   ]);
 
   if (subtitleRuns is List && subtitleRuns.isNotEmpty) {
+    // Recorremos buscando el dato numérico
     for (var run in subtitleRuns) {
-      final text = run['text'];
-      if (text != null &&
-          (text.contains('subscriber') || text.contains('suscriptor'))) {
-        subscribers = text.split(' ')[0];
-        break;
+      final text = run['text']?.toString();
+      if (text == null || text == ' • ') continue;
+
+      // Si el texto NO es "Artist" ni "Artista", probablemente es el dato que buscamos
+      if (text != 'Artist' && text != 'Artista') {
+        listenersOrSubscribers = text;
+
+        // Si queremos ser específicos y preferir el dato que tenga números:
+        if (RegExp(r'\d').hasMatch(text)) {
+          listenersOrSubscribers = text;
+          break; // Encontramos el dato numérico, nos quedamos con este
+        }
       }
     }
   }
@@ -3165,7 +3174,7 @@ Map<String, dynamic>? _parseArtistItem(Map<String, dynamic> item) {
   return {
     'name': title,
     'browseId': browseId,
-    'subscribers': subscribers,
+    'subscribers': listenersOrSubscribers,
     'thumbUrl': thumbUrl,
   };
 }
