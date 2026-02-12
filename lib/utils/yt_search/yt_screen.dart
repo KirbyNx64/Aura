@@ -141,6 +141,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
   // Estado para selección múltiple
   final Set<String> _selectedIndexes = {};
   bool _isSelectionMode = false;
+  int _searchSessionId = 0;
 
   // ScrollControllers para paginación incremental
   final ScrollController _songScrollController = ScrollController();
@@ -298,6 +299,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
       _loadingMoreSongs = true;
       _loadingMoreVideos = true;
       _loadingMorePlaylists = true;
+      _searchSessionId++;
     });
     final List<ConnectivityResult> connectivityResult = await Connectivity()
         .checkConnectivity();
@@ -552,6 +554,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
     _videoScrollController.dispose();
     _playlistScrollController.dispose();
     _tabScrollController.dispose();
+    _imageCache.clear();
     super.dispose();
   }
 
@@ -565,6 +568,19 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
   }) {
     if (imageUrl == null || imageUrl.isEmpty) {
       return fallback ?? const Icon(Icons.music_note, size: 32);
+    }
+
+    // Si ya existe la versión recortada en caché, mostrarla directamente
+    if (_imageCache.containsKey(imageUrl)) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: Image.memory(
+          _imageCache[imageUrl]!,
+          width: width,
+          height: height,
+          fit: fit ?? BoxFit.cover,
+        ),
+      );
     }
 
     return Image.network(
@@ -635,6 +651,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
       _currentAlbum = null;
       _playlistSongs = [];
       _currentPlaylist = null;
+      _searchSessionId++;
     });
     if (_tabScrollController.hasClients) {
       _tabScrollController.jumpTo(0);
@@ -2479,7 +2496,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                   color: Theme.of(context).colorScheme.onSurface
                                       .withValues(alpha: 0.6),
                                 ),
-                                const SizedBox(height: 8),
+                                const SizedBox(height: 16),
                                 Text(
                                   LocaleProvider.tr('no_internet_connection'),
                                   style: TextStyle(
@@ -2524,7 +2541,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                               .onSurface
                                               .withValues(alpha: 0.6),
                                         ),
-                                        const SizedBox(height: 8),
+                                        const SizedBox(height: 16),
                                         Text(
                                           LocaleProvider.tr(
                                             'no_recent_searches',
@@ -2587,8 +2604,8 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                     children: [
                                       Expanded(
                                         child: ListView.builder(
-                                          key: const PageStorageKey(
-                                            'yt_songs_list',
+                                          key: PageStorageKey(
+                                            'yt_songs_list_$_searchSessionId',
                                           ),
                                           controller: _songScrollController,
                                           padding: EdgeInsets.zero,
@@ -2912,8 +2929,8 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                     children: [
                                       Expanded(
                                         child: ListView.builder(
-                                          key: const PageStorageKey(
-                                            'yt_videos_list',
+                                          key: PageStorageKey(
+                                            'yt_videos_list_$_searchSessionId',
                                           ),
                                           controller: _videoScrollController,
                                           padding: EdgeInsets.zero,
@@ -3237,8 +3254,8 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                     children: [
                                       Expanded(
                                         child: ListView.builder(
-                                          key: const PageStorageKey(
-                                            'yt_albums_list',
+                                          key: PageStorageKey(
+                                            'yt_albums_list_$_searchSessionId',
                                           ),
                                           padding: EdgeInsets.zero,
                                           itemCount: _albumResults.length,
@@ -4429,8 +4446,8 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                     children: [
                                       Expanded(
                                         child: ListView.builder(
-                                          key: const PageStorageKey(
-                                            'yt_playlists_list',
+                                          key: PageStorageKey(
+                                            'yt_playlists_list_$_searchSessionId',
                                           ),
                                           controller: _playlistScrollController,
                                           padding: EdgeInsets.only(),
@@ -4733,8 +4750,8 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                 } else {
                                   // Vista normal: resumen de ambas categorías
                                   return ListView(
-                                    key: const PageStorageKey(
-                                      'yt_main_results_list',
+                                    key: PageStorageKey(
+                                      'yt_main_results_list_$_searchSessionId',
                                     ),
                                     children: [
                                       // Sección Artistas
@@ -6454,8 +6471,6 @@ class YtPreviewPlayerState extends State<YtPreviewPlayer>
   void dispose() {
     _playerStateSubscription?.cancel();
     _player.dispose();
-    // Limpiar caché de imágenes al cerrar el modal
-    _clearImageCache();
     super.dispose();
   }
 
@@ -6529,14 +6544,30 @@ class YtPreviewPlayerState extends State<YtPreviewPlayer>
       future: _downloadAndCropImage(imageUrl),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return Container(
-            width: width,
-            height: height,
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surfaceContainer,
-              borderRadius: BorderRadius.circular(8),
+          // Mostrar la imagen original mientras se procesa el recorte
+          // Gracias al caché de Flutter, si ya se mostró en la lista se verá instantánea
+          return ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Image.network(
+              imageUrl,
+              width: width,
+              height: height,
+              fit: fit ?? BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) =>
+                  fallback ?? const Icon(Icons.music_note, size: 32),
+              loadingBuilder: (context, child, loadingProgress) {
+                if (loadingProgress == null) return child;
+                return Container(
+                  width: width,
+                  height: height,
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surfaceContainer,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Center(child: LoadingIndicator()),
+                );
+              },
             ),
-            child: Center(child: LoadingIndicator()),
           );
         }
 
@@ -6596,11 +6627,6 @@ class YtPreviewPlayerState extends State<YtPreviewPlayer>
       // print('Error descargando imagen: $e');
     }
     return null;
-  }
-
-  // Función para limpiar el caché de imágenes (opcional, para liberar memoria)
-  void _clearImageCache() {
-    _imageCache.clear();
   }
 
   void _playPrevious() {

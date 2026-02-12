@@ -376,7 +376,7 @@ class DownloadManager {
       filePath: filePath,
       totalSize: audio.size,
       onProgress: (progress) {
-        _updateProgress(progress * 0.8);
+        _updateProgress(progress * 0.99);
       },
     );
 
@@ -561,8 +561,6 @@ class DownloadManager {
 
     try {
       // Escribir metadatos con audiotags
-      _updateProgress(0.85);
-
       final cleanedAuthor = _limpiarMetadato(
         author.replaceFirst(RegExp(r' - Topic$', caseSensitive: false), ''),
       );
@@ -588,8 +586,6 @@ class DownloadManager {
 
       // Indexar en Android
       MediaScanner.loadMedia(path: m4aPath);
-
-      _updateProgress(0.95);
 
       // Guardar en la base de datos de historial en segundo plano
       // usando Future.microtask para no bloquear la UI
