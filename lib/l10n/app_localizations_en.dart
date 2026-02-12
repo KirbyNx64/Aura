@@ -285,6 +285,7 @@ const Map<String, String> appLocalizationsEn = {
   'songs_search': 'Songs',
   'albums': 'Albums',
   'videos': 'Videos',
+  'singles': 'Singles',
   'no_results': 'No results',
   'results': 'Results',
   'no_description': 'Description not available',

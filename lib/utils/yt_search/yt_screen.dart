@@ -2587,6 +2587,9 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                     children: [
                                       Expanded(
                                         child: ListView.builder(
+                                          key: const PageStorageKey(
+                                            'yt_songs_list',
+                                          ),
                                           controller: _songScrollController,
                                           padding: EdgeInsets.zero,
                                           itemCount:
@@ -2909,6 +2912,9 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                     children: [
                                       Expanded(
                                         child: ListView.builder(
+                                          key: const PageStorageKey(
+                                            'yt_videos_list',
+                                          ),
                                           controller: _videoScrollController,
                                           padding: EdgeInsets.zero,
                                           itemCount:
@@ -3231,6 +3237,9 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                     children: [
                                       Expanded(
                                         child: ListView.builder(
+                                          key: const PageStorageKey(
+                                            'yt_albums_list',
+                                          ),
                                           padding: EdgeInsets.zero,
                                           itemCount: _albumResults.length,
                                           itemBuilder: (context, index) {
@@ -3571,6 +3580,9 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                       else
                                         Expanded(
                                           child: ListView.builder(
+                                            key: const PageStorageKey(
+                                              'yt_album_details_list',
+                                            ),
                                             padding: EdgeInsets.zero,
                                             itemCount: _albumSongs.length,
                                             itemBuilder: (context, idx) {
@@ -4060,6 +4072,9 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                       else
                                         Expanded(
                                           child: ListView.builder(
+                                            key: const PageStorageKey(
+                                              'yt_playlist_details_list',
+                                            ),
                                             padding: EdgeInsets.zero,
                                             itemCount: _playlistSongs.length,
                                             itemBuilder: (context, idx) {
@@ -4414,6 +4429,9 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                     children: [
                                       Expanded(
                                         child: ListView.builder(
+                                          key: const PageStorageKey(
+                                            'yt_playlists_list',
+                                          ),
                                           controller: _playlistScrollController,
                                           padding: EdgeInsets.only(),
                                           itemCount:
@@ -4715,6 +4733,9 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                 } else {
                                   // Vista normal: resumen de ambas categorías
                                   return ListView(
+                                    key: const PageStorageKey(
+                                      'yt_main_results_list',
+                                    ),
                                     children: [
                                       // Sección Artistas
                                       if (_artistResults.isNotEmpty)

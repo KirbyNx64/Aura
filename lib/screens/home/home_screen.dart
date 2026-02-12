@@ -1431,7 +1431,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               width: 80,
               height: 80,
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.circular(16),
                 child: artist['thumbUrl'] != null
                     ? CachedNetworkImage(
                         imageUrl: artist['thumbUrl'] as String,
@@ -1449,7 +1449,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                         .colorScheme
                                         .secondaryContainer
                                         .withValues(alpha: 0.8),
-                              borderRadius: BorderRadius.circular(20),
+                              borderRadius: BorderRadius.circular(16),
                             ),
                             child: Center(child: Icon(Icons.person, size: 40)),
                           );
@@ -1464,7 +1464,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                       .colorScheme
                                       .secondaryContainer
                                       .withValues(alpha: 0.8),
-                            borderRadius: BorderRadius.circular(20),
+                            borderRadius: BorderRadius.circular(16),
                           ),
                           child: Center(child: LoadingIndicator()),
                         ),
@@ -1476,7 +1476,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                               ? Colors.white.withValues(alpha: 0.1)
                               : Theme.of(context).colorScheme.secondaryContainer
                                     .withValues(alpha: 0.8),
-                          borderRadius: BorderRadius.circular(20),
+                          borderRadius: BorderRadius.circular(16),
                         ),
                         child: Center(child: Icon(Icons.person, size: 40)),
                       ),

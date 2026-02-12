@@ -299,6 +299,7 @@ const Map<String, String> appLocalizationsEs = {
   'songs_search': 'Canciones',
   'albums': 'Álbumes',
   'videos': 'Videos',
+  'singles': 'Sencillos',
   'write_song_or_artist': 'Escribe el nombre de una canción o artista',
   'loading_more': 'Cargando más resultados...',
   'copy_link': 'Copiar enlace',

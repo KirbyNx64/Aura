@@ -31,6 +31,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
   List<YtMusicResult> _songs = [];
   List<YtMusicResult> _videos = [];
   List<Map<String, String>> _albums = [];
+  List<Map<String, String>> _singles = [];
 
   // Estado para álbum seleccionado
   List<YtMusicResult> _albumSongs = [];
@@ -332,11 +333,19 @@ class _ArtistScreenState extends State<ArtistScreen> {
 
       final videoFuture = _loadVideosWithPagination(widget.artistName);
       final albumFuture = searchAlbumsOnly(widget.artistName);
+      final singlesFuture = (browseId != null && browseId.isNotEmpty)
+          ? getArtistSingles(browseId)
+          : Future.value({
+              'results': <Map<String, String>>[],
+              'continuationToken': null,
+              'browseEndpoint': null,
+            });
 
       final searchResults = await Future.wait([
         songFuture,
         videoFuture,
         albumFuture,
+        singlesFuture,
       ]);
 
       if (mounted) {
@@ -347,6 +356,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
         setState(() {
           // getArtistSongs ahora devuelve un Map con paginación
           final songsData = searchResults[0] as Map<String, dynamic>;
+          final singlesData = searchResults[3] as Map<String, dynamic>;
 
           // Si viene de getArtistSongs (con browseId)
           if (songsData.containsKey('browseEndpoint')) {
@@ -372,6 +382,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
           _hasMoreVideos = _videosContinuationToken != null;
 
           _albums = allAlbums;
+          _singles = singlesData['results'] as List<Map<String, String>>;
           _loadingContent = false;
         });
       }
@@ -1835,6 +1846,269 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                 ),
                               ],
                             ),
+                          ] else if (_expandedCategory == 'singles') ...[
+                            // Vista de lista de todos los sencillos
+                            const SizedBox(height: 24),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    IconButton(
+                                      constraints: const BoxConstraints(
+                                        minWidth: 40,
+                                        minHeight: 40,
+                                        maxWidth: 40,
+                                        maxHeight: 40,
+                                      ),
+                                      padding: EdgeInsets.zero,
+                                      icon: Container(
+                                        width: 40,
+                                        height: 40,
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          color: isDark
+                                              ? Theme.of(context)
+                                                    .colorScheme
+                                                    .secondary
+                                                    .withValues(alpha: 0.06)
+                                              : Theme.of(context)
+                                                    .colorScheme
+                                                    .secondary
+                                                    .withValues(alpha: 0.07),
+                                        ),
+                                        child: const Icon(
+                                          Icons.arrow_back,
+                                          size: 24,
+                                        ),
+                                      ),
+                                      tooltip: 'Volver',
+                                      onPressed: () {
+                                        setState(() {
+                                          _expandedCategory =
+                                              null; // Volver a la vista principal
+                                          _resetScroll();
+                                        });
+                                      },
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      LocaleProvider.tr(
+                                        'singles', // Hardcoded or LocaleProvider.tr('singles')
+                                      ),
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600,
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.primary,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 16),
+                                ListView.builder(
+                                  shrinkWrap: true,
+                                  physics: const NeverScrollableScrollPhysics(),
+                                  addAutomaticKeepAlives: false,
+                                  addRepaintBoundaries: true,
+                                  itemCount: _singles.length,
+                                  itemBuilder: (context, index) {
+                                    final single = _singles[index];
+
+                                    final cardColor = isAmoled
+                                        ? Colors.white.withAlpha(20)
+                                        : isDark
+                                        ? Theme.of(context)
+                                              .colorScheme
+                                              .secondary
+                                              .withValues(alpha: 0.06)
+                                        : Theme.of(context)
+                                              .colorScheme
+                                              .secondary
+                                              .withValues(alpha: 0.07);
+
+                                    final bool isFirst = index == 0;
+                                    final bool isLast =
+                                        index == _singles.length - 1;
+                                    final bool isOnly = _singles.length == 1;
+
+                                    BorderRadius borderRadius;
+                                    if (isOnly) {
+                                      borderRadius = BorderRadius.circular(20);
+                                    } else if (isFirst) {
+                                      borderRadius = const BorderRadius.only(
+                                        topLeft: Radius.circular(20),
+                                        topRight: Radius.circular(20),
+                                        bottomLeft: Radius.circular(4),
+                                        bottomRight: Radius.circular(4),
+                                      );
+                                    } else if (isLast) {
+                                      borderRadius = const BorderRadius.only(
+                                        topLeft: Radius.circular(4),
+                                        topRight: Radius.circular(4),
+                                        bottomLeft: Radius.circular(20),
+                                        bottomRight: Radius.circular(20),
+                                      );
+                                    } else {
+                                      borderRadius = BorderRadius.circular(4);
+                                    }
+
+                                    return Padding(
+                                      padding: EdgeInsets.only(
+                                        bottom: isLast ? 0 : 4,
+                                      ),
+                                      child: Card(
+                                        color: cardColor,
+                                        margin: EdgeInsets.zero,
+                                        elevation: 0,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: borderRadius,
+                                        ),
+                                        child: InkWell(
+                                          borderRadius: borderRadius,
+                                          onLongPress: () {
+                                            HapticFeedback.selectionClick();
+                                            // todo: impl selection
+                                          },
+                                          onTap: () async {
+                                            if (single['browseId'] == null) {
+                                              return;
+                                            }
+                                            setState(() {
+                                              _previousCategory = 'singles';
+                                              _expandedCategory = 'album';
+                                              _loadingAlbumSongs = true;
+                                              _albumSongs = [];
+                                              _currentAlbum = {
+                                                'title': single['title'],
+                                                'artist': single['artist'],
+                                                'thumbUrl': single['thumbUrl'],
+                                              };
+                                              _resetScroll();
+                                            });
+                                            final songs = await getAlbumSongs(
+                                              single['browseId']!,
+                                            );
+                                            if (!mounted) return;
+                                            setState(() {
+                                              _albumSongs = songs;
+                                              _loadingAlbumSongs = false;
+                                            });
+                                          },
+                                          child: ListTile(
+                                            contentPadding:
+                                                const EdgeInsets.symmetric(
+                                                  horizontal: 12,
+                                                  vertical: 4,
+                                                ),
+                                            leading: ClipRRect(
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                              child:
+                                                  single['thumbUrl'] != null &&
+                                                      single['thumbUrl']!
+                                                          .isNotEmpty
+                                                  ? _buildSafeNetworkImage(
+                                                      single['thumbUrl']!,
+                                                      width: 56,
+                                                      height: 56,
+                                                      fit: BoxFit.cover,
+                                                    )
+                                                  : Container(
+                                                      width: 56,
+                                                      height: 56,
+                                                      decoration: BoxDecoration(
+                                                        color: isSystem
+                                                            ? Theme.of(context)
+                                                                  .colorScheme
+                                                                  .secondaryContainer
+                                                            : Theme.of(context)
+                                                                  .colorScheme
+                                                                  .surfaceContainer,
+                                                        borderRadius:
+                                                            BorderRadius.circular(
+                                                              12,
+                                                            ),
+                                                      ),
+                                                      child: Icon(
+                                                        Icons.album,
+                                                        size: 32,
+                                                        color: Theme.of(
+                                                          context,
+                                                        ).colorScheme.onSurface,
+                                                      ),
+                                                    ),
+                                            ),
+                                            title: Text(
+                                              single['title'] ??
+                                                  'Título desconocido',
+                                              style: Theme.of(
+                                                context,
+                                              ).textTheme.titleMedium,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                            subtitle: Text(
+                                              (single['year'] != null &&
+                                                      single['year']
+                                                          .toString()
+                                                          .isNotEmpty)
+                                                  ? '${single['year']} • ${single['type'] == 'EP' ? 'EP' : LocaleProvider.tr('singles')}'
+                                                  : single['artist'] ??
+                                                        'Artista desconocido',
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                            trailing: IconButton(
+                                              style: IconButton.styleFrom(
+                                                backgroundColor:
+                                                    Theme.of(context)
+                                                        .colorScheme
+                                                        .primary
+                                                        .withAlpha(20),
+                                              ),
+                                              icon: const Icon(
+                                                Icons.chevron_right,
+                                                size: 20,
+                                              ),
+                                              onPressed: () async {
+                                                if (single['browseId'] ==
+                                                    null) {
+                                                  return;
+                                                }
+                                                setState(() {
+                                                  _previousCategory = 'singles';
+                                                  _expandedCategory = 'album';
+                                                  _loadingAlbumSongs = true;
+                                                  _albumSongs = [];
+                                                  _currentAlbum = {
+                                                    'title': single['title'],
+                                                    'artist': single['artist'],
+                                                    'thumbUrl':
+                                                        single['thumbUrl'],
+                                                  };
+                                                  _resetScroll();
+                                                });
+                                                final songs =
+                                                    await getAlbumSongs(
+                                                      single['browseId']!,
+                                                    );
+                                                if (!mounted) return;
+                                                setState(() {
+                                                  _albumSongs = songs;
+                                                  _loadingAlbumSongs = false;
+                                                });
+                                              },
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ],
+                            ),
                           ] else if (_expandedCategory == 'album') ...[
                             // Vista de canciones del álbum seleccionado
                             const SizedBox(height: 24),
@@ -3278,6 +3552,156 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                                 Flexible(
                                                   child: Text(
                                                     album['title'] ?? '',
+                                                    maxLines: 2,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                    style: Theme.of(
+                                                      context,
+                                                    ).textTheme.titleMedium,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+
+                            // Sección Sencillos
+                            if (_singles.isNotEmpty) ...[
+                              const SizedBox(height: 24),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  InkWell(
+                                    // No hay vista expandida de singles por ahora, así que no es clickable
+                                    // O podríamos hacer que abra la vista de álbum con todos los singles si quisieramos
+                                    // Por ahora solo mostramos el título
+                                    borderRadius: BorderRadius.circular(8),
+                                    onTap: () {
+                                      setState(() {
+                                        _previousCategory = _expandedCategory;
+                                        _expandedCategory = 'singles';
+                                        _resetScroll();
+                                      });
+                                    },
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 4,
+                                      ),
+                                      child: Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Row(
+                                            children: [
+                                              SizedBox(width: 14),
+                                              Text(
+                                                LocaleProvider.tr(
+                                                  'singles', // Hardcoded or LocaleProvider.tr('singles')
+                                                ),
+                                                style: TextStyle(
+                                                  fontSize: 16,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: Theme.of(
+                                                    context,
+                                                  ).colorScheme.primary,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          Icon(Icons.chevron_right),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  SizedBox(
+                                    height: 180, // Altura igual a albums
+                                    child: ListView.separated(
+                                      scrollDirection: Axis.horizontal,
+                                      itemCount: _singles.length,
+                                      separatorBuilder: (_, _) =>
+                                          const SizedBox(width: 12),
+                                      itemBuilder: (context, index) {
+                                        final single = _singles[index];
+                                        return AnimatedTapButton(
+                                          onTap: () async {
+                                            // Cargar canciones del sencillo (igual que álbum)
+                                            if (single['browseId'] == null) {
+                                              return;
+                                            }
+                                            setState(() {
+                                              _previousCategory =
+                                                  _expandedCategory;
+                                              _expandedCategory =
+                                                  'album'; // Usamos vista de álbum
+                                              _loadingAlbumSongs = true;
+                                              _albumSongs = [];
+                                              _currentAlbum = {
+                                                'title': single['title'],
+                                                'artist': single['artist'],
+                                                'thumbUrl': single['thumbUrl'],
+                                              };
+                                              _resetScroll();
+                                            });
+                                            final songs = await getAlbumSongs(
+                                              single['browseId']!,
+                                            );
+                                            if (!mounted) return;
+                                            setState(() {
+                                              _albumSongs = songs;
+                                              _loadingAlbumSongs = false;
+                                            });
+                                          },
+                                          child: SizedBox(
+                                            width: 120,
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                AspectRatio(
+                                                  aspectRatio: 1,
+                                                  child: ClipRRect(
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          12,
+                                                        ),
+                                                    child:
+                                                        single['thumbUrl'] !=
+                                                            null
+                                                        ? Image.network(
+                                                            single['thumbUrl']!,
+                                                            fit: BoxFit.cover,
+                                                          )
+                                                        : Container(
+                                                            color: isSystem
+                                                                ? Theme.of(
+                                                                        context,
+                                                                      )
+                                                                      .colorScheme
+                                                                      .secondaryContainer
+                                                                : Theme.of(
+                                                                        context,
+                                                                      )
+                                                                      .colorScheme
+                                                                      .surfaceContainer,
+                                                            child: const Icon(
+                                                              Icons.album,
+                                                              size: 40,
+                                                            ),
+                                                          ),
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 8),
+                                                Flexible(
+                                                  child: Text(
+                                                    single['title'] ?? '',
                                                     maxLines: 2,
                                                     overflow:
                                                         TextOverflow.ellipsis,

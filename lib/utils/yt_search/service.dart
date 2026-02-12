@@ -3169,3 +3169,313 @@ Map<String, dynamic>? _parseArtistItem(Map<String, dynamic> item) {
     'thumbUrl': thumbUrl,
   };
 }
+
+// Función para obtener Sencillos (Singles) de un artista
+Future<Map<String, dynamic>> getArtistSingles(String browseId) async {
+  String normalizedId = browseId;
+  if (normalizedId.startsWith('MPLA')) {
+    normalizedId = normalizedId.substring(4);
+  }
+
+  try {
+    final artistData = {...ytServiceContext, 'browseId': normalizedId};
+
+    // Configurar idioma para asegurar consistencia en títulos
+    try {
+      final ctx = (artistData['context'] as Map);
+      final client = (ctx['client'] as Map);
+      final locale = languageNotifier.value;
+      client['hl'] = locale.startsWith('es') ? 'es' : 'en';
+    } catch (_) {}
+
+    final artistResponse = (await sendRequest("browse", artistData)).data;
+
+    final sections = nav(artistResponse, [
+      'contents',
+      'singleColumnBrowseResultsRenderer',
+      'tabs',
+      0,
+      'tabRenderer',
+      'content',
+      'sectionListRenderer',
+      'contents',
+    ]);
+
+    if (sections == null || sections is! List) {
+      return {
+        'results': <Map<String, String>>[],
+        'continuationToken': null,
+        'browseEndpoint': null,
+      };
+    }
+
+    Map<String, dynamic>? singlesEndpoint;
+    List<dynamic>? topSinglesPreview;
+
+    // Palabras clave para buscar la sección
+    final keywords = [
+      'singles',
+      'sencillos',
+      'ep',
+      'eps',
+      'singles & eps',
+      'sencillos y ep',
+    ];
+
+    for (var section in sections) {
+      // 1. Buscar en musicShelfRenderer
+      if (section.containsKey('musicShelfRenderer')) {
+        final shelf = section['musicShelfRenderer'];
+        final title = nav(shelf, ['title', 'runs', 0, 'text']);
+
+        if (title != null &&
+            keywords.any((k) => title.toString().toLowerCase().contains(k))) {
+          singlesEndpoint = nav(shelf, ['bottomEndpoint', 'browseEndpoint']);
+
+          final contentList = nav(shelf, ['contents']);
+          if (contentList is List) {
+            topSinglesPreview = contentList;
+          }
+          break;
+        }
+      }
+
+      // 2. Buscar en musicCarouselShelfRenderer
+      if (section.containsKey('musicCarouselShelfRenderer')) {
+        final shelf = section['musicCarouselShelfRenderer'];
+        final title = nav(shelf, [
+          'header',
+          'musicCarouselShelfBasicHeaderRenderer',
+          'title',
+          'runs',
+          0,
+          'text',
+        ]);
+
+        if (title != null &&
+            keywords.any((k) => title.toString().toLowerCase().contains(k))) {
+          singlesEndpoint = nav(shelf, [
+            'header',
+            'musicCarouselShelfBasicHeaderRenderer',
+            'moreContentButton',
+            'buttonRenderer',
+            'navigationEndpoint',
+            'browseEndpoint',
+          ]);
+
+          final contentList = nav(shelf, ['contents']);
+          if (contentList is List) {
+            topSinglesPreview = contentList;
+          }
+          break;
+        }
+      }
+    }
+
+    // Si solo hay preview sin botón "Ver más", devolver el preview
+    if (singlesEndpoint == null && topSinglesPreview != null) {
+      final results = <Map<String, String>>[];
+
+      for (var item in topSinglesPreview) {
+        if (item['musicTwoRowItemRenderer'] != null) {
+          final parsed = _parseTwoRowItem(item['musicTwoRowItemRenderer']);
+          if (parsed != null) results.add(parsed);
+        } else if (item['musicResponsiveListItemRenderer'] != null) {
+          final parsed = _parseAlbumItem(
+            item['musicResponsiveListItemRenderer'],
+          );
+          if (parsed != null) results.add(parsed);
+        }
+      }
+
+      return {
+        'results': results,
+        'continuationToken': null,
+        'browseEndpoint': null,
+      };
+    }
+
+    if (singlesEndpoint == null) {
+      return {
+        'results': <Map<String, String>>[],
+        'continuationToken': null,
+        'browseEndpoint': null,
+      };
+    }
+
+    // 3. Obtener TODOS los singles usando el endpoint
+    final singlesBrowseData = {...ytServiceContext};
+    singlesBrowseData['browseId'] = singlesEndpoint['browseId'];
+    if (singlesEndpoint['params'] != null) {
+      singlesBrowseData['params'] = singlesEndpoint['params'];
+    }
+
+    final singlesResponse = (await sendRequest(
+      "browse",
+      singlesBrowseData,
+    )).data;
+    final results = <Map<String, String>>[];
+
+    // Extraer del grid renderer (los albums/singles suelen venir en grids)
+    final contents = nav(singlesResponse, [
+      'contents',
+      'singleColumnBrowseResultsRenderer',
+      'tabs',
+      0,
+      'tabRenderer',
+      'content',
+      'sectionListRenderer',
+      'contents',
+      0,
+    ]);
+
+    if (contents != null) {
+      var gridItems = nav(contents, ['gridRenderer', 'items']);
+
+      if (gridItems is List) {
+        for (var item in gridItems) {
+          if (item['musicTwoRowItemRenderer'] != null) {
+            final parsed = _parseTwoRowItem(item['musicTwoRowItemRenderer']);
+            if (parsed != null) results.add(parsed);
+          }
+        }
+      }
+
+      // Token de continuación para Grid
+      String? continuationToken = nav(contents, [
+        'gridRenderer',
+        'continuations',
+        0,
+        'nextContinuationData',
+        'continuation',
+      ]);
+
+      return {
+        'results': results,
+        'continuationToken': continuationToken,
+        'browseEndpoint': singlesEndpoint,
+      };
+    }
+
+    return {
+      'results': <Map<String, String>>[],
+      'continuationToken': null,
+      'browseEndpoint': null,
+    };
+  } catch (e) {
+    return {
+      'results': <Map<String, String>>[],
+      'continuationToken': null,
+      'browseEndpoint': null,
+    };
+  }
+}
+
+// Función de continuación para Singles/Albums (usa Grid)
+Future<Map<String, dynamic>> getArtistAlbumsOrSinglesContinuation({
+  required Map<String, dynamic> browseEndpoint,
+  required String continuationToken,
+}) async {
+  try {
+    final data = {...ytServiceContext};
+    data['browseId'] = browseEndpoint['browseId'];
+    if (browseEndpoint['params'] != null) {
+      data['params'] = browseEndpoint['params'];
+    }
+
+    final additionalParams =
+        '&ctoken=$continuationToken&continuation=$continuationToken';
+
+    final response = (await sendRequest(
+      "browse",
+      data,
+      additionalParams: additionalParams,
+    )).data;
+    final results = <Map<String, String>>[];
+
+    final continuationContents = nav(response, [
+      'continuationContents',
+      'gridContinuation',
+    ]);
+
+    if (continuationContents != null) {
+      final items = continuationContents['items'];
+      if (items is List) {
+        for (var item in items) {
+          if (item['musicTwoRowItemRenderer'] != null) {
+            final parsed = _parseTwoRowItem(item['musicTwoRowItemRenderer']);
+            if (parsed != null) results.add(parsed);
+          }
+        }
+      }
+
+      final nextToken = nav(continuationContents, [
+        'continuations',
+        0,
+        'nextContinuationData',
+        'continuation',
+      ]);
+
+      return {'results': results, 'continuationToken': nextToken};
+    }
+
+    return {'results': <Map<String, String>>[], 'continuationToken': null};
+  } catch (e) {
+    return {'results': <Map<String, String>>[], 'continuationToken': null};
+  }
+}
+
+Map<String, String>? _parseTwoRowItem(Map<String, dynamic> renderer) {
+  final browseId = nav(renderer, [
+    'navigationEndpoint',
+    'browseEndpoint',
+    'browseId',
+  ]);
+  if (browseId == null) return null;
+
+  final title = nav(renderer, ['title', 'runs', 0, 'text']);
+  final subtitleRuns = nav(renderer, ['subtitle', 'runs']);
+  String artist = '';
+  String? year;
+  String? type;
+
+  if (subtitleRuns is List && subtitleRuns.isNotEmpty) {
+    artist = subtitleRuns.map((r) => r['text'].toString()).join('');
+
+    // Intentar extraer año y tipo como en _parseAlbumItem
+    for (var run in subtitleRuns) {
+      final text = run['text']?.toString();
+      if (text == null || text == ' • ') continue;
+
+      if (text == 'Album' ||
+          text == 'Single' ||
+          text == 'EP' ||
+          text == 'Álbum' ||
+          text == 'Sencillo') {
+        type = text;
+      } else if (RegExp(r'^\d{4}$').hasMatch(text)) {
+        year = text;
+      }
+    }
+  }
+
+  String? thumbUrl;
+  final thumbnails = nav(renderer, [
+    'thumbnailRenderer',
+    'musicThumbnailRenderer',
+    'thumbnail',
+    'thumbnails',
+  ]);
+  if (thumbnails is List && thumbnails.isNotEmpty) {
+    thumbUrl = thumbnails.last['url'];
+  }
+
+  return {
+    'title': title?.toString() ?? '',
+    'artist': artist,
+    'year': year ?? '',
+    'type': type ?? '',
+    'thumbUrl': thumbUrl != null ? _cleanThumbnailUrl(thumbUrl) : '',
+    'browseId': browseId.toString(),
+  };
+}
