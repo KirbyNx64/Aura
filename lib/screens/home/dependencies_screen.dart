@@ -166,6 +166,14 @@ class DependenciesScreen extends StatelessWidget {
       'https://pub.dev/packages/material_loading_indicator',
       '^1.0.0',
     ),
+    'palette_generator': _DependencyInfo(
+      'https://pub.dev/packages/palette_generator',
+      '^0.3.3+7',
+    ),
+    'flutter_m3shapes': _DependencyInfo(
+      'https://pub.dev/packages/flutter_m3shapes',
+      '^1.0.0+2',
+    ),
   };
 
   Future<void> _launchUrl(String urlString) async {

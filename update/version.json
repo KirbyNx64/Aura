@@ -1,9 +1,9 @@
 {
-  "version": "1.8.0",
+  "version": "1.8.1",
   "apk_urls": {
-    "arm64-v8a": "https://github.com/KirbyNx64/Aura/releases/download/v1.8.0/AuraMusic-v1.8.0-arm64-v8a.apk",
-    "armeabi-v7a": "https://github.com/KirbyNx64/Aura/releases/download/v1.8.0/AuraMusic-v1.8.0-armeabi-v7a.apk",
-    "x86_64": "https://github.com/KirbyNx64/Aura/releases/download/v1.8.0/AuraMusic-v1.8.0-x86_64.apk"
+    "arm64-v8a": "https://github.com/KirbyNx64/Aura/releases/download/v1.8.1/AuraMusic-v1.8.1-arm64-v8a.apk",
+    "armeabi-v7a": "https://github.com/KirbyNx64/Aura/releases/download/v1.8.1/AuraMusic-v1.8.1-armeabi-v7a.apk",
+    "x86_64": "https://github.com/KirbyNx64/Aura/releases/download/v1.8.1/AuraMusic-v1.8.1-x86_64.apk"
   },
-  "changelog": "• Se aplicaron numerosas mejoras visuales en la interfaz, con un diseño más inspirado en Material 3.\n\n• Se rediseñaron varios widgets de la aplicación.\n\n• Se añadió una pantalla “Acerca de”, donde puedes ver más información sobre la app y sus dependencias.\n\n• Se incorporó una pantalla de bienvenida para el primer uso, en la que se solicitan permisos como almacenamiento, notificaciones, entre otros.\n\n• Se corrigieron varios errores y se optimizó la estabilidad general de la aplicación."
+  "changelog": "• Se añadió un tema dinámico, donde la aplicación adapta sus colores según la carátula de la canción que se esté reproduciendo actualmente (puede presentarse una ligera lentitud en algunos dispositivos).\n\n• Ahora puedes encontrar la sección “Sencillos” en la pantalla del artista.\n\n• Se muestra información sobre la audiencia mensual del artista.\n\n• Se aplicaron pequeñas mejoras visuales en la interfaz.\n\n• Se realizaron optimizaciones internas y se corrigieron errores menores."
 }
