@@ -675,6 +675,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
 
     return Image.network(
       imageUrl,
+      headers: headers,
       width: width,
       height: height,
       fit: fit ?? BoxFit.cover,
@@ -3569,8 +3570,11 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                       Row(
                                         children: [
                                           if (_currentAlbum != null) ...[
-                                            if (_currentAlbum!['thumbUrl'] !=
-                                                null)
+                                            if (_currentAlbum!['thumbUrl']
+                                                    is String &&
+                                                (_currentAlbum!['thumbUrl']
+                                                        as String)
+                                                    .isNotEmpty)
                                               Padding(
                                                 padding: const EdgeInsets.only(
                                                   right: 12,
@@ -3579,7 +3583,8 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                   borderRadius:
                                                       BorderRadius.circular(8),
                                                   child: _buildSafeNetworkImage(
-                                                    _currentAlbum!['thumbUrl'],
+                                                    _currentAlbum!['thumbUrl']
+                                                        as String,
                                                     width: 40,
                                                     height: 40,
                                                     fit: BoxFit.cover,
@@ -3923,13 +3928,14 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                                   )
                                                                 : (_currentAlbum !=
                                                                           null &&
-                                                                      _currentAlbum!['thumbUrl'] !=
-                                                                          null &&
+                                                                      _currentAlbum!['thumbUrl']
+                                                                          is String &&
                                                                       (_currentAlbum!['thumbUrl']
                                                                               as String)
                                                                           .isNotEmpty)
                                                                 ? _buildSafeNetworkImage(
-                                                                    _currentAlbum!['thumbUrl'],
+                                                                    _currentAlbum!['thumbUrl']
+                                                                        as String,
                                                                     width: 50,
                                                                     height: 50,
                                                                     fit: BoxFit
@@ -6900,7 +6906,7 @@ class YtPreviewPlayerState extends State<YtPreviewPlayer>
     }
 
     try {
-      final response = await http.get(Uri.parse(imageUrl));
+      final response = await http.get(Uri.parse(imageUrl), headers: headers);
       if (response.statusCode == 200) {
         final bytes = response.bodyBytes;
 

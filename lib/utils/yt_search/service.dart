@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'package:dio/dio.dart';
-import '../connectivity_helper.dart';
+
 import '../../l10n/locale_provider.dart';
 
 CancelToken? _searchCancelToken;
@@ -193,7 +193,9 @@ Future<Map<String, dynamic>?> getArtistDetails(String browseId) async {
 
       if (thumbnails is List && thumbnails.isNotEmpty) {
         thumbUrl = thumbnails.last['url'];
-        if (thumbUrl != null) thumbUrl = _cleanThumbnailUrl(thumbUrl);
+        if (thumbUrl != null) {
+          thumbUrl = _cleanThumbnailUrl(thumbUrl);
+        }
       }
     }
 
@@ -580,7 +582,7 @@ Future<Map<String, dynamic>> getArtistSongsContinuation({
 }
 
 // Helper: limpia parámetros de recorte de URLs de thumbnails
-String _cleanThumbnailUrl(String url) {
+String _cleanThumbnailUrl(String url, {bool highQuality = false}) {
   if (url.isEmpty) return url;
 
   // Si es una URL de Google User Content (usada por YTM para artistas)
@@ -590,7 +592,8 @@ String _cleanThumbnailUrl(String url) {
     if (url.contains('=')) {
       final baseUrl = url.split('=')[0];
       // s1200 proporciona una excelente calidad para imágenes de fondo
-      return '$baseUrl=s1200';
+      // w544-h544 es suficiente para listas y carga mucho más rápido
+      return highQuality ? '$baseUrl=s1200' : '$baseUrl=w544-h544';
     }
   }
 
@@ -829,34 +832,40 @@ Future<Response> sendRequest(
   String additionalParams = "",
   CancelToken? cancelToken,
 }) async {
-  // Verificar conectividad antes de hacer la petición
-  final hasConnection =
-      await ConnectivityHelper.hasInternetConnectionWithTimeout(
-        timeout: const Duration(seconds: 5),
-      );
-
-  if (!hasConnection) {
-    throw DioException(
-      requestOptions: RequestOptions(path: ''),
-      error: 'No hay conexión a internet',
-      type: DioExceptionType.connectionError,
-    );
-  }
-
-  final dio = Dio();
-  final url = "$baseUrl$action$fixedParms$additionalParams";
-  return await dio.post(
-    url,
-    options: Options(
-      headers: headers,
-      validateStatus: (status) {
-        return (status != null && (status >= 200 && status < 300)) ||
-            status == 400;
-      },
+  final dio = Dio(
+    BaseOptions(
+      connectTimeout: const Duration(seconds: 10),
+      receiveTimeout: const Duration(seconds: 20),
     ),
-    data: jsonEncode(data),
-    cancelToken: cancelToken,
   );
+  final url = "$baseUrl$action$fixedParms$additionalParams";
+  try {
+    return await dio.post(
+      url,
+      options: Options(
+        headers: headers,
+        validateStatus: (status) {
+          return (status != null && (status >= 200 && status < 300)) ||
+              status == 400;
+        },
+      ),
+      data: jsonEncode(data),
+      cancelToken: cancelToken,
+    );
+  } on DioException catch (e) {
+    if (e.type == DioExceptionType.connectionError ||
+        (e.type == DioExceptionType.unknown &&
+            (e.error.toString().contains('SocketException') ||
+                e.error.toString().contains('HttpException')))) {
+      return Response(
+        requestOptions: e.requestOptions,
+        statusCode: 503,
+        statusMessage: 'No hay conexión a internet',
+        data: {}, // Data vacía para evitar errores de parseo
+      );
+    }
+    rethrow;
+  }
 }
 
 // Función para parsear canciones específicamente

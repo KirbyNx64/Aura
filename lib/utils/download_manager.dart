@@ -19,6 +19,7 @@ import 'package:flutter/material.dart';
 import 'package:music/services/download_history_service.dart';
 import 'package:music/models/download_record.dart';
 import 'package:path/path.dart' as path;
+import 'package:music/utils/db/songs_index_db.dart';
 
 // Top-level function para usar con compute
 Uint8List? decodeAndCropImage(Uint8List bytes) {
@@ -616,7 +617,9 @@ class DownloadManager {
       _updateProgress(1.0);
       await Future.delayed(const Duration(seconds: 1));
 
-      foldersShouldReload.value = !foldersShouldReload.value;
+      await SongsIndexDB().addSong(m4aPath);
+      folderUpdatedNotifier.value = path.dirname(m4aPath);
+      // foldersShouldReload.value = !foldersShouldReload.value;
 
       onSuccess?.call(
         songTitle ?? LocaleProvider.tr('download_completed'),

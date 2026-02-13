@@ -73,3 +73,8 @@ final ValueNotifier<bool> focusYtSearchNotifier = ValueNotifier<bool>(false);
 
 // Notifier para ocultar la barra de navegación en búsquedas
 final ValueNotifier<bool> bottomNavVisibleNotifier = ValueNotifier<bool>(true);
+
+// Notifier para notificar cuando se actualiza una carpeta específica (ej. nueva descarga)
+final ValueNotifier<String?> folderUpdatedNotifier = ValueNotifier<String?>(
+  null,
+);

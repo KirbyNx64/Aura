@@ -214,6 +214,42 @@ class _FoldersScreenState extends State<FoldersScreen>
     }
   }
 
+  void _onFolderUpdated() async {
+    final rawFolderPath = folderUpdatedNotifier.value;
+    if (rawFolderPath == null || !mounted) return;
+
+    // Normalizar path siguiendo la lógica de SongsIndexDB
+    var dirPath = p.normalize(rawFolderPath);
+    if (dirPath.contains('/')) dirPath = dirPath.replaceAll('/', '\\');
+    dirPath = dirPath.trim();
+    if (dirPath.endsWith('\\') && dirPath.length > 3) {
+      dirPath = dirPath.substring(0, dirPath.length - 1);
+    }
+    dirPath = dirPath.toLowerCase();
+
+    // Obtener canciones actualizadas directamente con la key normalizada
+    final songs = await SongsIndexDB().getSongsFromFolder(dirPath);
+
+    if (mounted) {
+      setState(() {
+        if (songs.isNotEmpty) {
+          final isNew = !songPathsByFolder.containsKey(dirPath);
+          songPathsByFolder[dirPath] = songs;
+
+          if (isNew) {
+            folderDisplayNames[dirPath] = rawFolderPath
+                .split(RegExp(r'[\\/]'))
+                .last;
+          }
+        }
+      });
+
+      if (carpetaSeleccionada == dirPath) {
+        await _actualizarCarpetaActual();
+      }
+    }
+  }
+
   /// Función específica para refrescar el contenido de la carpeta actual o todas las canciones
   Future<void> _refreshCurrentFolder() async {
     if (_showAllSongs) {
@@ -357,6 +393,7 @@ class _FoldersScreenState extends State<FoldersScreen>
     _checkAndroidVersion();
     _loadOrderFilter().then((_) => cargarCanciones());
     foldersShouldReload.addListener(_onFoldersShouldReload);
+    folderUpdatedNotifier.addListener(_onFolderUpdated);
 
     // Escuchar cambios en el estado de reproducción con debounce
     audioHandler?.playbackState.listen((state) {
@@ -2267,6 +2304,7 @@ class _FoldersScreenState extends State<FoldersScreen>
     _foldersScrollController.dispose();
     _playlistsScrollController.dispose();
     foldersShouldReload.removeListener(_onFoldersShouldReload);
+    folderUpdatedNotifier.removeListener(_onFolderUpdated);
     super.dispose();
   }
 

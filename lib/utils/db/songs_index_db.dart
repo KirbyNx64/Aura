@@ -185,17 +185,27 @@ class SongsIndexDB {
       // Crear nueva entrada con la nueva ruta
       final newFolderPath = _getFolderPath(newPath);
       await b.put(newPath, {'folder_path': newFolderPath});
-      
+
       // Eliminar la entrada antigua
       await b.delete(oldPath);
     }
   }
 
+  /// Agrega una canción a la base de datos manualmente
+  Future<void> addSong(String filePath) async {
+    final b = await box;
+    final folderPath = _getFolderPath(filePath);
+    await b.put(filePath, {'folder_path': folderPath});
+  }
+
   /// Actualiza todas las rutas de canciones de una carpeta
-  Future<void> updateFolderPaths(String oldFolderPath, String newFolderPath) async {
+  Future<void> updateFolderPaths(
+    String oldFolderPath,
+    String newFolderPath,
+  ) async {
     final b = await box;
     final songsToUpdate = <String, Map>{};
-    
+
     // Encontrar todas las canciones de la carpeta antigua
     for (final entry in b.toMap().entries) {
       if (entry.value['folder_path'] == oldFolderPath) {
@@ -203,16 +213,16 @@ class SongsIndexDB {
         songsToUpdate[oldSongPath] = entry.value;
       }
     }
-    
+
     // Actualizar las rutas
     for (final entry in songsToUpdate.entries) {
       final oldPath = entry.key;
       final newPath = p.join(newFolderPath, p.basename(oldPath));
       final newFolderPathNormalized = _getFolderPath(newPath);
-      
+
       // Agregar nueva entrada
       await b.put(newPath, {'folder_path': newFolderPathNormalized});
-      
+
       // Eliminar entrada antigua
       await b.delete(oldPath);
     }
@@ -222,9 +232,9 @@ class SongsIndexDB {
   Future<List<String>> getRandomSongs({int limit = 18}) async {
     final b = await box;
     final allPaths = b.keys.cast<String>().toList();
-    
+
     if (allPaths.isEmpty) return [];
-    
+
     // Patrones de carpetas de WhatsApp a excluir
     final whatsappPatterns = [
       'whatsapp',
@@ -244,16 +254,17 @@ class SongsIndexDB {
       'whatsapp business video',
       'whatsapp business antrim',
     ];
-    
+
     // Filtrar canciones que NO estén en carpetas de WhatsApp
     final filteredPaths = allPaths.where((path) {
       final folderPath = _getFolderPath(path);
-      return !whatsappPatterns.any((pattern) => 
-        folderPath.contains(pattern.toLowerCase()));
+      return !whatsappPatterns.any(
+        (pattern) => folderPath.contains(pattern.toLowerCase()),
+      );
     }).toList();
-    
+
     if (filteredPaths.isEmpty) return [];
-    
+
     // Mezclar la lista y tomar el límite especificado
     filteredPaths.shuffle();
     return filteredPaths.take(limit).toList();
@@ -274,7 +285,7 @@ class SongsIndexDB {
     // Filtrar canciones que están indexadas y no están en carpetas ignoradas
     final indexedPaths = b.keys.cast<String>().toSet();
     final filteredSongs = <SongModel>[];
-    
+
     for (final song in allSongs) {
       if (indexedPaths.contains(song.data)) {
         final folderPath = _getFolderPath(song.data);
@@ -283,7 +294,7 @@ class SongsIndexDB {
         }
       }
     }
-    
+
     return filteredSongs;
   }
 }
