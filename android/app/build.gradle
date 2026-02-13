@@ -11,6 +11,8 @@ def keystorePropertiesFile = rootProject.file("key.properties")
 def keystoreProperties = new Properties()
 keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
 
+
+
 android {
     namespace = "com.example.music"
     compileSdk = flutter.compileSdkVersion
@@ -50,32 +52,7 @@ android {
     }
     
     // Configuración de firma
-    signingConfigs {
-        release {
-            keyAlias keystoreProperties['keyAlias']
-            keyPassword keystoreProperties['keyPassword']
-            storeFile keystoreProperties['storeFile'] ? file(keystoreProperties['storeFile']) : null
-            storePassword keystoreProperties['storePassword']
-        }
-    }
-    
-    buildTypes {
-        release {
-            // Habilitar minificación y ofuscación
-            minifyEnabled true
-            shrinkResources true
-            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-            signingConfig signingConfigs.release
-            signingConfig signingConfigs.release
-            
-            // Deshabilitar logs en producción
-            buildConfigField("boolean", "ENABLE_LOGGING", "false")
-        }
-        debug {
-            // Habilitar logs solo en modo debug
-            buildConfigField("boolean", "ENABLE_LOGGING", "true")
-        }
-    }
+    // Bloques duplicados eliminados. Se utilizan las configuraciones definidas más abajo.
     
     packagingOptions {
         // Enable 16KB page size support
@@ -143,11 +120,27 @@ android {
     }
     
     // Configuración adicional para 16KB
+    // Configuración de nombres de archivo APK
     applicationVariants.all { variant ->
-        variant.outputs.each { output ->
-            def abiName = output.getFilter("ABI")
-            if (abiName != null) {
-                output.versionCodeOverride = variant.versionCode
+        variant.outputs.all { output ->
+            def project = "AuraMusic"
+            def SEP = "-"
+            def version = variant.versionName
+            
+            def abi = output.getFilter("ABI")
+            
+            if (abi == null) {
+                // Fallback: detectar ABI desde el nombre del output si el filtro es nulo
+                if (output.name.contains("armeabi-v7a")) abi = "armeabi-v7a"
+                else if (output.name.contains("arm64-v8a")) abi = "arm64-v8a"
+                else if (output.name.contains("x86_64")) abi = "x86_64"
+                else if (output.name.contains("x86")) abi = "x86"
+            }
+            
+            if (abi != null) {
+                output.outputFileName = "${project}${SEP}v${version}${SEP}${abi}.apk"
+            } else {
+                output.outputFileName = "${project}${SEP}v${version}${SEP}universal.apk"
             }
         }
     }

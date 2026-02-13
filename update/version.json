@@ -1,9 +1,9 @@
 {
-  "version": "1.8.1",
+  "version": "1.8.2",
   "apk_urls": {
-    "arm64-v8a": "https://github.com/KirbyNx64/Aura/releases/download/v1.8.1/AuraMusic-v1.8.1-arm64-v8a.apk",
-    "armeabi-v7a": "https://github.com/KirbyNx64/Aura/releases/download/v1.8.1/AuraMusic-v1.8.1-armeabi-v7a.apk",
-    "x86_64": "https://github.com/KirbyNx64/Aura/releases/download/v1.8.1/AuraMusic-v1.8.1-x86_64.apk"
+    "arm64-v8a": "https://github.com/KirbyNx64/Aura/releases/download/v1.8.2/AuraMusic-v1.8.2-arm64-v8a.apk",
+    "armeabi-v7a": "https://github.com/KirbyNx64/Aura/releases/download/v1.8.2/AuraMusic-v1.8.2-armeabi-v7a.apk",
+    "x86_64": "https://github.com/KirbyNx64/Aura/releases/download/v1.8.2/AuraMusic-v1.8.2-x86_64.apk"
   },
-  "changelog": "• Se añadió un tema dinámico, donde la aplicación adapta sus colores según la carátula de la canción que se esté reproduciendo actualmente (puede presentarse una ligera lentitud en algunos dispositivos).\n\n• Ahora puedes encontrar la sección “Sencillos” en la pantalla del artista.\n\n• Se muestra información sobre la audiencia mensual del artista.\n\n• Se aplicaron pequeñas mejoras visuales en la interfaz.\n\n• Se realizaron optimizaciones internas y se corrigieron errores menores."
+  "changelog": "• Se aplicaron mejoras en el panel de la lista de reproducción dentro del reproductor.\n\n• Se optimizó la velocidad de carga de las carátulas en las búsquedas y en la pantalla de artista.\n\n• Se rediseñó la forma en que se muestra la información técnica de una canción.\n\n• Se corrigió el parpadeo de las carátulas al cambiar de canción en listas como Carpetas, Listas de reproducción, Me gusta y Recientes.\n\n• Se actualizó la versión de Flutter y Dart con la que se compila la aplicación.\n\n• Se corrigieron otros errores menores y se aplicaron pequeños ajustes visuales."
 }
