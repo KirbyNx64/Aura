@@ -5,6 +5,7 @@ import 'package:music/widgets/now_playing_overlay.dart';
 import 'package:music/l10n/locale_provider.dart';
 import 'package:music/utils/notifiers.dart';
 import 'package:music/utils/theme_preferences.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 typedef PageBuilderWithTabChange =
     Widget Function(BuildContext context, void Function(int) onTabChange);
@@ -136,11 +137,11 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
     return [
       NavigationDestination(
         icon: AnimatedNavIcon(
-          icon: Icon(Icons.home_filled, weight: 600),
+          icon: Icon(Symbols.home, weight: 600),
           isSelected: _selectedIndex == 0,
         ),
         selectedIcon: AnimatedNavIcon(
-          icon: Icon(Icons.home_filled, fill: 1, weight: 600, color: iconColor),
+          icon: Icon(Symbols.home, fill: 1, weight: 600, color: iconColor),
           isSelected: _selectedIndex == 0,
         ),
         label: LocaleProvider.tr('home'),
@@ -157,7 +158,7 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
             );
           },
           child: AnimatedNavIcon(
-            icon: Icon(Icons.search, weight: 600),
+            icon: Icon(Symbols.search, weight: 600),
             isSelected: _selectedIndex == 1,
           ),
         ),
@@ -172,7 +173,7 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
             );
           },
           child: AnimatedNavIcon(
-            icon: Icon(Icons.saved_search, weight: 600, color: iconColor),
+            icon: Icon(Symbols.video_search, weight: 600, color: iconColor),
             isSelected: _selectedIndex == 1,
           ),
         ),

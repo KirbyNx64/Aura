@@ -5040,9 +5040,13 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                       },
                                                       child: ListTile(
                                                         contentPadding:
-                                                            const EdgeInsets.symmetric(
+                                                            EdgeInsets.symmetric(
                                                               horizontal: 16,
-                                                              vertical: 5,
+                                                              vertical:
+                                                                  artist['subscribers'] ==
+                                                                      null
+                                                                  ? 12
+                                                                  : 5,
                                                             ),
                                                         leading: ClipRRect(
                                                           borderRadius:

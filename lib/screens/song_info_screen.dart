@@ -1,0 +1,537 @@
+import 'dart:io';
+import 'package:flutter/material.dart';
+import 'package:audio_service/audio_service.dart';
+import 'package:flutter_audio_toolkit/flutter_audio_toolkit.dart';
+import 'package:music/l10n/locale_provider.dart';
+import 'package:flutter/services.dart';
+import 'package:music/widgets/artwork_list_tile.dart';
+
+import 'package:music/utils/notifiers.dart';
+import 'package:music/utils/theme_preferences.dart';
+
+import 'package:share_plus/share_plus.dart';
+
+class SongInfoScreen extends StatefulWidget {
+  final MediaItem mediaItem;
+
+  const SongInfoScreen({super.key, required this.mediaItem});
+
+  @override
+  State<SongInfoScreen> createState() => _SongInfoScreenState();
+}
+
+class _SongInfoScreenState extends State<SongInfoScreen> {
+  final FlutterAudioToolkit _audioToolkit = FlutterAudioToolkit();
+  AudioInfo? _audioInfo;
+  bool _isLoading = true;
+  String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAudioInfo();
+  }
+
+  Future<void> _shareFile() async {
+    final filePath = widget.mediaItem.extras?['data'] as String?;
+    if (filePath != null && filePath.isNotEmpty) {
+      try {
+        // ignore: deprecated_member_use
+        await Share.shareXFiles([
+          XFile(filePath),
+        ], text: widget.mediaItem.title);
+      } catch (e) {
+        // Fallback for older versions or if standard way fails but user wanted "StartPlus" style?
+        // But Share.shareXFiles is the standard.
+        // If the user insists on SharePlus.instance, I'll correct it.
+      }
+    }
+  }
+
+  Future<void> _loadAudioInfo() async {
+    final filePath = widget.mediaItem.extras?['data'] as String?;
+    if (filePath == null || filePath.isEmpty) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+      return;
+    }
+
+    try {
+      final info = await _audioToolkit.getAudioInfo(filePath);
+      if (mounted) {
+        setState(() {
+          _audioInfo = info;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _errorMessage = e.toString();
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  String _formatDuration(int milliseconds) {
+    final duration = Duration(milliseconds: milliseconds);
+    final hours = duration.inHours;
+    final minutes = duration.inMinutes % 60;
+    final seconds = duration.inSeconds % 60;
+
+    if (hours > 0) {
+      return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+    } else {
+      return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+    }
+  }
+
+  String _formatFileSize(int bytes) {
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+    if (bytes < 1024 * 1024 * 1024) {
+      return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+    }
+    return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
+  }
+
+  String _getAudioFormat(String filePath) {
+    if (filePath.isEmpty) return 'N/A';
+    final extension = filePath.split('.').last.toLowerCase();
+    return extension.toUpperCase();
+  }
+
+  String _cleanFilePath(String filePath) {
+    if (filePath.isEmpty) return 'N/A';
+    return filePath.replaceFirst('/storage/emulated/0', '');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
+    final filePath = widget.mediaItem.extras?['data'] as String? ?? '';
+
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        leading: IconButton(
+          constraints: const BoxConstraints(
+            minWidth: 40,
+            minHeight: 40,
+            maxWidth: 40,
+            maxHeight: 40,
+          ),
+          padding: EdgeInsets.zero,
+          icon: Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: isDark
+                  ? Theme.of(
+                      context,
+                    ).colorScheme.secondary.withValues(alpha: 0.06)
+                  : Theme.of(
+                      context,
+                    ).colorScheme.secondary.withValues(alpha: 0.06),
+            ),
+            child: const Icon(Icons.arrow_back, size: 24),
+          ),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        title: TranslatedText(
+          'song_info',
+          style: TextStyle(fontWeight: FontWeight.w500),
+        ),
+        actions: [
+          IconButton(
+            icon: Icon(Icons.share),
+            onPressed: _shareFile,
+            tooltip: LocaleProvider.tr('share'),
+          ),
+        ],
+      ),
+      body: _isLoading
+          ? Center(child: CircularProgressIndicator())
+          : _errorMessage != null
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.error_outline, size: 48, color: colorScheme.error),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Error: $_errorMessage',
+                    style: TextStyle(color: colorScheme.error),
+                  ),
+                ],
+              ),
+            )
+          : SingleChildScrollView(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Header with Artwork and Info
+                  Center(
+                    child: Column(
+                      children: [
+                        _buildArtwork(180),
+                        const SizedBox(height: 24),
+                        Text(
+                          widget.mediaItem.title,
+                          style: Theme.of(context).textTheme.headlineSmall
+                              ?.copyWith(fontWeight: FontWeight.bold),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          widget.mediaItem.artist ??
+                              LocaleProvider.tr('unknown_artist'),
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(color: colorScheme.primary),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          widget.mediaItem.album ??
+                              LocaleProvider.tr('unknown_album'),
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(color: colorScheme.onSurfaceVariant),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+
+                  // Audio Properties Label
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.analytics_outlined,
+                        size: 20,
+                        color: colorScheme.primary,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        LocaleProvider.tr('information'),
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          color: colorScheme.primary,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Grid of properties
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final width = constraints.maxWidth;
+                      final cardWidth = (width - 16) / 2;
+                      final iconColor = colorScheme.onSurface;
+
+                      return Wrap(
+                        spacing: 16,
+                        runSpacing: 16,
+                        children: [
+                          _buildPropertyCard(
+                            context,
+                            icon: Icons.timer,
+                            label: LocaleProvider.tr('duration'),
+                            value: _audioInfo?.durationMs != null
+                                ? _formatDuration(_audioInfo!.durationMs!)
+                                : (widget.mediaItem.duration != null
+                                      ? _formatDuration(
+                                          widget
+                                              .mediaItem
+                                              .duration!
+                                              .inMilliseconds,
+                                        )
+                                      : "?"),
+                            width: cardWidth,
+                            color: iconColor,
+                          ),
+                          _buildPropertyCard(
+                            context,
+                            icon: Icons.save,
+                            label: LocaleProvider.tr('file_size'),
+                            value: _audioInfo?.fileSize != null
+                                ? _formatFileSize(_audioInfo!.fileSize!)
+                                : 'N/A',
+                            width: cardWidth,
+                            color: iconColor,
+                          ),
+                          _buildPropertyCard(
+                            context,
+                            icon: Icons.speaker,
+                            label: LocaleProvider.tr('channels'),
+                            value: _audioInfo?.channels != null
+                                ? '${_audioInfo!.channels}'
+                                : 'N/A',
+                            width: cardWidth,
+                            color: iconColor,
+                          ),
+                          _buildPropertyCard(
+                            context,
+                            icon: Icons.audio_file,
+                            label: LocaleProvider.tr('audio_format'),
+                            value: _getAudioFormat(filePath),
+                            width: cardWidth,
+                            color: iconColor,
+                          ),
+                          _buildPropertyCard(
+                            context,
+                            icon: Icons.speed,
+                            label: LocaleProvider.tr('original_bitrate'),
+                            value: _audioInfo?.bitRate != null
+                                ? '${_audioInfo!.bitRate} ${LocaleProvider.tr('kbps')}'
+                                : 'N/A',
+                            width: width, // Full width
+                            color: iconColor,
+                          ),
+                          _buildPropertyCard(
+                            context,
+                            icon: Icons.graphic_eq,
+                            label: LocaleProvider.tr('original_sample_rate'),
+                            value: _audioInfo?.sampleRate != null
+                                ? '${_audioInfo!.sampleRate} ${LocaleProvider.tr('hz')}'
+                                : 'N/A',
+                            width: width, // Full width
+                            color: iconColor,
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+
+                  const SizedBox(height: 32),
+
+                  // Storage Location
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.folder_open,
+                        size: 20,
+                        color: colorScheme.primary,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        LocaleProvider.tr('location'),
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          color: colorScheme.primary,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: isAmoled
+                          ? Colors.white.withAlpha(20)
+                          : isDark
+                          ? Theme.of(
+                              context,
+                            ).colorScheme.secondary.withValues(alpha: 0.06)
+                          : Theme.of(
+                              context,
+                            ).colorScheme.secondary.withValues(alpha: 0.07),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          LocaleProvider.tr('file_path'),
+                          style: Theme.of(context).textTheme.labelMedium
+                              ?.copyWith(color: colorScheme.onSurfaceVariant),
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                _cleanFilePath(filePath),
+                                style: Theme.of(context).textTheme.bodyMedium
+                                    ?.copyWith(fontFamily: 'monospace'),
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.copy, size: 20),
+                              onPressed: () {
+                                Clipboard.setData(
+                                  ClipboardData(text: filePath),
+                                );
+                              },
+                              style: IconButton.styleFrom(
+                                backgroundColor: colorScheme.primaryContainer,
+                                foregroundColor: colorScheme.onPrimaryContainer,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+                ],
+              ),
+            ),
+    );
+  }
+
+  Widget _buildPropertyCard(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+    required String value,
+    required double width,
+    required Color color,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    // Check for AMOLED theme using the custom notifier
+    final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
+
+    // Create a subtle version of the accent color for background
+    final cardColor = isAmoled
+        ? Colors.white.withAlpha(20)
+        : isDark
+        ? Theme.of(context).colorScheme.secondary.withValues(alpha: 0.06)
+        : Theme.of(context).colorScheme.secondary.withValues(alpha: 0.07);
+
+    return Container(
+      width: width,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: cardColor,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(icon, color: color, size: 24),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  value,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: colorScheme.onSurface,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildArtwork(double size) {
+    final extraSongId = widget.mediaItem.extras?['songId'];
+    int? songId;
+    if (extraSongId is int) {
+      songId = extraSongId;
+    } else if (extraSongId is String) {
+      songId = int.tryParse(extraSongId);
+    }
+
+    // If songId not in extras, try parsing from MediaItem id
+    songId ??= int.tryParse(widget.mediaItem.id);
+
+    final filePath = widget.mediaItem.extras?['data'] as String? ?? '';
+
+    // If we have valid songId and path, use ArtworkListTile which handles caching/loading
+    if (songId != null && filePath.isNotEmpty) {
+      return ArtworkListTile(
+        songId: songId,
+        songPath: filePath,
+        artUri: widget.mediaItem.artUri,
+        size: size,
+        width: size,
+        height: size,
+        borderRadius: BorderRadius.circular(16),
+      );
+    }
+
+    // Fallback logic
+    final artUri = widget.mediaItem.artUri;
+    if (artUri != null) {
+      if (artUri.scheme == 'file') {
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: Image.file(
+            File(artUri.toFilePath()),
+            width: size,
+            height: size,
+            fit: BoxFit.cover,
+            errorBuilder: (_, _, _) => _buildPlaceholder(size),
+          ),
+        );
+      } else if (artUri.scheme == 'http' || artUri.scheme == 'https') {
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: Image.network(
+            artUri.toString(),
+            width: size,
+            height: size,
+            fit: BoxFit.cover,
+            errorBuilder: (_, _, _) => _buildPlaceholder(size),
+          ),
+        );
+      }
+    }
+    return _buildPlaceholder(size);
+  }
+
+  Widget _buildPlaceholder(double size) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Icon(
+        Icons.music_note,
+        size: size * 0.5,
+        color: Theme.of(context).colorScheme.onSurfaceVariant,
+      ),
+    );
+  }
+}

@@ -18,6 +18,7 @@ import 'package:music/screens/play/player_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:music/widgets/song_info_dialog.dart';
 import 'package:music/widgets/hero_cached.dart';
+import 'package:music/widgets/artwork_list_tile.dart';
 import 'package:music/screens/artist/artist_screen.dart';
 
 enum OrdenFavoritos { normal, alfabetico, invertido, ultimoAgregado }
@@ -93,7 +94,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     // Escuchar cambios en el estado de reproducción con debounce
     audioHandler?.playbackState.listen((state) {
       _playingDebounce?.cancel();
-      _playingDebounce = Timer(const Duration(milliseconds: 400), () {
+      _playingDebounce = Timer(const Duration(milliseconds: 100), () {
         if (mounted) {
           _isPlayingNotifier.value = state.playing;
         }
@@ -103,20 +104,17 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     // Escuchar cambios en el MediaItem con debounce (para detección de canción actual)
     audioHandler?.mediaItem.listen((mediaItem) {
       _immediateMediaItemDebounce?.cancel();
-      _immediateMediaItemDebounce = Timer(
-        const Duration(milliseconds: 500),
-        () {
-          if (mounted) {
-            _immediateMediaItemNotifier.value = mediaItem;
-          }
-        },
-      );
+      _immediateMediaItemDebounce = Timer(const Duration(milliseconds: 50), () {
+        if (mounted) {
+          _immediateMediaItemNotifier.value = mediaItem;
+        }
+      });
     });
 
     // Escuchar cambios en el MediaItem con debounce (para espaciado y elementos no críticos)
     audioHandler?.mediaItem.listen((mediaItem) {
       _mediaItemDebounce?.cancel();
-      _mediaItemDebounce = Timer(const Duration(milliseconds: 400), () {
+      _mediaItemDebounce = Timer(const Duration(milliseconds: 200), () {
         if (mounted) {
           _currentMediaItemNotifier.value = mediaItem;
         }
@@ -1360,26 +1358,12 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                                             leading: ClipRRect(
                                               borderRadius:
                                                   BorderRadius.circular(8),
-                                              child: QueryArtworkWidget(
-                                                id: song.id,
-                                                type: ArtworkType.AUDIO,
-                                                artworkBorder:
+                                              child: ArtworkListTile(
+                                                songId: song.id,
+                                                songPath: song.data,
+                                                size: 40,
+                                                borderRadius:
                                                     BorderRadius.circular(8),
-                                                artworkHeight: 40,
-                                                artworkWidth: 40,
-                                                keepOldArtwork: true,
-                                                nullArtworkWidget: Container(
-                                                  width: 40,
-                                                  height: 40,
-                                                  color: primaryColor.withAlpha(
-                                                    30,
-                                                  ),
-                                                  child: Icon(
-                                                    Icons.music_note,
-                                                    color: primaryColor,
-                                                    size: 20,
-                                                  ),
-                                                ),
                                               ),
                                             ),
                                             title: Text(
@@ -1643,7 +1627,6 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     bool isAmoledTheme, {
     BorderRadius? borderRadius,
   }) {
-    final isSystem = colorSchemeNotifier.value == AppColorScheme.system;
     return ListTile(
       onLongPress: () {
         if (_isSelecting) {
@@ -1682,26 +1665,12 @@ class _FavoritesScreenState extends State<FavoritesScreen>
             ),
           ClipRRect(
             borderRadius: BorderRadius.circular(8),
-            child: QueryArtworkWidget(
-              id: song.id,
-              type: ArtworkType.AUDIO,
-              artworkBorder: BorderRadius.circular(8),
-              artworkHeight: 50,
-              artworkWidth: 50,
-              keepOldArtwork: true,
-              nullArtworkWidget: Container(
-                color: isSystem
-                    ? Theme.of(
-                        context,
-                      ).colorScheme.secondaryContainer.withValues(alpha: 0.5)
-                    : Theme.of(context).colorScheme.surfaceContainer,
-                width: 50,
-                height: 50,
-                child: Icon(
-                  Icons.music_note,
-                  color: Theme.of(context).colorScheme.onSurface,
-                ),
-              ),
+            child: ArtworkListTile(
+              key: ValueKey('fav_art_${song.data}'),
+              songId: song.id,
+              songPath: song.data,
+              size: 50,
+              borderRadius: BorderRadius.circular(8),
             ),
           ),
         ],
@@ -2139,27 +2108,11 @@ class _FavoritesScreenState extends State<FavoritesScreen>
 
   // Función para construir la carátula del modal
   Widget _buildModalArtwork(SongModel song) {
-    final isSystem = colorSchemeNotifier.value == AppColorScheme.system;
-    return QueryArtworkWidget(
-      id: song.id,
-      type: ArtworkType.AUDIO,
-      artworkBorder: BorderRadius.circular(8),
-      artworkHeight: 60,
-      artworkWidth: 60,
-      keepOldArtwork: true,
-      nullArtworkWidget: Container(
-        width: 60,
-        height: 60,
-        decoration: BoxDecoration(
-          color: isSystem
-              ? Theme.of(
-                  context,
-                ).colorScheme.secondaryContainer.withValues(alpha: 0.5)
-              : Theme.of(context).colorScheme.surfaceContainer,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Icon(Icons.music_note, size: 30),
-      ),
+    return ArtworkListTile(
+      songId: song.id,
+      songPath: song.data,
+      size: 60,
+      borderRadius: BorderRadius.circular(8),
     );
   }
 
@@ -2427,23 +2380,12 @@ class _FavoritesScreenState extends State<FavoritesScreen>
         );
 
       case 1:
-        return QueryArtworkWidget(
-          id: songs[0].id,
-          type: ArtworkType.AUDIO,
-          artworkHeight: 40,
-          artworkWidth: 40,
-          keepOldArtwork: true,
-          artworkBorder: BorderRadius.zero,
-          nullArtworkWidget: Container(
-            color: Theme.of(context).colorScheme.surfaceContainer,
-            child: Center(
-              child: Icon(
-                Icons.music_note,
-                color: Theme.of(context).colorScheme.onSurface,
-                size: 20,
-              ),
-            ),
-          ),
+        return ArtworkListTile(
+          songId: songs[0].id,
+          songPath: songs[0].data,
+          width: 40,
+          height: 40,
+          borderRadius: BorderRadius.zero,
         );
 
       case 2:
@@ -2452,39 +2394,21 @@ class _FavoritesScreenState extends State<FavoritesScreen>
         return Row(
           children: [
             Expanded(
-              child: QueryArtworkWidget(
-                id: songs[0].id,
-                type: ArtworkType.AUDIO,
-                artworkHeight: 40,
-                artworkWidth: 20,
-                keepOldArtwork: true,
-                artworkBorder: BorderRadius.zero,
-                nullArtworkWidget: Container(
-                  color: Theme.of(context).colorScheme.surfaceContainer,
-                  child: Icon(
-                    Icons.music_note,
-                    color: Theme.of(context).colorScheme.onSurface,
-                    size: 10,
-                  ),
-                ),
+              child: ArtworkListTile(
+                songId: songs[0].id,
+                songPath: songs[0].data,
+                width: 20,
+                height: 40,
+                borderRadius: BorderRadius.zero,
               ),
             ),
             Expanded(
-              child: QueryArtworkWidget(
-                id: songs[1].id,
-                type: ArtworkType.AUDIO,
-                artworkHeight: 40,
-                artworkWidth: 20,
-                keepOldArtwork: true,
-                artworkBorder: BorderRadius.zero,
-                nullArtworkWidget: Container(
-                  color: Theme.of(context).colorScheme.surfaceContainer,
-                  child: Icon(
-                    Icons.music_note,
-                    color: Theme.of(context).colorScheme.onSurface,
-                    size: 10,
-                  ),
-                ),
+              child: ArtworkListTile(
+                songId: songs[1].id,
+                songPath: songs[1].data,
+                width: 20,
+                height: 40,
+                borderRadius: BorderRadius.zero,
               ),
             ),
           ],
@@ -2498,39 +2422,21 @@ class _FavoritesScreenState extends State<FavoritesScreen>
               child: Row(
                 children: [
                   Expanded(
-                    child: QueryArtworkWidget(
-                      id: songs[0].id,
-                      type: ArtworkType.AUDIO,
-                      artworkHeight: 20,
-                      artworkWidth: 20,
-                      keepOldArtwork: true,
-                      artworkBorder: BorderRadius.zero,
-                      nullArtworkWidget: Container(
-                        color: Theme.of(context).colorScheme.surfaceContainer,
-                        child: Icon(
-                          Icons.music_note,
-                          color: Theme.of(context).colorScheme.onSurface,
-                          size: 10,
-                        ),
-                      ),
+                    child: ArtworkListTile(
+                      songId: songs[0].id,
+                      songPath: songs[0].data,
+                      width: 20,
+                      height: 20,
+                      borderRadius: BorderRadius.zero,
                     ),
                   ),
                   Expanded(
-                    child: QueryArtworkWidget(
-                      id: songs[1].id,
-                      type: ArtworkType.AUDIO,
-                      artworkHeight: 20,
-                      artworkWidth: 20,
-                      keepOldArtwork: true,
-                      artworkBorder: BorderRadius.zero,
-                      nullArtworkWidget: Container(
-                        color: Theme.of(context).colorScheme.surfaceContainer,
-                        child: Icon(
-                          Icons.music_note,
-                          color: Theme.of(context).colorScheme.onSurface,
-                          size: 10,
-                        ),
-                      ),
+                    child: ArtworkListTile(
+                      songId: songs[1].id,
+                      songPath: songs[1].data,
+                      width: 20,
+                      height: 20,
+                      borderRadius: BorderRadius.zero,
                     ),
                   ),
                 ],
@@ -2540,39 +2446,21 @@ class _FavoritesScreenState extends State<FavoritesScreen>
               child: Row(
                 children: [
                   Expanded(
-                    child: QueryArtworkWidget(
-                      id: songs[2].id,
-                      type: ArtworkType.AUDIO,
-                      artworkHeight: 20,
-                      artworkWidth: 20,
-                      keepOldArtwork: true,
-                      artworkBorder: BorderRadius.zero,
-                      nullArtworkWidget: Container(
-                        color: Theme.of(context).colorScheme.surfaceContainer,
-                        child: Icon(
-                          Icons.music_note,
-                          color: Theme.of(context).colorScheme.onSurface,
-                          size: 10,
-                        ),
-                      ),
+                    child: ArtworkListTile(
+                      songId: songs[2].id,
+                      songPath: songs[2].data,
+                      width: 20,
+                      height: 20,
+                      borderRadius: BorderRadius.zero,
                     ),
                   ),
                   Expanded(
-                    child: QueryArtworkWidget(
-                      id: songs[3].id,
-                      type: ArtworkType.AUDIO,
-                      artworkHeight: 20,
-                      artworkWidth: 20,
-                      keepOldArtwork: true,
-                      artworkBorder: BorderRadius.zero,
-                      nullArtworkWidget: Container(
-                        color: Theme.of(context).colorScheme.surfaceContainer,
-                        child: Icon(
-                          Icons.music_note,
-                          color: Theme.of(context).colorScheme.onSurface,
-                          size: 10,
-                        ),
-                      ),
+                    child: ArtworkListTile(
+                      songId: songs[3].id,
+                      songPath: songs[3].data,
+                      width: 20,
+                      height: 20,
+                      borderRadius: BorderRadius.zero,
                     ),
                   ),
                 ],

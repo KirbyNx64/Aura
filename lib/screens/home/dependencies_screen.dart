@@ -174,6 +174,15 @@ class DependenciesScreen extends StatelessWidget {
       'https://pub.dev/packages/flutter_m3shapes',
       '^1.0.0+2',
     ),
+    'material_symbols_icons': _DependencyInfo(
+      'https://pub.dev/packages/material_symbols_icons',
+      '^4.2906.0',
+    ),
+    'sliding_up_panel': _DependencyInfo(
+      'https://pub.dev/packages/sliding_up_panel',
+      '^2.0.0+1',
+    ),
+    'marquee': _DependencyInfo('https://pub.dev/packages/marquee', '^2.3.0'),
   };
 
   Future<void> _launchUrl(String urlString) async {

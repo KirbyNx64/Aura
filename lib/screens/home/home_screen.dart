@@ -24,6 +24,7 @@ import 'package:music/utils/db/artists_db.dart';
 import 'package:music/utils/db/artist_images_cache_db.dart';
 import 'package:music/utils/yt_search/service.dart';
 import 'package:music/widgets/hero_cached.dart';
+import 'package:music/widgets/artwork_list_tile.dart';
 import 'package:mini_music_visualizer/mini_music_visualizer.dart';
 import 'package:music/screens/play/player_screen.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -1369,7 +1370,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   // Widget para mostrar un artista en círculo
   Widget _buildArtistWidget(Map<String, dynamic> artist, BuildContext context) {
     final String artistKey =
-        'artist_${artist['name']}_${artist['song_count']}_${artist['thumbUrl'] ?? 'no_image'}_${colorSchemeNotifier.value.name}';
+        'artist_${artist['name']}_${artist['song_count']}_${artist['thumbUrl'] ?? 'no_image'}_${colorSchemeNotifier.value.name}_${Theme.of(context).brightness}';
 
     // print('🎨 Construyendo widget para ${artist['name']} - ThumbUrl: ${artist['thumbUrl'] != null ? 'Sí' : 'No'}');
 
@@ -1528,7 +1529,6 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   // Método optimizado para construir widgets de accesos directos: cachea solo la parte visual, handlers frescos
   Widget _buildShortcutWidget(SongModel song, BuildContext context) {
     final String shortcutKey = 'shortcut_${song.id}_${song.data}';
-    final isSystem = colorSchemeNotifier.value == AppColorScheme.system;
 
     // Cachear solo el contenido visual pesado (carátula base, pin, título)
     Widget cachedVisual;
@@ -1542,31 +1542,13 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             borderRadius: BorderRadius.circular(12),
             child: Stack(
               children: [
-                QueryArtworkWidget(
-                  id: song.id,
-                  type: ArtworkType.AUDIO,
-                  artworkFit: BoxFit.cover,
-                  artworkBorder: BorderRadius.circular(12),
-                  keepOldArtwork: true,
-                  artworkHeight: double.infinity,
-                  artworkWidth: double.infinity,
-                  artworkQuality: FilterQuality.high,
-                  size: 400,
-                  nullArtworkWidget: Container(
-                    width: 400,
-                    height: 400,
-                    color: isSystem
-                        ? Theme.of(context).colorScheme.secondaryContainer
-                              .withValues(alpha: 0.5)
-                        : Theme.of(context).colorScheme.surfaceContainer,
-                    child: Center(
-                      child: Icon(
-                        Icons.music_note,
-                        color: Theme.of(context).colorScheme.onSurface,
-                        size: 48,
-                      ),
-                    ),
-                  ),
+                ArtworkListTile(
+                  key: ValueKey('shortcut_art_${song.data}'),
+                  songId: song.id,
+                  songPath: song.data,
+                  width: double.infinity,
+                  height: double.infinity,
+                  borderRadius: BorderRadius.circular(12),
                 ),
                 if (_shortcutSongs.any((s) => s.data == song.data))
                   Positioned(
@@ -1970,34 +1952,19 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     List<SongModel> pageSongs,
   ) {
     final String quickPickKey = 'quickpick_leading_${song.id}_${song.data}';
-    final isSystem = colorSchemeNotifier.value == AppColorScheme.system;
     Widget leading;
     if (_quickPickWidgetCache.containsKey(quickPickKey)) {
       leading = _quickPickWidgetCache[quickPickKey]!;
     } else {
       leading = ClipRRect(
         borderRadius: BorderRadius.circular(8),
-        child: QueryArtworkWidget(
-          id: song.id,
-          type: ArtworkType.AUDIO,
-          artworkHeight: 60,
-          artworkWidth: 57,
-          artworkBorder: BorderRadius.zero,
-          artworkFit: BoxFit.cover,
-          keepOldArtwork: true,
-          nullArtworkWidget: Container(
-            color: isSystem
-                ? Theme.of(
-                    context,
-                  ).colorScheme.secondaryContainer.withValues(alpha: 0.5)
-                : Theme.of(context).colorScheme.surfaceContainer,
-            width: 60,
-            height: 67,
-            child: Icon(
-              Icons.music_note,
-              color: Theme.of(context).colorScheme.onSurface,
-            ),
-          ),
+        child: ArtworkListTile(
+          key: ValueKey('quickpick_art_${song.data}'),
+          songId: song.id,
+          songPath: song.data,
+          width: 57,
+          height: 60,
+          borderRadius: BorderRadius.zero,
         ),
       );
       _quickPickWidgetCache[quickPickKey] = leading;
@@ -2202,7 +2169,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _shuffleQuickPick();
 
     // Limpiar cache de selección rápida cuando se cargan nuevas canciones
-    _quickPickWidgetCache.clear();
+    // _quickPickWidgetCache.clear(); // Evitar parpadeos al actualizar estadísticas
 
     // Precargar carátulas de canciones más reproducidas
     unawaited(_preloadArtworksForSongs(songs));
@@ -2389,23 +2356,12 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         );
 
       case 1:
-        return QueryArtworkWidget(
-          id: songs[0].id,
-          type: ArtworkType.AUDIO,
-          artworkHeight: 40,
-          artworkWidth: 40,
-          keepOldArtwork: true,
-          artworkBorder: BorderRadius.zero,
-          nullArtworkWidget: Container(
-            color: Theme.of(context).colorScheme.surfaceContainer,
-            child: Center(
-              child: Icon(
-                Icons.music_note,
-                color: Theme.of(context).colorScheme.onSurface,
-                size: 20,
-              ),
-            ),
-          ),
+        return ArtworkListTile(
+          songId: songs[0].id,
+          songPath: songs[0].data,
+          width: 40,
+          height: 40,
+          borderRadius: BorderRadius.zero,
         );
 
       case 2:
@@ -2414,39 +2370,21 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         return Row(
           children: [
             Expanded(
-              child: QueryArtworkWidget(
-                id: songs[0].id,
-                type: ArtworkType.AUDIO,
-                artworkHeight: 40,
-                artworkWidth: 20,
-                keepOldArtwork: true,
-                artworkBorder: BorderRadius.zero,
-                nullArtworkWidget: Container(
-                  color: Theme.of(context).colorScheme.surfaceContainer,
-                  child: Icon(
-                    Icons.music_note,
-                    color: Theme.of(context).colorScheme.onSurface,
-                    size: 10,
-                  ),
-                ),
+              child: ArtworkListTile(
+                songId: songs[0].id,
+                songPath: songs[0].data,
+                width: 20,
+                height: 40,
+                borderRadius: BorderRadius.zero,
               ),
             ),
             Expanded(
-              child: QueryArtworkWidget(
-                id: songs[1].id,
-                type: ArtworkType.AUDIO,
-                artworkHeight: 40,
-                artworkWidth: 20,
-                keepOldArtwork: true,
-                artworkBorder: BorderRadius.zero,
-                nullArtworkWidget: Container(
-                  color: Theme.of(context).colorScheme.surfaceContainer,
-                  child: Icon(
-                    Icons.music_note,
-                    color: Theme.of(context).colorScheme.onSurface,
-                    size: 10,
-                  ),
-                ),
+              child: ArtworkListTile(
+                songId: songs[1].id,
+                songPath: songs[1].data,
+                width: 20,
+                height: 40,
+                borderRadius: BorderRadius.zero,
               ),
             ),
           ],
@@ -2460,39 +2398,21 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               child: Row(
                 children: [
                   Expanded(
-                    child: QueryArtworkWidget(
-                      id: songs[0].id,
-                      type: ArtworkType.AUDIO,
-                      artworkHeight: 20,
-                      artworkWidth: 20,
-                      keepOldArtwork: true,
-                      artworkBorder: BorderRadius.zero,
-                      nullArtworkWidget: Container(
-                        color: Theme.of(context).colorScheme.surfaceContainer,
-                        child: Icon(
-                          Icons.music_note,
-                          color: Theme.of(context).colorScheme.onSurface,
-                          size: 10,
-                        ),
-                      ),
+                    child: ArtworkListTile(
+                      songId: songs[0].id,
+                      songPath: songs[0].data,
+                      width: 20,
+                      height: 20,
+                      borderRadius: BorderRadius.zero,
                     ),
                   ),
                   Expanded(
-                    child: QueryArtworkWidget(
-                      id: songs[1].id,
-                      type: ArtworkType.AUDIO,
-                      artworkHeight: 20,
-                      artworkWidth: 20,
-                      keepOldArtwork: true,
-                      artworkBorder: BorderRadius.zero,
-                      nullArtworkWidget: Container(
-                        color: Theme.of(context).colorScheme.surfaceContainer,
-                        child: Icon(
-                          Icons.music_note,
-                          color: Theme.of(context).colorScheme.onSurface,
-                          size: 10,
-                        ),
-                      ),
+                    child: ArtworkListTile(
+                      songId: songs[1].id,
+                      songPath: songs[1].data,
+                      width: 20,
+                      height: 20,
+                      borderRadius: BorderRadius.zero,
                     ),
                   ),
                 ],
@@ -2502,39 +2422,21 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               child: Row(
                 children: [
                   Expanded(
-                    child: QueryArtworkWidget(
-                      id: songs[2].id,
-                      type: ArtworkType.AUDIO,
-                      artworkHeight: 20,
-                      artworkWidth: 20,
-                      keepOldArtwork: true,
-                      artworkBorder: BorderRadius.zero,
-                      nullArtworkWidget: Container(
-                        color: Theme.of(context).colorScheme.surfaceContainer,
-                        child: Icon(
-                          Icons.music_note,
-                          color: Theme.of(context).colorScheme.onSurface,
-                          size: 10,
-                        ),
-                      ),
+                    child: ArtworkListTile(
+                      songId: songs[2].id,
+                      songPath: songs[2].data,
+                      width: 20,
+                      height: 20,
+                      borderRadius: BorderRadius.zero,
                     ),
                   ),
                   Expanded(
-                    child: QueryArtworkWidget(
-                      id: songs[3].id,
-                      type: ArtworkType.AUDIO,
-                      artworkHeight: 20,
-                      artworkWidth: 20,
-                      keepOldArtwork: true,
-                      artworkBorder: BorderRadius.zero,
-                      nullArtworkWidget: Container(
-                        color: Theme.of(context).colorScheme.surfaceContainer,
-                        child: Icon(
-                          Icons.music_note,
-                          color: Theme.of(context).colorScheme.onSurface,
-                          size: 10,
-                        ),
-                      ),
+                    child: ArtworkListTile(
+                      songId: songs[3].id,
+                      songPath: songs[3].data,
+                      width: 20,
+                      height: 20,
+                      borderRadius: BorderRadius.zero,
                     ),
                   ),
                 ],
@@ -2593,6 +2495,10 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void didChangeDependencies() {
     super.didChangeDependencies();
     _lastBottomInset = View.of(context).viewInsets.bottom;
+    // Limpiar caches cuando cambian las dependencias (como el tema)
+    _artistWidgetCache.clear();
+    _shortcutWidgetCache.clear();
+    _quickPickWidgetCache.clear();
   }
 
   Future<void> _playSongAndOpenPlayer(
@@ -3056,7 +2962,6 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Future<void> _showAddFromRecentsToCurrentPlaylistDialog() async {
     final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final isSystem = colorSchemeNotifier.value == AppColorScheme.system;
 
     final recents = await RecentsDB().getRecents();
     if (!mounted) return;
@@ -3111,31 +3016,11 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                 ),
                                 ClipRRect(
                                   borderRadius: BorderRadius.circular(8),
-                                  child: QueryArtworkWidget(
-                                    id: song.id,
-                                    type: ArtworkType.AUDIO,
-                                    artworkBorder: BorderRadius.circular(8),
-                                    artworkHeight: 40,
-                                    artworkWidth: 40,
-                                    keepOldArtwork: true,
-                                    nullArtworkWidget: Container(
-                                      color: isSystem
-                                          ? Theme.of(context)
-                                                .colorScheme
-                                                .secondaryContainer
-                                                .withValues(alpha: 0.5)
-                                          : Theme.of(
-                                              context,
-                                            ).colorScheme.surfaceContainer,
-                                      width: 40,
-                                      height: 40,
-                                      child: Icon(
-                                        Icons.music_note,
-                                        color: Theme.of(
-                                          context,
-                                        ).colorScheme.onSurface,
-                                      ),
-                                    ),
+                                  child: ArtworkListTile(
+                                    songId: song.id,
+                                    songPath: song.data,
+                                    size: 40,
+                                    borderRadius: BorderRadius.circular(8),
                                   ),
                                 ),
                               ],
@@ -3232,7 +3117,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _shuffledQuickPick = combinedSongs;
 
     // Limpiar cache de selección rápida cuando se actualiza la lista
-    _quickPickWidgetCache.clear();
+    // _quickPickWidgetCache.clear(); // Comentado para evitar parpadeos al reordenar
   }
 
   // Función para agregar 50 canciones aleatorias SOLO al reproductor (no visualmente)
@@ -3356,7 +3241,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       }
 
       // Limpiar cache de selección rápida cuando se actualiza la lista
-      _quickPickWidgetCache.clear();
+      // _quickPickWidgetCache.clear(); // Comentado para evitar parpadeos
     } catch (e) {
       // print('❌ Error cargando canciones aleatorias: $e');
       // En caso de error, usar canciones de allSongs como fallback
@@ -3894,9 +3779,6 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                   final isAmoledTheme =
                                       colorSchemeNotifier.value ==
                                       AppColorScheme.amoled;
-                                  final isSystem =
-                                      colorSchemeNotifier.value ==
-                                      AppColorScheme.system;
 
                                   // Determinar el borderRadius según la posición
                                   final bool isFirst = index == 0;
@@ -3940,34 +3822,12 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                             borderRadius: BorderRadius.circular(
                                               8,
                                             ),
-                                            child: QueryArtworkWidget(
-                                              id: song.id,
-                                              type: ArtworkType.AUDIO,
-                                              artworkBorder:
+                                            child: ArtworkListTile(
+                                              songId: song.id,
+                                              songPath: song.data,
+                                              size: 50,
+                                              borderRadius:
                                                   BorderRadius.circular(8),
-                                              artworkHeight: 50,
-                                              artworkWidth: 50,
-                                              keepOldArtwork: true,
-                                              nullArtworkWidget: Container(
-                                                color: isSystem
-                                                    ? Theme.of(context)
-                                                          .colorScheme
-                                                          .secondaryContainer
-                                                          .withValues(
-                                                            alpha: 0.5,
-                                                          )
-                                                    : Theme.of(context)
-                                                          .colorScheme
-                                                          .surfaceContainer,
-                                                width: 50,
-                                                height: 50,
-                                                child: Icon(
-                                                  Icons.music_note,
-                                                  color: Theme.of(
-                                                    context,
-                                                  ).colorScheme.onSurface,
-                                                ),
-                                              ),
                                             ),
                                           ),
                                           title: Row(
@@ -4447,32 +4307,12 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                       ),
                                       leading: ClipRRect(
                                         borderRadius: BorderRadius.circular(8),
-                                        child: QueryArtworkWidget(
-                                          id: song.id,
-                                          type: ArtworkType.AUDIO,
-                                          artworkBorder: BorderRadius.circular(
+                                        child: ArtworkListTile(
+                                          songId: song.id,
+                                          songPath: song.data,
+                                          size: 50,
+                                          borderRadius: BorderRadius.circular(
                                             8,
-                                          ),
-                                          artworkHeight: 50,
-                                          artworkWidth: 50,
-                                          keepOldArtwork: true,
-                                          nullArtworkWidget: Container(
-                                            color: isSystem
-                                                ? Theme.of(context)
-                                                      .colorScheme
-                                                      .secondaryContainer
-                                                      .withValues(alpha: 0.5)
-                                                : Theme.of(context)
-                                                      .colorScheme
-                                                      .surfaceContainer,
-                                            width: 50,
-                                            height: 50,
-                                            child: Icon(
-                                              Icons.music_note,
-                                              color: Theme.of(
-                                                context,
-                                              ).colorScheme.onSurface,
-                                            ),
                                           ),
                                         ),
                                       ),
@@ -5042,9 +4882,6 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                     final isAmoledTheme =
                                         colorSchemeNotifier.value ==
                                         AppColorScheme.amoled;
-                                    final isSystem =
-                                        colorSchemeNotifier.value ==
-                                        AppColorScheme.system;
 
                                     // Determinar el borderRadius según la posición
                                     final bool isFirst = index == 0;
@@ -5571,36 +5408,14 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                 ClipRRect(
                                                   borderRadius:
                                                       BorderRadius.circular(8),
-                                                  child: QueryArtworkWidget(
-                                                    id: song.id,
-                                                    type: ArtworkType.AUDIO,
-                                                    artworkBorder:
+                                                  child: ArtworkListTile(
+                                                    songId: song.id,
+                                                    songPath: song.data,
+                                                    size: 50,
+                                                    borderRadius:
                                                         BorderRadius.circular(
                                                           8,
                                                         ),
-                                                    artworkHeight: 50,
-                                                    artworkWidth: 50,
-                                                    keepOldArtwork: true,
-                                                    nullArtworkWidget: Container(
-                                                      color: isSystem
-                                                          ? Theme.of(context)
-                                                                .colorScheme
-                                                                .secondaryContainer
-                                                                .withValues(
-                                                                  alpha: 0.5,
-                                                                )
-                                                          : Theme.of(context)
-                                                                .colorScheme
-                                                                .surfaceContainer,
-                                                      width: 50,
-                                                      height: 50,
-                                                      child: Icon(
-                                                        Icons.music_note,
-                                                        color: Theme.of(
-                                                          context,
-                                                        ).colorScheme.onSurface,
-                                                      ),
-                                                    ),
                                                   ),
                                                 ),
                                               ],
@@ -6203,34 +6018,12 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                             ClipRRect(
                                               borderRadius:
                                                   BorderRadius.circular(8),
-                                              child: QueryArtworkWidget(
-                                                id: song.id,
-                                                type: ArtworkType.AUDIO,
-                                                artworkBorder:
+                                              child: ArtworkListTile(
+                                                songId: song.id,
+                                                songPath: song.data,
+                                                size: 50,
+                                                borderRadius:
                                                     BorderRadius.circular(8),
-                                                artworkHeight: 50,
-                                                artworkWidth: 50,
-                                                keepOldArtwork: true,
-                                                nullArtworkWidget: Container(
-                                                  color: isSystem
-                                                      ? Theme.of(context)
-                                                            .colorScheme
-                                                            .secondaryContainer
-                                                            .withValues(
-                                                              alpha: 0.5,
-                                                            )
-                                                      : Theme.of(context)
-                                                            .colorScheme
-                                                            .surfaceContainer,
-                                                  width: 50,
-                                                  height: 50,
-                                                  child: Icon(
-                                                    Icons.music_note,
-                                                    color: Theme.of(
-                                                      context,
-                                                    ).colorScheme.onSurface,
-                                                  ),
-                                                ),
                                               ),
                                             ),
                                           ],
@@ -7261,22 +7054,12 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
       case 1:
         // Una canción: carátula completa
-        return QueryArtworkWidget(
-          id: songs[0].id,
-          type: ArtworkType.AUDIO,
-          artworkHeight: 57,
-          artworkWidth: 57,
-          artworkBorder: BorderRadius.zero,
-          nullArtworkWidget: Container(
-            color: Theme.of(context).colorScheme.surfaceContainer,
-            child: Center(
-              child: Icon(
-                Icons.music_note,
-                color: Theme.of(context).colorScheme.onSurface,
-                size: 24,
-              ),
-            ),
-          ),
+        return ArtworkListTile(
+          songId: songs[0].id,
+          songPath: songs[0].data,
+          width: 57,
+          height: 57,
+          borderRadius: BorderRadius.zero,
         );
 
       case 2:
@@ -7420,27 +7203,11 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   // Función para construir la carátula del modal
   Widget _buildModalArtwork(SongModel song) {
-    final isSystem = colorSchemeNotifier.value == AppColorScheme.system;
-    return QueryArtworkWidget(
-      id: song.id,
-      type: ArtworkType.AUDIO,
-      artworkBorder: BorderRadius.circular(8),
-      artworkHeight: 60,
-      artworkWidth: 60,
-      keepOldArtwork: true,
-      nullArtworkWidget: Container(
-        width: 60,
-        height: 60,
-        decoration: BoxDecoration(
-          color: isSystem
-              ? Theme.of(
-                  context,
-                ).colorScheme.secondaryContainer.withValues(alpha: 0.5)
-              : Theme.of(context).colorScheme.surfaceContainer,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Icon(Icons.music_note, size: 30),
-      ),
+    return ArtworkListTile(
+      songId: song.id,
+      songPath: song.data,
+      size: 60,
+      borderRadius: BorderRadius.circular(8),
     );
   }
 

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:music/l10n/locale_provider.dart';
 import 'package:music/utils/notifiers.dart';
 import 'package:music/utils/theme_preferences.dart';
@@ -430,7 +431,7 @@ class AboutScreen extends StatelessWidget {
                   ),
                   child: ListTile(
                     leading: Icon(
-                      Icons.flutter_dash_rounded,
+                      Symbols.flutter,
                       color: Theme.of(context).colorScheme.onSurface,
                     ),
                     title: Text(
@@ -441,7 +442,7 @@ class AboutScreen extends StatelessWidget {
                       ),
                     ),
                     subtitle: Text(
-                      '3.38.9 • stable • Dart 3.10.8',
+                      '3.41.0 • stable • Dart 3.11.0',
                       style: TextStyle(
                         fontSize: 13,
                         color: Theme.of(
