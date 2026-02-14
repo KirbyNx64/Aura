@@ -212,6 +212,7 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      extendBody: true,
       body: ValueListenableBuilder<bool>(
         valueListenable: audioServiceReady,
         builder: (context, ready, _) {
@@ -242,6 +243,7 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
                     children: [
                       SafeArea(
                         top: false,
+                        bottom: false,
                         child: IndexedStack(
                           index: _selectedIndex,
                           children: List.generate(
@@ -258,12 +260,12 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
                           bottom: MediaQuery.of(context).padding.bottom,
                           child: Container(
                             height: 100,
-                            color: Theme.of(context).colorScheme.surface,
+                            color: Colors.transparent,
                           ),
                         ),
                       if (overlayActive)
                         Positioned(
-                          bottom: MediaQuery.of(context).padding.bottom + 10,
+                          bottom: MediaQuery.of(context).padding.bottom,
                           left: 0,
                           right: 0,
                           child: const Center(

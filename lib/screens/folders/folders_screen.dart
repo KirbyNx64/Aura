@@ -2692,96 +2692,100 @@ class _FoldersScreenState extends State<FoldersScreen>
                 onRefresh: () async {
                   await _loadPlaylists();
                 },
-                child: Theme(
-                  data: Theme.of(context).copyWith(
-                    scrollbarTheme: ScrollbarThemeData(
-                      thumbColor: WidgetStateProperty.all(
-                        Theme.of(context).colorScheme.primary,
-                      ),
-                    ),
-                  ),
-                  child: Scrollbar(
-                    controller: _playlistsScrollController,
-                    thickness: 6.0,
-                    radius: const Radius.circular(8),
-                    interactive: true,
-                    child: ListView.builder(
+                child: ValueListenableBuilder<MediaItem?>(
+                  valueListenable: _currentMediaItemNotifier,
+                  builder: (context, debouncedMediaItem, child) {
+                    final bottomPadding = MediaQuery.of(context).padding.bottom;
+                    final space =
+                        (debouncedMediaItem != null ? 100.0 : 0.0) +
+                        bottomPadding;
+
+                    return RawScrollbar(
                       controller: _playlistsScrollController,
-                      padding: const EdgeInsets.only(
-                        left: 16.0,
-                        right: 16.0,
-                        top: 8.0,
-                      ),
-                      itemCount: _filteredPlaylists.length,
-                      itemBuilder: (context, index) {
-                        final playlist = _filteredPlaylists[index];
+                      thumbColor: Theme.of(context).colorScheme.primary,
+                      thickness: 6.0,
+                      radius: const Radius.circular(8),
+                      interactive: true,
+                      padding: EdgeInsets.only(bottom: space),
+                      child: ListView.builder(
+                        controller: _playlistsScrollController,
+                        padding: EdgeInsets.only(
+                          left: 16.0,
+                          right: 16.0,
+                          top: 8.0,
+                          bottom: space,
+                        ),
+                        itemCount: _filteredPlaylists.length,
+                        itemBuilder: (context, index) {
+                          final playlist = _filteredPlaylists[index];
 
-                        // Determinar el borderRadius según la posición
-                        final bool isFirst = index == 0;
-                        final bool isLast =
-                            index == _filteredPlaylists.length - 1;
-                        final bool isOnly = _filteredPlaylists.length == 1;
+                          // Determinar el borderRadius según la posición
+                          final bool isFirst = index == 0;
+                          final bool isLast =
+                              index == _filteredPlaylists.length - 1;
+                          final bool isOnly = _filteredPlaylists.length == 1;
 
-                        BorderRadius borderRadius;
-                        if (isOnly) {
-                          borderRadius = BorderRadius.circular(20);
-                        } else if (isFirst) {
-                          borderRadius = const BorderRadius.only(
-                            topLeft: Radius.circular(20),
-                            topRight: Radius.circular(20),
-                            bottomLeft: Radius.circular(4),
-                            bottomRight: Radius.circular(4),
-                          );
-                        } else if (isLast) {
-                          borderRadius = const BorderRadius.only(
-                            topLeft: Radius.circular(4),
-                            topRight: Radius.circular(4),
-                            bottomLeft: Radius.circular(20),
-                            bottomRight: Radius.circular(20),
-                          );
-                        } else {
-                          borderRadius = BorderRadius.circular(4);
-                        }
+                          BorderRadius borderRadius;
+                          if (isOnly) {
+                            borderRadius = BorderRadius.circular(20);
+                          } else if (isFirst) {
+                            borderRadius = const BorderRadius.only(
+                              topLeft: Radius.circular(20),
+                              topRight: Radius.circular(20),
+                              bottomLeft: Radius.circular(4),
+                              bottomRight: Radius.circular(4),
+                            );
+                          } else if (isLast) {
+                            borderRadius = const BorderRadius.only(
+                              topLeft: Radius.circular(4),
+                              topRight: Radius.circular(4),
+                              bottomLeft: Radius.circular(20),
+                              bottomRight: Radius.circular(20),
+                            );
+                          } else {
+                            borderRadius = BorderRadius.circular(4);
+                          }
 
-                        return Padding(
-                          padding: EdgeInsets.only(bottom: isLast ? 0 : 4),
-                          child: Card(
-                            color: barColor,
-                            margin: EdgeInsets.zero,
-                            elevation: 0,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: borderRadius,
-                            ),
-                            child: ClipRRect(
-                              borderRadius: borderRadius,
-                              child: ListTile(
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: borderRadius,
+                          return Padding(
+                            padding: EdgeInsets.only(bottom: isLast ? 0 : 4),
+                            child: Card(
+                              color: barColor,
+                              margin: EdgeInsets.zero,
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: borderRadius,
+                              ),
+                              child: ClipRRect(
+                                borderRadius: borderRadius,
+                                child: ListTile(
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: borderRadius,
+                                  ),
+                                  leading: _buildPlaylistArtworkGrid(playlist),
+                                  title: Text(
+                                    playlist.name,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.titleMedium,
+                                  ),
+                                  subtitle: Text(
+                                    '${playlist.songPaths.length} ${LocaleProvider.tr('songs')}',
+                                  ),
+                                  onTap: () async {
+                                    await _loadSongsFromPlaylist(playlist);
+                                  },
+                                  onLongPress: () =>
+                                      _showPlaylistOptions(playlist),
                                 ),
-                                leading: _buildPlaylistArtworkGrid(playlist),
-                                title: Text(
-                                  playlist.name,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(
-                                    context,
-                                  ).textTheme.titleMedium,
-                                ),
-                                subtitle: Text(
-                                  '${playlist.songPaths.length} ${LocaleProvider.tr('songs')}',
-                                ),
-                                onTap: () async {
-                                  await _loadSongsFromPlaylist(playlist);
-                                },
-                                onLongPress: () =>
-                                    _showPlaylistOptions(playlist),
                               ),
                             ),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
+                          );
+                        },
+                      ),
+                    );
+                  },
                 ),
               ),
       );
@@ -3018,171 +3022,157 @@ class _FoldersScreenState extends State<FoldersScreen>
           child: ValueListenableBuilder<MediaItem?>(
             valueListenable: _currentMediaItemNotifier,
             builder: (context, current, child) {
-              final space = current != null ? 100.0 : 0.0;
-              return Padding(
-                padding: EdgeInsets.only(bottom: space),
-                child: Builder(
-                  builder: (context) {
-                    final colorScheme = colorSchemeNotifier.value;
-                    final isAmoled = colorScheme == AppColorScheme.amoled;
-                    final isDark =
-                        Theme.of(context).brightness == Brightness.dark;
-                    final cardColor = isAmoled
-                        ? Colors.white.withAlpha(20)
-                        : isDark
-                        ? Theme.of(
-                            context,
-                          ).colorScheme.secondary.withValues(alpha: 0.06)
-                        : Theme.of(
-                            context,
-                          ).colorScheme.secondary.withValues(alpha: 0.07);
+              final bottomPadding = MediaQuery.of(context).padding.bottom;
+              final space = (current != null ? 100.0 : 0.0) + bottomPadding;
+              return Builder(
+                builder: (context) {
+                  final colorScheme = colorSchemeNotifier.value;
+                  final isAmoled = colorScheme == AppColorScheme.amoled;
+                  final isDark =
+                      Theme.of(context).brightness == Brightness.dark;
+                  final cardColor = isAmoled
+                      ? Colors.white.withAlpha(20)
+                      : isDark
+                      ? Theme.of(
+                          context,
+                        ).colorScheme.secondary.withValues(alpha: 0.06)
+                      : Theme.of(
+                          context,
+                        ).colorScheme.secondary.withValues(alpha: 0.07);
 
-                    final sortedEntries =
-                        _folderSearchController.text.isNotEmpty
-                              ? _filteredFolders
-                              : songPathsByFolder.entries.toList()
-                          ..sort(
-                            (a, b) => folderDisplayNames[a.key]!
-                                .toLowerCase()
-                                .compareTo(
-                                  folderDisplayNames[b.key]!.toLowerCase(),
-                                ),
-                          );
+                  final sortedEntries =
+                      _folderSearchController.text.isNotEmpty
+                            ? _filteredFolders
+                            : songPathsByFolder.entries.toList()
+                        ..sort(
+                          (a, b) => folderDisplayNames[a.key]!
+                              .toLowerCase()
+                              .compareTo(
+                                folderDisplayNames[b.key]!.toLowerCase(),
+                              ),
+                        );
 
-                    return Theme(
-                      data: Theme.of(context).copyWith(
-                        scrollbarTheme: ScrollbarThemeData(
-                          thumbColor: WidgetStateProperty.all(
-                            Theme.of(context).colorScheme.primary,
-                          ),
-                        ),
+                  return RawScrollbar(
+                    controller: _foldersScrollController,
+                    thumbColor: Theme.of(context).colorScheme.primary,
+                    thickness: 6.0,
+                    radius: const Radius.circular(8),
+                    interactive: true,
+                    padding: EdgeInsets.only(bottom: space),
+                    child: ListView.builder(
+                      controller: _foldersScrollController,
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: EdgeInsets.only(
+                        left: 16.0,
+                        right: 16.0,
+                        top: 8.0,
+                        bottom: space,
                       ),
-                      child: Scrollbar(
-                        controller: _foldersScrollController,
-                        thickness: 6.0,
-                        radius: const Radius.circular(8),
-                        interactive: true,
-                        child: ListView.builder(
-                          controller: _foldersScrollController,
-                          physics: const AlwaysScrollableScrollPhysics(),
-                          padding: const EdgeInsets.only(
-                            left: 16.0,
-                            right: 16.0,
-                            top: 8.0,
-                          ),
-                          itemCount: sortedEntries.length,
-                          itemBuilder: (context, i) {
-                            final entry = sortedEntries[i];
-                            final nombre = folderDisplayNames[entry.key]!;
-                            final canciones = entry.value;
+                      itemCount: sortedEntries.length,
+                      itemBuilder: (context, i) {
+                        final entry = sortedEntries[i];
+                        final nombre = folderDisplayNames[entry.key]!;
+                        final canciones = entry.value;
 
-                            // Usar cache para evitar parpadeos
-                            final ignored = _ignoredFoldersCache.contains(
-                              entry.key,
-                            );
-                            final opacity = ignored ? 0.4 : 1.0;
+                        // Usar cache para evitar parpadeos
+                        final ignored = _ignoredFoldersCache.contains(
+                          entry.key,
+                        );
+                        final opacity = ignored ? 0.4 : 1.0;
 
-                            // Determinar el borderRadius según la posición
-                            final bool isFirst = i == 0;
-                            final bool isLast = i == sortedEntries.length - 1;
-                            final bool isOnly = sortedEntries.length == 1;
+                        // Determinar el borderRadius según la posición
+                        final bool isFirst = i == 0;
+                        final bool isLast = i == sortedEntries.length - 1;
+                        final bool isOnly = sortedEntries.length == 1;
 
-                            BorderRadius borderRadius;
-                            if (isOnly) {
-                              borderRadius = BorderRadius.circular(20);
-                            } else if (isFirst) {
-                              borderRadius = const BorderRadius.only(
-                                topLeft: Radius.circular(20),
-                                topRight: Radius.circular(20),
-                                bottomLeft: Radius.circular(4),
-                                bottomRight: Radius.circular(4),
-                              );
-                            } else if (isLast) {
-                              borderRadius = const BorderRadius.only(
-                                topLeft: Radius.circular(4),
-                                topRight: Radius.circular(4),
-                                bottomLeft: Radius.circular(20),
-                                bottomRight: Radius.circular(20),
-                              );
-                            } else {
-                              borderRadius = BorderRadius.circular(4);
-                            }
+                        BorderRadius borderRadius;
+                        if (isOnly) {
+                          borderRadius = BorderRadius.circular(20);
+                        } else if (isFirst) {
+                          borderRadius = const BorderRadius.only(
+                            topLeft: Radius.circular(20),
+                            topRight: Radius.circular(20),
+                            bottomLeft: Radius.circular(4),
+                            bottomRight: Radius.circular(4),
+                          );
+                        } else if (isLast) {
+                          borderRadius = const BorderRadius.only(
+                            topLeft: Radius.circular(4),
+                            topRight: Radius.circular(4),
+                            bottomLeft: Radius.circular(20),
+                            bottomRight: Radius.circular(20),
+                          );
+                        } else {
+                          borderRadius = BorderRadius.circular(4);
+                        }
 
-                            return Padding(
-                              padding: EdgeInsets.only(bottom: isLast ? 0 : 4),
-                              child: Card(
-                                color: cardColor,
-                                margin: EdgeInsets.zero,
-                                elevation: 0,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: borderRadius,
-                                ),
-                                child: ClipRRect(
-                                  borderRadius: borderRadius,
-                                  child: Opacity(
-                                    opacity: opacity,
-                                    child: ListTile(
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: borderRadius,
+                        return Padding(
+                          padding: EdgeInsets.only(bottom: isLast ? 0 : 4),
+                          child: Card(
+                            color: cardColor,
+                            margin: EdgeInsets.zero,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: borderRadius,
+                            ),
+                            child: ClipRRect(
+                              borderRadius: borderRadius,
+                              child: Opacity(
+                                opacity: opacity,
+                                child: ListTile(
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: borderRadius,
+                                  ),
+                                  leading: const Icon(Icons.folder, size: 38),
+                                  title: Text(
+                                    nombre,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.titleMedium,
+                                  ),
+                                  subtitle: Text(
+                                    '${canciones.length} ${LocaleProvider.tr('songs')}',
+                                  ),
+                                  onTap: ignored
+                                      ? null
+                                      : () async {
+                                          await _loadSongsForFolder(entry);
+                                        },
+                                  trailing: Container(
+                                    width: 26,
+                                    height: 40,
+                                    decoration: BoxDecoration(
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.primary.withAlpha(20),
+                                      borderRadius: BorderRadius.circular(16),
+                                    ),
+                                    child: IconButton(
+                                      icon: const Icon(
+                                        Icons.more_vert,
+                                        size: 22,
                                       ),
-                                      leading: const Icon(
-                                        Icons.folder,
-                                        size: 38,
-                                      ),
-                                      title: Text(
+                                      padding: EdgeInsets.zero,
+                                      constraints: const BoxConstraints(),
+                                      onPressed: () => _showFolderOptionsModal(
+                                        context,
+                                        entry.key,
                                         nombre,
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: Theme.of(
-                                          context,
-                                        ).textTheme.titleMedium,
-                                      ),
-                                      subtitle: Text(
-                                        '${canciones.length} ${LocaleProvider.tr('songs')}',
-                                      ),
-                                      onTap: ignored
-                                          ? null
-                                          : () async {
-                                              await _loadSongsForFolder(entry);
-                                            },
-                                      trailing: Container(
-                                        width: 26,
-                                        height: 40,
-                                        decoration: BoxDecoration(
-                                          color: Theme.of(
-                                            context,
-                                          ).colorScheme.primary.withAlpha(20),
-                                          borderRadius: BorderRadius.circular(
-                                            16,
-                                          ),
-                                        ),
-                                        child: IconButton(
-                                          icon: const Icon(
-                                            Icons.more_vert,
-                                            size: 22,
-                                          ),
-                                          padding: EdgeInsets.zero,
-                                          constraints: const BoxConstraints(),
-                                          onPressed: () =>
-                                              _showFolderOptionsModal(
-                                                context,
-                                                entry.key,
-                                                nombre,
-                                                ignored,
-                                              ),
-                                        ),
+                                        ignored,
                                       ),
                                     ),
                                   ),
                                 ),
                               ),
-                            );
-                          },
-                        ),
-                      ),
-                    );
-                  },
-                ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  );
+                },
               );
             },
           ),
@@ -3581,199 +3571,189 @@ class _FoldersScreenState extends State<FoldersScreen>
           child: ValueListenableBuilder<MediaItem?>(
             valueListenable: _currentMediaItemNotifier,
             builder: (context, debouncedMediaItem, child) {
-              final space = debouncedMediaItem != null ? 100.0 : 0.0;
+              final bottomPadding = MediaQuery.of(context).padding.bottom;
+              final space =
+                  (debouncedMediaItem != null ? 100.0 : 0.0) + bottomPadding;
 
-              return Padding(
-                padding: EdgeInsets.only(bottom: space),
-                child: _filteredSongs.isEmpty
-                    ? SingleChildScrollView(
-                        physics: const AlwaysScrollableScrollPhysics(),
-                        child: SizedBox(
-                          height: MediaQuery.of(context).size.height - 200,
-                          child: Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(
-                                  _showAllSongs
-                                      ? Icons.music_note
-                                      : _selectedPlaylist != null
-                                      ? Icons.queue_music_outlined
-                                      : Icons.folder_off,
-                                  size: 48,
+              return _filteredSongs.isEmpty
+                  ? SingleChildScrollView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      child: SizedBox(
+                        height: MediaQuery.of(context).size.height - 200,
+                        child: Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                _showAllSongs
+                                    ? Icons.music_note
+                                    : _selectedPlaylist != null
+                                    ? Icons.queue_music_outlined
+                                    : Icons.folder_off,
+                                size: 48,
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurface.withValues(alpha: 0.6),
+                              ),
+                              const SizedBox(height: 16),
+                              TranslatedText(
+                                _showAllSongs
+                                    ? 'no_songs'
+                                    : _selectedPlaylist != null
+                                    ? 'no_songs_in_playlist'
+                                    : 'no_songs_in_folder',
+                                style: TextStyle(
+                                  fontSize: 14,
                                   color: Theme.of(context).colorScheme.onSurface
                                       .withValues(alpha: 0.6),
                                 ),
-                                const SizedBox(height: 16),
-                                TranslatedText(
-                                  _showAllSongs
-                                      ? 'no_songs'
-                                      : _selectedPlaylist != null
-                                      ? 'no_songs_in_playlist'
-                                      : 'no_songs_in_folder',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .onSurface
-                                        .withValues(alpha: 0.6),
-                                  ),
-                                ),
-                              ],
-                            ),
+                              ),
+                            ],
                           ),
                         ),
-                      )
-                    : ValueListenableBuilder<MediaItem?>(
-                        valueListenable: _immediateMediaItemNotifier,
-                        builder: (context, immediateMediaItem, child) {
-                          final colorScheme = colorSchemeNotifier.value;
-                          final isAmoled = colorScheme == AppColorScheme.amoled;
-                          final isDark =
-                              Theme.of(context).brightness == Brightness.dark;
-                          final cardColor = isAmoled
-                              ? Colors.white.withAlpha(20)
-                              : isDark
-                              ? Theme.of(
-                                  context,
-                                ).colorScheme.secondary.withValues(alpha: 0.06)
-                              : Theme.of(
-                                  context,
-                                ).colorScheme.secondary.withValues(alpha: 0.07);
+                      ),
+                    )
+                  : ValueListenableBuilder<MediaItem?>(
+                      valueListenable: _immediateMediaItemNotifier,
+                      builder: (context, immediateMediaItem, child) {
+                        final colorScheme = colorSchemeNotifier.value;
+                        final isAmoled = colorScheme == AppColorScheme.amoled;
+                        final isDark =
+                            Theme.of(context).brightness == Brightness.dark;
+                        final cardColor = isAmoled
+                            ? Colors.white.withAlpha(20)
+                            : isDark
+                            ? Theme.of(
+                                context,
+                              ).colorScheme.secondary.withValues(alpha: 0.06)
+                            : Theme.of(
+                                context,
+                              ).colorScheme.secondary.withValues(alpha: 0.07);
 
-                          return Theme(
-                            data: Theme.of(context).copyWith(
-                              scrollbarTheme: ScrollbarThemeData(
-                                thumbColor: WidgetStateProperty.all(
-                                  Theme.of(context).colorScheme.primary,
-                                ),
-                              ),
+                        return RawScrollbar(
+                          controller: _scrollController,
+                          thumbColor: Theme.of(context).colorScheme.primary,
+                          thickness: 6.0,
+                          radius: const Radius.circular(8),
+                          interactive: true,
+                          padding: EdgeInsets.only(bottom: space),
+                          child: ListView.builder(
+                            controller: _scrollController,
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            padding: EdgeInsets.only(
+                              left: 16.0,
+                              right: 16.0,
+                              top: 8.0,
+                              bottom: space,
                             ),
-                            child: Scrollbar(
-                              controller: _scrollController,
-                              thickness: 6.0,
-                              radius: const Radius.circular(8),
-                              interactive: true,
-                              child: ListView.builder(
-                                controller: _scrollController,
-                                physics: const AlwaysScrollableScrollPhysics(),
-                                padding: const EdgeInsets.only(
-                                  left: 16.0,
-                                  right: 16.0,
-                                  top: 8.0,
-                                ),
-                                itemCount: _displaySongs.length,
-                                itemBuilder: (context, i) {
-                                  final song = _displaySongs[i];
-                                  final path = song.data;
-                                  final isCurrent =
-                                      (immediateMediaItem?.id != null &&
-                                      path.isNotEmpty &&
-                                      (immediateMediaItem!.id == path ||
-                                          immediateMediaItem.extras?['data'] ==
-                                              path));
-                                  final isSelected = _selectedSongPaths
-                                      .contains(path);
-                                  final isIgnoredFuture = isSongIgnored(path);
+                            itemCount: _displaySongs.length,
+                            itemBuilder: (context, i) {
+                              final song = _displaySongs[i];
+                              final path = song.data;
+                              final isCurrent =
+                                  (immediateMediaItem?.id != null &&
+                                  path.isNotEmpty &&
+                                  (immediateMediaItem!.id == path ||
+                                      immediateMediaItem.extras?['data'] ==
+                                          path));
+                              final isSelected = _selectedSongPaths.contains(
+                                path,
+                              );
+                              final isIgnoredFuture = isSongIgnored(path);
 
-                                  // Determinar el borderRadius según la posición
-                                  final bool isFirst = i == 0;
-                                  final bool isLast =
-                                      i == _displaySongs.length - 1;
-                                  final bool isOnly = _displaySongs.length == 1;
+                              // Determinar el borderRadius según la posición
+                              final bool isFirst = i == 0;
+                              final bool isLast = i == _displaySongs.length - 1;
+                              final bool isOnly = _displaySongs.length == 1;
 
-                                  BorderRadius borderRadius;
-                                  if (isOnly) {
-                                    borderRadius = BorderRadius.circular(20);
-                                  } else if (isFirst) {
-                                    borderRadius = const BorderRadius.only(
-                                      topLeft: Radius.circular(20),
-                                      topRight: Radius.circular(20),
-                                      bottomLeft: Radius.circular(4),
-                                      bottomRight: Radius.circular(4),
-                                    );
-                                  } else if (isLast) {
-                                    borderRadius = const BorderRadius.only(
-                                      topLeft: Radius.circular(4),
-                                      topRight: Radius.circular(4),
-                                      bottomLeft: Radius.circular(20),
-                                      bottomRight: Radius.circular(20),
-                                    );
-                                  } else {
-                                    borderRadius = BorderRadius.circular(4);
-                                  }
+                              BorderRadius borderRadius;
+                              if (isOnly) {
+                                borderRadius = BorderRadius.circular(20);
+                              } else if (isFirst) {
+                                borderRadius = const BorderRadius.only(
+                                  topLeft: Radius.circular(20),
+                                  topRight: Radius.circular(20),
+                                  bottomLeft: Radius.circular(4),
+                                  bottomRight: Radius.circular(4),
+                                );
+                              } else if (isLast) {
+                                borderRadius = const BorderRadius.only(
+                                  topLeft: Radius.circular(4),
+                                  topRight: Radius.circular(4),
+                                  bottomLeft: Radius.circular(20),
+                                  bottomRight: Radius.circular(20),
+                                );
+                              } else {
+                                borderRadius = BorderRadius.circular(4);
+                              }
 
-                                  return FutureBuilder<bool>(
-                                    future: isIgnoredFuture,
-                                    builder: (context, snapshot) {
-                                      final isIgnored = snapshot.data ?? false;
+                              return FutureBuilder<bool>(
+                                future: isIgnoredFuture,
+                                builder: (context, snapshot) {
+                                  final isIgnored = snapshot.data ?? false;
 
-                                      Widget listTileWidget;
-                                      // Solo usar ValueListenableBuilder para la canción actual
-                                      if (isCurrent) {
-                                        listTileWidget =
-                                            ValueListenableBuilder<bool>(
-                                              valueListenable:
-                                                  _isPlayingNotifier,
-                                              builder: (context, playing, child) {
-                                                return _buildOptimizedListTile(
-                                                  context,
-                                                  song,
-                                                  isCurrent,
-                                                  playing,
-                                                  isAmoled,
-                                                  isIgnored,
-                                                  isSelected,
-                                                  borderRadius: borderRadius,
-                                                );
-                                              },
-                                            );
-                                      } else {
-                                        // Para canciones que no están reproduciéndose, no usar StreamBuilder
-                                        listTileWidget =
-                                            _buildOptimizedListTile(
+                                  Widget listTileWidget;
+                                  // Solo usar ValueListenableBuilder para la canción actual
+                                  if (isCurrent) {
+                                    listTileWidget =
+                                        ValueListenableBuilder<bool>(
+                                          valueListenable: _isPlayingNotifier,
+                                          builder: (context, playing, child) {
+                                            return _buildOptimizedListTile(
                                               context,
                                               song,
                                               isCurrent,
-                                              false, // No playing
+                                              playing,
                                               isAmoled,
                                               isIgnored,
                                               isSelected,
                                               borderRadius: borderRadius,
                                             );
-                                      }
+                                          },
+                                        );
+                                  } else {
+                                    // Para canciones que no están reproduciéndose, no usar StreamBuilder
+                                    listTileWidget = _buildOptimizedListTile(
+                                      context,
+                                      song,
+                                      isCurrent,
+                                      false, // No playing
+                                      isAmoled,
+                                      isIgnored,
+                                      isSelected,
+                                      borderRadius: borderRadius,
+                                    );
+                                  }
 
-                                      return Padding(
-                                        padding: EdgeInsets.only(
-                                          bottom: isLast ? 0 : 4,
-                                        ),
-                                        child: Card(
-                                          color: isCurrent
-                                              ? Theme.of(context)
-                                                    .colorScheme
-                                                    .primary
-                                                    .withAlpha(isDark ? 40 : 25)
-                                              : cardColor,
-                                          margin: EdgeInsets.zero,
-                                          elevation: 0,
-                                          shape: RoundedRectangleBorder(
-                                            borderRadius: borderRadius,
-                                          ),
-                                          child: ClipRRect(
-                                            borderRadius: borderRadius,
-                                            child: listTileWidget,
-                                          ),
-                                        ),
-                                      );
-                                    },
+                                  return Padding(
+                                    padding: EdgeInsets.only(
+                                      bottom: isLast ? 0 : 4,
+                                    ),
+                                    child: Card(
+                                      color: isCurrent
+                                          ? Theme.of(context)
+                                                .colorScheme
+                                                .primary
+                                                .withAlpha(isDark ? 40 : 25)
+                                          : cardColor,
+                                      margin: EdgeInsets.zero,
+                                      elevation: 0,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: borderRadius,
+                                      ),
+                                      child: ClipRRect(
+                                        borderRadius: borderRadius,
+                                        child: listTileWidget,
+                                      ),
+                                    ),
                                   );
                                 },
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-              );
+                              );
+                            },
+                          ),
+                        );
+                      },
+                    );
             },
           ),
         ),

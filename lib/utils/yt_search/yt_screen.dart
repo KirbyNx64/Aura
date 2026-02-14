@@ -2448,7 +2448,9 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                   final mediaItem = snapshot.data;
                   // Calcular espacio inferior considerando overlay de reproducción
                   // (ya no sumamos espacio para la barra de progreso)
-                  double bottomSpace = mediaItem != null ? 100.0 : 0.0;
+                  final bottomPadding = MediaQuery.of(context).padding.bottom;
+                  double bottomSpace =
+                      (mediaItem != null ? 100.0 : 0.0) + bottomPadding;
                   return Column(
                     children: [
                       if (!_loading &&
@@ -2676,12 +2678,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                           _hasSearched)
                         Expanded(
                           child: Padding(
-                            padding: EdgeInsets.fromLTRB(
-                              16,
-                              0,
-                              16,
-                              bottomSpace,
-                            ),
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
                             child: Builder(
                               builder: (context) {
                                 if (_expandedCategory == 'songs') {
@@ -2696,7 +2693,9 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                             'yt_songs_list_$_searchSessionId',
                                           ),
                                           controller: _songScrollController,
-                                          padding: EdgeInsets.zero,
+                                          padding: EdgeInsets.only(
+                                            bottom: bottomSpace,
+                                          ),
                                           itemCount:
                                               _songResults.length +
                                               (_loadingMoreSongs ? 1 : 0),
@@ -2767,7 +2766,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                       20,
                                                     ),
                                                     topRight: Radius.circular(
-                                                      16,
+                                                      20,
                                                     ),
                                                     bottomLeft: Radius.circular(
                                                       4,
@@ -3021,7 +3020,9 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                             'yt_videos_list_$_searchSessionId',
                                           ),
                                           controller: _videoScrollController,
-                                          padding: EdgeInsets.zero,
+                                          padding: EdgeInsets.only(
+                                            bottom: bottomSpace,
+                                          ),
                                           itemCount:
                                               _videoResults.length +
                                               (_loadingMoreVideos ? 1 : 0),
@@ -3345,7 +3346,9 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                           key: PageStorageKey(
                                             'yt_albums_list_$_searchSessionId',
                                           ),
-                                          padding: EdgeInsets.zero,
+                                          padding: EdgeInsets.only(
+                                            bottom: bottomSpace,
+                                          ),
                                           itemCount: _albumResults.length,
                                           itemBuilder: (context, index) {
                                             final item = _albumResults[index];
@@ -3692,7 +3695,9 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                             key: const PageStorageKey(
                                               'yt_album_details_list',
                                             ),
-                                            padding: EdgeInsets.zero,
+                                            padding: EdgeInsets.only(
+                                              bottom: bottomSpace,
+                                            ),
                                             itemCount: _albumSongs.length,
                                             itemBuilder: (context, idx) {
                                               final item = _albumSongs[idx];
@@ -4185,7 +4190,9 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                             key: const PageStorageKey(
                                               'yt_playlist_details_list',
                                             ),
-                                            padding: EdgeInsets.zero,
+                                            padding: EdgeInsets.only(
+                                              bottom: bottomSpace,
+                                            ),
                                             itemCount: _playlistSongs.length,
                                             itemBuilder: (context, idx) {
                                               final item = _playlistSongs[idx];
@@ -4543,7 +4550,9 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                             'yt_playlists_list_$_searchSessionId',
                                           ),
                                           controller: _playlistScrollController,
-                                          padding: EdgeInsets.only(),
+                                          padding: EdgeInsets.only(
+                                            bottom: bottomSpace,
+                                          ),
                                           itemCount:
                                               _playlistResults.length +
                                               (_loadingMorePlaylists ? 1 : 0),
@@ -4845,6 +4854,9 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                   return ListView(
                                     key: PageStorageKey(
                                       'yt_main_results_list_$_searchSessionId',
+                                    ),
+                                    padding: EdgeInsets.only(
+                                      bottom: bottomSpace,
                                     ),
                                     children: [
                                       // Sección Artistas
