@@ -61,16 +61,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _loadAudioQuality();
     _loadColorScheme();
     _loadArtworkQuality();
-    _initHeroAnimationSetting();
+
     _loadOverlayNextButtonSetting();
     _loadTranslationLanguageSetting();
     _loadArtworkBackgroundSetting();
-  }
-
-  Future<void> _initHeroAnimationSetting() async {
-    final prefs = await SharedPreferences.getInstance();
-    final useHero = prefs.getBool('use_hero_animation') ?? true;
-    heroAnimationNotifier.value = useHero;
   }
 
   Future<void> _loadOverlayNextButtonSetting() async {
@@ -3731,77 +3725,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ],
               ),
             ),
-            const SizedBox(height: 4),
-            Card(
-              color: cardColor,
-              margin: EdgeInsets.zero,
-              elevation: 0,
-              shape: const RoundedRectangleBorder(
-                borderRadius: BorderRadius.only(
-                  topLeft: Radius.circular(4),
-                  topRight: Radius.circular(4),
-                  bottomLeft: Radius.circular(4),
-                  bottomRight: Radius.circular(4),
-                ),
-              ),
-              child: Column(
-                children: [
-                  ValueListenableBuilder<bool>(
-                    valueListenable: heroAnimationNotifier,
-                    builder: (context, value, child) {
-                      return SwitchListTile(
-                        value: value,
-                        onChanged: (v) async {
-                          final prefs = await SharedPreferences.getInstance();
-                          await prefs.setBool('use_hero_animation', v);
-                          heroAnimationNotifier.value = v;
-                          setState(() {});
-                        },
-                        title: Text(
-                          LocaleProvider.tr('hero_animation'),
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: Theme.of(context).colorScheme.onSurface,
-                          ),
-                        ),
-                        subtitle: Text(
-                          LocaleProvider.tr('hero_animation_desc'),
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.onSurface.withValues(alpha: 0.9),
-                          ),
-                        ),
-                        secondary: Icon(
-                          Icons.animation,
-                          color: Theme.of(context).colorScheme.onSurface,
-                        ),
-                        shape: const RoundedRectangleBorder(
-                          borderRadius: BorderRadius.all(Radius.circular(4)),
-                        ),
-                        thumbIcon: WidgetStateProperty.resolveWith<Icon?>((
-                          Set<WidgetState> states,
-                        ) {
-                          final iconColor = isAmoled && isDark
-                              ? Colors.white
-                              : null;
-                          if (states.contains(WidgetState.selected)) {
-                            return Icon(
-                              Icons.check,
-                              size: 20,
-                              color: iconColor,
-                            );
-                          } else {
-                            return const Icon(Icons.close, size: 20);
-                          }
-                        }),
-                      );
-                    },
-                  ),
-                ],
-              ),
-            ),
+
             const SizedBox(height: 4),
             Card(
               color: cardColor,

@@ -5,13 +5,11 @@ import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
 import 'package:music/main.dart'
     show audioHandler, audioServiceReady, overlayVisibleNotifier;
-import 'package:music/screens/play/player_screen.dart';
 import 'package:music/widgets/hero_cached.dart';
 import 'package:music/utils/audio/background_audio_handler.dart';
 import 'marquee.dart';
 import 'package:music/utils/notifiers.dart';
 import 'package:music/utils/theme_preferences.dart';
-import 'package:music/utils/gesture_preferences.dart';
 
 /// Widget con animación de escala al presionar
 class ScaleAnimatedButton extends StatefulWidget {
@@ -77,8 +75,9 @@ class _ScaleAnimatedButtonState extends State<ScaleAnimatedButton>
 
 class NowPlayingOverlay extends StatefulWidget {
   final bool showBar;
+  final VoidCallback? onTap;
 
-  const NowPlayingOverlay({super.key, required this.showBar});
+  const NowPlayingOverlay({super.key, required this.showBar, this.onTap});
 
   @override
   State<NowPlayingOverlay> createState() => _NowPlayingOverlayState();
@@ -90,10 +89,6 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> {
   Timer? _playingDebounce;
   final ValueNotifier<bool> _isPlayingNotifier = ValueNotifier<bool>(false);
 
-  // Preferencias de gestos
-  bool _disableOpenPlayerGesture = false;
-  VoidCallback? _gesturePreferencesListener;
-
   // Cache del widget de fondo AMOLED para evitar reconstrucciones
   Widget? _cachedAmoledBackground;
   String? _cachedBackgroundSongId;
@@ -101,8 +96,6 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> {
   @override
   void initState() {
     super.initState();
-    _loadGesturePreferences();
-    _setupGesturePreferencesListener();
 
     // Escuchar cambios en el estado de reproducción con debounce mínimo
     audioHandler?.playbackState.listen((state) {
@@ -121,34 +114,11 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> {
     });
   }
 
-  /// Carga las preferencias de gestos
-  Future<void> _loadGesturePreferences() async {
-    final preferences = await GesturePreferences.getAllGesturePreferences();
-    if (mounted) {
-      setState(() {
-        _disableOpenPlayerGesture = preferences['openPlayer'] ?? false;
-      });
-    }
-  }
-
-  /// Configura el listener para cambios en las preferencias de gestos
-  void _setupGesturePreferencesListener() {
-    _gesturePreferencesListener = () {
-      if (mounted) {
-        _loadGesturePreferences();
-      }
-    };
-    gesturePreferencesChanged.addListener(_gesturePreferencesListener!);
-  }
-
   @override
   void dispose() {
     _temporaryItemTimer?.cancel();
     _playingDebounce?.cancel();
     _isPlayingNotifier.dispose();
-    if (_gesturePreferencesListener != null) {
-      gesturePreferencesChanged.removeListener(_gesturePreferencesListener!);
-    }
     super.dispose();
   }
 
@@ -209,7 +179,12 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> {
     final backgroundWidget = RepaintBoundary(
       key: ValueKey('amoled_bg_overlay_$songId'),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(20),
+          topRight: Radius.circular(20),
+          bottomLeft: Radius.circular(4),
+          bottomRight: Radius.circular(4),
+        ),
         child: Stack(
           children: [
             Positioned.fill(
@@ -289,99 +264,16 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> {
               builder: (context, navigationEnabled, _) {
                 return GestureDetector(
                   behavior: HitTestBehavior.translucent,
-                  onTap: () async {
+                  onTap: () {
                     if (!overlayVisibleNotifier.value) {
                       overlayVisibleNotifier.value = true;
                     }
                     if (isLoading || !navigationEnabled) return;
-                    final songId = currentSong.extras?['songId'] ?? 0;
-                    final songPath = currentSong.extras?['data'] ?? '';
-                    final artUri = artworkCache[songPath];
-                    // Pre-cargar en background pero no bloquear la apertura
-                    unawaited(getOrCacheArtwork(songId, songPath));
-
-                    if (!context.mounted) return;
-                    Navigator.of(context).push(
-                      PageRouteBuilder(
-                        pageBuilder: (context, animation, secondaryAnimation) =>
-                            FullPlayerScreen(
-                              initialMediaItem: currentSong,
-                              initialArtworkUri: artUri,
-                            ),
-                        transitionsBuilder:
-                            (context, animation, secondaryAnimation, child) {
-                              return SlideTransition(
-                                position:
-                                    Tween<Offset>(
-                                      begin: const Offset(0, 1),
-                                      end: Offset.zero,
-                                    ).animate(
-                                      CurvedAnimation(
-                                        parent: animation,
-                                        curve: Curves.easeOutCubic,
-                                      ),
-                                    ),
-                                child: child,
-                              );
-                            },
-                        transitionDuration: const Duration(milliseconds: 200),
-                        reverseTransitionDuration: const Duration(
-                          milliseconds: 300,
-                        ),
-                      ),
-                    );
+                    widget.onTap?.call();
                   },
-                  onVerticalDragEnd: (details) async {
-                    if (!overlayVisibleNotifier.value) {
-                      overlayVisibleNotifier.value = true;
-                    }
-                    if (isLoading ||
-                        !navigationEnabled ||
-                        _disableOpenPlayerGesture) {
-                      return;
-                    }
-                    if (details.primaryVelocity != null &&
-                        details.primaryVelocity! < 0) {
-                      final currentSong = song;
-                      final songId = currentSong?.extras?['songId'] ?? 0;
-                      final songPath = currentSong?.extras?['data'] ?? '';
-                      final artUri = artworkCache[songPath];
-                      // Pre-cargar en background pero no bloquear la apertura
-                      unawaited(getOrCacheArtwork(songId, songPath));
-
-                      if (!context.mounted) return;
-                      Navigator.of(context).push(
-                        PageRouteBuilder(
-                          pageBuilder:
-                              (context, animation, secondaryAnimation) =>
-                                  FullPlayerScreen(
-                                    initialMediaItem: currentSong,
-                                    initialArtworkUri: artUri,
-                                  ),
-                          transitionsBuilder:
-                              (context, animation, secondaryAnimation, child) {
-                                return SlideTransition(
-                                  position:
-                                      Tween<Offset>(
-                                        begin: const Offset(0, 1),
-                                        end: Offset.zero,
-                                      ).animate(
-                                        CurvedAnimation(
-                                          parent: animation,
-                                          curve: Curves.easeOutCubic,
-                                        ),
-                                      ),
-                                  child: child,
-                                );
-                              },
-                          transitionDuration: const Duration(milliseconds: 200),
-                          reverseTransitionDuration: const Duration(
-                            milliseconds: 300,
-                          ),
-                        ),
-                      );
-                    }
-                  },
+                  // Solo manejar arrastre si no hay onTap (modo standalone).
+                  // Cuando hay onTap (modo panel), el SlidingUpPanel maneja el arrastre.
+                  onVerticalDragEnd: null,
                   child: ValueListenableBuilder<bool>(
                     valueListenable: useArtworkAsBackgroundOverlayNotifier,
                     builder: (context, useArtworkBg, child) {
@@ -413,8 +305,8 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> {
                                     borderRadius: BorderRadius.only(
                                       topLeft: Radius.circular(20),
                                       topRight: Radius.circular(20),
-                                      bottomLeft: Radius.circular(0),
-                                      bottomRight: Radius.circular(0),
+                                      bottomLeft: Radius.circular(4),
+                                      bottomRight: Radius.circular(4),
                                     ),
                                   ),
                                 ),
@@ -436,8 +328,8 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> {
                                   borderRadius: BorderRadius.only(
                                     topLeft: Radius.circular(20),
                                     topRight: Radius.circular(20),
-                                    bottomLeft: Radius.circular(0),
-                                    bottomRight: Radius.circular(0),
+                                    bottomLeft: Radius.circular(4),
+                                    bottomRight: Radius.circular(4),
                                   ),
                                 ),
                                 child: Stack(

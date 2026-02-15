@@ -20,7 +20,6 @@ import 'package:music/utils/db/shortcuts_db.dart';
 import 'package:music/utils/db/mostplayer_db.dart';
 import 'package:music/screens/artist/artist_screen.dart';
 import 'package:mini_music_visualizer/mini_music_visualizer.dart';
-import 'package:music/screens/play/player_screen.dart';
 import 'package:music/widgets/hero_cached.dart';
 import 'package:music/widgets/artwork_list_tile.dart';
 import 'package:music/utils/db/playlist_model.dart' as hive_model;
@@ -1003,6 +1002,14 @@ class _FoldersScreenState extends State<FoldersScreen>
 
   // Para reproducir y abrir PlayerScreen:
   Future<void> _playSongAndOpenPlayer(String path) async {
+    if (playLoadingNotifier.value) return;
+    // Desactiva visualmente el shuffle de inmediato
+    try {
+      if (audioHandler is MyAudioHandler) {
+        (audioHandler as MyAudioHandler).isShuffleNotifier.value = false;
+      }
+    } catch (_) {}
+
     final ignored = await getIgnoredSongs();
     final filtered = _filteredSongs
         .where((s) => !ignored.contains(s.data))
@@ -1015,46 +1022,56 @@ class _FoldersScreenState extends State<FoldersScreen>
       final songId = song.id;
       final songPath = song.data;
 
-      // Crear el MediaItem para la pantalla del reproductor
-      final mediaItem = MediaItem(
-        id: song.data,
-        title: song.title,
-        artist: song.artist,
-        duration: (song.duration != null && song.duration! > 0)
-            ? Duration(milliseconds: song.duration!)
-            : null,
-        artUri: null,
-        extras: {'songId': song.id, 'albumId': song.albumId, 'data': song.data},
-      );
+      // Crear MediaItem temporal y actualizar inmediatamente para evitar visualizar la canción anterior
+      // ArtworkHeroCached.clearFallback();
 
-      // Cargar carátula en background
-      unawaited(getOrCacheArtwork(songId, songPath));
+      // Iniciar carga de carátula
+      final artUriFuture = getOrCacheArtwork(songId, songPath);
+      await (artUriFuture);
 
-      // Navegar a la pantalla del reproductor primero
-      if (!mounted) return;
-      Navigator.of(context).push(
-        PageRouteBuilder(
-          pageBuilder: (context, animation, secondaryAnimation) =>
-              FullPlayerScreen(initialMediaItem: mediaItem),
-          transitionsBuilder: (context, animation, secondaryAnimation, child) {
-            return SlideTransition(
-              position:
-                  Tween<Offset>(
-                    begin: const Offset(0, 1),
-                    end: Offset.zero,
-                  ).animate(
-                    CurvedAnimation(
-                      parent: animation,
-                      curve: Curves.easeOutCubic,
-                    ),
-                  ),
-              child: child,
-            );
+      Uri? cachedArtUri;
+      try {
+        // Intentar obtener si es rápido (cache)
+        cachedArtUri = await artUriFuture.timeout(
+          const Duration(milliseconds: 25),
+        );
+      } catch (_) {
+        // Si no es rápido, actualizar cuando esté listo para evitar el flash del placeholder
+        artUriFuture.then((uri) {
+          if (uri != null && mounted && audioHandler is MyAudioHandler) {
+            final handler = audioHandler as MyAudioHandler;
+            final current = handler.mediaItem.value;
+            // Verificar que seguimos en la misma canción
+            if (current != null && current.extras?['songId'] == songId) {
+              final updatedItem = current.copyWith(artUri: uri);
+              handler.mediaItem.add(updatedItem);
+            }
+          }
+        });
+      }
+
+      if (audioHandler != null) {
+        final tempMediaItem = MediaItem(
+          id: song.data,
+          title: song.title,
+          artist: song.artist,
+          duration: (song.duration != null && song.duration! > 0)
+              ? Duration(milliseconds: song.duration!)
+              : null,
+          artUri: cachedArtUri,
+          extras: {
+            'songId': song.id,
+            'albumId': song.albumId,
+            'data': song.data,
+            'queueIndex': 0,
           },
-          transitionDuration: const Duration(milliseconds: 200),
-          reverseTransitionDuration: const Duration(milliseconds: 300),
-        ),
-      );
+        );
+        (audioHandler as MyAudioHandler).mediaItem.add(tempMediaItem);
+      }
+
+      // Abrir el panel del reproductor con la nueva animación
+      if (!mounted) return;
+      openPlayerPanelNotifier.value = true;
 
       // Activar indicador de carga
       playLoadingNotifier.value = true;
@@ -1099,56 +1116,12 @@ class _FoldersScreenState extends State<FoldersScreen>
         origen = "Carpeta";
       }
       await prefs.setString('last_queue_source', origen);
-      // Comprobar si la cola actual es igual a la nueva (por ids y orden)
-      final currentQueue = handler.queue.value;
-      final isSameQueue =
-          currentQueue.length == filtered.length &&
-          List.generate(
-            filtered.length,
-            (i) => currentQueue[i].id == filtered[i].data,
-          ).every((x) => x);
 
-      if (isSameQueue) {
-        await handler.skipToQueueItem(index);
-        await handler.play();
-        return;
-      }
-
-      // Limpiar la cola y el MediaItem antes de mostrar la nueva canción
+      // Limpiar la cola y el MediaItem antes de mostrar la nueva canción (Comportamiento Favorites)
       handler.queue.add([]);
-      handler.mediaItem.add(null);
 
       // Limpiar el fallback de las carátulas para evitar parpadeo
       ArtworkHeroCached.clearFallback();
-
-      // Crear MediaItem temporal para mostrar el overlay inmediatamente
-      final song = filtered[index];
-
-      // Precargar la carátula antes de crear el MediaItem temporal
-      Uri? cachedArtUri;
-      try {
-        cachedArtUri = await getOrCacheArtwork(song.id, song.data);
-      } catch (e) {
-        // Si falla, continuar sin carátula
-      }
-
-      final tempMediaItem = MediaItem(
-        id: song.data,
-        album: song.album ?? '',
-        title: song.title,
-        artist: song.artist ?? '',
-        duration: (song.duration != null && song.duration! > 0)
-            ? Duration(milliseconds: song.duration!)
-            : null,
-        artUri: cachedArtUri,
-        extras: {
-          'songId': song.id,
-          'albumId': song.albumId,
-          'data': song.data,
-          'queueIndex': 0,
-        },
-      );
-      handler.mediaItem.add(tempMediaItem);
 
       await handler.setQueueFromSongs(filtered, initialIndex: index);
       await handler.play();

@@ -208,6 +208,10 @@ class _SlidingUpPanelState extends State<SlidingUpPanel>
 
   bool _isPanelVisible = true;
 
+  // Notifier que solo se actualiza cuando el estado abierto/cerrado realmente cambia,
+  // evitando rebuilds innecesarios en cada frame de animación.
+  final ValueNotifier<bool> _isPanelOpenNotifier = ValueNotifier<bool>(false);
+
   @override
   void initState() {
     super.initState();
@@ -228,6 +232,12 @@ class _SlidingUpPanelState extends State<SlidingUpPanel>
 
           if (widget.onPanelClosed != null && _ac.value == 0.0) {
             widget.onPanelClosed!();
+          }
+
+          // Actualizar el notifier solo cuando el estado realmente cambie
+          final isOpen = _ac.value == 1.0;
+          if (_isPanelOpenNotifier.value != isOpen) {
+            _isPanelOpenNotifier.value = isOpen;
           }
         });
 
@@ -312,24 +322,27 @@ class _SlidingUpPanelState extends State<SlidingUpPanel>
                 child: AnimatedBuilder(
                   animation: _ac,
                   builder: (context, child) {
-                    return Container(
-                      height:
-                          _ac.value * (widget.maxHeight - widget.minHeight) +
-                          widget.minHeight,
-                      margin: widget.margin,
-                      padding: widget.padding,
-                      decoration: widget.renderPanelSheet
-                          ? BoxDecoration(
-                              border: widget.border,
-                              borderRadius: widget.borderRadius,
-                              boxShadow: widget.boxShadow,
-                              color: widget.color,
-                            )
-                          : null,
-                      child: child,
+                    return ClipRect(
+                      child: Container(
+                        height:
+                            _ac.value * (widget.maxHeight - widget.minHeight) +
+                            widget.minHeight,
+                        margin: widget.margin,
+                        padding: widget.padding,
+                        decoration: widget.renderPanelSheet
+                            ? BoxDecoration(
+                                border: widget.border,
+                                borderRadius: widget.borderRadius,
+                                boxShadow: widget.boxShadow,
+                                color: widget.color,
+                              )
+                            : null,
+                        child: child,
+                      ),
                     );
                   },
                   child: Stack(
+                    clipBehavior: Clip.none,
                     children: <Widget>[
                       //open panel
                       Positioned(
@@ -408,9 +421,18 @@ class _SlidingUpPanelState extends State<SlidingUpPanel>
                                   ).animate(_ac),
 
                                   // if the panel is open ignore pointers (touch events) on the collapsed
-                                  // child so that way touch events go through to whatever is underneath
-                                  child: IgnorePointer(
-                                    ignoring: _isPanelOpen,
+                                  // child so that way touch events go through to whatever is underneath.
+                                  // Usamos ValueListenableBuilder en vez de AnimatedBuilder para que
+                                  // solo se reconstruya cuando _isPanelOpen realmente cambie
+                                  // (no en cada frame de animación).
+                                  child: ValueListenableBuilder<bool>(
+                                    valueListenable: _isPanelOpenNotifier,
+                                    builder: (context, isPanelOpen, child) {
+                                      return IgnorePointer(
+                                        ignoring: isPanelOpen,
+                                        child: child,
+                                      );
+                                    },
                                     child: widget.collapsed,
                                   ),
                                 ),
@@ -426,6 +448,7 @@ class _SlidingUpPanelState extends State<SlidingUpPanel>
 
   @override
   void dispose() {
+    _isPanelOpenNotifier.dispose();
     _ac.dispose();
     super.dispose();
   }
@@ -447,17 +470,23 @@ class _SlidingUpPanelState extends State<SlidingUpPanel>
   // this is because the listener is designed only for use with linking the scrolling of
   // panels and using it for panels that don't want to linked scrolling yields odd results
   Widget _gestureHandler({required Widget child}) {
-    if (!widget.isDraggable) return child;
-
+    // Cuando se usa panel, siempre envolver con GestureDetector para mantener
+    // la estructura del widget tree estable (preservar state de los hijos).
+    // Si no es draggable, los callbacks son null para que no responda a gestos.
     if (widget.panel != null) {
       return GestureDetector(
-        onVerticalDragUpdate: (DragUpdateDetails dets) =>
-            _onGestureSlide(dets.delta.dy),
-        onVerticalDragEnd: (DragEndDetails dets) =>
-            _onGestureEnd(dets.velocity),
+        onTap: widget.isDraggable && _isPanelClosed ? () => _open() : null,
+        onVerticalDragUpdate: widget.isDraggable
+            ? (DragUpdateDetails dets) => _onGestureSlide(dets.delta.dy)
+            : null,
+        onVerticalDragEnd: widget.isDraggable
+            ? (DragEndDetails dets) => _onGestureEnd(dets.velocity)
+            : null,
         child: child,
       );
     }
+
+    if (!widget.isDraggable) return child;
 
     return Listener(
       onPointerDown: (PointerDownEvent p) =>

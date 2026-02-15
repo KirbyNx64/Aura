@@ -35,8 +35,6 @@ final ValueNotifier<bool> coverQualityNotifier = ValueNotifier<bool>(
   true,
 ); // true: alta, false: baja
 
-final ValueNotifier<bool> heroAnimationNotifier = ValueNotifier(true);
-
 final ValueNotifier<bool> playLoadingNotifier = ValueNotifier(false);
 
 final ValueNotifier<bool> overlayNextButtonEnabled = ValueNotifier(false);
@@ -78,3 +76,6 @@ final ValueNotifier<bool> bottomNavVisibleNotifier = ValueNotifier<bool>(true);
 final ValueNotifier<String?> folderUpdatedNotifier = ValueNotifier<String?>(
   null,
 );
+
+// Notifier para solicitar la apertura del panel del reproductor
+final ValueNotifier<bool> openPlayerPanelNotifier = ValueNotifier<bool>(false);

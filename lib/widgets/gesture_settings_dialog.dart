@@ -13,10 +13,8 @@ class GestureSettingsDialog extends StatefulWidget {
 
 class _GestureSettingsDialogState extends State<GestureSettingsDialog> {
   Map<String, bool> _gesturePreferences = {
-    'closePlayer': true,
     'openPlaylist': true,
     'changeSong': true,
-    'openPlayer': true,
   };
   bool _isLoading = true;
 
@@ -31,10 +29,8 @@ class _GestureSettingsDialogState extends State<GestureSettingsDialog> {
     setState(() {
       // Invertir la lógica: true = activo, false = desactivado
       _gesturePreferences = {
-        'closePlayer': !preferences['closePlayer']!,
         'openPlaylist': !preferences['openPlaylist']!,
         'changeSong': !preferences['changeSong']!,
-        'openPlayer': !preferences['openPlayer']!,
       };
       _isLoading = false;
     });
@@ -43,10 +39,8 @@ class _GestureSettingsDialogState extends State<GestureSettingsDialog> {
   Future<void> _savePreferences() async {
     // Invertir la lógica al guardar: true = activo, false = desactivado
     final preferencesToSave = {
-      'closePlayer': !_gesturePreferences['closePlayer']!,
       'openPlaylist': !_gesturePreferences['openPlaylist']!,
       'changeSong': !_gesturePreferences['changeSong']!,
-      'openPlayer': !_gesturePreferences['openPlayer']!,
     };
     await GesturePreferences.setAllGesturePreferences(preferencesToSave);
     // Notificar que las preferencias han cambiado
@@ -101,24 +95,6 @@ class _GestureSettingsDialogState extends State<GestureSettingsDialog> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                SwitchListTile(
-                  title: Text(LocaleProvider.tr('gesture_open_player')),
-                  value: _gesturePreferences['openPlayer']!,
-                  onChanged: (value) {
-                    setState(() {
-                      _gesturePreferences['openPlayer'] = value;
-                    });
-                  },
-                ),
-                SwitchListTile(
-                  title: Text(LocaleProvider.tr('gesture_close_player')),
-                  value: _gesturePreferences['closePlayer']!,
-                  onChanged: (value) {
-                    setState(() {
-                      _gesturePreferences['closePlayer'] = value;
-                    });
-                  },
-                ),
                 SwitchListTile(
                   title: Text(LocaleProvider.tr('gesture_open_playlist')),
                   value: _gesturePreferences['openPlaylist']!,

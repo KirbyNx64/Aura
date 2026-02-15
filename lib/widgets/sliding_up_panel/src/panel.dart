@@ -208,6 +208,9 @@ class _SlidingUpPanelState extends State<SlidingUpPanel>
 
   bool _isPanelVisible = true;
 
+  // Notifier que solo se actualiza cuando el estado abierto/cerrado realmente cambia.
+  final ValueNotifier<bool> _isPanelOpenNotifier = ValueNotifier<bool>(false);
+
   @override
   void initState() {
     super.initState();
@@ -228,6 +231,11 @@ class _SlidingUpPanelState extends State<SlidingUpPanel>
 
           if (widget.onPanelClosed != null && _ac.value == 0.0) {
             widget.onPanelClosed!();
+          }
+
+          final isOpen = _ac.value == 1.0;
+          if (_isPanelOpenNotifier.value != isOpen) {
+            _isPanelOpenNotifier.value = isOpen;
           }
         });
 
@@ -408,9 +416,15 @@ class _SlidingUpPanelState extends State<SlidingUpPanel>
                                   ).animate(_ac),
 
                                   // if the panel is open ignore pointers (touch events) on the collapsed
-                                  // child so that way touch events go through to whatever is underneath
-                                  child: IgnorePointer(
-                                    ignoring: _isPanelOpen,
+                                  // child so that way touch events go through to whatever is underneath.
+                                  child: ValueListenableBuilder<bool>(
+                                    valueListenable: _isPanelOpenNotifier,
+                                    builder: (context, isPanelOpen, child) {
+                                      return IgnorePointer(
+                                        ignoring: isPanelOpen,
+                                        child: child,
+                                      );
+                                    },
                                     child: widget.collapsed,
                                   ),
                                 ),
@@ -426,6 +440,7 @@ class _SlidingUpPanelState extends State<SlidingUpPanel>
 
   @override
   void dispose() {
+    _isPanelOpenNotifier.dispose();
     _ac.dispose();
     super.dispose();
   }

@@ -14,7 +14,6 @@ import 'package:music/utils/db/shortcuts_db.dart';
 import 'package:music/utils/db/songs_index_db.dart';
 import 'package:mini_music_visualizer/mini_music_visualizer.dart';
 import 'package:music/utils/db/playlist_model.dart' as hive_model;
-import 'package:music/screens/play/player_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:music/widgets/song_info_dialog.dart';
 import 'package:music/widgets/hero_cached.dart';
@@ -203,11 +202,12 @@ class _FavoritesScreenState extends State<FavoritesScreen>
   }
 
   Future<void> _playSong(SongModel song) async {
-    const int maxQueueSongs = 200;
     final index = _favorites.indexWhere((s) => s.data == song.data);
 
     if (index == -1) return;
+
     final handler = audioHandler as MyAudioHandler;
+    /*
     final currentQueue = handler.queue.value;
     bool isSameQueue = false;
     if (currentQueue.length == _favorites.length) {
@@ -225,15 +225,17 @@ class _FavoritesScreenState extends State<FavoritesScreen>
       await handler.play();
       return;
     }
+    */
 
     // Limpiar la cola y el MediaItem antes de mostrar la nueva canción
     (audioHandler as MyAudioHandler).queue.add([]);
-    (audioHandler as MyAudioHandler).mediaItem.add(null);
+    // (audioHandler as MyAudioHandler).mediaItem.add(null);
 
     // Limpiar el fallback de las carátulas para evitar parpadeo
     ArtworkHeroCached.clearFallback();
 
     // Precargar la carátula antes de crear el MediaItem temporal
+    /*
     Uri? cachedArtUri;
     try {
       cachedArtUri = await getOrCacheArtwork(song.id, song.data);
@@ -258,6 +260,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
       },
     );
     (audioHandler as MyAudioHandler).mediaItem.add(tempMediaItem);
+    */
 
     // Solo guardar el origen si se va a cambiar la cola
     final prefs = await SharedPreferences.getInstance();
@@ -266,14 +269,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
       LocaleProvider.tr('favorites_title'),
     );
 
-    int before = (maxQueueSongs / 2).floor();
-    int after = maxQueueSongs - before;
-    int start = (index - before).clamp(0, _favorites.length);
-    int end = (index + after).clamp(0, _favorites.length);
-    List<SongModel> limitedQueue = _favorites.sublist(start, end);
-    int newIndex = index - start;
-
-    await handler.setQueueFromSongs(limitedQueue, initialIndex: newIndex);
+    await handler.setQueueFromSongs(_favorites, initialIndex: index);
     await handler.play();
   }
 
@@ -392,6 +388,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
   }
 
   void _onSongSelected(SongModel song) async {
+    if (playLoadingNotifier.value) return;
     try {
       (audioHandler as MyAudioHandler).isShuffleNotifier.value = false;
     } catch (_) {}
@@ -413,44 +410,53 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     final songId = song.id;
     final songPath = song.data;
 
-    // Crear el MediaItem para la pantalla del reproductor
-    final mediaItem = MediaItem(
+    // Crear MediaItem temporal y actualizar inmediatamente para evitar visualizar la canción anterior
+    // ArtworkHeroCached.clearFallback();
+
+    // Iniciar carga de carátula
+    final artUriFuture = getOrCacheArtwork(songId, songPath);
+    await (artUriFuture);
+
+    Uri? cachedArtUri;
+    try {
+      cachedArtUri = await artUriFuture.timeout(
+        const Duration(milliseconds: 25),
+      );
+    } catch (_) {
+      // Si no es rápido, actualizar cuando esté listo para evitar el flash del placeholder
+      artUriFuture.then((uri) {
+        if (uri != null && mounted && audioHandler is MyAudioHandler) {
+          final handler = audioHandler as MyAudioHandler;
+          final current = handler.mediaItem.value;
+          // Verificar que seguimos en la misma canción
+          if (current != null && current.extras?['songId'] == songId) {
+            final updatedItem = current.copyWith(artUri: uri);
+            handler.mediaItem.add(updatedItem);
+          }
+        }
+      });
+    }
+
+    final tempMediaItem = MediaItem(
       id: song.data,
       title: song.title,
       artist: song.artist,
       duration: (song.duration != null && song.duration! > 0)
           ? Duration(milliseconds: song.duration!)
           : null,
-      artUri: null,
-      extras: {'songId': song.id, 'albumId': song.albumId, 'data': song.data},
+      artUri: cachedArtUri,
+      extras: {
+        'songId': song.id,
+        'albumId': song.albumId,
+        'data': song.data,
+        'queueIndex': 0,
+      },
     );
+    (audioHandler as MyAudioHandler).mediaItem.add(tempMediaItem);
 
-    // Cargar carátula en background
-    unawaited(getOrCacheArtwork(songId, songPath));
-
-    // Navegar a la pantalla del reproductor primero
+    // Abrir el panel del reproductor con la nueva animación
     if (!mounted) return;
-    Navigator.of(context).push(
-      PageRouteBuilder(
-        pageBuilder: (context, animation, secondaryAnimation) =>
-            FullPlayerScreen(initialMediaItem: mediaItem),
-        transitionsBuilder: (context, animation, secondaryAnimation, child) {
-          return SlideTransition(
-            position: Tween<Offset>(begin: const Offset(0, 1), end: Offset.zero)
-                .animate(
-                  CurvedAnimation(
-                    parent: animation,
-                    curve: Curves.easeOutCubic,
-                  ),
-                ),
-            child: child,
-          );
-        },
-        transitionDuration: const Duration(milliseconds: 200),
-        reverseTransitionDuration: const Duration(milliseconds: 300),
-      ),
-    );
-
+    openPlayerPanelNotifier.value = true;
     // Activar indicador de carga
     playLoadingNotifier.value = true;
 
@@ -1914,182 +1920,171 @@ class _FavoritesScreenState extends State<FavoritesScreen>
       ),
       body: RefreshIndicator(
         onRefresh: _refreshFavorites,
-        child: SafeArea(
-          child: Column(
-            children: [
-              Expanded(
-                child: Builder(
-                  builder: (context) {
-                    final List<SongModel> songsToShow =
-                        _searchController.text.isNotEmpty
-                        ? _filteredFavorites
-                        : _favorites;
-                    if (songsToShow.isEmpty) {
-                      return Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.favorite_outline_rounded,
-                              weight: 600,
-                              size: 48,
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.onSurface.withValues(alpha: 0.6),
-                            ),
-                            const SizedBox(height: 16),
-                            TranslatedText(
-                              'no_songs',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.onSurface.withValues(alpha: 0.6),
-                              ),
-                            ),
-                          ],
+        child: ValueListenableBuilder<MediaItem?>(
+          valueListenable: _currentMediaItemNotifier,
+          builder: (context, debouncedMediaItem, child) {
+            final List<SongModel> songsToShow =
+                _searchController.text.isNotEmpty
+                ? _filteredFavorites
+                : _favorites;
+
+            if (songsToShow.isEmpty) {
+              return SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                child: SizedBox(
+                  height: MediaQuery.of(context).size.height - 200,
+                  child: Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.favorite_outline_rounded,
+                          weight: 600,
+                          size: 48,
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onSurface.withValues(alpha: 0.6),
                         ),
-                      );
-                    }
-                    return ValueListenableBuilder<MediaItem?>(
-                      valueListenable: _currentMediaItemNotifier,
-                      builder: (context, debouncedMediaItem, child) {
-                        final bottomPadding = MediaQuery.of(
-                          context,
-                        ).padding.bottom;
-                        final space =
-                            (debouncedMediaItem != null ? 100.0 : 0.0) +
-                            bottomPadding;
-                        return ValueListenableBuilder<MediaItem?>(
-                          valueListenable: _immediateMediaItemNotifier,
-                          builder: (context, immediateMediaItem, child) {
-                            final colorScheme = colorSchemeNotifier.value;
-                            final isAmoled =
-                                colorScheme == AppColorScheme.amoled;
-                            final isDark =
-                                Theme.of(context).brightness == Brightness.dark;
+                        const SizedBox(height: 16),
+                        TranslatedText(
+                          'no_songs',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onSurface.withValues(alpha: 0.6),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            }
 
-                            final cardColor = isAmoled
-                                ? Colors.white.withAlpha(20)
-                                : isDark
-                                ? Theme.of(context).colorScheme.secondary
-                                      .withValues(alpha: 0.06)
-                                : Theme.of(context).colorScheme.secondary
-                                      .withValues(alpha: 0.07);
+            final bottomPadding = MediaQuery.of(context).padding.bottom;
+            final space =
+                (debouncedMediaItem != null ? 100.0 : 0.0) + bottomPadding;
 
-                            return RawScrollbar(
-                              controller: _scrollController,
-                              thumbColor: Theme.of(context).colorScheme.primary,
-                              thickness: 6.0,
-                              radius: const Radius.circular(8),
-                              interactive: true,
-                              padding: EdgeInsets.only(bottom: space),
-                              child: ListView.builder(
-                                controller: _scrollController,
-                                padding: EdgeInsets.only(
-                                  left: 16.0,
-                                  right: 16.0,
-                                  top: 8.0,
-                                  bottom: space,
-                                ),
-                                itemCount: songsToShow.length,
-                                itemBuilder: (context, index) {
-                                  final song = songsToShow[index];
-                                  final path = song.data;
-                                  final isCurrent =
-                                      (immediateMediaItem?.id != null &&
-                                      path.isNotEmpty &&
-                                      (immediateMediaItem!.id == path ||
-                                          immediateMediaItem.extras?['data'] ==
-                                              path));
-                                  final bool isFirst = index == 0;
-                                  final bool isLast =
-                                      index == songsToShow.length - 1;
-                                  final bool isOnly = songsToShow.length == 1;
+            return ValueListenableBuilder<MediaItem?>(
+              valueListenable: _immediateMediaItemNotifier,
+              builder: (context, immediateMediaItem, child) {
+                final colorScheme = colorSchemeNotifier.value;
+                final isAmoled = colorScheme == AppColorScheme.amoled;
+                final isDark = Theme.of(context).brightness == Brightness.dark;
 
-                                  BorderRadius borderRadius;
-                                  if (isOnly) {
-                                    borderRadius = BorderRadius.circular(20);
-                                  } else if (isFirst) {
-                                    borderRadius = const BorderRadius.only(
-                                      topLeft: Radius.circular(20),
-                                      topRight: Radius.circular(20),
-                                      bottomLeft: Radius.circular(4),
-                                      bottomRight: Radius.circular(4),
-                                    );
-                                  } else if (isLast) {
-                                    borderRadius = const BorderRadius.only(
-                                      topLeft: Radius.circular(4),
-                                      topRight: Radius.circular(4),
-                                      bottomLeft: Radius.circular(20),
-                                      bottomRight: Radius.circular(20),
-                                    );
-                                  } else {
-                                    borderRadius = BorderRadius.circular(4);
-                                  }
+                final cardColor = isAmoled
+                    ? Colors.white.withAlpha(20)
+                    : isDark
+                    ? Theme.of(
+                        context,
+                      ).colorScheme.secondary.withValues(alpha: 0.06)
+                    : Theme.of(
+                        context,
+                      ).colorScheme.secondary.withValues(alpha: 0.07);
 
-                                  // Solo usar ValueListenableBuilder para la canción actual
-                                  Widget listTileWidget;
-                                  if (isCurrent) {
-                                    listTileWidget =
-                                        ValueListenableBuilder<bool>(
-                                          valueListenable: _isPlayingNotifier,
-                                          builder: (context, playing, child) {
-                                            return _buildOptimizedListTile(
-                                              context,
-                                              song,
-                                              isCurrent,
-                                              playing,
-                                              isAmoled,
-                                              borderRadius: borderRadius,
-                                            );
-                                          },
-                                        );
-                                  } else {
-                                    listTileWidget = _buildOptimizedListTile(
-                                      context,
-                                      song,
-                                      isCurrent,
-                                      false,
-                                      isAmoled,
-                                      borderRadius: borderRadius,
-                                    );
-                                  }
+                return RawScrollbar(
+                  controller: _scrollController,
+                  thumbColor: Theme.of(context).colorScheme.primary,
+                  thickness: 6.0,
+                  radius: const Radius.circular(8),
+                  interactive: true,
+                  padding: EdgeInsets.only(bottom: space),
+                  child: ListView.builder(
+                    controller: _scrollController,
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: EdgeInsets.only(
+                      left: 16.0,
+                      right: 16.0,
+                      top: 8.0,
+                      bottom: space,
+                    ),
+                    itemCount: songsToShow.length,
+                    itemBuilder: (context, index) {
+                      final song = songsToShow[index];
+                      final path = song.data;
+                      final isCurrent =
+                          (immediateMediaItem?.id != null &&
+                          path.isNotEmpty &&
+                          (immediateMediaItem!.id == path ||
+                              immediateMediaItem.extras?['data'] == path));
+                      final bool isFirst = index == 0;
+                      final bool isLast = index == songsToShow.length - 1;
+                      final bool isOnly = songsToShow.length == 1;
 
-                                  return Padding(
-                                    padding: EdgeInsets.only(
-                                      bottom: isLast ? 0 : 4,
-                                    ),
-                                    child: Card(
-                                      color: isCurrent
-                                          ? Theme.of(context)
-                                                .colorScheme
-                                                .primary
-                                                .withAlpha(isDark ? 40 : 25)
-                                          : cardColor,
-                                      margin: EdgeInsets.zero,
-                                      elevation: 0,
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: borderRadius,
-                                      ),
-                                      child: ClipRRect(
-                                        borderRadius: borderRadius,
-                                        child: listTileWidget,
-                                      ),
-                                    ),
-                                  );
-                                },
-                              ),
+                      BorderRadius borderRadius;
+                      if (isOnly) {
+                        borderRadius = BorderRadius.circular(20);
+                      } else if (isFirst) {
+                        borderRadius = const BorderRadius.only(
+                          topLeft: Radius.circular(20),
+                          topRight: Radius.circular(20),
+                          bottomLeft: Radius.circular(4),
+                          bottomRight: Radius.circular(4),
+                        );
+                      } else if (isLast) {
+                        borderRadius = const BorderRadius.only(
+                          topLeft: Radius.circular(4),
+                          topRight: Radius.circular(4),
+                          bottomLeft: Radius.circular(20),
+                          bottomRight: Radius.circular(20),
+                        );
+                      } else {
+                        borderRadius = BorderRadius.circular(4);
+                      }
+
+                      // Solo usar ValueListenableBuilder para la canción actual
+                      Widget listTileWidget;
+                      if (isCurrent) {
+                        listTileWidget = ValueListenableBuilder<bool>(
+                          valueListenable: _isPlayingNotifier,
+                          builder: (context, playing, child) {
+                            return _buildOptimizedListTile(
+                              context,
+                              song,
+                              isCurrent,
+                              playing,
+                              isAmoled,
+                              borderRadius: borderRadius,
                             );
                           },
                         );
-                      },
-                    );
-                  },
-                ),
-              ),
-            ],
-          ),
+                      } else {
+                        listTileWidget = _buildOptimizedListTile(
+                          context,
+                          song,
+                          isCurrent,
+                          false,
+                          isAmoled,
+                          borderRadius: borderRadius,
+                        );
+                      }
+
+                      return Padding(
+                        padding: EdgeInsets.only(bottom: isLast ? 0 : 4),
+                        child: Card(
+                          color: isCurrent
+                              ? Theme.of(context).colorScheme.primary.withAlpha(
+                                  isDark ? 40 : 25,
+                                )
+                              : cardColor,
+                          margin: EdgeInsets.zero,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: borderRadius,
+                          ),
+                          child: ClipRRect(
+                            borderRadius: borderRadius,
+                            child: listTileWidget,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                );
+              },
+            );
+          },
         ),
       ),
     );

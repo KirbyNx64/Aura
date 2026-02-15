@@ -218,9 +218,7 @@ const Map<String, String> appLocalizationsEs = {
   'select_language_desc': 'Selecciona el idioma de la app',
   'select_theme_desc': 'Selecciona el tema de la app',
   'artwork_quality': 'Calidad de carátula al reproducir',
-  'hero_animation': 'Animación Hero',
-  'hero_animation_desc':
-      'Activa la animación Hero entre overlay y reproductor.',
+
   'overlay_next_button': 'Botón siguiente en overlay',
   'overlay_next_button_desc':
       'Muestra el botón de siguiente canción en el overlay de reproducción.',

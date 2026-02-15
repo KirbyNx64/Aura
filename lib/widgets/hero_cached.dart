@@ -100,26 +100,9 @@ class _ArtworkHeroCachedState extends State<ArtworkHeroCached> {
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<bool>(
-      valueListenable: heroAnimationNotifier,
-      builder: (context, useHeroAnimation, child) {
-        final content = ClipRRect(
-          borderRadius: widget.borderRadius,
-          child: _buildContent(context),
-        );
-
-        // Si las animaciones hero están deshabilitadas, devolver solo el contenido
-        if (!useHeroAnimation) {
-          return content;
-        }
-
-        // Si están habilitadas, usar Hero
-        return Hero(
-          key: Key(widget.heroTag),
-          tag: widget.heroTag,
-          child: content,
-        );
-      },
+    return ClipRRect(
+      borderRadius: widget.borderRadius,
+      child: _buildContent(context),
     );
   }
 

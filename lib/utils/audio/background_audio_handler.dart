@@ -68,7 +68,7 @@ Future<AudioHandler> initAudioService() async {
               'Controles de reproducción de música',
           androidNotificationOngoing: true,
           androidNotificationClickStartsActivity: true,
-          // androidStopForegroundOnPause: false,
+          androidStopForegroundOnPause: false,
           androidResumeOnClick: true,
           preloadArtwork: true,
         ),
@@ -1145,35 +1145,28 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       indicesToLoad.add(i);
     }
 
-    // Cargar carátulas para las canciones prioritarias de forma síncrona
+    // Cargar carátulas para las canciones prioritarias en paralelo
     if (indicesToLoad.isNotEmpty) {
-      // print('🔄 Cargando carátulas para canciones prioritarias: ${indicesToLoad.toList()}');
+      await Future.wait(
+        indicesToLoad.map((i) async {
+          if (i < 0 || i >= songs.length) return;
+          final song = songs[i];
+          try {
+            final artUri = await getOrCacheArtwork(
+              song.id,
+              song.data,
+            ).timeout(const Duration(milliseconds: 600));
 
-      for (final i in indicesToLoad) {
-        final song = songs[i];
-        try {
-          // print('🖼️ Cargando carátula para: ${song.title} (índice: $i)');
-          final artUri = await getOrCacheArtwork(
-            song.id,
-            song.data,
-          ).timeout(const Duration(milliseconds: 800));
-
-          if (artUri != null) {
-            // print('✅ Carátula cargada para: ${song.title} - ${artUri.path}');
-            // Asegurar que el URI esté correctamente formateado
-            final validUri = Uri.file(artUri.toFilePath());
-            final updatedMediaItem = mediaItems[i].copyWith(artUri: validUri);
-            mediaItems[i] = updatedMediaItem;
-            // print('🔗 URI de carátula inicial formateado: $validUri');
-          } else {
-            //  print('⚠️ No se pudo cargar carátula para: ${song.title}');
+            if (artUri != null && i < mediaItems.length) {
+              final validUri = Uri.file(artUri.toFilePath());
+              mediaItems[i] = mediaItems[i].copyWith(artUri: validUri);
+            }
+          } catch (_) {
+            // Ignorar errores de carga individual
           }
-        } catch (e) {
-          // print('❌ Error cargando carátula para ${song.title}: $e');
-        }
-      }
+        }),
+      );
     }
-
     // print('✅ MediaItems creados con carátulas: ${mediaItems.where((m) => m.artUri != null).length}/${mediaItems.length}');
 
     return mediaItems;
@@ -1215,23 +1208,38 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         ? songs[initialIndex].data
         : null;
 
-    // Filtrar canciones que ya no existen en disco para evitar ENOENT
-    final List<SongModel> validSongs = [];
-    for (final s in songs) {
-      try {
-        if (await File(s.data).exists()) {
-          validSongs.add(s);
-        }
-      } catch (_) {}
+    // Filtrar canciones que ya no existen en disco para evitar ENOENT (Optimizado)
+    List<SongModel> validSongs;
+    if (songs.length > 100) {
+      // Para listas grandes, asumimos que existen para evitar miles de operaciones de E/S bloqueantes
+      // Solo verificamos la canción objetivo
+      validSongs = songs;
+      if (initialIndex >= 0 && initialIndex < songs.length) {
+        try {
+          if (!(await File(songs[initialIndex].data).exists())) {
+            // Si la elegida no existe, usamos la lista tal cual y el reproductor manejará el error
+          }
+        } catch (_) {}
+      }
+    } else {
+      // Para listas pequeñas, el filtrado paralelo es eficiente
+      final exists = await Future.wait(
+        songs.map((s) => File(s.data).exists().catchError((_) => false)),
+      );
+      validSongs = [];
+      for (int i = 0; i < songs.length; i++) {
+        if (exists[i]) validSongs.add(songs[i]);
+      }
     }
 
     // Recalcular el índice inicial para apuntar a la canción correcta en validSongs
-    if (targetSongPath != null && validSongs.isNotEmpty) {
+    if (targetSongPath != null &&
+        validSongs.isNotEmpty &&
+        validSongs.length != songs.length) {
       final newIndex = validSongs.indexWhere((s) => s.data == targetSongPath);
       if (newIndex != -1) {
         initialIndex = newIndex;
       } else {
-        // La canción seleccionada no existe, usar índice 0
         initialIndex = 0;
       }
     }

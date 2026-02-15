@@ -2,10 +2,13 @@ import 'package:audio_service/audio_service.dart';
 import 'package:music/main.dart';
 import 'package:flutter/material.dart';
 import 'package:music/widgets/now_playing_overlay.dart';
+import 'package:music/screens/play/player_screen.dart';
 import 'package:music/l10n/locale_provider.dart';
 import 'package:music/utils/notifiers.dart';
 import 'package:music/utils/theme_preferences.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import 'package:music/widgets/sliding_up_panel/sliding_up_panel_overlay.dart'
+    as overlay_panel;
 
 typedef PageBuilderWithTabChange =
     Widget Function(BuildContext context, void Function(int) onTabChange);
@@ -95,6 +98,10 @@ class Material3BottomNav extends StatefulWidget {
 class _Material3BottomNavState extends State<Material3BottomNav> {
   late int _selectedIndex;
   late final List<Widget?> _pages;
+  final overlay_panel.PanelController _overlayPanelController =
+      overlay_panel.PanelController();
+  bool _playlistOpen = false;
+  final ValueNotifier<double> _panelPositionNotifier = ValueNotifier(0.0);
 
   @override
   void initState() {
@@ -106,6 +113,16 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
       _onTabChange,
     );
     widget.selectedTabIndex.value = _selectedIndex;
+
+    // Escuchar solicitudes para abrir el panel del reproductor
+    openPlayerPanelNotifier.addListener(_onOpenPlayerPanelRequested);
+  }
+
+  void _onOpenPlayerPanelRequested() {
+    if (openPlayerPanelNotifier.value && _overlayPanelController.isAttached) {
+      _overlayPanelController.open();
+      openPlayerPanelNotifier.value = false; // Reset
+    }
   }
 
   void _onItemTapped(int index) {
@@ -122,8 +139,37 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
     _onItemTapped(index);
   }
 
+  // Función para manejar el botón atrás de forma centralizada
+  void _handleBackNavigation() {
+    final tab = widget.selectedTabIndex.value;
+
+    if (tab == 1) {
+      // YT
+      final state = ytScreenKey.currentState as dynamic;
+      if (state?.canPopInternally() == true) {
+        state.handleInternalPop();
+        return;
+      }
+    } else if (tab == 3) {
+      // Folders
+      final state = foldersScreenKey.currentState as dynamic;
+      if (state?.canPopInternally() == true) {
+        state.handleInternalPop();
+        return;
+      }
+    } else if (tab == 0) {
+      // Home screen
+      final state = homeScreenKey.currentState as dynamic;
+      if (state?.canPopInternally() == true) {
+        state.handleInternalPop();
+        return;
+      }
+    }
+  }
+
   @override
   void dispose() {
+    openPlayerPanelNotifier.removeListener(_onOpenPlayerPanelRequested);
     super.dispose();
   }
 
@@ -213,6 +259,7 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
   Widget build(BuildContext context) {
     return Scaffold(
       extendBody: true,
+      resizeToAvoidBottomInset: false,
       body: ValueListenableBuilder<bool>(
         valueListenable: audioServiceReady,
         builder: (context, ready, _) {
@@ -220,11 +267,18 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
             // Muestra solo la pantalla principal sin overlay
             return SafeArea(
               top: false,
-              child: IndexedStack(
-                index: _selectedIndex,
-                children: List.generate(
-                  _pages.length,
-                  (i) => _pages[i] ?? const SizedBox.shrink(),
+              child: PopScope(
+                canPop: false,
+                onPopInvokedWithResult: (didPop, result) {
+                  if (didPop) return;
+                  _handleBackNavigation();
+                },
+                child: IndexedStack(
+                  index: _selectedIndex,
+                  children: List.generate(
+                    _pages.length,
+                    (i) => _pages[i] ?? const SizedBox.shrink(),
+                  ),
                 ),
               ),
             );
@@ -239,40 +293,161 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
               return ValueListenableBuilder<bool>(
                 valueListenable: overlayVisibleNotifier,
                 builder: (context, overlayActive, child) {
-                  return Stack(
-                    children: [
-                      SafeArea(
-                        top: false,
-                        bottom: false,
-                        child: IndexedStack(
-                          index: _selectedIndex,
-                          children: List.generate(
-                            _pages.length,
-                            (i) => _pages[i] ?? const SizedBox.shrink(),
-                          ),
-                        ),
+                  final pageContent = SafeArea(
+                    top: false,
+                    bottom: false,
+                    child: IndexedStack(
+                      index: _selectedIndex,
+                      children: List.generate(
+                        _pages.length,
+                        (i) => _pages[i] ?? const SizedBox.shrink(),
                       ),
-                      // Overlay optimizado - solo se construye cuando es necesario
-                      if (overlayActive)
-                        Positioned(
-                          left: 0,
-                          right: 0,
-                          bottom: MediaQuery.of(context).padding.bottom,
-                          child: Container(
-                            height: 100,
-                            color: Colors.transparent,
+                    ),
+                  );
+
+                  if (!overlayActive) {
+                    return pageContent;
+                  }
+
+                  final bottomPadding = MediaQuery.of(context).padding.bottom;
+                  final screenHeight = MediaQuery.of(context).size.height;
+
+                  // Check if we need to open the panel after it renders (e.g. first launch)
+                  if (openPlayerPanelNotifier.value) {
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (openPlayerPanelNotifier.value &&
+                          _overlayPanelController.isAttached) {
+                        _overlayPanelController.open();
+                        openPlayerPanelNotifier.value = false;
+                      }
+                    });
+                  }
+
+                  return ValueListenableBuilder<bool>(
+                    valueListenable: playLoadingNotifier,
+                    builder: (context, isLoading, _) {
+                      return PopScope(
+                        canPop: false,
+                        onPopInvokedWithResult: (didPop, result) {
+                          if (didPop) return;
+
+                          // Prioridad: cerrar panel si está abierto
+                          if (_overlayPanelController.isAttached &&
+                              _overlayPanelController.isPanelOpen) {
+                            // Si el playlist interno está abierto, dejamos que FullPlayerScreen maneje el cierre
+                            if (_playlistOpen) return;
+
+                            if (isLoading) return; // Bloquear si carga
+                            _overlayPanelController.close();
+                            return;
+                          }
+
+                          // Si no hay panel abierto, manejar navegación interna de tabs
+                          _handleBackNavigation();
+                        },
+                        child: overlay_panel.SlidingUpPanel(
+                          controller: _overlayPanelController,
+                          minHeight: 82 + bottomPadding,
+                          maxHeight: screenHeight,
+                          renderPanelSheet: false,
+                          boxShadow: const [],
+                          color: Colors.transparent,
+                          isDraggable:
+                              !_playlistOpen &&
+                              !isLoading, // Bloquear deslizado si carga
+                          panelSnapping: true,
+                          backdropEnabled: false,
+                          defaultPanelState: overlay_panel.PanelState.closed,
+                          onPanelSlide: (position) {
+                            // Actualizar posición para animar AppBar (sin setState para evitar lag)
+                            _panelPositionNotifier.value = position;
+                            // Ocultar la barra de navegación cuando el panel se abre
+                            if (position > 0.1) {
+                              if (bottomNavVisibleNotifier.value) {
+                                bottomNavVisibleNotifier.value = false;
+                              }
+                            } else {
+                              if (!bottomNavVisibleNotifier.value) {
+                                bottomNavVisibleNotifier.value = true;
+                              }
+                            }
+                          },
+                          onPanelClosed: () {
+                            bottomNavVisibleNotifier.value = true;
+                            // Asegurar que _playlistOpen se resetee al cerrar el panel
+                            if (_playlistOpen) {
+                              setState(() {
+                                _playlistOpen = false;
+                              });
+                            }
+                          },
+                          onPanelOpened: () {
+                            bottomNavVisibleNotifier.value = false;
+                          },
+                          collapsed: ValueListenableBuilder<double>(
+                            valueListenable: _panelPositionNotifier,
+                            builder: (context, position, child) {
+                              return Opacity(
+                                opacity: (1.0 - (position / 0.3)).clamp(
+                                  0.0,
+                                  1.0,
+                                ),
+                                child: child,
+                              );
+                            },
+                            child: RepaintBoundary(
+                              child: Padding(
+                                padding: EdgeInsets.only(bottom: bottomPadding),
+                                child: NowPlayingOverlay(
+                                  showBar: true,
+                                  onTap: () {
+                                    if (_overlayPanelController.isAttached) {
+                                      _overlayPanelController.open();
+                                    }
+                                  },
+                                ),
+                              ),
+                            ),
                           ),
-                        ),
-                      if (overlayActive)
-                        Positioned(
-                          bottom: MediaQuery.of(context).padding.bottom,
-                          left: 0,
-                          right: 0,
-                          child: const Center(
-                            child: NowPlayingOverlay(showBar: true),
+                          panel: Builder(
+                            builder: (context) {
+                              // Usar viewPadding (padding del sistema) en vez del
+                              // padding modificado por el Scaffold que incluye la
+                              // altura del bottom nav (ahora fija con SizedBox).
+                              final data = MediaQuery.of(context);
+                              return MediaQuery(
+                                data: data.copyWith(
+                                  padding: data.padding.copyWith(
+                                    bottom: data.viewPadding.bottom,
+                                  ),
+                                ),
+                                child: RepaintBoundary(
+                                  child: FullPlayerScreen(
+                                    initialMediaItem: snapshot.data,
+                                    panelPositionNotifier:
+                                        _panelPositionNotifier,
+                                    onClose: () {
+                                      if (_overlayPanelController.isAttached &&
+                                          !isLoading) {
+                                        _overlayPanelController.close();
+                                      }
+                                    },
+                                    onPlaylistStateChanged: (isOpen) {
+                                      if (_playlistOpen != isOpen) {
+                                        setState(() {
+                                          _playlistOpen = isOpen;
+                                        });
+                                      }
+                                    },
+                                  ),
+                                ),
+                              );
+                            },
                           ),
+                          body: pageContent,
                         ),
-                    ],
+                      );
+                    },
                   );
                 },
               );
@@ -284,27 +459,30 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
         valueListenable: bottomNavVisibleNotifier,
         builder: (context, isVisible, navChild) {
           final bottomPadding = MediaQuery.paddingOf(context).bottom;
-          return AnimatedContainer(
-            duration: const Duration(milliseconds: 300),
-            height: isVisible ? (80 + bottomPadding) : bottomPadding,
-            child: Stack(
-              children: [
-                // Gesto para bloquear toques en la barra de Android (como en settings_screen.dart)
-                GestureDetector(
-                  onVerticalDragStart: (_) {},
-                  behavior: HitTestBehavior.translucent,
-                  child: SizedBox(
-                    height: isVisible ? (80 + bottomPadding) : bottomPadding,
-                    width: double.infinity,
-                  ),
+          final navHeight = 74 + bottomPadding;
+          return SizedBox(
+            height: navHeight,
+            child: AnimatedSlide(
+              offset: isVisible ? Offset.zero : const Offset(0, 1),
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeInOut,
+              child: IgnorePointer(
+                ignoring: !isVisible,
+                child: Stack(
+                  children: [
+                    // Gesto para bloquear toques en la barra de Android
+                    GestureDetector(
+                      onVerticalDragStart: (_) {},
+                      behavior: HitTestBehavior.translucent,
+                      child: SizedBox(
+                        height: navHeight,
+                        width: double.infinity,
+                      ),
+                    ),
+                    navChild!,
+                  ],
                 ),
-                AnimatedSlide(
-                  offset: isVisible ? Offset.zero : const Offset(0, 1),
-                  duration: const Duration(milliseconds: 300),
-                  curve: Curves.easeInOut,
-                  child: navChild!,
-                ),
-              ],
+              ),
             ),
           );
         },
@@ -318,6 +496,7 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
                 final isDark = Theme.of(context).brightness == Brightness.dark;
 
                 return NavigationBar(
+                  height: 74,
                   backgroundColor: Theme.of(context).colorScheme.surface,
                   animationDuration: const Duration(milliseconds: 400),
                   selectedIndex: _selectedIndex,

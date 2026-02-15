@@ -40,11 +40,11 @@ class FavoritesDB {
   Future<List<SongModel>> getFavorites() async {
     final b = await box;
     final List<String> paths = b.values.toList().reversed.toList();
-    
+
     // Usar SongsIndexDB para obtener solo canciones no ignoradas
     final SongsIndexDB songsIndex = SongsIndexDB();
     final indexedSongs = await songsIndex.getIndexedSongs();
-    
+
     List<SongModel> ordered = [];
     for (final path in paths) {
       final match = indexedSongs.where((s) => s.data == path);
@@ -66,7 +66,10 @@ class FavoritesDB {
     final allSongs = await query.querySongs();
     try {
       final song = allSongs.firstWhere((s) => s.id == songId);
-      final key = b.keys.firstWhere((k) => b.get(k) == song.data, orElse: () => null);
+      final key = b.keys.firstWhere(
+        (k) => b.get(k) == song.data,
+        orElse: () => null,
+      );
       if (key != null) {
         await b.delete(key);
       }

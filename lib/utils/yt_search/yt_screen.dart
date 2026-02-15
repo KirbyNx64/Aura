@@ -261,9 +261,6 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
       return;
     }
 
-    // Ocultar la barra de navegación al iniciar cualquier búsqueda (incluyendo enlaces)
-    bottomNavVisibleNotifier.value = false;
-
     // Verificar si es un enlace de playlist de YouTube
     if (_isYouTubePlaylistUrl(_controller.text)) {
       _focusNode.unfocus();
@@ -748,7 +745,6 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
       _tabScrollController.jumpTo(0);
     }
     _focusNode.unfocus();
-    bottomNavVisibleNotifier.value = true;
   }
 
   // Función para detectar si el texto es un enlace de YouTube

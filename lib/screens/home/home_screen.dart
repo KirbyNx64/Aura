@@ -26,7 +26,6 @@ import 'package:music/utils/yt_search/service.dart';
 import 'package:music/widgets/hero_cached.dart';
 import 'package:music/widgets/artwork_list_tile.dart';
 import 'package:mini_music_visualizer/mini_music_visualizer.dart';
-import 'package:music/screens/play/player_screen.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:music/utils/song_info_dialog.dart';
@@ -2506,138 +2505,51 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     List<SongModel> queue, {
     String? queueSource,
   }) async {
-    // Obtener la carátula para la pantalla del reproductor
-    // Crear el MediaItem para la pantalla del reproductor
-    final mediaItem = MediaItem(
-      id: song.data,
-      title: song.title,
-      artist: song.artist,
-      duration: (song.duration != null && song.duration! > 0)
-          ? Duration(milliseconds: song.duration!)
-          : null,
-      artUri: null, // No bloqueamos esperando la URI
-      extras: {'songId': song.id, 'albumId': song.albumId, 'data': song.data},
-    );
-
-    // Precargar la carátula en segundo plano
-    final songId = song.id;
-    final songPath = song.data;
-    unawaited(getOrCacheArtwork(songId, songPath));
-
-    // Navegar a la pantalla del reproductor primero
-    if (!mounted) return;
-    Navigator.of(context).push(
-      PageRouteBuilder(
-        pageBuilder: (context, animation, secondaryAnimation) =>
-            FullPlayerScreen(initialMediaItem: mediaItem),
-        transitionsBuilder: (context, animation, secondaryAnimation, child) {
-          return SlideTransition(
-            position: Tween<Offset>(begin: const Offset(0, 1), end: Offset.zero)
-                .animate(
-                  CurvedAnimation(
-                    parent: animation,
-                    curve: Curves.easeOutCubic,
-                  ),
-                ),
-            child: child,
-          );
-        },
-        transitionDuration: const Duration(milliseconds: 200),
-        reverseTransitionDuration: const Duration(milliseconds: 300),
-      ),
-    );
-
-    // Activar indicador de carga
-    // print('🟢 Activando loading...');
-    playLoadingNotifier.value = true;
-    // print('🟢 Loading activado: ${playLoadingNotifier.value}');
-
-    // Reproducir la canción después de un breve delay para que se abra la pantalla
-    Future.delayed(const Duration(milliseconds: 400), () async {
-      try {
-        if (mounted) {
-          // Primero reproducir la canción
-          await _playSong(song, queue, queueSource: queueSource);
-
-          // Luego agregar las canciones aleatorias al reproductor (si es necesario)
-          if (queueSource == LocaleProvider.tr('quick_access_songs') ||
-              queueSource == LocaleProvider.tr('quick_pick_songs')) {
-            // Esperar un poco para que la reproducción se estabilice
-            await Future.delayed(const Duration(milliseconds: 200));
-            await _addRandomSongsToPlayerQueue(queue);
-          }
-        }
-      } catch (e) {
-        // print('Error en reproducción: $e');
-      }
-    });
-
-    // Desactivar loading después de un tiempo fijo (más confiable)
-    Future.delayed(const Duration(milliseconds: 800), () {
-      // print('🔴 Desactivando loading...');
-      playLoadingNotifier.value = false;
-      // print('🔴 Loading desactivado: ${playLoadingNotifier.value}');
-    });
-  }
-
-  Future<void> _playSong(
-    SongModel song,
-    List<SongModel> queue, {
-    String? queueSource,
-  }) async {
-    // Desactiva visualmente el shuffle
+    if (playLoadingNotifier.value) return;
+    // Desactiva visualmente el shuffle de inmediato
     try {
-      final handler = await _getAudioHandler();
-      if (handler != null) {
-        handler.isShuffleNotifier.value = false;
+      if (audioHandler is MyAudioHandler) {
+        (audioHandler as MyAudioHandler).isShuffleNotifier.value = false;
       }
     } catch (_) {}
-    const int maxQueueSongs = 200;
-    final index = queue.indexWhere((s) => s.data == song.data);
 
-    if (index != -1) {
-      // Obtener AudioService de forma segura
-      final handler = await _getAudioHandler();
-      if (handler == null) {
-        return;
-      }
+    // Obtener la carátula para la pantalla del reproductor
+    final songId = song.id;
+    final songPath = song.data;
 
-      // Comprobar si la cola actual es igual a la nueva (por ids y orden)
-      final currentQueue = handler.queue.value;
-      final isSameQueue =
-          currentQueue.length == queue.length &&
-          List.generate(
-            queue.length,
-            (i) => currentQueue[i].id == queue[i].data,
-          ).every((x) => x);
+    // Crear MediaItem temporal y actualizar inmediatamente para evitar visualizar la canción anterior
+    // ArtworkHeroCached.clearFallback();
 
-      if (isSameQueue) {
-        // Solo cambiar de canción
-        await handler.skipToQueueItem(index);
-        await handler.play();
-        return;
-      }
+    // Iniciar carga de carátula
+    final artUriFuture = getOrCacheArtwork(songId, songPath);
+    await (artUriFuture);
 
-      // Limpiar la cola y el MediaItem antes de mostrar la nueva canción
-      handler.queue.add([]);
-      handler.mediaItem.add(null);
+    Uri? cachedArtUri;
+    try {
+      // Intentar obtener si es rápido (cache)
+      cachedArtUri = await artUriFuture.timeout(
+        const Duration(milliseconds: 25),
+      );
+    } catch (_) {
+      // Si no es rápido, actualizar cuando esté listo para evitar el flash del placeholder
+      artUriFuture.then((uri) {
+        if (uri != null && mounted && audioHandler is MyAudioHandler) {
+          final handler = audioHandler as MyAudioHandler;
+          final current = handler.mediaItem.value;
+          // Verificar que seguimos en la misma canción
+          if (current != null && current.extras?['songId'] == songId) {
+            final updatedItem = current.copyWith(artUri: uri);
+            handler.mediaItem.add(updatedItem);
+          }
+        }
+      });
+    }
 
-      // Limpiar el fallback de las carátulas para evitar parpadeo
-      ArtworkHeroCached.clearFallback();
-
-      // Crear MediaItem temporal para mostrar el overlay inmediatamente
-      Uri? cachedArtUri;
-      try {
-        cachedArtUri = await getOrCacheArtwork(song.id, song.data);
-      } catch (e) {
-        // Si falla, continuar sin carátula
-      }
-
+    if (audioHandler != null) {
       final tempMediaItem = MediaItem(
         id: song.data,
-        album: song.album ?? '',
         title: song.title,
-        artist: song.artist ?? '',
+        artist: song.artist,
         duration: (song.duration != null && song.duration! > 0)
             ? Duration(milliseconds: song.duration!)
             : null,
@@ -2649,14 +2561,61 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           'queueIndex': 0,
         },
       );
-      handler.mediaItem.add(tempMediaItem);
+      (audioHandler as MyAudioHandler).mediaItem.add(tempMediaItem);
+    }
 
-      int before = (maxQueueSongs / 2).floor();
-      int after = maxQueueSongs - before;
-      int start = (index - before).clamp(0, queue.length);
-      int end = (index + after).clamp(0, queue.length);
-      List<SongModel> limitedQueue = queue.sublist(start, end);
-      int newIndex = index - start;
+    // Abrir el panel del reproductor con la nueva animación
+    if (!mounted) return;
+    openPlayerPanelNotifier.value = true;
+
+    // Activar indicador de carga
+    playLoadingNotifier.value = true;
+
+    // Reproducir la canción después de un breve delay para que se abra el panel
+    Future.delayed(const Duration(milliseconds: 400), () async {
+      try {
+        if (mounted) {
+          // Primero reproducir la canción
+          _playSong(song, queue, queueSource: queueSource);
+
+          // Luego agregar las canciones aleatorias al reproductor (si es necesario)
+          if (queueSource == LocaleProvider.tr('quick_access_songs') ||
+              queueSource == LocaleProvider.tr('quick_pick_songs')) {
+            // Esperar un poco para que la reproducción se estabilice
+            await Future.delayed(const Duration(milliseconds: 200));
+            await _addRandomSongsToPlayerQueue(queue);
+          }
+
+          // Desactivar indicador de carga después de reproducir (comportamiento de FavoritesScreen)
+          Future.delayed(const Duration(milliseconds: 200), () {
+            playLoadingNotifier.value = false;
+          });
+        }
+      } catch (e) {
+        // print('Error en reproducción: $e');
+      }
+    });
+  }
+
+  Future<void> _playSong(
+    SongModel song,
+    List<SongModel> queue, {
+    String? queueSource,
+  }) async {
+    final index = queue.indexWhere((s) => s.data == song.data);
+
+    if (index != -1) {
+      // Obtener AudioService de forma segura
+      final handler = await _getAudioHandler();
+      if (handler == null) {
+        return;
+      }
+
+      // Limpiar la cola y el MediaItem antes de mostrar la nueva canción (Comportamiento Favorites)
+      handler.queue.add([]);
+
+      // Limpiar el fallback de las carátulas para evitar parpadeo
+      ArtworkHeroCached.clearFallback();
 
       // Guardar el origen en SharedPreferences
       final prefs = await SharedPreferences.getInstance();
@@ -2668,7 +2627,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               ? LocaleProvider.tr('recent_songs_title')
               : "Home");
       await prefs.setString('last_queue_source', origen);
-      await (handler).setQueueFromSongs(limitedQueue, initialIndex: newIndex);
+      await (handler).setQueueFromSongs(queue, initialIndex: index);
       await (handler).play();
     }
   }

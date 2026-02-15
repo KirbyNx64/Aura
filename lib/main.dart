@@ -159,8 +159,9 @@ class LifecycleHandler extends WidgetsBindingObserver {
 // Declara el ValueNotifier global en main.dart
 final selectedTabIndex = ValueNotifier<int>(0);
 
-// Declara el key global arriba en main.dart
 final GlobalKey<HomeScreenState> homeScreenKey = GlobalKey<HomeScreenState>();
+final GlobalKey ytScreenKey = GlobalKey();
+final GlobalKey foldersScreenKey = GlobalKey();
 
 class MainNavRoot extends StatefulWidget {
   final void Function(AppThemeMode) setThemeMode;
@@ -175,10 +176,6 @@ class MainNavRoot extends StatefulWidget {
 }
 
 class _MainNavRootState extends State<MainNavRoot> {
-  final ValueNotifier<int> selectedTabIndex = ValueNotifier<int>(0);
-  final GlobalKey ytScreenKey = GlobalKey();
-  final GlobalKey foldersScreenKey = GlobalKey();
-
   StreamSubscription? _sharingSubscription;
 
   @override
@@ -321,36 +318,10 @@ class _MainNavRootState extends State<MainNavRoot> {
   @override
   Widget build(BuildContext context) {
     return PopScope(
-      canPop: false, // Siempre bloquear pop inicialmente
+      canPop:
+          false, // Bloquear pop para que los hijos manejen la navegación interna
       onPopInvokedWithResult: (didPop, result) {
-        final tab = selectedTabIndex.value;
-
-        // Verificar navegación interna primero
-        if (tab == 1) {
-          // YT
-          final state = ytScreenKey.currentState as dynamic;
-          if (state?.canPopInternally() == true) {
-            state.handleInternalPop();
-            return;
-          }
-        } else if (tab == 3) {
-          // Folders
-          final state = foldersScreenKey.currentState as dynamic;
-          if (state?.canPopInternally() == true) {
-            state.handleInternalPop();
-            return;
-          }
-        } else if (tab == 0) {
-          // Home screen - verificar si tiene navegación interna
-          final state = homeScreenKey.currentState as dynamic;
-          if (state?.canPopInternally() == true) {
-            state.handleInternalPop();
-            return;
-          }
-        }
-
-        // Bloquear completamente el cierre de la aplicación
-        // Solo permitir navegación interna, nunca salir de la app
+        // La lógica de navegación interna ahora se maneja en Material3BottomNav
       },
       child: Material3BottomNav(
         pageBuilders: [
@@ -760,12 +731,11 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
       // Inicializar el notifier con el color guardado
       colorSchemeNotifier.value = savedColorScheme;
 
-      // Inicializar la configuración de animación hero
       final prefs = await SharedPreferences.getInstance();
 
       // Verificar si es la primera vez (onboarding) y otras preferencias
       final isFirstRun = prefs.getBool('first_run') ?? true;
-      final useHero = prefs.getBool('use_hero_animation') ?? true;
+
       final nextButtonEnabled =
           prefs.getBool('overlay_next_button_enabled') ?? false;
       final useArtworkOverlay =
@@ -776,7 +746,7 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
       // Actualizar estado una sola vez
       setState(() {
         _showOnboarding = isFirstRun;
-        heroAnimationNotifier.value = useHero;
+
         overlayNextButtonEnabled.value = nextButtonEnabled;
         useArtworkAsBackgroundOverlayNotifier.value = useArtworkOverlay;
         useArtworkAsBackgroundPlayerNotifier.value = useArtworkPlayer;
