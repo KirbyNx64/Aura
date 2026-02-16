@@ -195,6 +195,7 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> {
                   child: Image(
                     image: imageProvider,
                     fit: BoxFit.cover,
+                    filterQuality: FilterQuality.low,
                     errorBuilder: (context, error, stackTrace) =>
                         const SizedBox.shrink(),
                   ),

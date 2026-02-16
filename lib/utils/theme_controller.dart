@@ -62,7 +62,7 @@ class ThemeController {
     _retryPending = false;
 
     // Iniciar nuevo timer (debounce de 300ms)
-    _debounceTimer = Timer(const Duration(milliseconds: 300), _processPending);
+    _debounceTimer = Timer(const Duration(milliseconds: 200), _processPending);
   }
 
   /// Procesa la canción pendiente si es necesario

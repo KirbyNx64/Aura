@@ -842,6 +842,30 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     super.dispose();
   }
 
+  Color normalizePaletteColor(Color color) {
+    final hsl = HSLColor.fromColor(color);
+    // Si la saturación original es muy baja (gris/blanco/negro), mantenerla baja
+    // para evitar colorear artificialmente imágenes en escala de grises.
+    final isGrayscale = hsl.saturation < 0.15;
+
+    // Si es muy oscuro (negro), forzar un poco de luminosidad para que se vea
+    double effectiveLightness = hsl.lightness;
+    if (effectiveLightness < 0.15) {
+      effectiveLightness = 0.15;
+    }
+
+    final fixedLightness = (effectiveLightness * 0.85).clamp(0.55, 0.85);
+
+    final fixedSaturation = isGrayscale
+        ? hsl.saturation
+        : hsl.saturation.clamp(0.35, 1.0);
+
+    return hsl
+        .withLightness(fixedLightness)
+        .withSaturation(fixedSaturation)
+        .toColor();
+  }
+
   Future<void> _showSongOptions(
     BuildContext context,
     MediaItem mediaItem,
@@ -855,316 +879,418 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      useSafeArea: true,
-      builder: (context) => SafeArea(
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Encabezado con información de la canción
-              Container(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  children: [
-                    // Carátula de la canción
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: SizedBox(
-                        width: 60,
-                        height: 60,
-                        child: _buildModalArtwork(mediaItem),
-                      ),
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return ValueListenableBuilder<bool>(
+          valueListenable: useDynamicColorBackgroundNotifier,
+          builder: (context, useDynamicBg, _) {
+            return ValueListenableBuilder<AppColorScheme>(
+              valueListenable: colorSchemeNotifier,
+              builder: (context, colorScheme, _) {
+                final isAmoled = colorScheme == AppColorScheme.amoled;
+                final isDark = Theme.of(context).brightness == Brightness.dark;
+                final showDynamicBg = useDynamicBg && isAmoled && isDark;
+
+                return Container(
+                  decoration: BoxDecoration(
+                    color: showDynamicBg
+                        ? Colors.black
+                        : Theme.of(context).scaffoldBackgroundColor,
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(28),
                     ),
-                    const SizedBox(width: 16),
-                    // Título y artista
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            mediaItem.title,
-                            maxLines: 1,
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            mediaItem.artist ??
-                                LocaleProvider.tr('unknown_artist'),
-                            style: TextStyle(fontSize: 14),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    // Botón de búsqueda para abrir opciones
-                    InkWell(
-                      onTap: () async {
-                        Navigator.of(context).pop();
-                        await _showSearchOptions(mediaItem);
-                      },
-                      borderRadius: BorderRadius.circular(12),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).brightness == Brightness.dark
-                              ? Theme.of(context).colorScheme.primary
-                              : Theme.of(context).colorScheme.onPrimaryContainer
-                                    .withValues(alpha: 0.7),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.search,
-                              size: 20,
-                              color:
-                                  Theme.of(context).brightness ==
-                                      Brightness.dark
-                                  ? Theme.of(context).colorScheme.onPrimary
-                                  : Theme.of(
-                                      context,
-                                    ).colorScheme.surfaceContainer,
-                            ),
-                            const SizedBox(width: 8),
-                            TranslatedText(
-                              'search',
-                              style: TextStyle(
-                                fontWeight: FontWeight.w600,
-                                fontSize: 14,
-                                color:
-                                    Theme.of(context).brightness ==
-                                        Brightness.dark
-                                    ? Theme.of(context).colorScheme.onPrimary
-                                    : Theme.of(
-                                        context,
-                                      ).colorScheme.surfaceContainer,
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: Stack(
+                    children: [
+                      if (showDynamicBg)
+                        ValueListenableBuilder<Color?>(
+                          valueListenable:
+                              ThemeController.instance.dominantColor,
+                          builder: (context, domColor, _) {
+                            return Positioned.fill(
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 200),
+                                curve: Curves.easeInOut,
+                                color: normalizePaletteColor(
+                                  domColor ??
+                                      Theme.of(context).scaffoldBackgroundColor,
+                                ).withValues(alpha: 0.2),
                               ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              ListTile(
-                leading: Icon(
-                  isFav ? Icons.delete_outline : Icons.favorite_outline_rounded,
-                  weight: isFav ? null : 600,
-                ),
-                title: Text(
-                  isFav
-                      ? LocaleProvider.tr('remove_from_favorites')
-                      : LocaleProvider.tr('add_to_favorites'),
-                ),
-                onTap: () async {
-                  Navigator.of(context).pop();
-
-                  final path = mediaItem.extras?['data'] ?? '';
-
-                  if (isFav) {
-                    await FavoritesDB().removeFavorite(path);
-                    favoritesShouldReload.value = !favoritesShouldReload.value;
-                  } else {
-                    if (path.isEmpty) {
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                              'No se puede añadir: ruta no disponible',
-                            ),
-                          ),
-                        );
-                      }
-                      return;
-                    }
-
-                    final allSongs = await _audioQuery.querySongs();
-                    final songList = allSongs
-                        .where((s) => s.data == path)
-                        .toList();
-
-                    if (songList.isEmpty) {
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('No se encontró la canción original'),
-                          ),
-                        );
-                      }
-                      return;
-                    }
-
-                    final song = songList.first;
-                    await _addToFavorites(song);
-                  }
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.queue_music),
-                title: Text(LocaleProvider.tr('add_to_playlist')),
-                onTap: () async {
-                  if (!mounted) {
-                    return;
-                  }
-                  final safeContext = context;
-                  Navigator.of(safeContext).pop();
-                  await _showAddToPlaylistDialog(safeContext, mediaItem);
-                },
-              ),
-              if ((mediaItem.artist ?? '').trim().isNotEmpty)
-                ListTile(
-                  leading: const Icon(Icons.person_outline),
-                  title: const TranslatedText('go_to_artist'),
-                  onTap: () {
-                    Navigator.of(context).pop();
-                    final name = (mediaItem.artist ?? '').trim();
-                    if (name.isEmpty) return;
-                    Navigator.of(context).push(
-                      PageRouteBuilder(
-                        pageBuilder: (context, animation, secondaryAnimation) =>
-                            ArtistScreen(artistName: name),
-                        transitionsBuilder:
-                            (context, animation, secondaryAnimation, child) {
-                              const begin = Offset(1.0, 0.0);
-                              const end = Offset.zero;
-                              const curve = Curves.ease;
-                              final tween = Tween(
-                                begin: begin,
-                                end: end,
-                              ).chain(CurveTween(curve: curve));
-                              return SlideTransition(
-                                position: animation.drive(tween),
-                                child: child,
-                              );
-                            },
-                      ),
-                    );
-                  },
-                ),
-              FutureBuilder<bool>(
-                future: ShortcutsDB().isShortcut(
-                  mediaItem.extras?['data'] ?? '',
-                ),
-                builder: (context, snapshot) {
-                  final isCurrentlyPinned = snapshot.data ?? false;
-                  final path = mediaItem.extras?['data'] ?? '';
-
-                  return ListTile(
-                    leading: Icon(
-                      isCurrentlyPinned
-                          ? Icons.push_pin
-                          : Icons.push_pin_outlined,
-                    ),
-                    title: Text(
-                      isCurrentlyPinned
-                          ? LocaleProvider.tr('unpin_shortcut')
-                          : LocaleProvider.tr('pin_shortcut'),
-                    ),
-                    onTap: () async {
-                      Navigator.of(context).pop();
-
-                      if (path.isEmpty) {
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                'No se puede fijar: ruta no disponible',
-                              ),
-                            ),
-                          );
-                        }
-                        return;
-                      }
-
-                      final shortcutsDB = ShortcutsDB();
-
-                      if (isCurrentlyPinned) {
-                        // Desfijar de accesos directos
-                        await shortcutsDB.removeShortcut(path);
-                        // Notificar que los accesos directos han cambiado
-                        shortcutsShouldReload.value =
-                            !shortcutsShouldReload.value;
-                      } else {
-                        // Fijar en accesos directos
-                        await shortcutsDB.addShortcut(path);
-                        // Notificar que los accesos directos han cambiado
-                        shortcutsShouldReload.value =
-                            !shortcutsShouldReload.value;
-                      }
-                    },
-                  );
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.lyrics_outlined),
-                title: Text(LocaleProvider.tr('show_lyrics')),
-                onTap: () async {
-                  Navigator.of(context).pop();
-
-                  // Check if lyrics on cover is enabled
-                  final prefs = await SharedPreferences.getInstance();
-                  final showLyricsOnCover =
-                      prefs.getBool('show_lyrics_on_cover') ?? false;
-
-                  if (showLyricsOnCover) {
-                    // Original behavior: toggle lyrics display on cover
-                    if (!_showLyrics) {
-                      setState(() {
-                        _showLyrics = true;
-                      });
-                      await _loadLyrics(mediaItem);
-                    } else {
-                      setState(() {
-                        _showLyrics = false;
-                      });
-                    }
-                  } else {
-                    // New behavior: show lyrics in modal
-                    if (!context.mounted) return;
-                    _showLyricsModal(context, mediaItem);
-                  }
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.equalizer_rounded),
-                title: Text(LocaleProvider.tr('equalizer')),
-                onTap: () {
-                  Navigator.of(context).pop();
-                  Navigator.of(context).push(
-                    PageRouteBuilder(
-                      pageBuilder: (context, animation, secondaryAnimation) =>
-                          const EqualizerScreen(),
-                      transitionsBuilder:
-                          (context, animation, secondaryAnimation, child) {
-                            const begin = Offset(1.0, 0.0);
-                            const end = Offset.zero;
-                            const curve = Curves.ease;
-                            final tween = Tween(
-                              begin: begin,
-                              end: end,
-                            ).chain(CurveTween(curve: curve));
-                            return SlideTransition(
-                              position: animation.drive(tween),
-                              child: child,
                             );
                           },
-                    ),
-                  );
-                },
-              ),
-              /*
+                        ),
+                      SafeArea(
+                        child: SingleChildScrollView(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              // Encabezado con información de la canción
+                              Container(
+                                padding: const EdgeInsets.all(16),
+                                child: Row(
+                                  children: [
+                                    // Carátula de la canción
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(8),
+                                      child: SizedBox(
+                                        width: 60,
+                                        height: 60,
+                                        child: _buildModalArtwork(mediaItem),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 16),
+                                    // Título y artista
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Text(
+                                            mediaItem.title,
+                                            maxLines: 1,
+                                            style: const TextStyle(
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            mediaItem.artist ??
+                                                LocaleProvider.tr(
+                                                  'unknown_artist',
+                                                ),
+                                            style: TextStyle(fontSize: 14),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    // Botón de búsqueda para abrir opciones
+                                    InkWell(
+                                      onTap: () async {
+                                        Navigator.of(context).pop();
+                                        await _showSearchOptions(mediaItem);
+                                      },
+                                      borderRadius: BorderRadius.circular(12),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 16,
+                                          vertical: 8,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color:
+                                              Theme.of(context).brightness ==
+                                                  Brightness.dark
+                                              ? Theme.of(
+                                                  context,
+                                                ).colorScheme.primary
+                                              : Theme.of(context)
+                                                    .colorScheme
+                                                    .onPrimaryContainer
+                                                    .withValues(alpha: 0.7),
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(
+                                              Icons.search,
+                                              size: 20,
+                                              color:
+                                                  Theme.of(
+                                                        context,
+                                                      ).brightness ==
+                                                      Brightness.dark
+                                                  ? Theme.of(
+                                                      context,
+                                                    ).colorScheme.onPrimary
+                                                  : Theme.of(context)
+                                                        .colorScheme
+                                                        .surfaceContainer,
+                                            ),
+                                            const SizedBox(width: 8),
+                                            TranslatedText(
+                                              'search',
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.w600,
+                                                fontSize: 14,
+                                                color:
+                                                    Theme.of(
+                                                          context,
+                                                        ).brightness ==
+                                                        Brightness.dark
+                                                    ? Theme.of(
+                                                        context,
+                                                      ).colorScheme.onPrimary
+                                                    : Theme.of(context)
+                                                          .colorScheme
+                                                          .surfaceContainer,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              ListTile(
+                                leading: Icon(
+                                  isFav
+                                      ? Icons.delete_outline
+                                      : Icons.favorite_outline_rounded,
+                                  weight: isFav ? null : 600,
+                                ),
+                                title: Text(
+                                  isFav
+                                      ? LocaleProvider.tr(
+                                          'remove_from_favorites',
+                                        )
+                                      : LocaleProvider.tr('add_to_favorites'),
+                                ),
+                                onTap: () async {
+                                  Navigator.of(context).pop();
+
+                                  final path = mediaItem.extras?['data'] ?? '';
+
+                                  if (isFav) {
+                                    await FavoritesDB().removeFavorite(path);
+                                    favoritesShouldReload.value =
+                                        !favoritesShouldReload.value;
+                                  } else {
+                                    if (path.isEmpty) {
+                                      if (context.mounted) {
+                                        ScaffoldMessenger.of(
+                                          context,
+                                        ).showSnackBar(
+                                          const SnackBar(
+                                            content: Text(
+                                              'No se puede añadir: ruta no disponible',
+                                            ),
+                                          ),
+                                        );
+                                      }
+                                      return;
+                                    }
+
+                                    final allSongs = await _audioQuery
+                                        .querySongs();
+                                    final songList = allSongs
+                                        .where((s) => s.data == path)
+                                        .toList();
+
+                                    if (songList.isEmpty) {
+                                      if (context.mounted) {
+                                        ScaffoldMessenger.of(
+                                          context,
+                                        ).showSnackBar(
+                                          const SnackBar(
+                                            content: Text(
+                                              'No se encontró la canción original',
+                                            ),
+                                          ),
+                                        );
+                                      }
+                                      return;
+                                    }
+
+                                    final song = songList.first;
+                                    await _addToFavorites(song);
+                                  }
+                                },
+                              ),
+                              ListTile(
+                                leading: const Icon(Icons.queue_music),
+                                title: Text(
+                                  LocaleProvider.tr('add_to_playlist'),
+                                ),
+                                onTap: () async {
+                                  if (!mounted) {
+                                    return;
+                                  }
+                                  final safeContext = context;
+                                  Navigator.of(safeContext).pop();
+                                  await _showAddToPlaylistDialog(
+                                    safeContext,
+                                    mediaItem,
+                                  );
+                                },
+                              ),
+                              if ((mediaItem.artist ?? '').trim().isNotEmpty)
+                                ListTile(
+                                  leading: const Icon(Icons.person_outline),
+                                  title: const TranslatedText('go_to_artist'),
+                                  onTap: () {
+                                    Navigator.of(context).pop();
+                                    final name = (mediaItem.artist ?? '')
+                                        .trim();
+                                    if (name.isEmpty) return;
+                                    Navigator.of(context).push(
+                                      PageRouteBuilder(
+                                        pageBuilder:
+                                            (
+                                              context,
+                                              animation,
+                                              secondaryAnimation,
+                                            ) => ArtistScreen(artistName: name),
+                                        transitionsBuilder:
+                                            (
+                                              context,
+                                              animation,
+                                              secondaryAnimation,
+                                              child,
+                                            ) {
+                                              const begin = Offset(1.0, 0.0);
+                                              const end = Offset.zero;
+                                              const curve = Curves.ease;
+                                              final tween = Tween(
+                                                begin: begin,
+                                                end: end,
+                                              ).chain(CurveTween(curve: curve));
+                                              return SlideTransition(
+                                                position: animation.drive(
+                                                  tween,
+                                                ),
+                                                child: child,
+                                              );
+                                            },
+                                      ),
+                                    );
+                                  },
+                                ),
+                              FutureBuilder<bool>(
+                                future: ShortcutsDB().isShortcut(
+                                  mediaItem.extras?['data'] ?? '',
+                                ),
+                                builder: (context, snapshot) {
+                                  final isCurrentlyPinned =
+                                      snapshot.data ?? false;
+                                  final path = mediaItem.extras?['data'] ?? '';
+
+                                  return ListTile(
+                                    leading: Icon(
+                                      isCurrentlyPinned
+                                          ? Icons.push_pin
+                                          : Icons.push_pin_outlined,
+                                    ),
+                                    title: Text(
+                                      isCurrentlyPinned
+                                          ? LocaleProvider.tr('unpin_shortcut')
+                                          : LocaleProvider.tr('pin_shortcut'),
+                                    ),
+                                    onTap: () async {
+                                      Navigator.of(context).pop();
+
+                                      if (path.isEmpty) {
+                                        if (context.mounted) {
+                                          ScaffoldMessenger.of(
+                                            context,
+                                          ).showSnackBar(
+                                            const SnackBar(
+                                              content: Text(
+                                                'No se puede fijar: ruta no disponible',
+                                              ),
+                                            ),
+                                          );
+                                        }
+                                        return;
+                                      }
+
+                                      final shortcutsDB = ShortcutsDB();
+
+                                      if (isCurrentlyPinned) {
+                                        // Desfijar de accesos directos
+                                        await shortcutsDB.removeShortcut(path);
+                                        // Notificar que los accesos directos han cambiado
+                                        shortcutsShouldReload.value =
+                                            !shortcutsShouldReload.value;
+                                      } else {
+                                        // Fijar en accesos directos
+                                        await shortcutsDB.addShortcut(path);
+                                        // Notificar que los accesos directos han cambiado
+                                        shortcutsShouldReload.value =
+                                            !shortcutsShouldReload.value;
+                                      }
+                                    },
+                                  );
+                                },
+                              ),
+                              ListTile(
+                                leading: const Icon(Icons.lyrics_outlined),
+                                title: Text(LocaleProvider.tr('show_lyrics')),
+                                onTap: () async {
+                                  Navigator.of(context).pop();
+
+                                  // Check if lyrics on cover is enabled
+                                  final prefs =
+                                      await SharedPreferences.getInstance();
+                                  final showLyricsOnCover =
+                                      prefs.getBool('show_lyrics_on_cover') ??
+                                      false;
+
+                                  if (showLyricsOnCover) {
+                                    // Original behavior: toggle lyrics display on cover
+                                    if (!_showLyrics) {
+                                      setState(() {
+                                        _showLyrics = true;
+                                      });
+                                      await _loadLyrics(mediaItem);
+                                    } else {
+                                      setState(() {
+                                        _showLyrics = false;
+                                      });
+                                    }
+                                  } else {
+                                    // New behavior: show lyrics in modal
+                                    if (!context.mounted) return;
+                                    _showLyricsModal(context, mediaItem);
+                                  }
+                                },
+                              ),
+                              ListTile(
+                                leading: const Icon(Icons.equalizer_rounded),
+                                title: Text(LocaleProvider.tr('equalizer')),
+                                onTap: () {
+                                  Navigator.of(context).pop();
+                                  Navigator.of(context).push(
+                                    PageRouteBuilder(
+                                      pageBuilder:
+                                          (
+                                            context,
+                                            animation,
+                                            secondaryAnimation,
+                                          ) => const EqualizerScreen(),
+                                      transitionsBuilder:
+                                          (
+                                            context,
+                                            animation,
+                                            secondaryAnimation,
+                                            child,
+                                          ) {
+                                            const begin = Offset(1.0, 0.0);
+                                            const end = Offset.zero;
+                                            const curve = Curves.ease;
+                                            final tween = Tween(
+                                              begin: begin,
+                                              end: end,
+                                            ).chain(CurveTween(curve: curve));
+                                            return SlideTransition(
+                                              position: animation.drive(tween),
+                                              child: child,
+                                            );
+                                          },
+                                    ),
+                                  );
+                                },
+                              ),
+                              /*
               ValueListenableBuilder<double>(
                 valueListenable:
                     (audioHandler as MyAudioHandler).volumeBoostNotifier,
@@ -1180,63 +1306,82 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                 },
               ),
               */
-              ListTile(
-                leading: const Icon(Icons.share),
-                title: Text(LocaleProvider.tr('share_audio_file')),
-                onTap: () async {
-                  Navigator.of(context).pop();
-                  final dataPath = mediaItem.extras?['data'] as String?;
-                  if (dataPath != null && dataPath.isNotEmpty) {
-                    await SharePlus.instance.share(
-                      ShareParams(
-                        text: mediaItem.title,
-                        files: [XFile(dataPath)],
-                      ),
-                    );
-                  }
-                },
-              ),
-              ListTile(
-                leading: () {
-                  final isActive =
-                      (audioHandler as MyAudioHandler).sleepTimeRemaining !=
-                      null;
-                  return Icon(isActive ? Icons.timer : Icons.timer_outlined);
-                }(),
-                title: Text(() {
-                  final remaining =
-                      (audioHandler as MyAudioHandler).sleepTimeRemaining;
-                  if (remaining != null) {
-                    return '${LocaleProvider.tr('sleep_timer_remaining')}: ${_formatSleepTimerDuration(remaining)}';
-                  } else {
-                    return LocaleProvider.tr('sleep_timer');
-                  }
-                }()),
-                onTap: () {
-                  Navigator.of(context).pop();
-                  showModalBottomSheet(
-                    context: context,
-                    builder: (context) => const SleepTimerOptionsSheet(),
-                  );
-                },
-              ),
+                              ListTile(
+                                leading: const Icon(Icons.share),
+                                title: Text(
+                                  LocaleProvider.tr('share_audio_file'),
+                                ),
+                                onTap: () async {
+                                  Navigator.of(context).pop();
+                                  final dataPath =
+                                      mediaItem.extras?['data'] as String?;
+                                  if (dataPath != null && dataPath.isNotEmpty) {
+                                    await SharePlus.instance.share(
+                                      ShareParams(
+                                        text: mediaItem.title,
+                                        files: [XFile(dataPath)],
+                                      ),
+                                    );
+                                  }
+                                },
+                              ),
+                              ListTile(
+                                leading: () {
+                                  final isActive =
+                                      (audioHandler as MyAudioHandler)
+                                          .sleepTimeRemaining !=
+                                      null;
+                                  return Icon(
+                                    isActive
+                                        ? Icons.timer
+                                        : Icons.timer_outlined,
+                                  );
+                                }(),
+                                title: Text(() {
+                                  final remaining =
+                                      (audioHandler as MyAudioHandler)
+                                          .sleepTimeRemaining;
+                                  if (remaining != null) {
+                                    return '${LocaleProvider.tr('sleep_timer_remaining')}: ${_formatSleepTimerDuration(remaining)}';
+                                  } else {
+                                    return LocaleProvider.tr('sleep_timer');
+                                  }
+                                }()),
+                                onTap: () {
+                                  Navigator.of(context).pop();
+                                  showModalBottomSheet(
+                                    context: context,
+                                    backgroundColor: Colors.transparent,
+                                    builder: (context) =>
+                                        const SleepTimerOptionsSheet(),
+                                  );
+                                },
+                              ),
 
-              ListTile(
-                leading: const Icon(Icons.info_outline),
-                title: Text(LocaleProvider.tr('song_info')),
-                onTap: () async {
-                  Navigator.of(context).pop();
-                  await SongInfoDialog.show(
-                    context,
-                    mediaItem,
-                    colorSchemeNotifier,
-                  );
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
+                              ListTile(
+                                leading: const Icon(Icons.info_outline),
+                                title: Text(LocaleProvider.tr('song_info')),
+                                onTap: () async {
+                                  Navigator.of(context).pop();
+                                  await SongInfoDialog.show(
+                                    context,
+                                    mediaItem,
+                                    colorSchemeNotifier,
+                                  );
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            );
+          },
+        );
+      },
     );
   }
 
@@ -1269,204 +1414,271 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
             ? Theme.of(context).colorScheme.secondary.withValues(alpha: 0.06)
             : Theme.of(context).colorScheme.secondary.withValues(alpha: 0.07);
 
-        return Container(
-          decoration: BoxDecoration(
-            color: Theme.of(context).scaffoldBackgroundColor,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-          ),
-          child: SafeArea(
-            child: Padding(
-              padding: EdgeInsets.only(
-                bottom: MediaQuery.of(context).viewInsets.bottom + 16,
-                left: 16,
-                right: 16,
-                top: 12,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.onSurfaceVariant.withAlpha(100),
-                      borderRadius: BorderRadius.circular(2),
+        return ValueListenableBuilder<bool>(
+          valueListenable: useDynamicColorBackgroundNotifier,
+          builder: (context, useDynamicBg, _) {
+            return ValueListenableBuilder<AppColorScheme>(
+              valueListenable: colorSchemeNotifier,
+              builder: (context, colorScheme, _) {
+                final isAmoled = colorScheme == AppColorScheme.amoled;
+                final isDark = Theme.of(context).brightness == Brightness.dark;
+                final showDynamicBg = useDynamicBg && isAmoled && isDark;
+
+                return Container(
+                  decoration: BoxDecoration(
+                    color: showDynamicBg
+                        ? Colors.black
+                        : Theme.of(context).scaffoldBackgroundColor,
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(28),
                     ),
                   ),
-                  const SizedBox(height: 16),
-                  Text(
-                    LocaleProvider.tr('save_to_playlist'),
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  if (playlists.isEmpty)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 24),
-                      child: Column(
-                        children: [
-                          Icon(Icons.playlist_add_rounded, size: 48),
-                          const SizedBox(height: 12),
-                          Text(
-                            LocaleProvider.tr('no_playlists_yet'),
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  if (playlists.isNotEmpty)
-                    Flexible(
-                      child: ConstrainedBox(
-                        constraints: BoxConstraints(
-                          maxHeight: MediaQuery.of(context).size.height * 0.4,
-                        ),
-                        child: ListView.builder(
-                          shrinkWrap: true,
-                          padding: EdgeInsets.zero,
-                          itemCount: playlists.length,
-                          itemBuilder: (context, i) {
-                            final pl = playlists[i];
-                            final bool isFirst = i == 0;
-                            final bool isLast = i == playlists.length - 1;
-                            final bool isOnly = playlists.length == 1;
-
-                            BorderRadius borderRadius;
-                            if (isOnly) {
-                              borderRadius = BorderRadius.circular(20);
-                            } else if (isFirst) {
-                              borderRadius = const BorderRadius.only(
-                                topLeft: Radius.circular(20),
-                                topRight: Radius.circular(20),
-                                bottomLeft: Radius.circular(4),
-                                bottomRight: Radius.circular(4),
-                              );
-                            } else if (isLast) {
-                              borderRadius = const BorderRadius.only(
-                                topLeft: Radius.circular(4),
-                                topRight: Radius.circular(4),
-                                bottomLeft: Radius.circular(20),
-                                bottomRight: Radius.circular(20),
-                              );
-                            } else {
-                              borderRadius = BorderRadius.circular(4);
-                            }
-
-                            return Padding(
-                              padding: EdgeInsets.only(bottom: isLast ? 0 : 4),
-                              child: Card(
-                                color: barColor,
-                                margin: EdgeInsets.zero,
-                                elevation: 0,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: borderRadius,
-                                ),
-                                child: ListTile(
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: borderRadius,
-                                  ),
-                                  leading: _buildPlaylistArtworkGrid(
-                                    pl,
-                                    allSongs,
-                                  ),
-                                  title: Text(
-                                    pl.name,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: Theme.of(
-                                      context,
-                                    ).textTheme.titleMedium,
-                                  ),
-                                  onTap: () async {
-                                    final songList = allSongs
-                                        .where(
-                                          (s) =>
-                                              s.data ==
-                                              (mediaItem.extras?['data'] ?? ''),
-                                        )
-                                        .toList();
-
-                                    if (songList.isNotEmpty) {
-                                      await PlaylistsDB().addSongToPlaylist(
-                                        pl.id,
-                                        songList.first,
-                                      );
-                                      playlistsShouldReload.value =
-                                          !playlistsShouldReload.value;
-                                      if (context.mounted) {
-                                        Navigator.of(context).pop();
-                                      }
-                                    }
-                                  },
-                                ),
+                  clipBehavior: Clip.antiAlias,
+                  child: Stack(
+                    children: [
+                      if (showDynamicBg)
+                        ValueListenableBuilder<Color?>(
+                          valueListenable:
+                              ThemeController.instance.dominantColor,
+                          builder: (context, domColor, _) {
+                            return Positioned.fill(
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 200),
+                                curve: Curves.easeInOut,
+                                color: normalizePaletteColor(
+                                  domColor ??
+                                      Theme.of(context).scaffoldBackgroundColor,
+                                ).withValues(alpha: 0.2),
                               ),
                             );
                           },
                         ),
+                      SafeArea(
+                        child: Padding(
+                          padding: EdgeInsets.only(
+                            bottom:
+                                MediaQuery.of(context).viewInsets.bottom + 16,
+                            left: 16,
+                            right: 16,
+                            top: 12,
+                          ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 40,
+                                height: 4,
+                                decoration: BoxDecoration(
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onSurfaceVariant.withAlpha(100),
+                                  borderRadius: BorderRadius.circular(2),
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                LocaleProvider.tr('save_to_playlist'),
+                                style: Theme.of(context).textTheme.titleLarge
+                                    ?.copyWith(fontWeight: FontWeight.bold),
+                              ),
+                              const SizedBox(height: 20),
+                              if (playlists.isEmpty)
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 24,
+                                  ),
+                                  child: Column(
+                                    children: [
+                                      Icon(
+                                        Icons.playlist_add_rounded,
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.onSurface,
+                                        size: 48,
+                                      ),
+                                      const SizedBox(height: 12),
+                                      Text(
+                                        LocaleProvider.tr('no_playlists_yet'),
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                          color: Theme.of(
+                                            context,
+                                          ).colorScheme.onSurfaceVariant,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              if (playlists.isNotEmpty)
+                                Flexible(
+                                  child: ConstrainedBox(
+                                    constraints: BoxConstraints(
+                                      maxHeight:
+                                          MediaQuery.of(context).size.height *
+                                          0.4,
+                                    ),
+                                    child: ListView.builder(
+                                      shrinkWrap: true,
+                                      padding: EdgeInsets.zero,
+                                      itemCount: playlists.length,
+                                      itemBuilder: (context, i) {
+                                        final pl = playlists[i];
+                                        final bool isFirst = i == 0;
+                                        final bool isLast =
+                                            i == playlists.length - 1;
+                                        final bool isOnly =
+                                            playlists.length == 1;
+
+                                        BorderRadius borderRadius;
+                                        if (isOnly) {
+                                          borderRadius = BorderRadius.circular(
+                                            20,
+                                          );
+                                        } else if (isFirst) {
+                                          borderRadius =
+                                              const BorderRadius.only(
+                                                topLeft: Radius.circular(20),
+                                                topRight: Radius.circular(20),
+                                                bottomLeft: Radius.circular(4),
+                                                bottomRight: Radius.circular(4),
+                                              );
+                                        } else if (isLast) {
+                                          borderRadius =
+                                              const BorderRadius.only(
+                                                topLeft: Radius.circular(4),
+                                                topRight: Radius.circular(4),
+                                                bottomLeft: Radius.circular(20),
+                                                bottomRight: Radius.circular(
+                                                  20,
+                                                ),
+                                              );
+                                        } else {
+                                          borderRadius = BorderRadius.circular(
+                                            4,
+                                          );
+                                        }
+
+                                        return Padding(
+                                          padding: EdgeInsets.only(
+                                            bottom: isLast ? 0 : 4,
+                                          ),
+                                          child: Card(
+                                            color: barColor,
+                                            margin: EdgeInsets.zero,
+                                            elevation: 0,
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius: borderRadius,
+                                            ),
+                                            child: ListTile(
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius: borderRadius,
+                                              ),
+                                              leading:
+                                                  _buildPlaylistArtworkGrid(
+                                                    pl,
+                                                    allSongs,
+                                                  ),
+                                              title: Text(
+                                                pl.name,
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: Theme.of(
+                                                  context,
+                                                ).textTheme.titleMedium,
+                                              ),
+                                              onTap: () async {
+                                                final songList = allSongs
+                                                    .where(
+                                                      (s) =>
+                                                          s.data ==
+                                                          (mediaItem
+                                                                  .extras?['data'] ??
+                                                              ''),
+                                                    )
+                                                    .toList();
+
+                                                if (songList.isNotEmpty) {
+                                                  await PlaylistsDB()
+                                                      .addSongToPlaylist(
+                                                        pl.id,
+                                                        songList.first,
+                                                      );
+                                                  playlistsShouldReload.value =
+                                                      !playlistsShouldReload
+                                                          .value;
+                                                  if (context.mounted) {
+                                                    Navigator.of(context).pop();
+                                                  }
+                                                }
+                                              },
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                ),
+                              const SizedBox(height: 16),
+                              TextField(
+                                controller: controller,
+                                autofocus: false,
+                                decoration: InputDecoration(
+                                  hintText: LocaleProvider.tr('new_playlist'),
+                                  prefixIcon: const Icon(Icons.playlist_add),
+                                  suffixIcon: IconButton(
+                                    icon: const Icon(Icons.check_rounded),
+                                    onPressed: () async {
+                                      if (controller.text.trim().isNotEmpty) {
+                                        await _createPlaylistAndAddSong(
+                                          context,
+                                          controller,
+                                          mediaItem,
+                                        );
+                                        playlistsShouldReload.value =
+                                            !playlistsShouldReload.value;
+                                      }
+                                    },
+                                  ),
+                                  filled: true,
+                                  fillColor: barColor,
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(20),
+                                    borderSide: BorderSide.none,
+                                  ),
+                                  enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(20),
+                                    borderSide: BorderSide.none,
+                                  ),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(20),
+                                    borderSide: BorderSide.none,
+                                  ),
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 20,
+                                    vertical: 16,
+                                  ),
+                                ),
+                                onSubmitted: (value) async {
+                                  if (value.trim().isNotEmpty) {
+                                    await _createPlaylistAndAddSong(
+                                      context,
+                                      controller,
+                                      mediaItem,
+                                    );
+                                  }
+                                },
+                              ),
+                              const SizedBox(height: 8),
+                            ],
+                          ),
+                        ),
                       ),
-                    ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: controller,
-                    autofocus: false,
-                    decoration: InputDecoration(
-                      hintText: LocaleProvider.tr('new_playlist'),
-                      prefixIcon: const Icon(Icons.playlist_add),
-                      suffixIcon: IconButton(
-                        icon: const Icon(Icons.check_rounded),
-                        onPressed: () async {
-                          if (controller.text.trim().isNotEmpty) {
-                            await _createPlaylistAndAddSong(
-                              context,
-                              controller,
-                              mediaItem,
-                            );
-                            playlistsShouldReload.value =
-                                !playlistsShouldReload.value;
-                          }
-                        },
-                      ),
-                      filled: true,
-                      fillColor: barColor,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(20),
-                        borderSide: BorderSide.none,
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(20),
-                        borderSide: BorderSide.none,
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(20),
-                        borderSide: BorderSide.none,
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 20,
-                        vertical: 16,
-                      ),
-                    ),
-                    onSubmitted: (value) async {
-                      if (value.trim().isNotEmpty) {
-                        await _createPlaylistAndAddSong(
-                          context,
-                          controller,
-                          mediaItem,
-                        );
-                      }
-                    },
+                    ],
                   ),
-                  const SizedBox(height: 8),
-                ],
-              ),
-            ),
-          ),
+                );
+              },
+            );
+          },
         );
       },
     );
@@ -2171,7 +2383,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                       final isDark =
                           Theme.of(context).brightness == Brightness.dark;
                       final showBackground = isAmoled && isDark && useArtworkBg;
-                      final showDynamicBg = useDynamicBg;
+                      final showDynamicBg = useDynamicBg && isAmoled && isDark;
 
                       return SlidingUpPanel(
                         controller: _panelController,
@@ -2244,12 +2456,12 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                 milliseconds: 200,
                                               ),
                                               curve: Curves.easeInOut,
-                                              color:
-                                                  (domColor ??
-                                                          Theme.of(
-                                                            context,
-                                                          ).scaffoldBackgroundColor)
-                                                      .withValues(alpha: 0.2),
+                                              color: normalizePaletteColor(
+                                                domColor ??
+                                                    Theme.of(
+                                                      context,
+                                                    ).scaffoldBackgroundColor,
+                                              ).withValues(alpha: 0.2),
                                             ),
                                           );
                                         },
@@ -4821,6 +5033,30 @@ class _LyricsModalContentState extends State<_LyricsModalContent> {
     }
   }
 
+  Color normalizePaletteColor(Color color) {
+    final hsl = HSLColor.fromColor(color);
+    // Si la saturación original es muy baja (gris/blanco/negro), mantenerla baja
+    // para evitar colorear artificialmente imágenes en escala de grises.
+    final isGrayscale = hsl.saturation < 0.15;
+
+    // Si es muy oscuro (negro), forzar un poco de luminosidad para que se vea
+    double effectiveLightness = hsl.lightness;
+    if (effectiveLightness < 0.15) {
+      effectiveLightness = 0.15;
+    }
+
+    final fixedLightness = (effectiveLightness * 0.85).clamp(0.55, 0.85);
+
+    final fixedSaturation = isGrayscale
+        ? hsl.saturation
+        : hsl.saturation.clamp(0.35, 1.0);
+
+    return hsl
+        .withLightness(fixedLightness)
+        .withSaturation(fixedSaturation)
+        .toColor();
+  }
+
   @override
   Widget build(BuildContext context) {
     return ValueListenableBuilder<bool>(
@@ -4831,6 +5067,7 @@ class _LyricsModalContentState extends State<_LyricsModalContent> {
           builder: (context, colorScheme, child) {
             final isAmoled = colorScheme == AppColorScheme.amoled;
             final isDark = Theme.of(context).brightness == Brightness.dark;
+            final showDynamicBg = useDynamicBg && isAmoled && isDark;
 
             return Container(
               constraints: BoxConstraints(
@@ -4839,7 +5076,7 @@ class _LyricsModalContentState extends State<_LyricsModalContent> {
                     MediaQuery.of(context).padding.top,
               ),
               decoration: BoxDecoration(
-                color: useDynamicBg
+                color: showDynamicBg
                     ? Colors.black
                     : Theme.of(context).scaffoldBackgroundColor,
                 borderRadius: const BorderRadius.vertical(
@@ -4849,7 +5086,7 @@ class _LyricsModalContentState extends State<_LyricsModalContent> {
               clipBehavior: Clip.antiAlias,
               child: Stack(
                 children: [
-                  if (useDynamicBg)
+                  if (showDynamicBg)
                     ValueListenableBuilder<Color?>(
                       valueListenable: ThemeController.instance.dominantColor,
                       builder: (context, domColor, _) {
@@ -4857,12 +5094,10 @@ class _LyricsModalContentState extends State<_LyricsModalContent> {
                           child: AnimatedContainer(
                             duration: const Duration(milliseconds: 200),
                             curve: Curves.easeInOut,
-                            color:
-                                (domColor ??
-                                        Theme.of(
-                                          context,
-                                        ).scaffoldBackgroundColor)
-                                    .withValues(alpha: 0.2),
+                            color: normalizePaletteColor(
+                              domColor ??
+                                  Theme.of(context).scaffoldBackgroundColor,
+                            ).withValues(alpha: 0.2),
                           ),
                         );
                       },
@@ -5122,33 +5357,6 @@ class _LyricsModalContentState extends State<_LyricsModalContent> {
     final result = _lyricsResult;
     if (result == null) {
       return _buildNoLyricsFound(context, currentMediaItem);
-    }
-
-    if (result.type == LyricsResultType.apiUnavailable) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.error_outline,
-              size: 64,
-              color: Theme.of(
-                context,
-              ).colorScheme.onSurface.withValues(alpha: 0.5),
-            ),
-            SizedBox(height: 16),
-            Text(
-              LocaleProvider.tr('api_unavailable'),
-              style: TextStyle(
-                fontSize: 16,
-                color: Theme.of(
-                  context,
-                ).colorScheme.onSurface.withValues(alpha: 0.7),
-              ),
-            ),
-          ],
-        ),
-      );
     }
 
     if (result.type == LyricsResultType.noConnection) {
@@ -5766,6 +5974,30 @@ class SleepTimerOptionsSheet extends StatelessWidget {
     Navigator.of(context).pop();
   }
 
+  Color normalizePaletteColor(Color color) {
+    final hsl = HSLColor.fromColor(color);
+    // Si la saturación original es muy baja (gris/blanco/negro), mantenerla baja
+    // para evitar colorear artificialmente imágenes en escala de grises.
+    final isGrayscale = hsl.saturation < 0.15;
+
+    // Si es muy oscuro (negro), forzar un poco de luminosidad para que se vea
+    double effectiveLightness = hsl.lightness;
+    if (effectiveLightness < 0.15) {
+      effectiveLightness = 0.15;
+    }
+
+    final fixedLightness = (effectiveLightness * 0.85).clamp(0.55, 0.85);
+
+    final fixedSaturation = isGrayscale
+        ? hsl.saturation
+        : hsl.saturation.clamp(0.35, 1.0);
+
+    return hsl
+        .withLightness(fixedLightness)
+        .withSaturation(fixedSaturation)
+        .toColor();
+  }
+
   @override
   Widget build(BuildContext context) {
     final mediaItem = audioHandler?.mediaItem.valueOrNull;
@@ -5773,46 +6005,109 @@ class SleepTimerOptionsSheet extends StatelessWidget {
     final position = playbackState?.position ?? Duration.zero;
     final duration = mediaItem?.duration ?? Duration.zero;
     final remaining = duration > position ? duration - position : Duration.zero;
-    return SafeArea(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          ListTile(
-            title: Text(LocaleProvider.tr('one_minute')),
-            onTap: () => _setTimer(context, const Duration(minutes: 1)),
-          ),
-          ListTile(
-            title: Text(LocaleProvider.tr('five_minutes')),
-            onTap: () => _setTimer(context, const Duration(minutes: 5)),
-          ),
-          ListTile(
-            title: Text(LocaleProvider.tr('fifteen_minutes')),
-            onTap: () => _setTimer(context, const Duration(minutes: 15)),
-          ),
-          ListTile(
-            title: Text(LocaleProvider.tr('thirty_minutes')),
-            onTap: () => _setTimer(context, const Duration(minutes: 30)),
-          ),
-          ListTile(
-            title: Text(LocaleProvider.tr('one_hour')),
-            onTap: () => _setTimer(context, const Duration(minutes: 60)),
-          ),
-          ListTile(
-            title: Text(LocaleProvider.tr('until_song_ends')),
-            onTap: remaining > Duration.zero
-                ? () => _setTimer(context, remaining)
-                : null,
-          ),
-          const Divider(),
-          ListTile(
-            title: Text(LocaleProvider.tr('cancel_timer')),
-            onTap: () {
-              (audioHandler as MyAudioHandler).cancelSleepTimer();
-              Navigator.of(context).pop();
-            },
-          ),
-        ],
-      ),
+
+    return ValueListenableBuilder<bool>(
+      valueListenable: useDynamicColorBackgroundNotifier,
+      builder: (context, useDynamicBg, _) {
+        return ValueListenableBuilder<AppColorScheme>(
+          valueListenable: colorSchemeNotifier,
+          builder: (context, colorScheme, _) {
+            final isAmoled = colorScheme == AppColorScheme.amoled;
+            final isDark = Theme.of(context).brightness == Brightness.dark;
+            final showDynamicBg = useDynamicBg && isAmoled && isDark;
+
+            return Container(
+              decoration: BoxDecoration(
+                color: showDynamicBg
+                    ? Colors.black
+                    : Theme.of(context).scaffoldBackgroundColor,
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(28),
+                ),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: Stack(
+                children: [
+                  if (showDynamicBg)
+                    ValueListenableBuilder<Color?>(
+                      valueListenable: ThemeController.instance.dominantColor,
+                      builder: (context, domColor, _) {
+                        return Positioned.fill(
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
+                            curve: Curves.easeInOut,
+                            color: normalizePaletteColor(
+                              domColor ??
+                                  Theme.of(context).scaffoldBackgroundColor,
+                            ).withValues(alpha: 0.2),
+                          ),
+                        );
+                      },
+                    ),
+                  SafeArea(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const SizedBox(height: 12),
+                        Container(
+                          width: 40,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onSurfaceVariant.withAlpha(100),
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        ListTile(
+                          title: Text(LocaleProvider.tr('one_minute')),
+                          onTap: () =>
+                              _setTimer(context, const Duration(minutes: 1)),
+                        ),
+                        ListTile(
+                          title: Text(LocaleProvider.tr('five_minutes')),
+                          onTap: () =>
+                              _setTimer(context, const Duration(minutes: 5)),
+                        ),
+                        ListTile(
+                          title: Text(LocaleProvider.tr('fifteen_minutes')),
+                          onTap: () =>
+                              _setTimer(context, const Duration(minutes: 15)),
+                        ),
+                        ListTile(
+                          title: Text(LocaleProvider.tr('thirty_minutes')),
+                          onTap: () =>
+                              _setTimer(context, const Duration(minutes: 30)),
+                        ),
+                        ListTile(
+                          title: Text(LocaleProvider.tr('one_hour')),
+                          onTap: () =>
+                              _setTimer(context, const Duration(minutes: 60)),
+                        ),
+                        ListTile(
+                          title: Text(LocaleProvider.tr('until_song_ends')),
+                          onTap: remaining > Duration.zero
+                              ? () => _setTimer(context, remaining)
+                              : null,
+                        ),
+                        const Divider(),
+                        ListTile(
+                          title: Text(LocaleProvider.tr('cancel_timer')),
+                          onTap: () {
+                            (audioHandler as MyAudioHandler).cancelSleepTimer();
+                            Navigator.of(context).pop();
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
     );
   }
 }
