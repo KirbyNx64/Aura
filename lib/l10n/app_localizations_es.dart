@@ -41,8 +41,8 @@ const Map<String, String> appLocalizationsEs = {
       'Has completado la configuración inicial. Ya puedes empezar a disfrutar de Aura Music.',
   'all_files_permission': 'Acceso a todos los archivos',
   'music_audio_permission': 'Música y Audio',
-  'player': 'Reproductor',
-  'overlay': 'Overlay',
+  'player': 'Reproductor blur',
+  'overlay': 'Overlay blur',
 
   // Preferences
   'preferences': 'Preferencias',
@@ -227,6 +227,11 @@ const Map<String, String> appLocalizationsEs = {
       'Usa la carátula de la canción como fondo del reproductor (Solo en tema oscuro AMOLED)',
   'use_artwork_as_background_desc_select':
       'Selecciona dónde usar la carátula como fondo',
+  'amoled_background': 'Fondo AMOLED',
+  'amoled_background_title': 'Fondo del reproductor',
+  'amoled_background_desc':
+      'Selecciona que fondo usar en el reproductor (Solo en tema oscuro AMOLED)',
+  'use_dynamic_color_background': 'Usar fondo de color dinámico',
   'artwork_quality_description':
       'Selecciona la calidad de las carátulas al reproducir música',
   '100_percent_maximum': '100% (Máximo)',

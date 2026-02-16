@@ -38,8 +38,8 @@ const Map<String, String> appLocalizationsEn = {
   'grant_notifications': 'Allow notifications',
   'all_files_permission': 'All files access',
   'music_audio_permission': 'Music and Audio',
-  'player': 'Player',
-  'overlay': 'Overlay',
+  'player': 'Player blur',
+  'overlay': 'Overlay blur',
 
   // Preferences
   'preferences': 'Preferences',
@@ -217,10 +217,15 @@ const Map<String, String> appLocalizationsEn = {
   'overlay_next_button_desc':
       'Shows the next song button in the playback overlay.',
   'use_artwork_as_background': 'Use artwork as background',
+  'amoled_background': 'AMOLED background',
+  'amoled_background_title': 'Player background',
+  'amoled_background_desc':
+      'Use the song art as the player background (Only in AMOLED dark theme)',
   'use_artwork_as_background_desc':
       'Use the song art as the player background (Only in AMOLED dark theme)',
   'use_artwork_as_background_desc_select':
       'Select where to use the song art as background',
+  'use_dynamic_color_background': 'Use dynamic color background',
   '100_percent_maximum': '100% (Maximum)',
   '80_percent_recommended': '80% (Recommended)',
   '60_percent_performance': '60% (Performance)',

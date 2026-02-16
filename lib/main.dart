@@ -739,9 +739,9 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
       final nextButtonEnabled =
           prefs.getBool('overlay_next_button_enabled') ?? false;
       final useArtworkOverlay =
-          prefs.getBool('use_artwork_background_overlay') ?? true;
+          prefs.getBool('use_artwork_background_overlay') ?? false;
       final useArtworkPlayer =
-          prefs.getBool('use_artwork_background_player') ?? true;
+          prefs.getBool('use_artwork_background_player') ?? false;
 
       // Actualizar estado una sola vez
       setState(() {
@@ -750,6 +750,8 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
         overlayNextButtonEnabled.value = nextButtonEnabled;
         useArtworkAsBackgroundOverlayNotifier.value = useArtworkOverlay;
         useArtworkAsBackgroundPlayerNotifier.value = useArtworkPlayer;
+        useDynamicColorBackgroundNotifier.value =
+            prefs.getBool('use_dynamic_color_background') ?? true;
         _isLoading = false;
       });
 

@@ -45,7 +45,10 @@ class ThemeController {
 
   /// Callback cuando cambia el mediaItem
   void _onMediaItemChanged(MediaItem? mediaItem) {
-    if (colorSchemeNotifier.value != AppColorScheme.dynamic) return;
+    if (colorSchemeNotifier.value != AppColorScheme.dynamic &&
+        !useDynamicColorBackgroundNotifier.value) {
+      return;
+    }
     if (mediaItem == null) return;
 
     final songId = (mediaItem.extras?['songId'] ?? mediaItem.id).toString();
@@ -154,7 +157,7 @@ class ThemeController {
     try {
       final generator = await PaletteGenerator.fromImageProvider(
         ResizeImage(imageProvider, height: 50, width: 50),
-        maximumColorCount: 8,
+        maximumColorCount: 16,
       );
 
       final paletteColor =

@@ -66,6 +66,10 @@ final ValueNotifier<bool> useArtworkAsBackgroundPlayerNotifier =
 final ValueNotifier<bool> useArtworkAsBackgroundOverlayNotifier =
     ValueNotifier<bool>(true);
 
+// Notifier para usar color dinámico como fondo
+final ValueNotifier<bool> useDynamicColorBackgroundNotifier =
+    ValueNotifier<bool>(false);
+
 // Notifier para enfocar la búsqueda YT al cambiar de tab desde la barra de home
 final ValueNotifier<bool> focusYtSearchNotifier = ValueNotifier<bool>(false);
 

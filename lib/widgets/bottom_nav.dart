@@ -337,7 +337,7 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
                             // Si el playlist interno está abierto, dejamos que FullPlayerScreen maneje el cierre
                             if (_playlistOpen) return;
 
-                            if (isLoading) return; // Bloquear si carga
+                            // if (isLoading) return; // Bloquear si carga
                             _overlayPanelController.close();
                             return;
                           }
@@ -353,8 +353,7 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
                           boxShadow: const [],
                           color: Colors.transparent,
                           isDraggable:
-                              !_playlistOpen &&
-                              !isLoading, // Bloquear deslizado si carga
+                              !_playlistOpen, // Bloquear deslizado solo si el playlist está abierto
                           panelSnapping: true,
                           backdropEnabled: false,
                           defaultPanelState: overlay_panel.PanelState.closed,
@@ -422,23 +421,28 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
                                   ),
                                 ),
                                 child: RepaintBoundary(
-                                  child: FullPlayerScreen(
-                                    initialMediaItem: snapshot.data,
-                                    panelPositionNotifier:
-                                        _panelPositionNotifier,
-                                    onClose: () {
-                                      if (_overlayPanelController.isAttached &&
-                                          !isLoading) {
-                                        _overlayPanelController.close();
-                                      }
-                                    },
-                                    onPlaylistStateChanged: (isOpen) {
-                                      if (_playlistOpen != isOpen) {
-                                        setState(() {
-                                          _playlistOpen = isOpen;
-                                        });
-                                      }
-                                    },
+                                  child: ClipRRect(
+                                    borderRadius: const BorderRadius.vertical(
+                                      top: Radius.circular(20),
+                                    ),
+                                    child: FullPlayerScreen(
+                                      initialMediaItem: snapshot.data,
+                                      panelPositionNotifier:
+                                          _panelPositionNotifier,
+                                      onClose: () {
+                                        if (_overlayPanelController
+                                            .isAttached) {
+                                          _overlayPanelController.close();
+                                        }
+                                      },
+                                      onPlaylistStateChanged: (isOpen) {
+                                        if (_playlistOpen != isOpen) {
+                                          setState(() {
+                                            _playlistOpen = isOpen;
+                                          });
+                                        }
+                                      },
+                                    ),
                                   ),
                                 ),
                               );

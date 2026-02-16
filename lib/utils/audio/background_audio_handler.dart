@@ -68,7 +68,7 @@ Future<AudioHandler> initAudioService() async {
               'Controles de reproducción de música',
           androidNotificationOngoing: true,
           androidNotificationClickStartsActivity: true,
-          androidStopForegroundOnPause: false,
+          // androidStopForegroundOnPause: false,
           androidResumeOnClick: true,
           preloadArtwork: true,
         ),
@@ -356,6 +356,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   Duration? _sleepDuration;
   Duration? _sleepStartPosition;
   bool _isSkipping = false;
+  bool _isPreloadingNext = false;
   bool _isInitialized = false;
   StreamSubscription<int?>? _currentIndexSubscription;
   StreamSubscription<PlaybackEvent>? _playbackEventSubscription;
@@ -747,6 +748,8 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
   /// Precarga la carátula de la siguiente canción cuando quedan pocos segundos
   void _preloadNextSongArtwork() {
+    if (_isPreloadingNext) return;
+
     final duration = _player.duration;
     final position = _player.position;
     final currentIndex = _player.currentIndex;
@@ -758,55 +761,63 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     // Si quedan menos de 18 segundos, precargar la siguiente canción
     final remainingTime = duration - position;
     if (remainingTime.inSeconds <= 18 && remainingTime.inSeconds > 15) {
-      final nextIndex = currentIndex + 1;
-      if (nextIndex < _currentSongList.length) {
-        final nextSong = _currentSongList[nextIndex];
+      _isPreloadingNext = true;
 
-        // Verificar si ya está en caché (memoria o archivo)
-        bool isAlreadyCached = false;
-        if (_artworkCache.containsKey(nextSong.data)) {
-          isAlreadyCached = true;
-        } else {
-          // Verificar también en caché temporal (archivos) - hacer de forma asíncrona
-          unawaited(() async {
-            try {
-              _tempDirPath ??= (await getTemporaryDirectory()).path;
-              final cachedFile = File(
-                '$_tempDirPath/artwork_${nextSong.id}.jpg',
-              );
-              if (await cachedFile.exists()) {
-                // Agregar al caché en memoria para acceso inmediato
-                _artworkCache[nextSong.data] = Uri.file(cachedFile.path);
-              }
-            } catch (e) {
-              // Error silencioso
-            }
-          }());
-        }
+      unawaited(() async {
+        try {
+          final nextIndex = currentIndex + 1;
+          if (nextIndex < _currentSongList.length) {
+            final nextSong = _currentSongList[nextIndex];
 
-        // Solo precargar si no está ya en caché
-        if (!isAlreadyCached) {
-          unawaited(() async {
-            try {
-              final artUri = await getOrCacheArtwork(
-                nextSong.id,
-                nextSong.data,
-              ).timeout(const Duration(milliseconds: 2000));
-
-              // Verificar que el archivo existe antes de usar
-              if (artUri != null) {
-                final file = File(artUri.toFilePath());
-                if (!await file.exists()) {
-                  // Archivo no existe, remover del caché
-                  _artworkCache.remove(nextSong.data);
+            // Verificar si ya está en caché (memoria o archivo)
+            bool isAlreadyCached = false;
+            if (_artworkCache.containsKey(nextSong.data)) {
+              isAlreadyCached = true;
+            } else {
+              // Verificar también en caché temporal (archivos)
+              try {
+                _tempDirPath ??= (await getTemporaryDirectory()).path;
+                final cachedFile = File(
+                  '$_tempDirPath/artwork_${nextSong.id}.jpg',
+                );
+                if (await cachedFile.exists()) {
+                  // Agregar al caché en memoria para acceso inmediato
+                  _artworkCache[nextSong.data] = Uri.file(cachedFile.path);
+                  isAlreadyCached =
+                      true; // No need to load if found in file cache
                 }
+              } catch (e) {
+                // Error silencioso
               }
-            } catch (e) {
-              // print('Error precargando carátula para ${nextSong.title}: $e');
             }
-          }());
+
+            // Solo precargar si no está ya en caché
+            if (!isAlreadyCached) {
+              try {
+                final artUri = await getOrCacheArtwork(
+                  nextSong.id,
+                  nextSong.data,
+                ).timeout(const Duration(milliseconds: 2000));
+
+                // Verificar que el archivo existe antes de usar
+                if (artUri != null) {
+                  final file = File(artUri.toFilePath());
+                  if (!await file.exists()) {
+                    // Archivo no existe, remover del caché
+                    _artworkCache.remove(nextSong.data);
+                  }
+                }
+              } catch (e) {
+                // print('Error precargando carátula para ${nextSong.title}: $e');
+              }
+            }
+          }
+        } finally {
+          // Permitir nueva precarga después de 5 segundos para evitar repeticiones en el mismo rango
+          await Future.delayed(const Duration(seconds: 5));
+          _isPreloadingNext = false;
         }
-      }
+      }());
     }
   }
 
@@ -881,7 +892,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   }
 
   /// Actualiza solo el MediaItem cuando cambia el índice siguiendo las mejores prácticas de audio_service
-  void _updateCurrentMediaItem(int index) {
+  Future<void> _updateCurrentMediaItem(int index) async {
     if (index < 0 || index >= _mediaQueue.length) return;
 
     var currentMediaItem = _mediaQueue[index];
@@ -936,45 +947,29 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       if (immediateArtUri != null) {
         // print('⚡ Carátula encontrada en caché de memoria para: ${currentMediaItem.title}');
 
-        // Verificar que el archivo existe de forma síncrona
+        // Verificar que el archivo existe de forma asíncrona
         final file = File(immediateArtUri.toFilePath());
-        if (file.existsSync()) {
+        if (await file.exists()) {
           // print('✅ Archivo de carátula existe: ${file.path}');
 
           // Verificar que el archivo no esté vacío
-          final fileSize = file.lengthSync();
+          final fileSize = await file.length();
           if (fileSize > 0) {
             // print('✅ Archivo de carátula válido (${fileSize} bytes)');
 
             // Asegurar que el URI esté correctamente formateado
             final validUri = Uri.file(file.path);
             final finalMediaItem = currentMediaItem.copyWith(artUri: validUri);
-            _mediaQueue[index] = finalMediaItem;
+
+            if (index < _mediaQueue.length) {
+              _mediaQueue[index] = finalMediaItem;
+            }
 
             // print('📱 Enviando MediaItem con carátula inmediata - ArtUri: ${validUri.toString()}');
             // print('📱 MediaItem completo: ${finalMediaItem.toString()}');
 
             // Enviar la notificación inmediatamente
             mediaItem.add(finalMediaItem);
-
-            // Verificar que se envió correctamente
-            // print('✅ MediaItem enviado a notificación');
-
-            // Re-enviar la notificación después de un pequeño delay para asegurar que se procese
-            unawaited(() async {
-              await Future.delayed(const Duration(milliseconds: 200));
-              if (_lastProcessedSongId == currentSongId && mounted) {
-                // print('🔄 Re-enviando MediaItem para asegurar carátula');
-                mediaItem.add(finalMediaItem);
-
-                // Segundo retry después de más tiempo
-                await Future.delayed(const Duration(milliseconds: 500));
-                if (_lastProcessedSongId == currentSongId && mounted) {
-                  // print('🔄 Segundo retry para asegurar carátula');
-                  mediaItem.add(finalMediaItem);
-                }
-              }
-            }());
 
             return;
           } else {
@@ -1008,7 +1003,9 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
               final finalMediaItem = currentMediaItem.copyWith(
                 artUri: validUri,
               );
-              _mediaQueue[index] = finalMediaItem;
+              if (index < _mediaQueue.length) {
+                _mediaQueue[index] = finalMediaItem;
+              }
               mediaItem.add(finalMediaItem);
 
               // print('⚡ Carátula encontrada en caché temporal para: ${currentMediaItem.title}');

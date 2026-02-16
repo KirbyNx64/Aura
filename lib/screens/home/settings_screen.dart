@@ -84,12 +84,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final prefs = await SharedPreferences.getInstance();
     final usePlayer = prefs.getBool('use_artwork_background_player') ?? true;
     final useOverlay = prefs.getBool('use_artwork_background_overlay') ?? true;
+    final useDynamic = prefs.getBool('use_dynamic_color_background') ?? false;
+
     useArtworkAsBackgroundPlayerNotifier.value = usePlayer;
     useArtworkAsBackgroundOverlayNotifier.value = useOverlay;
+    useDynamicColorBackgroundNotifier.value = useDynamic;
   }
 
   Future<void> _setArtworkBackgroundPlayer(bool value) async {
     final prefs = await SharedPreferences.getInstance();
+    if (value) {
+      await prefs.setBool('use_dynamic_color_background', false);
+      useDynamicColorBackgroundNotifier.value = false;
+    }
     await prefs.setBool('use_artwork_background_player', value);
     useArtworkAsBackgroundPlayerNotifier.value = value;
     setState(() {});
@@ -97,8 +104,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _setArtworkBackgroundOverlay(bool value) async {
     final prefs = await SharedPreferences.getInstance();
+    if (value) {
+      await prefs.setBool('use_dynamic_color_background', false);
+      useDynamicColorBackgroundNotifier.value = false;
+    }
     await prefs.setBool('use_artwork_background_overlay', value);
     useArtworkAsBackgroundOverlayNotifier.value = value;
+    setState(() {});
+  }
+
+  Future<void> _setDynamicColorBackground(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (value) {
+      await prefs.setBool('use_artwork_background_player', false);
+      await prefs.setBool('use_artwork_background_overlay', false);
+      useArtworkAsBackgroundPlayerNotifier.value = false;
+      useArtworkAsBackgroundOverlayNotifier.value = false;
+    }
+    await prefs.setBool('use_dynamic_color_background', value);
+    useDynamicColorBackgroundNotifier.value = value;
     setState(() {});
   }
 
@@ -130,7 +154,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               const SizedBox(height: 16),
               TranslatedText(
-                'use_artwork_as_background',
+                'amoled_background',
                 style: const TextStyle(fontWeight: FontWeight.bold),
               ),
             ],
@@ -155,6 +179,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     title: TranslatedText('overlay'),
                     value: value,
                     onChanged: (v) => _setArtworkBackgroundOverlay(v),
+                  );
+                },
+              ),
+              ValueListenableBuilder<bool>(
+                valueListenable: useDynamicColorBackgroundNotifier,
+                builder: (context, value, _) {
+                  return SwitchListTile(
+                    title: TranslatedText('use_dynamic_color_background'),
+                    value: value,
+                    onChanged: (v) => _setDynamicColorBackground(v),
                   );
                 },
               ),
@@ -2815,14 +2849,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: ListTile(
                 onTap: _showArtworkBackgroundDialog,
                 title: TranslatedText(
-                  'use_artwork_as_background',
+                  'amoled_background_title',
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                     color: Theme.of(context).colorScheme.onSurface,
                   ),
                 ),
                 subtitle: TranslatedText(
-                  'use_artwork_as_background_desc',
+                  'amoled_background_desc',
                   style: TextStyle(
                     fontSize: 13,
                     color: Theme.of(

@@ -268,7 +268,7 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> {
                     if (!overlayVisibleNotifier.value) {
                       overlayVisibleNotifier.value = true;
                     }
-                    if (isLoading || !navigationEnabled) return;
+                    if (!navigationEnabled) return;
                     widget.onTap?.call();
                   },
                   // Solo manejar arrastre si no hay onTap (modo standalone).
@@ -314,7 +314,9 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> {
                               // Capa frontal (origen)
                               Container(
                                 decoration: BoxDecoration(
-                                  color: isLight
+                                  color: isAmoled
+                                      ? Colors.black
+                                      : isLight
                                       ? Theme.of(context).colorScheme.primary
                                             .withAlpha(isDark ? 40 : 25)
                                       : isSystem
