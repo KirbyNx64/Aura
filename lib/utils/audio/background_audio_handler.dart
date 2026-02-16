@@ -1088,6 +1088,78 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   int _loadVersion = 0;
 
   /// Función mejorada para crear MediaItems iniciales siguiendo las mejores prácticas de audio_service
+  List<MediaItem> _createMediaItemsWithoutArtwork(List<SongModel> songs) {
+    final mediaItems = <MediaItem>[];
+
+    for (int i = 0; i < songs.length; i++) {
+      final song = songs[i];
+      Duration? dur = (song.duration != null && song.duration! > 0)
+          ? Duration(milliseconds: song.duration!)
+          : null;
+
+      mediaItems.add(
+        MediaItem(
+          id: song.data,
+          album: song.album ?? '',
+          title: song.title,
+          artist: song.artist ?? '',
+          duration: dur,
+          artUri: null,
+          extras: {
+            'songId': song.id,
+            'albumId': song.albumId,
+            'data': song.data,
+            'queueIndex': i,
+          },
+        ),
+      );
+    }
+
+    return mediaItems;
+  }
+
+  Future<void> _loadArtworksInBackground(
+    List<SongModel> songs, {
+    int? priorityIndex,
+  }) async {
+    final Set<int> indicesToLoad = {};
+
+    if (priorityIndex != null &&
+        priorityIndex >= 0 &&
+        priorityIndex < songs.length) {
+      indicesToLoad.add(priorityIndex);
+    }
+
+    for (int i = 0; i < 3 && i < songs.length; i++) {
+      indicesToLoad.add(i);
+    }
+
+    if (indicesToLoad.isEmpty) return;
+
+    await Future.wait(
+      indicesToLoad.map((i) async {
+        if (i < 0 || i >= songs.length) return;
+        final song = songs[i];
+        try {
+          final artUri = await getOrCacheArtwork(
+            song.id,
+            song.data,
+          ).timeout(const Duration(milliseconds: 600));
+
+          if (artUri != null && i < _mediaQueue.length) {
+            final validUri = Uri.file(artUri.toFilePath());
+            _mediaQueue[i] = _mediaQueue[i].copyWith(artUri: validUri);
+          }
+        } catch (_) {}
+      }),
+    );
+
+    if (_mediaQueue.isNotEmpty) {
+      queue.add(List<MediaItem>.from(_mediaQueue));
+    }
+  }
+
+  /*
   Future<List<MediaItem>> _createMediaItemsWithArtwork(
     List<SongModel> songs, {
     int? priorityIndex,
@@ -1168,6 +1240,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
     return mediaItems;
   }
+  */
 
   bool _areSongListsEqual(List<SongModel> a, List<SongModel> b) {
     if (a.length != b.length) return false;
@@ -1293,14 +1366,14 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       initialIndex = 0;
     }
 
-    // 1. Crear MediaItems con carátulas para las primeras canciones
+    // 1. Crear MediaItems primero (sin carátulas para no bloquear UI)
     _mediaQueue.clear();
-    final mediaItems = await _createMediaItemsWithArtwork(
-      validSongs,
-      priorityIndex: initialIndex,
-    );
+    final mediaItems = _createMediaItemsWithoutArtwork(validSongs);
     _mediaQueue.addAll(mediaItems);
     queue.add(List<MediaItem>.from(_mediaQueue));
+
+    // Cargar carátulas en background sin bloquear
+    _loadArtworksInBackground(validSongs, priorityIndex: initialIndex);
     // Persistir cola inmediatamente (lista de rutas)
     unawaited(() async {
       try {

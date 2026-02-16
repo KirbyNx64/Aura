@@ -238,9 +238,15 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
                 ),
                 FilledButton.tonal(
                   onPressed: () => Navigator.of(context).pop(true),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: isAmoled ? Colors.white : null,
+                  ),
                   child: TranslatedText(
                     'apply',
-                    style: const TextStyle(fontWeight: FontWeight.bold),
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: isAmoled ? Colors.black : null,
+                    ),
                   ),
                 ),
               ],
@@ -343,9 +349,15 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
               actions: [
                 FilledButton.tonal(
                   onPressed: () => Navigator.of(context).pop(),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: isAmoled ? Colors.white : null,
+                  ),
                   child: TranslatedText(
                     'ok',
-                    style: const TextStyle(fontWeight: FontWeight.bold),
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: isAmoled ? Colors.black : null,
+                    ),
                   ),
                 ),
               ],

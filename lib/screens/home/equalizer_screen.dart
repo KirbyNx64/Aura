@@ -762,12 +762,16 @@ class _EqualizerScreenState extends State<EqualizerScreen> {
                       Container(
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
-                          color: colorScheme.secondaryContainer,
+                          color: isAmoled
+                              ? Colors.white
+                              : colorScheme.secondaryContainer,
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Icon(
                           Icons.volume_up_rounded,
-                          color: colorScheme.onSecondaryContainer,
+                          color: isAmoled
+                              ? Colors.black
+                              : colorScheme.onSecondaryContainer,
                         ),
                       ),
                       const SizedBox(width: 16),

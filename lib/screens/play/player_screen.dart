@@ -134,7 +134,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
   // Cache del widget de fondo AMOLED para evitar reconstrucciones
   Widget? _cachedAmoledBackground;
   String? _cachedBackgroundSongId;
-  
+
   // Cache de la imagen con blur pre-renderizada (blur estático)
   ui.Image? _cachedBlurredImage;
   String? _cachedBlurredImageSongId;
@@ -2211,8 +2211,8 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                   width: w,
                   height: h,
                   scale: scale + 0.1,
-                  cachedImage: _cachedBlurredImageSongId == songId 
-                      ? _cachedBlurredImage 
+                  cachedImage: _cachedBlurredImageSongId == songId
+                      ? _cachedBlurredImage
                       : null,
                   onImageCached: (image) {
                     if (_cachedBlurredImageSongId != songId) {
@@ -2513,18 +2513,19 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                       if (targetOpacity <= 0.0) {
                                         return const Offstage();
                                       }
-                                      
+
                                       // Si la opacidad es muy baja, usar Offstage para evitar renderizado pero mantener el widget en el árbol
                                       if (targetOpacity < minOpacityThreshold) {
                                         return const Offstage();
                                       }
-                                      
+
                                       // Normalizar la opacidad para que vaya de 0 a 1 cuando está por encima del threshold
-                                      final normalizedOpacity = 
-                                          ((targetOpacity - minOpacityThreshold) / 
-                                           (1.0 - minOpacityThreshold))
-                                          .clamp(0.0, 1.0);
-                                      
+                                      final normalizedOpacity =
+                                          ((targetOpacity -
+                                                      minOpacityThreshold) /
+                                                  (1.0 - minOpacityThreshold))
+                                              .clamp(0.0, 1.0);
+
                                       // Usar Opacity con IgnorePointer cuando la opacidad es baja
                                       // para evitar procesamiento de eventos innecesarios
                                       return IgnorePointer(
@@ -2539,7 +2540,9 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                   );
                                 } else {
                                   // Si no hay panelPositionNotifier, mostrar siempre el fondo
-                                  final targetOpacity = _lyricsModalOpen ? 0.0 : 1.0;
+                                  final targetOpacity = _lyricsModalOpen
+                                      ? 0.0
+                                      : 1.0;
 
                                   if (targetOpacity <= 0.0) {
                                     return const Offstage();
@@ -5066,6 +5069,8 @@ class _LyricsModalContentState extends State<_LyricsModalContent> {
         .toColor();
   }
 
+  final bool isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
+
   @override
   Widget build(BuildContext context) {
     return ValueListenableBuilder<bool>(
@@ -5414,18 +5419,22 @@ class _LyricsModalContentState extends State<_LyricsModalContent> {
           Icon(
             Icons.lyrics_outlined,
             size: 64,
-            color: Theme.of(
-              context,
-            ).colorScheme.onSurface.withValues(alpha: 0.5),
+            color: isAmoled
+                ? Colors.white
+                : Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withValues(alpha: 0.5),
           ),
           SizedBox(height: 16),
           Text(
             LocaleProvider.tr('no_lyrics_found'),
             style: TextStyle(
               fontSize: 16,
-              color: Theme.of(
-                context,
-              ).colorScheme.onSurface.withValues(alpha: 0.7),
+              color: isAmoled
+                  ? Colors.white
+                  : Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withValues(alpha: 0.7),
             ),
           ),
           SizedBox(height: 24),
@@ -6355,7 +6364,7 @@ class _StaticBlurImageState extends State<_StaticBlurImage> {
 
   Future<void> _loadAndBlurImage() async {
     if (_isLoading) return;
-    
+
     setState(() {
       _isLoading = true;
     });
@@ -6365,36 +6374,44 @@ class _StaticBlurImageState extends State<_StaticBlurImage> {
       final ImageStream stream = widget.imageProvider.resolve(
         const ImageConfiguration(),
       );
-      
+
       final completer = Completer<ui.Image>();
       late ImageStreamListener listener;
-      
-      listener = ImageStreamListener((ImageInfo info, bool _) {
-        completer.complete(info.image);
-        stream.removeListener(listener);
-      }, onError: (exception, stackTrace) {
-        completer.completeError(exception);
-        stream.removeListener(listener);
-      });
-      
+
+      listener = ImageStreamListener(
+        (ImageInfo info, bool _) {
+          completer.complete(info.image);
+          stream.removeListener(listener);
+        },
+        onError: (exception, stackTrace) {
+          completer.completeError(exception);
+          stream.removeListener(listener);
+        },
+      );
+
       stream.addListener(listener);
-      
+
       final image = await completer.future;
-      
+
       // Renderizar el blur en una imagen estática
       final recorder = ui.PictureRecorder();
       final canvas = Canvas(recorder);
       final paint = Paint();
-      
+
       // Aplicar blur usando ImageFilter
       final blurFilter = ui.ImageFilter.blur(sigmaX: 9, sigmaY: 9);
       canvas.saveLayer(
         Offset.zero & Size(widget.width, widget.height),
         paint..imageFilter = blurFilter,
       );
-      
+
       // Dibujar la imagen escalada
-      final srcRect = Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble());
+      final srcRect = Rect.fromLTWH(
+        0,
+        0,
+        image.width.toDouble(),
+        image.height.toDouble(),
+      );
       final dstRect = Rect.fromLTWH(0, 0, widget.width, widget.height);
       canvas.drawImageRect(
         image,
@@ -6402,22 +6419,22 @@ class _StaticBlurImageState extends State<_StaticBlurImage> {
         dstRect,
         Paint()..filterQuality = FilterQuality.low,
       );
-      
+
       canvas.restore();
-      
+
       // Convertir a imagen
       final picture = recorder.endRecording();
       final blurredImage = await picture.toImage(
         widget.width.toInt(),
         widget.height.toInt(),
       );
-      
+
       if (mounted) {
         setState(() {
           _blurredImage = blurredImage;
           _isLoading = false;
         });
-        
+
         // Notificar al padre para cachear la imagen
         widget.onImageCached(blurredImage);
       }
@@ -6491,7 +6508,12 @@ class _BlurredImagePainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final srcRect = Rect.fromLTWH(0, 0, blurredImage.width.toDouble(), blurredImage.height.toDouble());
+    final srcRect = Rect.fromLTWH(
+      0,
+      0,
+      blurredImage.width.toDouble(),
+      blurredImage.height.toDouble(),
+    );
     final dstRect = Rect.fromLTWH(0, 0, size.width, size.height);
     canvas.drawImageRect(
       blurredImage,
