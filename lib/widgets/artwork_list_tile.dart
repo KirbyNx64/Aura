@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:music/utils/audio/background_audio_handler.dart';
 import 'package:music/utils/notifiers.dart';
@@ -80,6 +81,20 @@ class _ArtworkListTileState extends State<ArtworkListTile> {
 
   @override
   Widget build(BuildContext context) {
+    // Optimización: evitar LayoutBuilder si width y height están definidos
+    // Optimización: evitar LayoutBuilder si width y height están definidos y son finitos
+    if (widget.width != null &&
+        widget.height != null &&
+        widget.width!.isFinite &&
+        widget.height!.isFinite) {
+      return SizedBox(
+        width: widget.width,
+        height: widget.height,
+        child: _buildArtworkContent(widget.width!, widget.height!),
+      );
+    }
+
+    // Solo usar LayoutBuilder si es necesario (width o height son null/infinitos)
     return LayoutBuilder(
       builder: (context, constraints) {
         double w = widget.width ?? widget.size;
@@ -102,6 +117,11 @@ class _ArtworkListTileState extends State<ArtworkListTile> {
   }
 
   Widget _buildArtworkContent(double w, double h) {
+    // IMPORTANT: for listas, decodificar al tamaño real evita jank en scroll.
+    final dpr = MediaQuery.of(context).devicePixelRatio;
+    final int cacheW = max(1, (w * dpr).round());
+    final int cacheH = max(1, (h * dpr).round());
+
     if (widget.artUri != null &&
         (widget.artUri!.isScheme('http') || widget.artUri!.isScheme('https'))) {
       return ClipRRect(
@@ -112,8 +132,10 @@ class _ArtworkListTileState extends State<ArtworkListTile> {
           height: h,
           fit: BoxFit.cover,
           gaplessPlayback: true,
-          cacheWidth: 400,
-          cacheHeight: 400,
+          // Decodificar cerca del tamaño final reduce trabajo en scroll.
+          cacheWidth: cacheW,
+          cacheHeight: cacheH,
+          filterQuality: FilterQuality.low,
           errorBuilder: (context, error, stackTrace) {
             return _buildFallbackIcon(w, h);
           },
@@ -129,6 +151,10 @@ class _ArtworkListTileState extends State<ArtworkListTile> {
           height: h,
           fit: BoxFit.cover,
           gaplessPlayback: true,
+          // Decodificar cerca del tamaño final reduce trabajo en scroll.
+          cacheWidth: cacheW,
+          cacheHeight: cacheH,
+          filterQuality: FilterQuality.low,
           errorBuilder: (context, error, stackTrace) {
             return _buildFallbackIcon(w, h);
           },

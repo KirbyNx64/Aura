@@ -2578,18 +2578,18 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           // Primero reproducir la canción
           _playSong(song, queue, queueSource: queueSource);
 
+          // Desactivar indicador de carga después de reproducir (comportamiento consistente)
+          Future.delayed(const Duration(milliseconds: 200), () {
+            if (mounted) playLoadingNotifier.value = false;
+          });
+
           // Luego agregar las canciones aleatorias al reproductor (si es necesario)
           if (queueSource == LocaleProvider.tr('quick_access_songs') ||
               queueSource == LocaleProvider.tr('quick_pick_songs')) {
             // Esperar un poco para que la reproducción se estabilice
             await Future.delayed(const Duration(milliseconds: 200));
-            await _addRandomSongsToPlayerQueue(queue);
+            unawaited(_addRandomSongsToPlayerQueue(queue));
           }
-
-          // Desactivar indicador de carga después de reproducir (comportamiento de FavoritesScreen)
-          Future.delayed(const Duration(milliseconds: 200), () {
-            playLoadingNotifier.value = false;
-          });
         }
       } catch (e) {
         // print('Error en reproducción: $e');

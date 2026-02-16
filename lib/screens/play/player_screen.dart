@@ -19,7 +19,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:translator/translator.dart';
 
 import 'dart:async';
-import 'dart:ui';
+import 'dart:ui' as ui;
 import 'package:scroll_to_index/scroll_to_index.dart';
 import 'package:music/l10n/locale_provider.dart';
 import 'package:music/utils/theme_preferences.dart';
@@ -134,6 +134,10 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
   // Cache del widget de fondo AMOLED para evitar reconstrucciones
   Widget? _cachedAmoledBackground;
   String? _cachedBackgroundSongId;
+  
+  // Cache de la imagen con blur pre-renderizada (blur estático)
+  ui.Image? _cachedBlurredImage;
+  String? _cachedBlurredImageSongId;
 
   // Notifier para la posición del panel de playlist (0.0 = cerrado, 1.0 = abierto)
   final ValueNotifier<double> _playlistPanelPosition = ValueNotifier(0.0);
@@ -2175,12 +2179,15 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     if (imageProvider == null) {
       _cachedAmoledBackground = null;
       _cachedBackgroundSongId = null;
+      _cachedBlurredImage = null;
+      _cachedBlurredImageSongId = null;
       return null;
     }
 
     imageProvider = ResizeImage(imageProvider, width: 150);
 
-    // Construir y cachear el widget
+    // Construir y cachear el widget con blur estático
+    // Usar RepaintBoundary para aislar el blur y evitar repintados del resto del árbol
     final backgroundWidget = RepaintBoundary(
       key: ValueKey('amoled_bg_$songId'),
       child: Stack(
@@ -2198,29 +2205,21 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
 
                 if (w <= 0 || h <= 0) return const SizedBox.shrink();
 
-                return Transform.scale(
-                  scale:
-                      scale +
-                      0.1, // +0.1 para evitar bordes blancos por redondeo
-                  child: Center(
-                    child: SizedBox(
-                      width: w,
-                      height: h,
-                      child: ImageFiltered(
-                        // Sigma reducido proporcionalmente (50 / 6 ≈ 8.5)
-                        imageFilter: ImageFilter.blur(sigmaX: 9, sigmaY: 9),
-                        child: Image(
-                          image: imageProvider!,
-                          fit: BoxFit.cover,
-                          gaplessPlayback: true,
-                          // FilterQuality.medium suaviza el escalado
-                          filterQuality: FilterQuality.medium,
-                          errorBuilder: (context, error, stackTrace) =>
-                              const SizedBox.shrink(),
-                        ),
-                      ),
-                    ),
-                  ),
+                // Usar un widget que cachea el blur como imagen estática
+                return _StaticBlurImage(
+                  imageProvider: imageProvider!,
+                  width: w,
+                  height: h,
+                  scale: scale + 0.1,
+                  cachedImage: _cachedBlurredImageSongId == songId 
+                      ? _cachedBlurredImage 
+                      : null,
+                  onImageCached: (image) {
+                    if (_cachedBlurredImageSongId != songId) {
+                      _cachedBlurredImage = image;
+                      _cachedBlurredImageSongId = songId;
+                    }
+                  },
                 );
               },
             ),
@@ -2433,114 +2432,124 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                             // Fondo (carátula o color dinámico) con animación de opacidad
                             if (showBackground || showDynamicBg) ...[
                               (() {
-                                // Construir el contenido estático del fondo una sola vez
-                                final backgroundStack = Stack(
-                                  children: [
-                                    if (showBackground)
+                                // Construir el contenido estático del fondo una sola vez y cachearlo
+                                // Envolver en RepaintBoundary para evitar repintados innecesarios
+                                final backgroundStack = RepaintBoundary(
+                                  child: Stack(
+                                    children: [
+                                      if (showBackground)
+                                        Positioned.fill(
+                                          child:
+                                              _buildAmoledBackground(
+                                                currentMediaItem,
+                                              ) ??
+                                              const SizedBox.shrink(),
+                                        ),
+                                      if (showDynamicBg)
+                                        ValueListenableBuilder<Color?>(
+                                          valueListenable: ThemeController
+                                              .instance
+                                              .dominantColor,
+                                          builder: (context, domColor, _) {
+                                            return Positioned.fill(
+                                              child: Container(
+                                                color: normalizePaletteColor(
+                                                  domColor ??
+                                                      Theme.of(
+                                                        context,
+                                                      ).scaffoldBackgroundColor,
+                                                ).withValues(alpha: 0.2),
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                      // Gradiente inferior para mejorar legibilidad (común para ambos fondos)
                                       Positioned.fill(
-                                        child:
-                                            _buildAmoledBackground(
-                                              currentMediaItem,
-                                            ) ??
-                                            const SizedBox.shrink(),
-                                      ),
-                                    if (showDynamicBg)
-                                      ValueListenableBuilder<Color?>(
-                                        valueListenable: ThemeController
-                                            .instance
-                                            .dominantColor,
-                                        builder: (context, domColor, _) {
-                                          return Positioned.fill(
-                                            child: AnimatedContainer(
-                                              duration: const Duration(
-                                                milliseconds: 200,
-                                              ),
-                                              curve: Curves.easeInOut,
-                                              color: normalizePaletteColor(
-                                                domColor ??
-                                                    Theme.of(
-                                                      context,
-                                                    ).scaffoldBackgroundColor,
-                                              ).withValues(alpha: 0.2),
+                                        child: Container(
+                                          decoration: BoxDecoration(
+                                            gradient: LinearGradient(
+                                              begin: Alignment.bottomCenter,
+                                              end: Alignment.topCenter,
+                                              colors: [
+                                                Colors.black.withValues(
+                                                  alpha: 0.65,
+                                                ),
+                                                Colors.transparent,
+                                              ],
+                                              stops: const [0.0, 0.7],
                                             ),
-                                          );
-                                        },
-                                      ),
-                                    // Gradiente inferior para mejorar legibilidad (común para ambos fondos)
-                                    Positioned.fill(
-                                      child: Container(
-                                        decoration: BoxDecoration(
-                                          gradient: LinearGradient(
-                                            begin: Alignment.bottomCenter,
-                                            end: Alignment.topCenter,
-                                            colors: [
-                                              Colors.black.withValues(
-                                                alpha: 0.65,
-                                              ),
-                                              Colors.transparent,
-                                            ],
-                                            stops: const [0.0, 0.7],
                                           ),
                                         ),
                                       ),
-                                    ),
-                                  ],
+                                    ],
+                                  ),
                                 );
 
-                                return ValueListenableBuilder<double>(
-                                  valueListenable: _playlistPanelPosition,
-                                  builder: (context, playlistPos, child) {
-                                    // Opacidad basada en la posición del playlist:
-                                    // 1.0 (cerrado) -> 0.0 (abierto)
-                                    final playlistOpacity = (1.0 - playlistPos)
-                                        .clamp(0.0, 1.0);
+                                // Threshold para evitar renderizar el blur cuando la opacidad es muy baja
+                                // Esto mejora significativamente el rendimiento durante las animaciones
+                                const double minOpacityThreshold = 0.15;
 
-                                    if (widget.panelPositionNotifier != null) {
-                                      return ValueListenableBuilder<double>(
-                                        valueListenable:
-                                            widget.panelPositionNotifier!,
-                                        builder: (context, panelPos, _) {
-                                          // Combinar ambas opacidades
-                                          final panelOpacity =
-                                              ((panelPos - 0.7) / 0.3).clamp(
-                                                0.0,
-                                                1.0,
-                                              );
-                                          // Si la opacidad final es muy baja, retornamos SizedBox para evitar pintar
-                                          // pero solo si NO estamos esperando la animación de cierre de letras
-                                          final finalOpacity =
-                                              panelOpacity * playlistOpacity;
-
-                                          // Si el modal de letras está abierto, forzamos opacidad 0
-                                          final targetOpacity = _lyricsModalOpen
-                                              ? 0.0
-                                              : finalOpacity;
-
-                                          return AnimatedOpacity(
-                                            opacity: targetOpacity,
-                                            duration: const Duration(
-                                              milliseconds: 250,
-                                            ),
-                                            child: backgroundStack,
+                                // No usar _playlistPanelPosition para ocultar el fondo
+                                // El fondo permanece visible siempre para evitar re-renderizados
+                                if (widget.panelPositionNotifier != null) {
+                                  return ValueListenableBuilder<double>(
+                                    valueListenable:
+                                        widget.panelPositionNotifier!,
+                                    builder: (context, panelPos, child) {
+                                      // Solo usar la opacidad del panel overlay, sin afectar por el playlist
+                                      final panelOpacity =
+                                          ((panelPos - 0.7) / 0.3).clamp(
+                                            0.0,
+                                            1.0,
                                           );
-                                        },
-                                      );
-                                    } else {
-                                      // Solo control de playlist si no hay notificador de panel externo
+
+                                      // Si el modal de letras está abierto, forzamos opacidad 0
                                       final targetOpacity = _lyricsModalOpen
                                           ? 0.0
-                                          : playlistOpacity;
+                                          : panelOpacity;
 
-                                      return AnimatedOpacity(
-                                        opacity: targetOpacity,
-                                        duration: const Duration(
-                                          milliseconds: 250,
+                                      // OPTIMIZACIÓN CRÍTICA: No renderizar el blur cuando la opacidad es muy baja
+                                      // El blur es muy costoso y no es visible cuando la opacidad < threshold
+                                      if (targetOpacity <= 0.0) {
+                                        return const Offstage();
+                                      }
+                                      
+                                      // Si la opacidad es muy baja, usar Offstage para evitar renderizado pero mantener el widget en el árbol
+                                      if (targetOpacity < minOpacityThreshold) {
+                                        return const Offstage();
+                                      }
+                                      
+                                      // Normalizar la opacidad para que vaya de 0 a 1 cuando está por encima del threshold
+                                      final normalizedOpacity = 
+                                          ((targetOpacity - minOpacityThreshold) / 
+                                           (1.0 - minOpacityThreshold))
+                                          .clamp(0.0, 1.0);
+                                      
+                                      // Usar Opacity con IgnorePointer cuando la opacidad es baja
+                                      // para evitar procesamiento de eventos innecesarios
+                                      return IgnorePointer(
+                                        ignoring: normalizedOpacity < 0.5,
+                                        child: Opacity(
+                                          opacity: normalizedOpacity,
+                                          child: child,
                                         ),
-                                        child: backgroundStack,
                                       );
-                                    }
-                                  },
-                                );
+                                    },
+                                    child: backgroundStack,
+                                  );
+                                } else {
+                                  // Si no hay panelPositionNotifier, mostrar siempre el fondo
+                                  final targetOpacity = _lyricsModalOpen ? 0.0 : 1.0;
+
+                                  if (targetOpacity <= 0.0) {
+                                    return const Offstage();
+                                  }
+
+                                  return Opacity(
+                                    opacity: targetOpacity,
+                                    child: backgroundStack,
+                                  );
+                                }
                               })(),
                             ],
                             // Scaffold principal
@@ -6296,5 +6305,204 @@ class _HolePunchPainter extends CustomPainter {
     return oldDelegate.color != color ||
         oldDelegate.radius != radius ||
         oldDelegate.icon != icon;
+  }
+}
+
+// Widget para renderizar blur estático (pre-cacheado como imagen)
+class _StaticBlurImage extends StatefulWidget {
+  final ImageProvider imageProvider;
+  final double width;
+  final double height;
+  final double scale;
+  final ui.Image? cachedImage;
+  final ValueChanged<ui.Image> onImageCached;
+
+  const _StaticBlurImage({
+    required this.imageProvider,
+    required this.width,
+    required this.height,
+    required this.scale,
+    this.cachedImage,
+    required this.onImageCached,
+  });
+
+  @override
+  State<_StaticBlurImage> createState() => _StaticBlurImageState();
+}
+
+class _StaticBlurImageState extends State<_StaticBlurImage> {
+  ui.Image? _blurredImage;
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _blurredImage = widget.cachedImage;
+    if (_blurredImage == null) {
+      _loadAndBlurImage();
+    }
+  }
+
+  @override
+  void didUpdateWidget(_StaticBlurImage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Si cambió la imagen o no tenemos cache, cargar de nuevo
+    if (oldWidget.imageProvider != widget.imageProvider ||
+        _blurredImage == null) {
+      _loadAndBlurImage();
+    }
+  }
+
+  Future<void> _loadAndBlurImage() async {
+    if (_isLoading) return;
+    
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      // Cargar la imagen
+      final ImageStream stream = widget.imageProvider.resolve(
+        const ImageConfiguration(),
+      );
+      
+      final completer = Completer<ui.Image>();
+      late ImageStreamListener listener;
+      
+      listener = ImageStreamListener((ImageInfo info, bool _) {
+        completer.complete(info.image);
+        stream.removeListener(listener);
+      }, onError: (exception, stackTrace) {
+        completer.completeError(exception);
+        stream.removeListener(listener);
+      });
+      
+      stream.addListener(listener);
+      
+      final image = await completer.future;
+      
+      // Renderizar el blur en una imagen estática
+      final recorder = ui.PictureRecorder();
+      final canvas = Canvas(recorder);
+      final paint = Paint();
+      
+      // Aplicar blur usando ImageFilter
+      final blurFilter = ui.ImageFilter.blur(sigmaX: 9, sigmaY: 9);
+      canvas.saveLayer(
+        Offset.zero & Size(widget.width, widget.height),
+        paint..imageFilter = blurFilter,
+      );
+      
+      // Dibujar la imagen escalada
+      final srcRect = Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble());
+      final dstRect = Rect.fromLTWH(0, 0, widget.width, widget.height);
+      canvas.drawImageRect(
+        image,
+        srcRect,
+        dstRect,
+        Paint()..filterQuality = FilterQuality.low,
+      );
+      
+      canvas.restore();
+      
+      // Convertir a imagen
+      final picture = recorder.endRecording();
+      final blurredImage = await picture.toImage(
+        widget.width.toInt(),
+        widget.height.toInt(),
+      );
+      
+      if (mounted) {
+        setState(() {
+          _blurredImage = blurredImage;
+          _isLoading = false;
+        });
+        
+        // Notificar al padre para cachear la imagen
+        widget.onImageCached(blurredImage);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_blurredImage == null) {
+      // Mientras carga, mostrar el blur dinámico (solo la primera vez)
+      return RepaintBoundary(
+        child: Transform.scale(
+          scale: widget.scale,
+          child: Center(
+            child: SizedBox(
+              width: widget.width,
+              height: widget.height,
+              child: ImageFiltered(
+                imageFilter: ui.ImageFilter.blur(sigmaX: 9, sigmaY: 9),
+                child: Image(
+                  image: widget.imageProvider,
+                  fit: BoxFit.cover,
+                  gaplessPlayback: true,
+                  filterQuality: FilterQuality.low,
+                  errorBuilder: (context, error, stackTrace) =>
+                      const SizedBox.shrink(),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    // Mostrar la imagen con blur pre-renderizada (estática)
+    return RepaintBoundary(
+      child: Transform.scale(
+        scale: widget.scale,
+        child: Center(
+          child: SizedBox(
+            width: widget.width,
+            height: widget.height,
+            child: CustomPaint(
+              painter: _BlurredImagePainter(_blurredImage!),
+              size: Size(widget.width, widget.height),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    // No disposear la imagen cacheada, se reutiliza
+    super.dispose();
+  }
+}
+
+// CustomPainter para dibujar la imagen con blur pre-renderizada
+class _BlurredImagePainter extends CustomPainter {
+  final ui.Image blurredImage;
+
+  _BlurredImagePainter(this.blurredImage);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final srcRect = Rect.fromLTWH(0, 0, blurredImage.width.toDouble(), blurredImage.height.toDouble());
+    final dstRect = Rect.fromLTWH(0, 0, size.width, size.height);
+    canvas.drawImageRect(
+      blurredImage,
+      srcRect,
+      dstRect,
+      Paint()..filterQuality = FilterQuality.low,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _BlurredImagePainter oldDelegate) {
+    return oldDelegate.blurredImage != blurredImage;
   }
 }

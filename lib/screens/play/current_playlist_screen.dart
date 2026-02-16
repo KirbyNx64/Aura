@@ -491,6 +491,35 @@ class _CurrentPlaylistScreenState extends State<CurrentPlaylistScreen>
                           },
                           child: Builder(
                             builder: (context) {
+                              // Pre-cálculos para evitar trabajo por-item durante el scroll
+                              final isAmoledTheme =
+                                  colorSchemeNotifier.value == AppColorScheme.amoled;
+                              final isDark =
+                                  Theme.of(context).brightness == Brightness.dark;
+                              final primaryColor =
+                                  Theme.of(context).colorScheme.primary;
+                              final cardColor = isAmoledTheme
+                                  ? Colors.white.withAlpha(20)
+                                  : isDark
+                                      ? Theme.of(context)
+                                          .colorScheme
+                                          .secondary
+                                          .withValues(alpha: 0.06)
+                                      : Theme.of(context)
+                                          .colorScheme
+                                          .secondary
+                                          .withValues(alpha: 0.07);
+                              final currentCardColor =
+                                  primaryColor.withAlpha(isDark ? 40 : 25);
+                              final textColor =
+                                  isAmoledTheme ? Colors.white : primaryColor;
+
+                              // Mapa id->índice real para evitar indexOf(O(n)) en cada item
+                              final indexMap = <String, int>{};
+                              for (var i = 0; i < widget.queue.length; i++) {
+                                indexMap[widget.queue[i].id] = i;
+                              }
+
                               // Filtrar la cola según la búsqueda
                               final filteredQueue = _searchQuery.isEmpty
                                   ? widget.queue
@@ -505,6 +534,9 @@ class _CurrentPlaylistScreenState extends State<CurrentPlaylistScreen>
                               return ListView.builder(
                                 controller: _scrollController,
                                 physics: const AlwaysScrollableScrollPhysics(),
+                                cacheExtent: 200,
+                                addAutomaticKeepAlives: false,
+                                addRepaintBoundaries: true,
                                 padding: EdgeInsets.only(
                                   top: 8,
                                   bottom: MediaQuery.of(context).padding.bottom,
@@ -512,13 +544,10 @@ class _CurrentPlaylistScreenState extends State<CurrentPlaylistScreen>
                                 itemCount: filteredQueue.length,
                                 itemBuilder: (context, index) {
                                   final item = filteredQueue[index];
-                                  // Encontrar el índice real en la cola original para skipToQueueItem
-                                  final realIndex = widget.queue.indexOf(item);
                                   final isCurrent =
                                       item.id == widget.currentMediaItem?.id;
-                                  final isAmoledTheme =
-                                      colorSchemeNotifier.value ==
-                                      AppColorScheme.amoled;
+                                  // Índice real en O(1)
+                                  final realIndex = indexMap[item.id] ?? index;
                                   final songId = item.extras?['songId'] ?? 0;
                                   final songPath = item.extras?['data'] ?? '';
 
@@ -527,17 +556,7 @@ class _CurrentPlaylistScreenState extends State<CurrentPlaylistScreen>
                                   // final isFirstItem = index == 0;
                                   // final isLastItem = index == filteredQueue.length - 1;
 
-                                  // Variables para diseño Material3
-                                  final isDark =
-                                      Theme.of(context).brightness ==
-                                      Brightness.dark;
-                                  final cardColor = isAmoledTheme
-                                      ? Colors.white.withAlpha(20)
-                                      : isDark
-                                      ? Theme.of(context).colorScheme.secondary
-                                            .withValues(alpha: 0.06)
-                                      : Theme.of(context).colorScheme.secondary
-                                            .withValues(alpha: 0.07);
+                                  // (colores ya memoizados arriba)
 
                                   // Calcular borderRadius según posición
                                   final bool isFirst = index == 0;
@@ -579,115 +598,82 @@ class _CurrentPlaylistScreenState extends State<CurrentPlaylistScreen>
                                       bottom: isLast ? 20.0 : 4.0,
                                     ),
                                     child: Card(
-                                      color: isCurrent
-                                          ? Theme.of(context)
-                                                .colorScheme
-                                                .primary
-                                                .withAlpha(isDark ? 40 : 25)
-                                          : cardColor,
+                                      color: isCurrent ? currentCardColor : cardColor,
                                       margin: EdgeInsets.zero,
                                       elevation: 0,
                                       shape: RoundedRectangleBorder(
                                         borderRadius: borderRadius,
                                       ),
-                                      child: ClipRRect(
-                                        borderRadius: borderRadius,
-                                        child: ListTile(
-                                          leading: ArtworkListTile(
+                                      // Evita un ClipRRect extra (menos costo por item)
+                                      clipBehavior: Clip.antiAlias,
+                                      child: ListTile(
+                                        leading: RepaintBoundary(
+                                          child: ArtworkListTile(
                                             songId: songId,
                                             songPath: songPath,
                                             artUri: item.artUri,
                                             size: 48,
-                                            borderRadius: BorderRadius.circular(
-                                              8,
-                                            ),
+                                            borderRadius: BorderRadius.circular(8),
                                           ),
-                                          title: Row(
-                                            children: [
-                                              if (isCurrent)
-                                                StreamBuilder<PlaybackState>(
-                                                  stream: audioHandler
-                                                      ?.playbackState,
-                                                  builder: (context, snapshot) {
-                                                    final playing =
-                                                        snapshot
-                                                            .data
-                                                            ?.playing ??
-                                                        false;
-                                                    return Padding(
-                                                      padding:
-                                                          const EdgeInsets.only(
-                                                            right: 8.0,
-                                                          ),
-                                                      child: MiniMusicVisualizer(
-                                                        color: isAmoledTheme
-                                                            ? Colors.white
-                                                            : Theme.of(context)
-                                                                  .colorScheme
-                                                                  .primary,
-                                                        width: 4,
-                                                        height: 15,
-                                                        radius: 4,
-                                                        animate: playing,
-                                                      ),
-                                                    );
-                                                  },
-                                                ),
-                                              Expanded(
-                                                child: Text(
-                                                  item.title,
-                                                  maxLines: 1,
-                                                  style: TextStyle(
-                                                    fontWeight: isCurrent
-                                                        ? FontWeight.bold
-                                                        : Theme.of(context)
-                                                              .textTheme
-                                                              .titleMedium
-                                                              ?.fontWeight,
-                                                    color: isCurrent
-                                                        ? (isAmoledTheme
-                                                              ? Colors.white
-                                                              : Theme.of(
-                                                                      context,
-                                                                    )
-                                                                    .colorScheme
-                                                                    .primary)
-                                                        : null,
-                                                  ),
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
+                                        ),
+                                        title: Row(
+                                          children: [
+                                            if (isCurrent)
+                                              StreamBuilder<PlaybackState>(
+                                                stream:
+                                                    audioHandler?.playbackState,
+                                                builder: (context, snapshot) {
+                                                  final playing =
+                                                      snapshot.data?.playing ??
+                                                          false;
+                                                  return Padding(
+                                                    padding: const EdgeInsets.only(
+                                                      right: 8.0,
+                                                    ),
+                                                    child: MiniMusicVisualizer(
+                                                      color: textColor,
+                                                      width: 4,
+                                                      height: 15,
+                                                      radius: 4,
+                                                      animate: playing,
+                                                    ),
+                                                  );
+                                                },
+                                              ),
+                                            Expanded(
+                                              child: Text(
+                                                item.title,
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: TextStyle(
+                                                  fontWeight: isCurrent
+                                                      ? FontWeight.bold
+                                                      : Theme.of(context)
+                                                            .textTheme
+                                                            .titleMedium
+                                                            ?.fontWeight,
+                                                  color:
+                                                      isCurrent ? textColor : null,
                                                 ),
                                               ),
-                                            ],
-                                          ),
-                                          subtitle: Text(
-                                            item.artist ??
-                                                LocaleProvider.tr(
-                                                  'unknown_artist',
-                                                ),
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: TextStyle(
-                                              color: isCurrent
-                                                  ? (isAmoledTheme
-                                                        ? Colors.white
-                                                        : Theme.of(
-                                                            context,
-                                                          ).colorScheme.primary)
-                                                  : null,
                                             ),
-                                          ),
-                                          tileColor: Colors.transparent,
-                                          splashColor: Theme.of(context)
-                                              .colorScheme
-                                              .primary
-                                              .withValues(alpha: 0.1),
-                                          onTap: () {
-                                            audioHandler?.skipToQueueItem(
-                                              realIndex,
-                                            );
-                                          },
+                                          ],
                                         ),
+                                        subtitle: Text(
+                                          item.artist ??
+                                              LocaleProvider.tr('unknown_artist'),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            color: isCurrent ? textColor : null,
+                                          ),
+                                        ),
+                                        tileColor: Colors.transparent,
+                                        splashColor:
+                                            primaryColor.withValues(alpha: 0.1),
+                                        onTap: () {
+                                          audioHandler?.skipToQueueItem(realIndex);
+                                        },
                                       ),
                                     ),
                                   );

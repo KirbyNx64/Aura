@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:ui';
+import 'dart:ui' as ui;
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
 import 'package:music/main.dart'
@@ -93,6 +93,10 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> {
   Widget? _cachedAmoledBackground;
   String? _cachedBackgroundSongId;
 
+  // Cache de la imagen con blur pre-renderizada (blur estático)
+  ui.Image? _cachedBlurredImage;
+  String? _cachedBlurredImageSongId;
+
   @override
   void initState() {
     super.initState();
@@ -172,10 +176,15 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> {
     if (imageProvider == null) {
       _cachedAmoledBackground = null;
       _cachedBackgroundSongId = null;
+      _cachedBlurredImage = null;
+      _cachedBlurredImageSongId = null;
       return null;
     }
 
+    imageProvider = ResizeImage(imageProvider, width: 150);
+
     // Construir y cachear el widget
+    // Construir y cachear el widget con blur estático
     final backgroundWidget = RepaintBoundary(
       key: ValueKey('amoled_bg_overlay_$songId'),
       child: ClipRRect(
@@ -188,18 +197,32 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> {
         child: Stack(
           children: [
             Positioned.fill(
-              child: Opacity(
-                opacity: 0.6, // Ajusta este valor para más/menos transparencia
-                child: ImageFiltered(
-                  imageFilter: ImageFilter.blur(sigmaX: 50, sigmaY: 50),
-                  child: Image(
-                    image: imageProvider,
-                    fit: BoxFit.cover,
-                    filterQuality: FilterQuality.low,
-                    errorBuilder: (context, error, stackTrace) =>
-                        const SizedBox.shrink(),
-                  ),
-                ),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  // Renderizar el blur a baja resolución y escalar el resultado.
+                  const double scale = 6.0;
+                  final w = constraints.maxWidth / scale;
+                  final h = constraints.maxHeight / scale;
+
+                  if (w <= 0 || h <= 0) return const SizedBox.shrink();
+
+                  // Usar un widget que cachea el blur como imagen estática
+                  return _StaticBlurImage(
+                    imageProvider: imageProvider!,
+                    width: w,
+                    height: h,
+                    scale: scale + 0.1,
+                    cachedImage: _cachedBlurredImageSongId == songId
+                        ? _cachedBlurredImage
+                        : null,
+                    onImageCached: (image) {
+                      if (_cachedBlurredImageSongId != songId) {
+                        _cachedBlurredImage = image;
+                        _cachedBlurredImageSongId = songId;
+                      }
+                    },
+                  );
+                },
               ),
             ),
             Positioned.fill(
@@ -998,12 +1021,12 @@ class _HolePunchPainter extends CustomPainter {
   });
 
   @override
-  void paint(Canvas canvas, Size size) {
-    canvas.saveLayer(Offset.zero & size, Paint());
+  void paint(ui.Canvas canvas, Size size) {
+    canvas.saveLayer(Offset.zero & size, ui.Paint());
 
-    final paint = Paint()
+    final paint = ui.Paint()
       ..color = color
-      ..style = PaintingStyle.fill;
+      ..style = ui.PaintingStyle.fill;
 
     canvas.drawRRect(
       RRect.fromRectAndRadius(Offset.zero & size, Radius.circular(radius)),
@@ -1017,7 +1040,7 @@ class _HolePunchPainter extends CustomPainter {
           fontSize: iconSize,
           fontFamily: icon.fontFamily,
           package: icon.fontPackage,
-          foreground: Paint()..blendMode = BlendMode.dstOut,
+          foreground: ui.Paint()..blendMode = ui.BlendMode.dstOut,
         ),
       ),
       textDirection: TextDirection.ltr,
@@ -1038,5 +1061,216 @@ class _HolePunchPainter extends CustomPainter {
     return oldDelegate.color != color ||
         oldDelegate.radius != radius ||
         oldDelegate.icon != icon;
+  }
+}
+
+class _StaticBlurImage extends StatefulWidget {
+  final ImageProvider imageProvider;
+  final double width;
+  final double height;
+  final double scale;
+  final ui.Image? cachedImage;
+  final ValueChanged<ui.Image> onImageCached;
+
+  const _StaticBlurImage({
+    required this.imageProvider,
+    required this.width,
+    required this.height,
+    required this.scale,
+    this.cachedImage,
+    required this.onImageCached,
+  });
+
+  @override
+  State<_StaticBlurImage> createState() => _StaticBlurImageState();
+}
+
+class _StaticBlurImageState extends State<_StaticBlurImage> {
+  ui.Image? _blurredImage;
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _blurredImage = widget.cachedImage;
+    if (_blurredImage == null) {
+      _loadAndBlurImage();
+    }
+  }
+
+  @override
+  void didUpdateWidget(_StaticBlurImage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Si cambió la imagen o no tenemos cache, cargar de nuevo
+    if (oldWidget.imageProvider != widget.imageProvider ||
+        _blurredImage == null) {
+      _loadAndBlurImage();
+    }
+  }
+
+  Future<void> _loadAndBlurImage() async {
+    if (_isLoading) return;
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      // Cargar la imagen
+      final ImageStream stream = widget.imageProvider.resolve(
+        const ImageConfiguration(),
+      );
+
+      final completer = Completer<ui.Image>();
+      late ImageStreamListener listener;
+
+      listener = ImageStreamListener(
+        (ImageInfo info, bool _) {
+          completer.complete(info.image);
+          stream.removeListener(listener);
+        },
+        onError: (exception, stackTrace) {
+          completer.completeError(exception);
+          stream.removeListener(listener);
+        },
+      );
+
+      stream.addListener(listener);
+
+      final image = await completer.future;
+
+      // Renderizar el blur en una imagen estática
+      final recorder = ui.PictureRecorder();
+      final canvas = ui.Canvas(recorder);
+      final paint = ui.Paint();
+
+      // Aplicar blur usando ImageFilter
+      final blurFilter = ui.ImageFilter.blur(sigmaX: 9, sigmaY: 9);
+      canvas.saveLayer(
+        Offset.zero & Size(widget.width, widget.height),
+        paint..imageFilter = blurFilter,
+      );
+
+      // Dibujar la imagen escalada
+      final srcRect = Rect.fromLTWH(
+        0,
+        0,
+        image.width.toDouble(),
+        image.height.toDouble(),
+      );
+      final dstRect = Rect.fromLTWH(0, 0, widget.width, widget.height);
+      canvas.drawImageRect(
+        image,
+        srcRect,
+        dstRect,
+        ui.Paint()..filterQuality = FilterQuality.low,
+      );
+
+      canvas.restore();
+
+      // Convertir a imagen
+      final picture = recorder.endRecording();
+      final blurredImage = await picture.toImage(
+        widget.width.toInt(),
+        widget.height.toInt(),
+      );
+
+      if (mounted) {
+        setState(() {
+          _blurredImage = blurredImage;
+          _isLoading = false;
+        });
+
+        // Notificar al padre para cachear la imagen
+        widget.onImageCached(blurredImage);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_blurredImage == null) {
+      // Mientras carga, mostrar el blur dinámico (solo la primera vez)
+      return RepaintBoundary(
+        child: Transform.scale(
+          scale: widget.scale,
+          child: Center(
+            child: SizedBox(
+              width: widget.width,
+              height: widget.height,
+              child: ImageFiltered(
+                imageFilter: ui.ImageFilter.blur(sigmaX: 9, sigmaY: 9),
+                child: Image(
+                  image: widget.imageProvider,
+                  fit: BoxFit.cover,
+                  gaplessPlayback: true,
+                  filterQuality: FilterQuality.low,
+                  errorBuilder: (context, error, stackTrace) =>
+                      const SizedBox.shrink(),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    // Mostrar la imagen con blur pre-renderizada (estática)
+    return RepaintBoundary(
+      child: Transform.scale(
+        scale: widget.scale,
+        child: Center(
+          child: SizedBox(
+            width: widget.width,
+            height: widget.height,
+            child: CustomPaint(
+              painter: _BlurredImagePainter(_blurredImage!),
+              size: Size(widget.width, widget.height),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    // No disposear la imagen cacheada, se reutiliza
+    super.dispose();
+  }
+}
+
+// CustomPainter para dibujar la imagen con blur pre-renderizada
+class _BlurredImagePainter extends CustomPainter {
+  final ui.Image blurredImage;
+
+  _BlurredImagePainter(this.blurredImage);
+
+  @override
+  void paint(ui.Canvas canvas, Size size) {
+    final srcRect = Rect.fromLTWH(
+      0,
+      0,
+      blurredImage.width.toDouble(),
+      blurredImage.height.toDouble(),
+    );
+    final dstRect = Rect.fromLTWH(0, 0, size.width, size.height);
+    canvas.drawImageRect(
+      blurredImage,
+      srcRect,
+      dstRect,
+      ui.Paint()..filterQuality = FilterQuality.low,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _BlurredImagePainter oldDelegate) {
+    return oldDelegate.blurredImage != blurredImage;
   }
 }
