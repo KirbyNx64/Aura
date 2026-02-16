@@ -362,14 +362,12 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Timer? _playingDebounce;
   Timer? _mediaItemDebounce;
-  Timer? _immediateMediaItemDebounce;
   final ValueNotifier<bool> _isPlayingNotifier = ValueNotifier<bool>(false);
-  final ValueNotifier<String?> _currentSongPathNotifier =
-      ValueNotifier<String?>(null);
   final ValueNotifier<MediaItem?> _currentMediaItemNotifier =
       ValueNotifier<MediaItem?>(null);
-  final ValueNotifier<MediaItem?> _immediateMediaItemNotifier =
-      ValueNotifier<MediaItem?>(null);
+
+  static String? _pathFromMediaItem(MediaItem? item) =>
+      item?.extras?['data'] ?? item?.id;
 
   /// Helper para obtener el AudioHandler de forma segura
   Future<MyAudioHandler?> _getAudioHandler() async {
@@ -413,14 +411,8 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
     // Inicializar con el valor actual si ya hay algo reproduciéndose
     if (audioHandler?.mediaItem.valueOrNull != null) {
-      // Cancelar cualquier debounce pendiente
-      _immediateMediaItemDebounce?.cancel();
       _mediaItemDebounce?.cancel();
-      _immediateMediaItemNotifier.value = audioHandler!.mediaItem.valueOrNull;
       _currentMediaItemNotifier.value = audioHandler!.mediaItem.valueOrNull;
-      final path =
-          audioHandler!.mediaItem.valueOrNull?.extras?['data'] as String?;
-      _currentSongPathNotifier.value = path;
     }
 
     // Inicializar el estado de reproducción actual
@@ -430,33 +422,25 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
 
     // Escuchar cambios en el estado de reproducción con debounce
+    // Solo actualizar si el valor realmente cambió para evitar rebuilds redundantes
     audioHandler?.playbackState.listen((state) {
       _playingDebounce?.cancel();
-      _playingDebounce = Timer(const Duration(milliseconds: 400), () {
-        if (mounted) {
+      _playingDebounce = Timer(const Duration(milliseconds: 100), () {
+        if (mounted && _isPlayingNotifier.value != state.playing) {
           _isPlayingNotifier.value = state.playing;
         }
       });
     });
 
-    // Escuchar cambios en el MediaItem con debounce
+    // Un solo listener para MediaItem: evita rebuilds duplicados (antes 50ms + 400ms)
+    // Solo actualizar si la ruta de la canción realmente cambió
     audioHandler?.mediaItem.listen((item) {
+      final newPath = _pathFromMediaItem(item);
       _mediaItemDebounce?.cancel();
-      _mediaItemDebounce = Timer(const Duration(milliseconds: 400), () {
-        if (mounted) {
+      _mediaItemDebounce = Timer(const Duration(milliseconds: 80), () {
+        if (mounted &&
+            _pathFromMediaItem(_currentMediaItemNotifier.value) != newPath) {
           _currentMediaItemNotifier.value = item;
-          final path = item?.extras?['data'] as String?;
-          _currentSongPathNotifier.value = path;
-        }
-      });
-    });
-
-    // Escuchar cambios inmediatos en el MediaItem (sin debounce)
-    audioHandler?.mediaItem.listen((item) {
-      _immediateMediaItemDebounce?.cancel();
-      _immediateMediaItemDebounce = Timer(const Duration(milliseconds: 50), () {
-        if (mounted) {
-          _immediateMediaItemNotifier.value = item;
         }
       });
     });
@@ -1613,18 +1597,18 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       _shortcutWidgetCache[shortcutKey] = cachedVisual;
     }
 
-    // Detectar si esta canción es la actual con debounce optimizado
+    // Detectar si esta canción es la actual
     return ValueListenableBuilder<MediaItem?>(
-      valueListenable: _immediateMediaItemNotifier,
-      builder: (context, immediateMediaItem, child) {
+      valueListenable: _currentMediaItemNotifier,
+      builder: (context, currentMediaItem, child) {
         final path = song.data;
         final isCurrent =
-            (immediateMediaItem?.id != null &&
+            (currentMediaItem?.id != null &&
             path.isNotEmpty &&
-            (immediateMediaItem!.id == path ||
-                immediateMediaItem.extras?['data'] == path));
+            (currentMediaItem!.id == path ||
+                currentMediaItem.extras?['data'] == path));
 
-        // Siempre usar ValueListenableBuilder para mantener estructura consistente
+        // Solo usar ValueListenableBuilder para play si es la canción actual
         return ValueListenableBuilder<bool>(
           valueListenable: _isPlayingNotifier,
           builder: (context, playing, child) {
@@ -1969,16 +1953,16 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       _quickPickWidgetCache[quickPickKey] = leading;
     }
 
-    // Detectar si esta canción es la actual con debounce optimizado
+    // Detectar si esta canción es la actual
     return ValueListenableBuilder<MediaItem?>(
-      valueListenable: _immediateMediaItemNotifier,
-      builder: (context, immediateMediaItem, child) {
+      valueListenable: _currentMediaItemNotifier,
+      builder: (context, currentMediaItem, child) {
         final path = song.data;
         final isCurrent =
-            (immediateMediaItem?.id != null &&
+            (currentMediaItem?.id != null &&
             path.isNotEmpty &&
-            (immediateMediaItem!.id == path ||
-                immediateMediaItem.extras?['data'] == path));
+            (currentMediaItem!.id == path ||
+                currentMediaItem.extras?['data'] == path));
 
         final isAmoledTheme =
             colorSchemeNotifier.value == AppColorScheme.amoled;
@@ -2467,11 +2451,8 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _searchPlaylistFocus.dispose();
     _playingDebounce?.cancel();
     _mediaItemDebounce?.cancel();
-    _immediateMediaItemDebounce?.cancel();
     _isPlayingNotifier.dispose();
-    _currentSongPathNotifier.dispose();
     _currentMediaItemNotifier.dispose();
-    _immediateMediaItemNotifier.dispose();
     super.dispose();
   }
 
@@ -3651,62 +3632,57 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       ),
       body: ValueListenableBuilder<MediaItem?>(
         valueListenable: _currentMediaItemNotifier,
-        builder: (context, debouncedMediaItem, child) {
+        builder: (context, currentMediaItem, child) {
           final bottomPadding = MediaQuery.of(context).padding.bottom;
           final space =
-              (debouncedMediaItem != null ? 100.0 : 0.0) + bottomPadding;
+              (currentMediaItem != null ? 100.0 : 0.0) + bottomPadding;
 
-          return _showingRecents
-              ? Builder(
-                  builder: (context) {
-                    final List<SongModel> songsToShow =
-                        _searchRecentsController.text.isNotEmpty
-                        ? _filteredRecents
-                        : _recentSongs;
-                    if (songsToShow.isEmpty) {
-                      return Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.history,
-                              size: 48,
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.onSurface.withValues(alpha: 0.6),
-                            ),
-                            const SizedBox(height: 16),
-                            TranslatedText(
-                              'no_recent_songs',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.onSurface.withValues(alpha: 0.6),
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    }
-                    return ValueListenableBuilder<MediaItem?>(
-                      valueListenable: _immediateMediaItemNotifier,
-                      builder: (context, immediateMediaItem, child) {
-                        final colorScheme = colorSchemeNotifier.value;
-                        final isAmoled = colorScheme == AppColorScheme.amoled;
-                        final isDark =
-                            Theme.of(context).brightness == Brightness.dark;
-                        final cardColor = isAmoled
-                            ? Colors.white.withAlpha(20)
-                            : isDark
-                            ? Theme.of(
-                                context,
-                              ).colorScheme.secondary.withValues(alpha: 0.06)
-                            : Theme.of(
-                                context,
-                              ).colorScheme.secondary.withValues(alpha: 0.07);
+          if (_showingRecents) {
+            final List<SongModel> songsToShow =
+                _searchRecentsController.text.isNotEmpty
+                ? _filteredRecents
+                : _recentSongs;
+            if (songsToShow.isEmpty) {
+              return Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.history,
+                      size: 48,
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurface.withValues(alpha: 0.6),
+                    ),
+                    const SizedBox(height: 16),
+                    TranslatedText(
+                      'no_recent_songs',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withValues(alpha: 0.6),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }
+            final colorScheme = colorSchemeNotifier.value;
+            final isAmoled = colorScheme == AppColorScheme.amoled;
+            final isDark =
+                Theme.of(context).brightness == Brightness.dark;
+            final cardColor = isAmoled
+                ? Colors.white.withAlpha(20)
+                : isDark
+                ? Theme.of(
+                    context,
+                  ).colorScheme.secondary.withValues(alpha: 0.06)
+                : Theme.of(
+                    context,
+                  ).colorScheme.secondary.withValues(alpha: 0.07);
 
-                        return RawScrollbar(
+            return RawScrollbar(
                           controller: _recentsScrollController,
                           thumbColor: Theme.of(context).colorScheme.primary,
                           thickness: 6.0,
@@ -3726,10 +3702,10 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                               final song = songsToShow[index];
                               final path = song.data;
                               final isCurrent =
-                                  (immediateMediaItem?.id != null &&
+                                  (currentMediaItem?.id != null &&
                                   path.isNotEmpty &&
-                                  (immediateMediaItem!.id == path ||
-                                      immediateMediaItem.extras?['data'] ==
+                                  (currentMediaItem!.id == path ||
+                                      currentMediaItem.extras?['data'] ==
                                           path));
                               final isAmoledTheme =
                                   colorSchemeNotifier.value ==
@@ -4707,34 +4683,34 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                               final bool isLastItem =
                                   index == songsToShow.length - 1;
 
-                              return Padding(
-                                padding: EdgeInsets.only(
-                                  bottom: isLastItem ? 0 : 4,
-                                ),
-                                child: Card(
-                                  color: isCurrent
-                                      ? Theme.of(context).colorScheme.primary
-                                            .withAlpha(isDark ? 40 : 25)
-                                      : cardColor,
-                                  margin: EdgeInsets.zero,
-                                  elevation: 0,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: borderRadius,
+                              return RepaintBoundary(
+                                child: Padding(
+                                  padding: EdgeInsets.only(
+                                    bottom: isLastItem ? 0 : 4,
                                   ),
-                                  child: ClipRRect(
-                                    borderRadius: borderRadius,
-                                    child: listTileWidget,
+                                  child: Card(
+                                    color: isCurrent
+                                        ? Theme.of(context).colorScheme.primary
+                                              .withAlpha(isDark ? 40 : 25)
+                                        : cardColor,
+                                    margin: EdgeInsets.zero,
+                                    elevation: 0,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: borderRadius,
+                                    ),
+                                    child: ClipRRect(
+                                      borderRadius: borderRadius,
+                                      child: listTileWidget,
+                                    ),
                                   ),
                                 ),
                               );
                             },
                           ),
                         );
-                      },
-                    );
-                  },
-                )
-              : _showingPlaylistSongs
+          }
+
+          return _showingPlaylistSongs
               ? RefreshIndicator(
                   onRefresh: _refreshPlaylistSongs,
                   child: Builder(
@@ -4769,25 +4745,22 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           ),
                         );
                       }
-                      return ValueListenableBuilder<MediaItem?>(
-                        valueListenable: _immediateMediaItemNotifier,
-                        builder: (context, immediateMediaItem, child) {
-                          final colorScheme = colorSchemeNotifier.value;
-                          final isAmoled = colorScheme == AppColorScheme.amoled;
-                          final isDark =
-                              Theme.of(context).brightness == Brightness.dark;
-                          final cardColor = isAmoled
-                              ? Colors.white.withAlpha(20)
-                              : isDark
-                              ? Theme.of(
-                                  context,
-                                ).colorScheme.secondary.withValues(alpha: 0.06)
-                              : Theme.of(
-                                  context,
-                                ).colorScheme.secondary.withValues(alpha: 0.07);
+                      final colorScheme = colorSchemeNotifier.value;
+                      final isAmoled = colorScheme == AppColorScheme.amoled;
+                      final isDark =
+                          Theme.of(context).brightness == Brightness.dark;
+                      final cardColor = isAmoled
+                          ? Colors.white.withAlpha(20)
+                          : isDark
+                          ? Theme.of(
+                              context,
+                            ).colorScheme.secondary.withValues(alpha: 0.06)
+                          : Theme.of(
+                              context,
+                            ).colorScheme.secondary.withValues(alpha: 0.07);
 
-                          return RawScrollbar(
-                            controller: _playlistSongsScrollController,
+                      return RawScrollbar(
+                        controller: _playlistSongsScrollController,
                             thumbColor: Theme.of(context).colorScheme.primary,
                             thickness: 6.0,
                             radius: const Radius.circular(8),
@@ -4806,10 +4779,10 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                 final song = songsToShow[index];
                                 final path = song.data;
                                 final isCurrent =
-                                    (immediateMediaItem?.id != null &&
+                                    (currentMediaItem?.id != null &&
                                     path.isNotEmpty &&
-                                    (immediateMediaItem!.id == path ||
-                                        immediateMediaItem.extras?['data'] ==
+                                    (currentMediaItem!.id == path ||
+                                        currentMediaItem.extras?['data'] ==
                                             path));
                                 final isAmoledTheme =
                                     colorSchemeNotifier.value ==
@@ -6029,29 +6002,31 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                 final bool isLastItem =
                                     index == songsToShow.length - 1;
 
-                                return Padding(
-                                  padding: EdgeInsets.only(
-                                    bottom: isLastItem ? 0 : 4,
-                                  ),
-                                  child: Card(
-                                    color: isCurrent
-                                        ? Theme.of(
-                                            context,
-                                          ).colorScheme.primary.withAlpha(
-                                            Theme.of(context).brightness ==
-                                                    Brightness.dark
-                                                ? 40
-                                                : 25,
-                                          )
-                                        : cardColor,
-                                    margin: EdgeInsets.zero,
-                                    elevation: 0,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: borderRadius,
+                                return RepaintBoundary(
+                                  child: Padding(
+                                    padding: EdgeInsets.only(
+                                      bottom: isLastItem ? 0 : 4,
                                     ),
-                                    child: ClipRRect(
-                                      borderRadius: borderRadius,
-                                      child: listTileWidget,
+                                    child: Card(
+                                      color: isCurrent
+                                          ? Theme.of(
+                                              context,
+                                            ).colorScheme.primary.withAlpha(
+                                              Theme.of(context).brightness ==
+                                                      Brightness.dark
+                                                  ? 40
+                                                  : 25,
+                                            )
+                                          : cardColor,
+                                      margin: EdgeInsets.zero,
+                                      elevation: 0,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: borderRadius,
+                                      ),
+                                      child: ClipRRect(
+                                        borderRadius: borderRadius,
+                                        child: listTileWidget,
+                                      ),
                                     ),
                                   ),
                                 );
@@ -6059,9 +6034,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                             ),
                           );
                         },
-                      );
-                    },
-                  ),
+                      ),
                 )
               : RefreshIndicator(
                   onRefresh: () async {

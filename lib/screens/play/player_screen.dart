@@ -2422,10 +2422,13 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                             },
                           );
                         },
-                        body: Stack(
-                          children: [
-                            // Capa base negra opaca (siempre visible para AMOLED o fondo dinámico)
-                            if (showBackground || showDynamicBg)
+                        body: RepaintBoundary(
+                          // Aislar el body del player para que no repinte durante el scroll
+                          // del panel de playlist. El fondo (blur/color) es costoso y causa lag.
+                          child: Stack(
+                            children: [
+                              // Capa base negra opaca (siempre visible para AMOLED o fondo dinámico)
+                              if (showBackground || showDynamicBg)
                               const Positioned.fill(
                                 child: ColoredBox(color: Colors.black),
                               ),
@@ -4731,6 +4734,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                               ),
                             ),
                           ],
+                        ),
                         ),
                       );
                     },

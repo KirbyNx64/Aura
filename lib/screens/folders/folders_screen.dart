@@ -84,12 +84,12 @@ class _FoldersScreenState extends State<FoldersScreen>
   Timer? _debounce;
   Timer? _playingDebounce;
   Timer? _mediaItemDebounce;
-  Timer? _immediateMediaItemDebounce;
   final ValueNotifier<bool> _isPlayingNotifier = ValueNotifier<bool>(false);
   final ValueNotifier<MediaItem?> _currentMediaItemNotifier =
       ValueNotifier<MediaItem?>(null);
-  final ValueNotifier<MediaItem?> _immediateMediaItemNotifier =
-      ValueNotifier<MediaItem?>(null);
+
+  static String? _pathFromMediaItem(MediaItem? item) =>
+      item?.extras?['data'] ?? item?.id;
 
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
@@ -395,10 +395,11 @@ class _FoldersScreenState extends State<FoldersScreen>
     folderUpdatedNotifier.addListener(_onFolderUpdated);
 
     // Escuchar cambios en el estado de reproducción con debounce
+    // Solo actualizar si el valor realmente cambió para evitar rebuilds redundantes
     audioHandler?.playbackState.listen((state) {
       _playingDebounce?.cancel();
       _playingDebounce = Timer(const Duration(milliseconds: 100), () {
-        if (mounted) {
+        if (mounted && _isPlayingNotifier.value != state.playing) {
           _isPlayingNotifier.value = state.playing;
         }
       });
@@ -406,10 +407,7 @@ class _FoldersScreenState extends State<FoldersScreen>
 
     // Inicializar con el valor actual si ya hay algo reproduciéndose
     if (audioHandler?.mediaItem.valueOrNull != null) {
-      // Cancelar cualquier debounce pendiente
-      _immediateMediaItemDebounce?.cancel();
       _mediaItemDebounce?.cancel();
-      _immediateMediaItemNotifier.value = audioHandler!.mediaItem.valueOrNull;
       _currentMediaItemNotifier.value = audioHandler!.mediaItem.valueOrNull;
     }
 
@@ -419,21 +417,14 @@ class _FoldersScreenState extends State<FoldersScreen>
           audioHandler!.playbackState.valueOrNull!.playing;
     }
 
-    // Escuchar cambios en el MediaItem con debounce (para detección de canción actual)
+    // Un solo listener para MediaItem: evita rebuilds duplicados (antes 50ms + 200ms)
+    // Solo actualizar si la ruta de la canción realmente cambió
     audioHandler?.mediaItem.listen((mediaItem) {
-      _immediateMediaItemDebounce?.cancel();
-      _immediateMediaItemDebounce = Timer(const Duration(milliseconds: 50), () {
-        if (mounted) {
-          _immediateMediaItemNotifier.value = mediaItem;
-        }
-      });
-    });
-
-    // Escuchar cambios en el MediaItem con debounce (para espaciado y elementos no críticos)
-    audioHandler?.mediaItem.listen((mediaItem) {
+      final newPath = _pathFromMediaItem(mediaItem);
       _mediaItemDebounce?.cancel();
-      _mediaItemDebounce = Timer(const Duration(milliseconds: 200), () {
-        if (mounted) {
+      _mediaItemDebounce = Timer(const Duration(milliseconds: 80), () {
+        if (mounted &&
+            _pathFromMediaItem(_currentMediaItemNotifier.value) != newPath) {
           _currentMediaItemNotifier.value = mediaItem;
         }
       });
@@ -2265,10 +2256,8 @@ class _FoldersScreenState extends State<FoldersScreen>
     _debounce?.cancel();
     _playingDebounce?.cancel();
     _mediaItemDebounce?.cancel();
-    _immediateMediaItemDebounce?.cancel();
     _isPlayingNotifier.dispose();
     _currentMediaItemNotifier.dispose();
-    _immediateMediaItemNotifier.dispose();
     _searchController.dispose();
     _searchFocusNode.dispose();
     _folderSearchController.dispose();
@@ -3543,67 +3532,66 @@ class _FoldersScreenState extends State<FoldersScreen>
           onRefresh: _refreshCurrentFolder,
           child: ValueListenableBuilder<MediaItem?>(
             valueListenable: _currentMediaItemNotifier,
-            builder: (context, debouncedMediaItem, child) {
+            builder: (context, currentMediaItem, child) {
               final bottomPadding = MediaQuery.of(context).padding.bottom;
               final space =
-                  (debouncedMediaItem != null ? 100.0 : 0.0) + bottomPadding;
+                  (currentMediaItem != null ? 100.0 : 0.0) + bottomPadding;
 
-              return _filteredSongs.isEmpty
-                  ? SingleChildScrollView(
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      child: SizedBox(
-                        height: MediaQuery.of(context).size.height - 200,
-                        child: Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                _showAllSongs
-                                    ? Icons.music_note
-                                    : _selectedPlaylist != null
-                                    ? Icons.queue_music_outlined
-                                    : Icons.folder_off,
-                                size: 48,
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.onSurface.withValues(alpha: 0.6),
-                              ),
-                              const SizedBox(height: 16),
-                              TranslatedText(
-                                _showAllSongs
-                                    ? 'no_songs'
-                                    : _selectedPlaylist != null
-                                    ? 'no_songs_in_playlist'
-                                    : 'no_songs_in_folder',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: Theme.of(context).colorScheme.onSurface
-                                      .withValues(alpha: 0.6),
-                                ),
-                              ),
-                            ],
+              if (_filteredSongs.isEmpty) {
+                return SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  child: SizedBox(
+                    height: MediaQuery.of(context).size.height - 200,
+                    child: Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            _showAllSongs
+                                ? Icons.music_note
+                                : _selectedPlaylist != null
+                                ? Icons.queue_music_outlined
+                                : Icons.folder_off,
+                            size: 48,
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onSurface.withValues(alpha: 0.6),
                           ),
-                        ),
+                          const SizedBox(height: 16),
+                          TranslatedText(
+                            _showAllSongs
+                                ? 'no_songs'
+                                : _selectedPlaylist != null
+                                ? 'no_songs_in_playlist'
+                                : 'no_songs_in_folder',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Theme.of(context).colorScheme.onSurface
+                                  .withValues(alpha: 0.6),
+                            ),
+                          ),
+                        ],
                       ),
-                    )
-                  : ValueListenableBuilder<MediaItem?>(
-                      valueListenable: _immediateMediaItemNotifier,
-                      builder: (context, immediateMediaItem, child) {
-                        final colorScheme = colorSchemeNotifier.value;
-                        final isAmoled = colorScheme == AppColorScheme.amoled;
-                        final isDark =
-                            Theme.of(context).brightness == Brightness.dark;
-                        final cardColor = isAmoled
-                            ? Colors.white.withAlpha(20)
-                            : isDark
-                            ? Theme.of(
-                                context,
-                              ).colorScheme.secondary.withValues(alpha: 0.06)
-                            : Theme.of(
-                                context,
-                              ).colorScheme.secondary.withValues(alpha: 0.07);
+                    ),
+                  ),
+                );
+              }
 
-                        return RawScrollbar(
+              final colorScheme = colorSchemeNotifier.value;
+              final isAmoled = colorScheme == AppColorScheme.amoled;
+              final isDark =
+                  Theme.of(context).brightness == Brightness.dark;
+              final cardColor = isAmoled
+                  ? Colors.white.withAlpha(20)
+                  : isDark
+                  ? Theme.of(
+                      context,
+                    ).colorScheme.secondary.withValues(alpha: 0.06)
+                  : Theme.of(
+                      context,
+                    ).colorScheme.secondary.withValues(alpha: 0.07);
+
+              return RawScrollbar(
                           controller: _scrollController,
                           thumbColor: Theme.of(context).colorScheme.primary,
                           thickness: 6.0,
@@ -3624,10 +3612,10 @@ class _FoldersScreenState extends State<FoldersScreen>
                               final song = _displaySongs[i];
                               final path = song.data;
                               final isCurrent =
-                                  (immediateMediaItem?.id != null &&
+                                  (currentMediaItem?.id != null &&
                                   path.isNotEmpty &&
-                                  (immediateMediaItem!.id == path ||
-                                      immediateMediaItem.extras?['data'] ==
+                                  (currentMediaItem!.id == path ||
+                                      currentMediaItem.extras?['data'] ==
                                           path));
                               final isSelected = _selectedSongPaths.contains(
                                 path,
@@ -3698,25 +3686,27 @@ class _FoldersScreenState extends State<FoldersScreen>
                                     );
                                   }
 
-                                  return Padding(
-                                    padding: EdgeInsets.only(
-                                      bottom: isLast ? 0 : 4,
-                                    ),
-                                    child: Card(
-                                      color: isCurrent
-                                          ? Theme.of(context)
-                                                .colorScheme
-                                                .primary
-                                                .withAlpha(isDark ? 40 : 25)
-                                          : cardColor,
-                                      margin: EdgeInsets.zero,
-                                      elevation: 0,
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: borderRadius,
+                                  return RepaintBoundary(
+                                    child: Padding(
+                                      padding: EdgeInsets.only(
+                                        bottom: isLast ? 0 : 4,
                                       ),
-                                      child: ClipRRect(
-                                        borderRadius: borderRadius,
-                                        child: listTileWidget,
+                                      child: Card(
+                                        color: isCurrent
+                                            ? Theme.of(context)
+                                                  .colorScheme
+                                                  .primary
+                                                  .withAlpha(isDark ? 40 : 25)
+                                            : cardColor,
+                                        margin: EdgeInsets.zero,
+                                        elevation: 0,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: borderRadius,
+                                        ),
+                                        child: ClipRRect(
+                                          borderRadius: borderRadius,
+                                          child: listTileWidget,
+                                        ),
                                       ),
                                     ),
                                   );
@@ -3725,8 +3715,6 @@ class _FoldersScreenState extends State<FoldersScreen>
                             },
                           ),
                         );
-                      },
-                    );
             },
           ),
         ),
@@ -5061,10 +5049,7 @@ class _FoldersScreenState extends State<FoldersScreen>
 
     // Actualizar los notifiers con los valores actuales del audioHandler
     if (audioHandler?.mediaItem.valueOrNull != null) {
-      // Cancelar el debounce para evitar conflictos
-      _immediateMediaItemDebounce?.cancel();
       _mediaItemDebounce?.cancel();
-      _immediateMediaItemNotifier.value = audioHandler!.mediaItem.valueOrNull;
       _currentMediaItemNotifier.value = audioHandler!.mediaItem.valueOrNull;
     }
     if (audioHandler?.playbackState.valueOrNull != null) {
@@ -5113,9 +5098,7 @@ class _FoldersScreenState extends State<FoldersScreen>
 
     // Actualizar los notifiers con los valores actuales del audioHandler
     if (audioHandler?.mediaItem.valueOrNull != null) {
-      _immediateMediaItemDebounce?.cancel();
       _mediaItemDebounce?.cancel();
-      _immediateMediaItemNotifier.value = audioHandler!.mediaItem.valueOrNull;
       _currentMediaItemNotifier.value = audioHandler!.mediaItem.valueOrNull;
     }
     if (audioHandler?.playbackState.valueOrNull != null) {
@@ -5903,9 +5886,7 @@ class _FoldersScreenState extends State<FoldersScreen>
 
     // Actualizar los notifiers con los valores actuales del audioHandler
     if (audioHandler?.mediaItem.valueOrNull != null) {
-      _immediateMediaItemDebounce?.cancel();
       _mediaItemDebounce?.cancel();
-      _immediateMediaItemNotifier.value = audioHandler!.mediaItem.valueOrNull;
       _currentMediaItemNotifier.value = audioHandler!.mediaItem.valueOrNull;
     }
     if (audioHandler?.playbackState.valueOrNull != null) {

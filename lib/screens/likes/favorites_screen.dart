@@ -51,12 +51,14 @@ class _FavoritesScreenState extends State<FavoritesScreen>
   Timer? _debounce;
   Timer? _playingDebounce;
   Timer? _mediaItemDebounce;
-  Timer? _immediateMediaItemDebounce;
   final ValueNotifier<bool> _isPlayingNotifier = ValueNotifier<bool>(false);
   final ValueNotifier<MediaItem?> _currentMediaItemNotifier =
       ValueNotifier<MediaItem?>(null);
-  final ValueNotifier<MediaItem?> _immediateMediaItemNotifier =
-      ValueNotifier<MediaItem?>(null);
+
+  static String? _pathFromMediaItem(MediaItem? item) =>
+      item?.extras?['data'] ?? item?.id;
+
+  void _onFavoritesReload() => _loadFavorites();
 
   @override
   void initState() {
@@ -71,16 +73,11 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     _searchFocusNode.addListener(() {
       setState(() {});
     });
-    favoritesShouldReload.addListener(() {
-      _loadFavorites();
-    });
+    favoritesShouldReload.addListener(_onFavoritesReload);
 
     // Inicializar con el valor actual si ya hay algo reproduciéndose
     if (audioHandler?.mediaItem.valueOrNull != null) {
-      // Cancelar cualquier debounce pendiente
-      _immediateMediaItemDebounce?.cancel();
       _mediaItemDebounce?.cancel();
-      _immediateMediaItemNotifier.value = audioHandler!.mediaItem.valueOrNull;
       _currentMediaItemNotifier.value = audioHandler!.mediaItem.valueOrNull;
     }
 
@@ -91,30 +88,24 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     }
 
     // Escuchar cambios en el estado de reproducción con debounce
+    // Solo actualizar si el valor realmente cambió para evitar rebuilds redundantes
     audioHandler?.playbackState.listen((state) {
       _playingDebounce?.cancel();
       _playingDebounce = Timer(const Duration(milliseconds: 100), () {
-        if (mounted) {
+        if (mounted && _isPlayingNotifier.value != state.playing) {
           _isPlayingNotifier.value = state.playing;
         }
       });
     });
 
-    // Escuchar cambios en el MediaItem con debounce (para detección de canción actual)
+    // Un solo listener para MediaItem: evita rebuilds duplicados (antes 50ms + 200ms)
+    // Solo actualizar si la ruta de la canción realmente cambió
     audioHandler?.mediaItem.listen((mediaItem) {
-      _immediateMediaItemDebounce?.cancel();
-      _immediateMediaItemDebounce = Timer(const Duration(milliseconds: 50), () {
-        if (mounted) {
-          _immediateMediaItemNotifier.value = mediaItem;
-        }
-      });
-    });
-
-    // Escuchar cambios en el MediaItem con debounce (para espaciado y elementos no críticos)
-    audioHandler?.mediaItem.listen((mediaItem) {
+      final newPath = _pathFromMediaItem(mediaItem);
       _mediaItemDebounce?.cancel();
-      _mediaItemDebounce = Timer(const Duration(milliseconds: 200), () {
-        if (mounted) {
+      _mediaItemDebounce = Timer(const Duration(milliseconds: 80), () {
+        if (mounted &&
+            _pathFromMediaItem(_currentMediaItemNotifier.value) != newPath) {
           _currentMediaItemNotifier.value = mediaItem;
         }
       });
@@ -127,16 +118,12 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     _refreshController.dispose();
     _searchController.dispose();
     _searchFocusNode.dispose();
-    favoritesShouldReload.removeListener(() {
-      _loadFavorites();
-    });
+    favoritesShouldReload.removeListener(_onFavoritesReload);
     _debounce?.cancel();
     _playingDebounce?.cancel();
     _mediaItemDebounce?.cancel();
-    _immediateMediaItemDebounce?.cancel();
     _isPlayingNotifier.dispose();
     _currentMediaItemNotifier.dispose();
-    _immediateMediaItemNotifier.dispose();
     _scrollController.dispose();
     super.dispose();
   }
@@ -153,10 +140,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
 
     // Actualizar los notifiers con los valores actuales del audioHandler
     if (audioHandler?.mediaItem.valueOrNull != null) {
-      // Cancelar el debounce para evitar conflictos
-      _immediateMediaItemDebounce?.cancel();
       _mediaItemDebounce?.cancel();
-      _immediateMediaItemNotifier.value = audioHandler!.mediaItem.valueOrNull;
       _currentMediaItemNotifier.value = audioHandler!.mediaItem.valueOrNull;
     }
     if (audioHandler?.playbackState.valueOrNull != null) {
@@ -1922,7 +1906,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
         onRefresh: _refreshFavorites,
         child: ValueListenableBuilder<MediaItem?>(
           valueListenable: _currentMediaItemNotifier,
-          builder: (context, debouncedMediaItem, child) {
+          builder: (context, currentMediaItem, child) {
             final List<SongModel> songsToShow =
                 _searchController.text.isNotEmpty
                 ? _filteredFavorites
@@ -1964,26 +1948,23 @@ class _FavoritesScreenState extends State<FavoritesScreen>
 
             final bottomPadding = MediaQuery.of(context).padding.bottom;
             final space =
-                (debouncedMediaItem != null ? 100.0 : 0.0) + bottomPadding;
+                (currentMediaItem != null ? 100.0 : 0.0) + bottomPadding;
 
-            return ValueListenableBuilder<MediaItem?>(
-              valueListenable: _immediateMediaItemNotifier,
-              builder: (context, immediateMediaItem, child) {
-                final colorScheme = colorSchemeNotifier.value;
-                final isAmoled = colorScheme == AppColorScheme.amoled;
-                final isDark = Theme.of(context).brightness == Brightness.dark;
+            final colorScheme = colorSchemeNotifier.value;
+            final isAmoled = colorScheme == AppColorScheme.amoled;
+            final isDark = Theme.of(context).brightness == Brightness.dark;
 
-                final cardColor = isAmoled
-                    ? Colors.white.withAlpha(20)
-                    : isDark
-                    ? Theme.of(
-                        context,
-                      ).colorScheme.secondary.withValues(alpha: 0.06)
-                    : Theme.of(
-                        context,
-                      ).colorScheme.secondary.withValues(alpha: 0.07);
+            final cardColor = isAmoled
+                ? Colors.white.withAlpha(20)
+                : isDark
+                ? Theme.of(
+                    context,
+                  ).colorScheme.secondary.withValues(alpha: 0.06)
+                : Theme.of(
+                    context,
+                  ).colorScheme.secondary.withValues(alpha: 0.07);
 
-                return RawScrollbar(
+            return RawScrollbar(
                   controller: _scrollController,
                   thumbColor: Theme.of(context).colorScheme.primary,
                   thickness: 6.0,
@@ -2004,10 +1985,10 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                       final song = songsToShow[index];
                       final path = song.data;
                       final isCurrent =
-                          (immediateMediaItem?.id != null &&
+                          (currentMediaItem?.id != null &&
                           path.isNotEmpty &&
-                          (immediateMediaItem!.id == path ||
-                              immediateMediaItem.extras?['data'] == path));
+                          (currentMediaItem!.id == path ||
+                              currentMediaItem.extras?['data'] == path));
                       final bool isFirst = index == 0;
                       final bool isLast = index == songsToShow.length - 1;
                       final bool isOnly = songsToShow.length == 1;
@@ -2060,30 +2041,30 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                         );
                       }
 
-                      return Padding(
-                        padding: EdgeInsets.only(bottom: isLast ? 0 : 4),
-                        child: Card(
-                          color: isCurrent
-                              ? Theme.of(context).colorScheme.primary.withAlpha(
-                                  isDark ? 40 : 25,
-                                )
-                              : cardColor,
-                          margin: EdgeInsets.zero,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: borderRadius,
-                          ),
-                          child: ClipRRect(
-                            borderRadius: borderRadius,
-                            child: listTileWidget,
+                      return RepaintBoundary(
+                        child: Padding(
+                          padding: EdgeInsets.only(bottom: isLast ? 0 : 4),
+                          child: Card(
+                            color: isCurrent
+                                ? Theme.of(context).colorScheme.primary.withAlpha(
+                                    isDark ? 40 : 25,
+                                  )
+                                : cardColor,
+                            margin: EdgeInsets.zero,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: borderRadius,
+                            ),
+                            child: ClipRRect(
+                              borderRadius: borderRadius,
+                              child: listTileWidget,
+                            ),
                           ),
                         ),
                       );
                     },
                   ),
                 );
-              },
-            );
           },
         ),
       ),

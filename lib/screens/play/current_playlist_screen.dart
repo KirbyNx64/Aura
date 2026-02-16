@@ -483,13 +483,16 @@ class _CurrentPlaylistScreenState extends State<CurrentPlaylistScreen>
                       const SizedBox(height: 8),
 
                       Expanded(
-                        child: Listener(
-                          behavior: HitTestBehavior.translucent,
-                          onPointerDown: (_) {
-                            // Explicitly enable scrolling mode when touching the list area
-                            widget.panelController?.setScrollingEnabled(true);
-                          },
-                          child: Builder(
+                        child: RepaintBoundary(
+                          // Aislar el ListView para que el scroll no provoque repaints
+                          // del overlay AMOLED ni del header (reduce lag con tema dinámico)
+                          child: Listener(
+                            behavior: HitTestBehavior.translucent,
+                            onPointerDown: (_) {
+                              // Explicitly enable scrolling mode when touching the list area
+                              widget.panelController?.setScrollingEnabled(true);
+                            },
+                            child: Builder(
                             builder: (context) {
                               // Pre-cálculos para evitar trabajo por-item durante el scroll
                               final isAmoledTheme =
@@ -681,6 +684,7 @@ class _CurrentPlaylistScreenState extends State<CurrentPlaylistScreen>
                               );
                             },
                           ),
+                        ),
                         ),
                       ),
                     ],
