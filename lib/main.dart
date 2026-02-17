@@ -317,26 +317,19 @@ class _MainNavRootState extends State<MainNavRoot> {
 
   @override
   Widget build(BuildContext context) {
-    return PopScope(
-      canPop:
-          false, // Bloquear pop para que los hijos manejen la navegación interna
-      onPopInvokedWithResult: (didPop, result) {
-        // La lógica de navegación interna ahora se maneja en Material3BottomNav
-      },
-      child: Material3BottomNav(
-        pageBuilders: [
-          (context, onTabChange) => HomeScreen(
-            key: homeScreenKey,
-            onTabChange: onTabChange,
-            setThemeMode: widget.setThemeMode,
-            setColorScheme: widget.setColorScheme,
-          ),
-          (context, onTabChange) => YtSearchTestScreen(key: ytScreenKey),
-          (context, onTabChange) => FavoritesScreen(),
-          (context, onTabChange) => FoldersScreen(key: foldersScreenKey),
-        ],
-        selectedTabIndex: selectedTabIndex,
-      ),
+    return Material3BottomNav(
+      pageBuilders: [
+        (context, onTabChange) => HomeScreen(
+          key: homeScreenKey,
+          onTabChange: onTabChange,
+          setThemeMode: widget.setThemeMode,
+          setColorScheme: widget.setColorScheme,
+        ),
+        (context, onTabChange) => YtSearchTestScreen(key: ytScreenKey),
+        (context, onTabChange) => FavoritesScreen(),
+        (context, onTabChange) => FoldersScreen(key: foldersScreenKey),
+      ],
+      selectedTabIndex: selectedTabIndex,
     );
   }
 }

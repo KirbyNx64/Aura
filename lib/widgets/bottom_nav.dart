@@ -7,6 +7,7 @@ import 'package:music/l10n/locale_provider.dart';
 import 'package:music/utils/notifiers.dart';
 import 'package:music/utils/theme_preferences.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import 'package:flutter/services.dart';
 import 'package:music/widgets/sliding_up_panel/sliding_up_panel_overlay.dart'
     as overlay_panel;
 
@@ -140,7 +141,7 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
   }
 
   // Función para manejar el botón atrás de forma centralizada
-  void _handleBackNavigation() {
+  bool _handleBackNavigation() {
     final tab = widget.selectedTabIndex.value;
 
     if (tab == 1) {
@@ -148,23 +149,24 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
       final state = ytScreenKey.currentState as dynamic;
       if (state?.canPopInternally() == true) {
         state.handleInternalPop();
-        return;
+        return true;
       }
     } else if (tab == 3) {
       // Folders
       final state = foldersScreenKey.currentState as dynamic;
       if (state?.canPopInternally() == true) {
         state.handleInternalPop();
-        return;
+        return true;
       }
     } else if (tab == 0) {
       // Home screen
       final state = homeScreenKey.currentState as dynamic;
       if (state?.canPopInternally() == true) {
         state.handleInternalPop();
-        return;
+        return true;
       }
     }
+    return false;
   }
 
   @override
@@ -271,7 +273,10 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
                 canPop: false,
                 onPopInvokedWithResult: (didPop, result) {
                   if (didPop) return;
-                  _handleBackNavigation();
+                  final handled = _handleBackNavigation();
+                  if (!handled) {
+                    SystemChannels.platform.invokeMethod('SystemNavigator.pop');
+                  }
                 },
                 child: IndexedStack(
                   index: _selectedIndex,
@@ -306,7 +311,19 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
                   );
 
                   if (!overlayActive) {
-                    return pageContent;
+                    return PopScope(
+                      canPop: false,
+                      onPopInvokedWithResult: (didPop, result) {
+                        if (didPop) return;
+                        final handled = _handleBackNavigation();
+                        if (!handled) {
+                          SystemChannels.platform.invokeMethod(
+                            'SystemNavigator.pop',
+                          );
+                        }
+                      },
+                      child: pageContent,
+                    );
                   }
 
                   final bottomPadding = MediaQuery.of(context).padding.bottom;
@@ -343,7 +360,12 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
                           }
 
                           // Si no hay panel abierto, manejar navegación interna de tabs
-                          _handleBackNavigation();
+                          final handled = _handleBackNavigation();
+                          if (!handled) {
+                            SystemChannels.platform.invokeMethod(
+                              'SystemNavigator.pop',
+                            );
+                          }
                         },
                         child: overlay_panel.SlidingUpPanel(
                           controller: _overlayPanelController,

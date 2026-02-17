@@ -491,7 +491,7 @@ class _EqualizerScreenState extends State<EqualizerScreen> {
               Icon(
                 Icons.equalizer_rounded,
                 size: 64,
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                color: theme.colorScheme.onSurface,
               ),
               const SizedBox(height: 16),
               Text(
