@@ -362,11 +362,20 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> {
                                   children: [
                                     if (showBackground)
                                       Positioned.fill(
-                                        child:
-                                            _buildAmoledBackground(
-                                              currentSong,
-                                            ) ??
-                                            const SizedBox.shrink(),
+                                        child: AnimatedSwitcher(
+                                          duration: const Duration(
+                                            milliseconds: 200,
+                                          ),
+                                          child:
+                                              _buildAmoledBackground(
+                                                currentSong,
+                                              ) ??
+                                              const SizedBox.shrink(
+                                                key: ValueKey(
+                                                  'empty_bg_overlay',
+                                                ),
+                                              ),
+                                        ),
                                       ),
                                     Padding(
                                       padding: const EdgeInsets.symmetric(

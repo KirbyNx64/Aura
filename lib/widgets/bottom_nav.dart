@@ -383,6 +383,11 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
                           onPanelOpened: () {
                             bottomNavVisibleNotifier.value = false;
                           },
+                          body: RepaintBoundary(
+                            // Aislar el contenido de tabs (FoldersScreen, etc.) del scroll
+                            // del panel del reproductor. Reduce lag cuando hay listas de canciones.
+                            child: pageContent,
+                          ),
                           collapsed: ValueListenableBuilder<double>(
                             valueListenable: _panelPositionNotifier,
                             builder: (context, position, child) {
@@ -448,7 +453,6 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
                               );
                             },
                           ),
-                          body: pageContent,
                         ),
                       );
                     },

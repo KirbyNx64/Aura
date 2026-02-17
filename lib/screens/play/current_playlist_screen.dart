@@ -54,17 +54,13 @@ class _CurrentPlaylistScreenState extends State<CurrentPlaylistScreen>
 
   /// Carga carátula de forma asíncrona si no está en cache (para playlist)
   void _loadArtworkAsync(int songId, String songPath) {
-    // Cargar de forma asíncrona usando el sistema unificado
     getOrCacheArtwork(songId, songPath)
         .then((artUri) {
           if (artUri != null && mounted) {
-            // Forzar rebuild para mostrar la carátula cargada
             setState(() {});
           }
         })
-        .catchError((error) {
-          // print('❌ Error cargando carátula en playlist: $error');
-        });
+        .catchError((error) {});
   }
 
   @override
