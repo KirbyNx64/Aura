@@ -65,7 +65,7 @@ Future<void> performIndexingIfNeeded() async {
     // print('🎵 Procesando ${allSongs.length} canciones...');
 
     // Realizar la indexación de canciones
-    await songsIndexDB.indexAllSongs();
+    await songsIndexDB.indexAllSongs(allSongs);
 
     // print('🎵 Indexando artistas...');
 

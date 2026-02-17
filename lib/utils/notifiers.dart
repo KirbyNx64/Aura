@@ -5,6 +5,8 @@ final foldersShouldReload = ValueNotifier<bool>(false);
 
 final favoritesShouldReload = ValueNotifier<bool>(false);
 
+final dislikesShouldReload = ValueNotifier<bool>(false);
+
 final playlistsShouldReload = ValueNotifier<bool>(false);
 
 final recentsShouldReload = ValueNotifier<bool>(false);

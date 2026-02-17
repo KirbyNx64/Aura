@@ -97,15 +97,21 @@ class SongsIndexDB {
   }
 
   /// Analiza el almacenamiento y actualiza el índice SOLO con rutas
-  Future<void> indexAllSongs() async {
+  Future<void> indexAllSongs([List<SongModel>? preloadedSongs]) async {
     if (!await needsIndexing()) {
       await syncDatabase();
       return;
     }
 
     final b = await box;
-    final OnAudioQuery audioQuery = OnAudioQuery();
-    final allSongs = await audioQuery.querySongs();
+    List<SongModel> allSongs;
+
+    if (preloadedSongs != null) {
+      allSongs = preloadedSongs;
+    } else {
+      final OnAudioQuery audioQuery = OnAudioQuery();
+      allSongs = await audioQuery.querySongs();
+    }
 
     // Obtener carpetas ignoradas
     final prefs = await SharedPreferences.getInstance();
@@ -114,11 +120,18 @@ class SongsIndexDB {
         .toSet();
 
     await b.clear();
+    final Map<dynamic, Map> entries = {};
+
     for (final song in allSongs) {
       final folderPath = _getFolderPath(song.data);
       if (ignoredFolders.contains(folderPath)) continue;
-      await b.put(song.data, {'folder_path': folderPath});
+      entries[song.data] = {'folder_path': folderPath};
     }
+
+    if (entries.isNotEmpty) {
+      await b.putAll(entries);
+    }
+
     _isIndexed = true;
   }
 

@@ -29,18 +29,18 @@ class ArtistsDB {
     // Contar canciones por artista
     final Map<String, List<SongModel>> artistSongs = {};
     int ignoredCount = 0;
-    
+
     for (final song in songs) {
       final artist = song.artist ?? 'Artista desconocido';
-      
+
       // Log para depuración - mostrar algunos nombres de artistas
       if (ignoredCount < 5) {
         // print('🎵 ArtistsDB: Procesando artista: "$artist"');
       }
-      
+
       // Ignorar artistas desconocidos o vacíos
-      if (artist.isEmpty || 
-          artist.toLowerCase() == 'unknown' || 
+      if (artist.isEmpty ||
+          artist.toLowerCase() == 'unknown' ||
           artist.toLowerCase() == 'unknown artist' ||
           artist.toLowerCase() == 'artista desconocido' ||
           artist.toLowerCase() == 'unknown artist' ||
@@ -51,41 +51,47 @@ class ArtistsDB {
         ignoredCount++;
         continue;
       }
-      
+
       if (artistSongs.containsKey(artist)) {
         artistSongs[artist]!.add(song);
       } else {
         artistSongs[artist] = [song];
       }
     }
-    
+
     // print('🎵 ArtistsDB: Ignorados $ignoredCount artistas desconocidos');
 
     // print('🎵 ArtistsDB: Encontrados ${artistSongs.length} artistas únicos');
 
     // Guardar artistas con sus canciones usando hash como clave
     int artistId = 0;
+    final Map<dynamic, Map<String, dynamic>> entries = {};
+
     for (final entry in artistSongs.entries) {
       final artist = entry.key;
       final songs = entry.value;
-      
+
       // Obtener la primera canción del artista para usar su portada
       final firstSong = songs.first;
-      
+
       // Usar un ID numérico como clave para evitar el límite de 255 caracteres
       final key = 'artist_$artistId';
-      
-      await b.put(key, {
+
+      entries[key] = {
         'name': artist,
         'song_count': songs.length,
         'first_song_path': firstSong.data,
         'first_song_id': firstSong.id,
         'songs': songs.map((s) => s.data).toList(),
-      });
-      
+      };
+
       artistId++;
     }
-    
+
+    if (entries.isNotEmpty) {
+      await b.putAll(entries);
+    }
+
     // print('🎵 ArtistsDB: Indexación completada, ${artistSongs.length} artistas guardados');
   }
 
@@ -95,9 +101,9 @@ class ArtistsDB {
       // print('🎵 ArtistsDB: Obteniendo top artistas (límite: $limit)');
       final b = await box;
       final artists = <Map<String, dynamic>>[];
-      
+
       // print('🎵 ArtistsDB: Total de artistas en DB: ${b.length}');
-      
+
       for (final value in b.values) {
         try {
           // Convertir de Map<dynamic, dynamic> a Map<String, dynamic> de forma segura
@@ -105,11 +111,11 @@ class ArtistsDB {
           for (final entry in (value as Map).entries) {
             artistData[entry.key.toString()] = entry.value;
           }
-          
+
           final artistName = artistData['name'] as String? ?? '';
-          
+
           // Filtrar artistas desconocidos también en la recuperación
-          if (artistName.isNotEmpty && 
+          if (artistName.isNotEmpty &&
               !artistName.toLowerCase().contains('unknown') &&
               !artistName.toLowerCase().contains('desconocido') &&
               artistName.trim().isNotEmpty) {
@@ -120,13 +126,15 @@ class ArtistsDB {
           continue;
         }
       }
-      
+
       // Ordenar por cantidad de canciones (descendente)
-      artists.sort((a, b) => (b['song_count'] as int).compareTo(a['song_count'] as int));
-      
+      artists.sort(
+        (a, b) => (b['song_count'] as int).compareTo(a['song_count'] as int),
+      );
+
       final result = artists.take(limit).toList();
       // print('🎵 ArtistsDB: Retornando ${result.length} artistas (después de filtrar desconocidos)');
-      
+
       return result;
     } catch (e) {
       // print('🎵 ArtistsDB: Error en getTopArtists: $e');
@@ -137,7 +145,7 @@ class ArtistsDB {
   /// Obtiene las canciones de un artista específico
   Future<List<String>> getArtistSongs(String artistName) async {
     final b = await box;
-    
+
     // Buscar el artista por nombre en todos los valores
     for (final value in b.values) {
       // Convertir de Map<dynamic, dynamic> a Map<String, dynamic> de forma segura
@@ -145,19 +153,19 @@ class ArtistsDB {
       for (final entry in (value as Map).entries) {
         artistData[entry.key.toString()] = entry.value;
       }
-      
+
       if (artistData['name'] == artistName) {
         return List<String>.from(artistData['songs'] ?? []);
       }
     }
-    
+
     return [];
   }
 
   /// Obtiene información de un artista específico
   Future<Map<String, dynamic>?> getArtistInfo(String artistName) async {
     final b = await box;
-    
+
     // Buscar el artista por nombre en todos los valores
     for (final value in b.values) {
       // Convertir de Map<dynamic, dynamic> a Map<String, dynamic> de forma segura
@@ -165,12 +173,12 @@ class ArtistsDB {
       for (final entry in (value as Map).entries) {
         artistData[entry.key.toString()] = entry.value;
       }
-      
+
       if (artistData['name'] == artistName) {
         return artistData;
       }
     }
-    
+
     return null;
   }
 

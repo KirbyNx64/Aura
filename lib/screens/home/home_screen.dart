@@ -2554,27 +2554,24 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     playLoadingNotifier.value = true;
 
     // Reproducir la canción después de un breve delay para que se abra el panel
-    Future.delayed(const Duration(milliseconds: 400), () async {
-      try {
-        if (mounted) {
-          // Primero reproducir la canción
-          _playSong(song, queue, queueSource: queueSource);
+    Future.delayed(const Duration(milliseconds: 400), () {
+      if (mounted) {
+        // Primero reproducir la canción
+        _playSong(song, queue, queueSource: queueSource);
 
-          // Desactivar indicador de carga después de reproducir (comportamiento consistente)
+        // Desactivar indicador de carga después de reproducir (comportamiento consistente)
+        Future.delayed(const Duration(milliseconds: 200), () {
+          if (mounted) playLoadingNotifier.value = false;
+        });
+
+        // Luego agregar las canciones aleatorias al reproductor (si es necesario)
+        if (queueSource == LocaleProvider.tr('quick_access_songs') ||
+            queueSource == LocaleProvider.tr('quick_pick_songs')) {
+          // Esperar un poco para que la reproducción se estabilice
           Future.delayed(const Duration(milliseconds: 200), () {
-            if (mounted) playLoadingNotifier.value = false;
-          });
-
-          // Luego agregar las canciones aleatorias al reproductor (si es necesario)
-          if (queueSource == LocaleProvider.tr('quick_access_songs') ||
-              queueSource == LocaleProvider.tr('quick_pick_songs')) {
-            // Esperar un poco para que la reproducción se estabilice
-            await Future.delayed(const Duration(milliseconds: 200));
             unawaited(_addRandomSongsToPlayerQueue(queue));
-          }
+          });
         }
-      } catch (e) {
-        // print('Error en reproducción: $e');
       }
     });
   }
@@ -2586,32 +2583,29 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }) async {
     final index = queue.indexWhere((s) => s.data == song.data);
 
-    if (index != -1) {
-      // Obtener AudioService de forma segura
-      final handler = await _getAudioHandler();
-      if (handler == null) {
-        return;
-      }
+    if (index == -1) return;
 
-      // Limpiar la cola y el MediaItem antes de mostrar la nueva canción (Comportamiento Favorites)
-      handler.queue.add([]);
+    // Obtener AudioService de forma segura
+    final handler = audioHandler as MyAudioHandler;
 
-      // Limpiar el fallback de las carátulas para evitar parpadeo
-      ArtworkHeroCached.clearFallback();
+    // Limpiar la cola y el MediaItem antes de mostrar la nueva canción (Comportamiento Favorites)
+    (audioHandler as MyAudioHandler).queue.add([]);
 
-      // Guardar el origen en SharedPreferences
-      final prefs = await SharedPreferences.getInstance();
-      String origen =
-          queueSource ??
-          (_showingPlaylistSongs && _selectedPlaylist != null
-              ? "${_selectedPlaylist?['name'] ?? ''}"
-              : _showingRecents
-              ? LocaleProvider.tr('recent_songs_title')
-              : "Home");
-      await prefs.setString('last_queue_source', origen);
-      await (handler).setQueueFromSongs(queue, initialIndex: index);
-      await (handler).play();
-    }
+    // Limpiar el fallback de las carátulas para evitar parpadeo
+    ArtworkHeroCached.clearFallback();
+
+    // Guardar el origen en SharedPreferences
+    final prefs = await SharedPreferences.getInstance();
+    String origen =
+        queueSource ??
+        (_showingPlaylistSongs && _selectedPlaylist != null
+            ? "${_selectedPlaylist?['name'] ?? ''}"
+            : _showingRecents
+            ? LocaleProvider.tr('recent_songs_title')
+            : "Home");
+    await prefs.setString('last_queue_source', origen);
+    await (handler).setQueueFromSongs(queue, initialIndex: index);
+    await (handler).play();
   }
 
   Future<void> _addToFavorites(SongModel song) async {
