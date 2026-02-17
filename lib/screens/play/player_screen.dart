@@ -3095,22 +3095,30 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
 
                                                                         return Stack(
                                                                           children: [
-                                                                            ArtworkHeroCached(
-                                                                              artUri: currentMediaItem.artUri,
-                                                                              size: artworkSize,
-                                                                              borderRadius: BorderRadius.circular(
-                                                                                artworkSize *
-                                                                                    0.06,
+                                                                            AnimatedSwitcher(
+                                                                              duration: const Duration(
+                                                                                milliseconds: 75,
                                                                               ),
-                                                                              heroTag:
-                                                                                  widget.onClose !=
-                                                                                      null
-                                                                                  ? 'panel_player_artwork_${(currentMediaItem.extras?['songId'] ?? currentMediaItem.id).toString()}'
-                                                                                  : 'now_playing_artwork_${(currentMediaItem.extras?['songId'] ?? currentMediaItem.id).toString()}',
-                                                                              showPlaceholderIcon: !_showLyrics,
-                                                                              songPath:
-                                                                                  currentMediaItem.extras?['data']
-                                                                                      as String?,
+                                                                              child: ArtworkHeroCached(
+                                                                                key: ValueKey(
+                                                                                  'player_art_${(currentMediaItem.extras?['songId'] ?? currentMediaItem.id).toString()}',
+                                                                                ),
+                                                                                artUri: currentMediaItem.artUri,
+                                                                                size: artworkSize,
+                                                                                borderRadius: BorderRadius.circular(
+                                                                                  artworkSize *
+                                                                                      0.06,
+                                                                                ),
+                                                                                heroTag:
+                                                                                    widget.onClose !=
+                                                                                        null
+                                                                                    ? 'panel_player_artwork_${(currentMediaItem.extras?['songId'] ?? currentMediaItem.id).toString()}'
+                                                                                    : 'now_playing_artwork_${(currentMediaItem.extras?['songId'] ?? currentMediaItem.id).toString()}',
+                                                                                showPlaceholderIcon: !_showLyrics,
+                                                                                songPath:
+                                                                                    currentMediaItem.extras?['data']
+                                                                                        as String?,
+                                                                              ),
                                                                             ),
                                                                             // Indicadores de doble toque solo cuando las letras se muestran en modal y se ha hecho doble toque
                                                                             if (!showLyricsOnCover &&

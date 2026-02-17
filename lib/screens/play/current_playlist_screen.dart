@@ -489,198 +489,220 @@ class _CurrentPlaylistScreenState extends State<CurrentPlaylistScreen>
                               widget.panelController?.setScrollingEnabled(true);
                             },
                             child: Builder(
-                            builder: (context) {
-                              // Pre-cálculos para evitar trabajo por-item durante el scroll
-                              final isAmoledTheme =
-                                  colorSchemeNotifier.value == AppColorScheme.amoled;
-                              final isDark =
-                                  Theme.of(context).brightness == Brightness.dark;
-                              final primaryColor =
-                                  Theme.of(context).colorScheme.primary;
-                              final cardColor = isAmoledTheme
-                                  ? Colors.white.withAlpha(20)
-                                  : isDark
-                                      ? Theme.of(context)
-                                          .colorScheme
-                                          .secondary
+                              builder: (context) {
+                                // Pre-cálculos para evitar trabajo por-item durante el scroll
+                                final isAmoledTheme =
+                                    colorSchemeNotifier.value ==
+                                    AppColorScheme.amoled;
+                                final isDark =
+                                    Theme.of(context).brightness ==
+                                    Brightness.dark;
+                                final primaryColor = Theme.of(
+                                  context,
+                                ).colorScheme.primary;
+                                final cardColor = isAmoledTheme
+                                    ? Colors.white.withAlpha(20)
+                                    : isDark
+                                    ? Theme.of(context).colorScheme.secondary
                                           .withValues(alpha: 0.06)
-                                      : Theme.of(context)
-                                          .colorScheme
-                                          .secondary
+                                    : Theme.of(context).colorScheme.secondary
                                           .withValues(alpha: 0.07);
-                              final currentCardColor =
-                                  primaryColor.withAlpha(isDark ? 40 : 25);
-                              final textColor =
-                                  isAmoledTheme ? Colors.white : primaryColor;
+                                final currentCardColor = primaryColor.withAlpha(
+                                  isDark ? 40 : 25,
+                                );
+                                final textColor = isAmoledTheme
+                                    ? Colors.white
+                                    : primaryColor;
 
-                              // Mapa id->índice real para evitar indexOf(O(n)) en cada item
-                              final indexMap = <String, int>{};
-                              for (var i = 0; i < widget.queue.length; i++) {
-                                indexMap[widget.queue[i].id] = i;
-                              }
+                                // Mapa id->índice real para evitar indexOf(O(n)) en cada item
+                                final indexMap = <String, int>{};
+                                for (var i = 0; i < widget.queue.length; i++) {
+                                  indexMap[widget.queue[i].id] = i;
+                                }
 
-                              // Filtrar la cola según la búsqueda
-                              final filteredQueue = _searchQuery.isEmpty
-                                  ? widget.queue
-                                  : widget.queue.where((item) {
-                                      final title = item.title.toLowerCase();
-                                      final artist = (item.artist ?? '')
-                                          .toLowerCase();
-                                      return title.contains(_searchQuery) ||
-                                          artist.contains(_searchQuery);
-                                    }).toList();
+                                // Filtrar la cola según la búsqueda
+                                final filteredQueue = _searchQuery.isEmpty
+                                    ? widget.queue
+                                    : widget.queue.where((item) {
+                                        final title = item.title.toLowerCase();
+                                        final artist = (item.artist ?? '')
+                                            .toLowerCase();
+                                        return title.contains(_searchQuery) ||
+                                            artist.contains(_searchQuery);
+                                      }).toList();
 
-                              return ListView.builder(
-                                controller: _scrollController,
-                                physics: const AlwaysScrollableScrollPhysics(),
-                                cacheExtent: 200,
-                                addAutomaticKeepAlives: false,
-                                addRepaintBoundaries: true,
-                                padding: EdgeInsets.only(
-                                  top: 8,
-                                  bottom: MediaQuery.of(context).padding.bottom,
-                                ),
-                                itemCount: filteredQueue.length,
-                                itemBuilder: (context, index) {
-                                  final item = filteredQueue[index];
-                                  final isCurrent =
-                                      item.id == widget.currentMediaItem?.id;
-                                  // Índice real en O(1)
-                                  final realIndex = indexMap[item.id] ?? index;
-                                  final songId = item.extras?['songId'] ?? 0;
-                                  final songPath = item.extras?['data'] ?? '';
+                                return ListView.builder(
+                                  controller: _scrollController,
+                                  physics:
+                                      const AlwaysScrollableScrollPhysics(),
+                                  cacheExtent: 200,
+                                  addAutomaticKeepAlives: false,
+                                  addRepaintBoundaries: true,
+                                  padding: EdgeInsets.only(
+                                    top: 8,
+                                    bottom: MediaQuery.of(
+                                      context,
+                                    ).padding.bottom,
+                                  ),
+                                  itemCount: filteredQueue.length,
+                                  itemBuilder: (context, index) {
+                                    final item = filteredQueue[index];
+                                    final isCurrent =
+                                        item.id == widget.currentMediaItem?.id;
+                                    // Índice real en O(1)
+                                    final realIndex =
+                                        indexMap[item.id] ?? index;
+                                    final songId = item.extras?['songId'] ?? 0;
+                                    final songPath = item.extras?['data'] ?? '';
 
-                                  // Agregar padding adicional al primer y último elemento para evitar recorte
-                                  // Ya no es tan necesario como en el modal, pero ayuda visualmente
-                                  // final isFirstItem = index == 0;
-                                  // final isLastItem = index == filteredQueue.length - 1;
+                                    // Agregar padding adicional al primer y último elemento para evitar recorte
+                                    // Ya no es tan necesario como en el modal, pero ayuda visualmente
+                                    // final isFirstItem = index == 0;
+                                    // final isLastItem = index == filteredQueue.length - 1;
 
-                                  // (colores ya memoizados arriba)
+                                    // (colores ya memoizados arriba)
 
-                                  // Calcular borderRadius según posición
-                                  final bool isFirst = index == 0;
-                                  final bool isLast =
-                                      index ==
-                                      filteredQueue.length -
-                                          1; // Usando filteredQueue.length aquí porque es lo que se muestra
-                                  final bool isOnly = filteredQueue.length == 1;
+                                    // Calcular borderRadius según posición
+                                    final bool isFirst = index == 0;
+                                    final bool isLast =
+                                        index ==
+                                        filteredQueue.length -
+                                            1; // Usando filteredQueue.length aquí porque es lo que se muestra
+                                    final bool isOnly =
+                                        filteredQueue.length == 1;
 
-                                  BorderRadius borderRadius;
-                                  if (isOnly) {
-                                    borderRadius = BorderRadius.circular(16);
-                                  } else if (isFirst) {
-                                    borderRadius = const BorderRadius.only(
-                                      topLeft: Radius.circular(16),
-                                      topRight: Radius.circular(16),
-                                      bottomLeft: Radius.circular(4),
-                                      bottomRight: Radius.circular(4),
-                                    );
-                                  } else if (isLast) {
-                                    borderRadius = const BorderRadius.only(
-                                      topLeft: Radius.circular(4),
-                                      topRight: Radius.circular(4),
-                                      bottomLeft: Radius.circular(16),
-                                      bottomRight: Radius.circular(16),
-                                    );
-                                  } else {
-                                    borderRadius = BorderRadius.circular(4);
-                                  }
+                                    BorderRadius borderRadius;
+                                    if (isOnly) {
+                                      borderRadius = BorderRadius.circular(16);
+                                    } else if (isFirst) {
+                                      borderRadius = const BorderRadius.only(
+                                        topLeft: Radius.circular(16),
+                                        topRight: Radius.circular(16),
+                                        bottomLeft: Radius.circular(4),
+                                        bottomRight: Radius.circular(4),
+                                      );
+                                    } else if (isLast) {
+                                      borderRadius = const BorderRadius.only(
+                                        topLeft: Radius.circular(4),
+                                        topRight: Radius.circular(4),
+                                        bottomLeft: Radius.circular(16),
+                                        bottomRight: Radius.circular(16),
+                                      );
+                                    } else {
+                                      borderRadius = BorderRadius.circular(4);
+                                    }
 
-                                  return Padding(
-                                    key: ValueKey(
-                                      item.id,
-                                    ), // Key única para evitar intercambio de carátulas
-                                    padding: EdgeInsets.only(
-                                      left: 16,
-                                      right: 16,
-                                      top: isFirst ? 4.0 : 0.0,
-                                      bottom: isLast ? 20.0 : 4.0,
-                                    ),
-                                    child: Card(
-                                      color: isCurrent ? currentCardColor : cardColor,
-                                      margin: EdgeInsets.zero,
-                                      elevation: 0,
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: borderRadius,
+                                    return Padding(
+                                      key: ValueKey(
+                                        item.id,
+                                      ), // Key única para evitar intercambio de carátulas
+                                      padding: EdgeInsets.only(
+                                        left: 16,
+                                        right: 16,
+                                        top: isFirst ? 4.0 : 0.0,
+                                        bottom: isLast ? 20.0 : 4.0,
                                       ),
-                                      // Evita un ClipRRect extra (menos costo por item)
-                                      clipBehavior: Clip.antiAlias,
-                                      child: ListTile(
-                                        leading: RepaintBoundary(
-                                          child: ArtworkListTile(
-                                            songId: songId,
-                                            songPath: songPath,
-                                            artUri: item.artUri,
-                                            size: 48,
-                                            borderRadius: BorderRadius.circular(8),
-                                          ),
+                                      child: Card(
+                                        color: isCurrent
+                                            ? currentCardColor
+                                            : cardColor,
+                                        margin: EdgeInsets.zero,
+                                        elevation: 0,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: borderRadius,
                                         ),
-                                        title: Row(
-                                          children: [
-                                            if (isCurrent)
-                                              StreamBuilder<PlaybackState>(
-                                                stream:
-                                                    audioHandler?.playbackState,
-                                                builder: (context, snapshot) {
-                                                  final playing =
-                                                      snapshot.data?.playing ??
-                                                          false;
-                                                  return Padding(
-                                                    padding: const EdgeInsets.only(
-                                                      right: 8.0,
-                                                    ),
-                                                    child: MiniMusicVisualizer(
-                                                      color: textColor,
-                                                      width: 4,
-                                                      height: 15,
-                                                      radius: 4,
-                                                      animate: playing,
-                                                    ),
-                                                  );
-                                                },
-                                              ),
-                                            Expanded(
-                                              child: Text(
-                                                item.title,
-                                                maxLines: 1,
-                                                overflow: TextOverflow.ellipsis,
-                                                style: TextStyle(
-                                                  fontWeight: isCurrent
-                                                      ? FontWeight.bold
-                                                      : Theme.of(context)
-                                                            .textTheme
-                                                            .titleMedium
-                                                            ?.fontWeight,
-                                                  color:
-                                                      isCurrent ? textColor : null,
+                                        // Evita un ClipRRect extra (menos costo por item)
+                                        clipBehavior: Clip.antiAlias,
+                                        child: ListTile(
+                                          leading: RepaintBoundary(
+                                            child: ArtworkListTile(
+                                              songId: songId,
+                                              songPath: songPath,
+                                              artUri: item.artUri,
+                                              size: 48,
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                            ),
+                                          ),
+                                          title: Row(
+                                            children: [
+                                              if (isCurrent)
+                                                StreamBuilder<PlaybackState>(
+                                                  stream: audioHandler
+                                                      ?.playbackState,
+                                                  builder: (context, snapshot) {
+                                                    final playing =
+                                                        snapshot
+                                                            .data
+                                                            ?.playing ??
+                                                        false;
+                                                    return Padding(
+                                                      padding:
+                                                          const EdgeInsets.only(
+                                                            right: 8.0,
+                                                          ),
+                                                      child:
+                                                          MiniMusicVisualizer(
+                                                            color: textColor,
+                                                            width: 4,
+                                                            height: 15,
+                                                            radius: 4,
+                                                            animate: playing,
+                                                          ),
+                                                    );
+                                                  },
+                                                ),
+                                              Expanded(
+                                                child: Text(
+                                                  item.title,
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  style: TextStyle(
+                                                    fontWeight: isCurrent
+                                                        ? FontWeight.bold
+                                                        : Theme.of(context)
+                                                              .textTheme
+                                                              .titleMedium
+                                                              ?.fontWeight,
+                                                    color: isCurrent
+                                                        ? textColor
+                                                        : null,
+                                                  ),
                                                 ),
                                               ),
-                                            ),
-                                          ],
-                                        ),
-                                        subtitle: Text(
-                                          item.artist ??
-                                              LocaleProvider.tr('unknown_artist'),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: TextStyle(
-                                            color: isCurrent ? textColor : null,
+                                            ],
                                           ),
+                                          subtitle: Text(
+                                            item.artist ??
+                                                LocaleProvider.tr(
+                                                  'unknown_artist',
+                                                ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(
+                                              color: isCurrent
+                                                  ? textColor
+                                                  : null,
+                                            ),
+                                          ),
+                                          tileColor: Colors.transparent,
+                                          splashColor: primaryColor.withValues(
+                                            alpha: 0.1,
+                                          ),
+                                          onTap: () {
+                                            audioHandler?.skipToQueueItem(
+                                              realIndex,
+                                            );
+                                          },
                                         ),
-                                        tileColor: Colors.transparent,
-                                        splashColor:
-                                            primaryColor.withValues(alpha: 0.1),
-                                        onTap: () {
-                                          audioHandler?.skipToQueueItem(realIndex);
-                                        },
                                       ),
-                                    ),
-                                  );
-                                },
-                              );
-                            },
+                                    );
+                                  },
+                                );
+                              },
+                            ),
                           ),
-                        ),
                         ),
                       ),
                     ],

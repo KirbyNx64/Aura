@@ -372,6 +372,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
   }
 
   void _onSongSelected(SongModel song) async {
+    FocusManager.instance.primaryFocus?.unfocus();
     if (playLoadingNotifier.value) return;
     try {
       (audioHandler as MyAudioHandler).isShuffleNotifier.value = false;
@@ -1965,106 +1966,106 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                   ).colorScheme.secondary.withValues(alpha: 0.07);
 
             return RawScrollbar(
-                  controller: _scrollController,
-                  thumbColor: Theme.of(context).colorScheme.primary,
-                  thickness: 6.0,
-                  radius: const Radius.circular(8),
-                  interactive: true,
-                  padding: EdgeInsets.only(bottom: space),
-                  child: ListView.builder(
-                    controller: _scrollController,
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    padding: EdgeInsets.only(
-                      left: 16.0,
-                      right: 16.0,
-                      top: 8.0,
-                      bottom: space,
-                    ),
-                    itemCount: songsToShow.length,
-                    itemBuilder: (context, index) {
-                      final song = songsToShow[index];
-                      final path = song.data;
-                      final isCurrent =
-                          (currentMediaItem?.id != null &&
-                          path.isNotEmpty &&
-                          (currentMediaItem!.id == path ||
-                              currentMediaItem.extras?['data'] == path));
-                      final bool isFirst = index == 0;
-                      final bool isLast = index == songsToShow.length - 1;
-                      final bool isOnly = songsToShow.length == 1;
+              controller: _scrollController,
+              thumbColor: Theme.of(context).colorScheme.primary,
+              thickness: 6.0,
+              radius: const Radius.circular(8),
+              interactive: true,
+              padding: EdgeInsets.only(bottom: space),
+              child: ListView.builder(
+                controller: _scrollController,
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: EdgeInsets.only(
+                  left: 16.0,
+                  right: 16.0,
+                  top: 8.0,
+                  bottom: space,
+                ),
+                itemCount: songsToShow.length,
+                itemBuilder: (context, index) {
+                  final song = songsToShow[index];
+                  final path = song.data;
+                  final isCurrent =
+                      (currentMediaItem?.id != null &&
+                      path.isNotEmpty &&
+                      (currentMediaItem!.id == path ||
+                          currentMediaItem.extras?['data'] == path));
+                  final bool isFirst = index == 0;
+                  final bool isLast = index == songsToShow.length - 1;
+                  final bool isOnly = songsToShow.length == 1;
 
-                      BorderRadius borderRadius;
-                      if (isOnly) {
-                        borderRadius = BorderRadius.circular(20);
-                      } else if (isFirst) {
-                        borderRadius = const BorderRadius.only(
-                          topLeft: Radius.circular(20),
-                          topRight: Radius.circular(20),
-                          bottomLeft: Radius.circular(4),
-                          bottomRight: Radius.circular(4),
-                        );
-                      } else if (isLast) {
-                        borderRadius = const BorderRadius.only(
-                          topLeft: Radius.circular(4),
-                          topRight: Radius.circular(4),
-                          bottomLeft: Radius.circular(20),
-                          bottomRight: Radius.circular(20),
-                        );
-                      } else {
-                        borderRadius = BorderRadius.circular(4);
-                      }
+                  BorderRadius borderRadius;
+                  if (isOnly) {
+                    borderRadius = BorderRadius.circular(20);
+                  } else if (isFirst) {
+                    borderRadius = const BorderRadius.only(
+                      topLeft: Radius.circular(20),
+                      topRight: Radius.circular(20),
+                      bottomLeft: Radius.circular(4),
+                      bottomRight: Radius.circular(4),
+                    );
+                  } else if (isLast) {
+                    borderRadius = const BorderRadius.only(
+                      topLeft: Radius.circular(4),
+                      topRight: Radius.circular(4),
+                      bottomLeft: Radius.circular(20),
+                      bottomRight: Radius.circular(20),
+                    );
+                  } else {
+                    borderRadius = BorderRadius.circular(4);
+                  }
 
-                      // Solo usar ValueListenableBuilder para la canción actual
-                      Widget listTileWidget;
-                      if (isCurrent) {
-                        listTileWidget = ValueListenableBuilder<bool>(
-                          valueListenable: _isPlayingNotifier,
-                          builder: (context, playing, child) {
-                            return _buildOptimizedListTile(
-                              context,
-                              song,
-                              isCurrent,
-                              playing,
-                              isAmoled,
-                              borderRadius: borderRadius,
-                            );
-                          },
-                        );
-                      } else {
-                        listTileWidget = _buildOptimizedListTile(
+                  // Solo usar ValueListenableBuilder para la canción actual
+                  Widget listTileWidget;
+                  if (isCurrent) {
+                    listTileWidget = ValueListenableBuilder<bool>(
+                      valueListenable: _isPlayingNotifier,
+                      builder: (context, playing, child) {
+                        return _buildOptimizedListTile(
                           context,
                           song,
                           isCurrent,
-                          false,
+                          playing,
                           isAmoled,
                           borderRadius: borderRadius,
                         );
-                      }
+                      },
+                    );
+                  } else {
+                    listTileWidget = _buildOptimizedListTile(
+                      context,
+                      song,
+                      isCurrent,
+                      false,
+                      isAmoled,
+                      borderRadius: borderRadius,
+                    );
+                  }
 
-                      return RepaintBoundary(
-                        child: Padding(
-                          padding: EdgeInsets.only(bottom: isLast ? 0 : 4),
-                          child: Card(
-                            color: isCurrent
-                                ? Theme.of(context).colorScheme.primary.withAlpha(
-                                    isDark ? 40 : 25,
-                                  )
-                                : cardColor,
-                            margin: EdgeInsets.zero,
-                            elevation: 0,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: borderRadius,
-                            ),
-                            child: ClipRRect(
-                              borderRadius: borderRadius,
-                              child: listTileWidget,
-                            ),
-                          ),
+                  return RepaintBoundary(
+                    child: Padding(
+                      padding: EdgeInsets.only(bottom: isLast ? 0 : 4),
+                      child: Card(
+                        color: isCurrent
+                            ? Theme.of(
+                                context,
+                              ).colorScheme.primary.withAlpha(isDark ? 40 : 25)
+                            : cardColor,
+                        margin: EdgeInsets.zero,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: borderRadius,
                         ),
-                      );
-                    },
-                  ),
-                );
+                        child: ClipRRect(
+                          borderRadius: borderRadius,
+                          child: listTileWidget,
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            );
           },
         ),
       ),

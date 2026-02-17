@@ -422,18 +422,26 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> {
                                                   final artUri =
                                                       currentSong.artUri;
 
-                                                  return ArtworkHeroCached(
-                                                    artUri: artUri,
-                                                    size: 50,
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                          8,
-                                                        ),
-                                                    heroTag:
-                                                        'now_playing_artwork_${(currentSong.extras?['songId'] ?? currentSong.id).toString()}',
-                                                    showPlaceholderIcon: true,
-                                                    isLoading:
-                                                        false, // El overlay maneja el loading externamente
+                                                  return AnimatedSwitcher(
+                                                    duration: const Duration(
+                                                      milliseconds: 200,
+                                                    ),
+                                                    child: ArtworkHeroCached(
+                                                      key: ValueKey(
+                                                        'overlay_art_${(currentSong.extras?['songId'] ?? currentSong.id).toString()}',
+                                                      ),
+                                                      artUri: artUri,
+                                                      size: 50,
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            8,
+                                                          ),
+                                                      heroTag:
+                                                          'now_playing_artwork_${(currentSong.extras?['songId'] ?? currentSong.id).toString()}',
+                                                      showPlaceholderIcon: true,
+                                                      isLoading:
+                                                          false, // El overlay maneja el loading externamente
+                                                    ),
                                                   );
                                                 },
                                               ),
