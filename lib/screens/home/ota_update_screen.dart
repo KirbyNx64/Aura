@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:music/utils/connectivity_helper.dart';
 import 'package:ota_update/ota_update.dart';
 import 'package:music/utils/ota_update_helper.dart';
 import 'dart:io';
@@ -8,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:music/utils/theme_preferences.dart';
 import 'package:music/utils/notifiers.dart';
 import 'package:material_loading_indicator/loading_indicator.dart';
+import 'package:open_settings_plus/open_settings_plus.dart';
 
 class UpdateScreen extends StatefulWidget {
   const UpdateScreen({super.key});
@@ -30,16 +32,32 @@ class _UpdateScreenState extends State<UpdateScreen> {
   bool _hasChecked = false;
   // Estado para saber si está buscando actualizaciones
   bool _isChecking = false;
+  // Estado para saber si no hay internet
+  bool _noInternet = false;
 
   Future<void> _checkUpdate() async {
     setState(() {
       _status = LocaleProvider.tr('checking_update');
       _hasChecked = true;
       _isChecking = true;
+      _noInternet = false;
       _version = '';
       _changelog = '';
       _apkUrl = null;
     });
+
+    final hasConnection = await ConnectivityHelper.hasInternetConnection();
+
+    if (!hasConnection) {
+      if (mounted) {
+        setState(() {
+          _noInternet = true;
+          _status = LocaleProvider.tr('no_internet_connection');
+          _isChecking = false;
+        });
+      }
+      return;
+    }
 
     final updateInfo = await OtaUpdateHelper.checkForUpdate();
 
@@ -595,7 +613,9 @@ class _UpdateScreenState extends State<UpdateScreen> {
                                       .withValues(alpha: 0.07),
                           ),
                           child: Icon(
-                            Icons.check_circle_outline_rounded,
+                            _noInternet
+                                ? Icons.wifi_off_rounded
+                                : Icons.check_circle_outline_rounded,
                             grade: 300,
                             size: 80,
                             color:
@@ -612,13 +632,25 @@ class _UpdateScreenState extends State<UpdateScreen> {
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.w500,
-                            color: Theme.of(context).colorScheme.onSurface,
                           ),
                           textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 26),
                         ElevatedButton.icon(
-                          onPressed: _checkUpdate,
+                          onPressed: _noInternet
+                              ? () {
+                                  switch (OpenSettingsPlus.shared) {
+                                    case OpenSettingsPlusAndroid settings:
+                                      settings.wifi();
+                                      break;
+                                    case OpenSettingsPlusIOS settings:
+                                      settings.wifi();
+                                      break;
+                                    default:
+                                      break;
+                                  }
+                                }
+                              : _checkUpdate,
                           icon: Container(
                             width: 24,
                             height: 24,
@@ -628,12 +660,16 @@ class _UpdateScreenState extends State<UpdateScreen> {
                               color: Colors.white.withValues(alpha: 0.2),
                             ),
                             child: Icon(
-                              Icons.refresh,
+                              _noInternet ? Icons.settings : Icons.refresh,
                               size: 16,
                               color: Theme.of(context).colorScheme.onPrimary,
                             ),
                           ),
-                          label: Text(LocaleProvider.tr('check_again')),
+                          label: Text(
+                            _noInternet
+                                ? LocaleProvider.tr('open_settings')
+                                : LocaleProvider.tr('check_again'),
+                          ),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Theme.of(
                               context,

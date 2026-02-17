@@ -514,6 +514,7 @@ const Map<String, String> appLocalizationsEn = {
       'No internet connection. Please check your connection and try again.',
   'no_internet_retry':
       'No internet connection, please check your connection and try again.',
+  'open_settings': 'Open settings',
 
   // Home screen
   'recent': 'Recent',
@@ -738,6 +739,7 @@ const Map<String, String> appLocalizationsEn = {
   'developer': 'Developer',
   'filters': 'Filters',
   'flutter_version': 'Flutter Version',
+  'device_info': 'Device Information',
 
   // Download messages
   'download_started_for_elements': 'Download started for @count elements',

@@ -1144,39 +1144,79 @@ class _FavoritesScreenState extends State<FavoritesScreen>
   }
 
   Future<void> _removeFromFavoritesMassive() async {
-    final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
     final selectedSongs =
         (_searchController.text.isNotEmpty ? _filteredFavorites : _favorites)
             .where((s) => _selectedSongIds.contains(s.id));
     final count = _selectedSongIds.length;
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: isAmoled && isDark
-              ? const BorderSide(color: Colors.white, width: 1)
-              : BorderSide.none,
-        ),
-        title: TranslatedText('remove_from_favorites'),
-        content: Text(
-          count == 1
-              ? LocaleProvider.tr('confirm_remove_favorite')
-              : "${LocaleProvider.tr('confirm_remove_favorites')} ($count)",
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: TranslatedText('cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: TranslatedText('remove'),
-          ),
-        ],
-      ),
+      builder: (BuildContext context) {
+        return ValueListenableBuilder<AppColorScheme>(
+          valueListenable: colorSchemeNotifier,
+          builder: (context, colorScheme, child) {
+            final isAmoled = colorScheme == AppColorScheme.amoled;
+            final isDark = Theme.of(context).brightness == Brightness.dark;
+
+            return AlertDialog(
+              backgroundColor: isAmoled && isDark
+                  ? Colors.black
+                  : Theme.of(context).colorScheme.surface,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(28),
+                side: isAmoled && isDark
+                    ? const BorderSide(color: Colors.white24, width: 1)
+                    : BorderSide.none,
+              ),
+              contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
+              icon: Icon(
+                Icons.delete_sweep_rounded,
+                size: 32,
+                color: Theme.of(context).colorScheme.error,
+              ),
+              title: TranslatedText(
+                'remove_from_favorites',
+                style: const TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w500,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              content: Text(
+                count == 1
+                    ? LocaleProvider.tr('confirm_remove_favorite')
+                    : "${LocaleProvider.tr('confirm_remove_favorites')} ($count)",
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+              actionsPadding: const EdgeInsets.all(16),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: Text(
+                    LocaleProvider.tr('cancel'),
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(true),
+                  child: Text(
+                    LocaleProvider.tr('remove'),
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
     if (confirmed != true) return;
     for (final song in selectedSongs) {
@@ -1913,6 +1953,10 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                 ? _filteredFavorites
                 : _favorites;
 
+            final colorScheme = colorSchemeNotifier.value;
+            final isAmoled = colorScheme == AppColorScheme.amoled;
+            final isDark = Theme.of(context).brightness == Brightness.dark;
+
             if (songsToShow.isEmpty) {
               return SingleChildScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
@@ -1922,13 +1966,30 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(
-                          Icons.favorite_outline_rounded,
-                          weight: 600,
-                          size: 48,
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.onSurface.withValues(alpha: 0.6),
+                        Container(
+                          width: 80,
+                          height: 80,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: isDark
+                                ? Theme.of(context).colorScheme.secondary
+                                      .withValues(alpha: 0.04)
+                                : Theme.of(context).colorScheme.secondary
+                                      .withValues(alpha: 0.05),
+                          ),
+                          child: Icon(
+                            Icons.favorite_outline_rounded,
+                            weight: 600,
+                            size: 50,
+                            color:
+                                Theme.of(context).brightness == Brightness.light
+                                ? Theme.of(
+                                    context,
+                                  ).colorScheme.onSurface.withValues(alpha: 0.7)
+                                : Theme.of(context).colorScheme.onSurface
+                                      .withValues(alpha: 0.7),
+                          ),
                         ),
                         const SizedBox(height: 16),
                         TranslatedText(
@@ -1950,10 +2011,6 @@ class _FavoritesScreenState extends State<FavoritesScreen>
             final bottomPadding = MediaQuery.of(context).padding.bottom;
             final space =
                 (currentMediaItem != null ? 100.0 : 0.0) + bottomPadding;
-
-            final colorScheme = colorSchemeNotifier.value;
-            final isAmoled = colorScheme == AppColorScheme.amoled;
-            final isDark = Theme.of(context).brightness == Brightness.dark;
 
             final cardColor = isAmoled
                 ? Colors.white.withAlpha(20)

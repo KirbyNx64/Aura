@@ -3320,7 +3320,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                   child: ClipRRect(
                                                     borderRadius:
                                                         BorderRadius.circular(
-                                                          artworkSize * 0.06,
+                                                          artworkSize * 0.04,
                                                         ),
                                                     child: RepaintBoundary(
                                                       child: Container(
@@ -3335,7 +3335,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                           borderRadius:
                                                               BorderRadius.circular(
                                                                 artworkSize *
-                                                                    0.06,
+                                                                    0.04,
                                                               ),
                                                         ),
                                                         alignment:
@@ -3637,13 +3637,9 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                                                               isLiked
                                                                                                   ? Icons.favorite_rounded
                                                                                                   : Icons.favorite_border_rounded,
-                                                                                              color: isLiked
-                                                                                                  ? Theme.of(
-                                                                                                      context,
-                                                                                                    ).colorScheme.primary
-                                                                                                  : Theme.of(
-                                                                                                      context,
-                                                                                                    ).colorScheme.onSurface,
+                                                                                              color: Theme.of(
+                                                                                                context,
+                                                                                              ).colorScheme.onSurface,
                                                                                               size: isSmall
                                                                                                   ? 20
                                                                                                   : 24,
@@ -3793,13 +3789,9 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                                                 size: isSmall
                                                                                     ? 20
                                                                                     : 24,
-                                                                                color: _isCurrentDisliked
-                                                                                    ? Theme.of(
-                                                                                        context,
-                                                                                      ).colorScheme.primary
-                                                                                    : Theme.of(
-                                                                                        context,
-                                                                                      ).colorScheme.onSurface,
+                                                                                color: Theme.of(
+                                                                                  context,
+                                                                                ).colorScheme.onSurface,
                                                                               ),
                                                                             ),
                                                                           ),
@@ -4984,7 +4976,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                           ),
                                           const Spacer(),
                                           if (!is16by9 && !isSmallScreen) ...[
-                                            const SizedBox(height: 20),
+                                            const SizedBox(height: 30),
                                             Align(
                                               alignment: Alignment.bottomCenter,
                                               child: SafeArea(

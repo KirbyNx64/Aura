@@ -293,6 +293,255 @@ class _WelcomePage extends StatelessWidget {
 
     return Stack(
       children: [
+        Column(
+          children: [
+            Expanded(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final isShort = MediaQuery.of(context).size.height < 700;
+                  return SingleChildScrollView(
+                    physics: isShort
+                        ? const ClampingScrollPhysics()
+                        : const NeverScrollableScrollPhysics(),
+                    padding: const EdgeInsets.symmetric(horizontal: 28.0),
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        minHeight: constraints.maxHeight,
+                      ),
+                      child: IntrinsicHeight(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            SizedBox(
+                              height: MediaQuery.of(context).size.height < 700
+                                  ? 24
+                                  : 48,
+                            ),
+                            // Titulo Estilizado
+                            TranslatedText(
+                              'welcome',
+                              style: textTheme.displaySmall?.copyWith(
+                                fontWeight: FontWeight.w900,
+                                color: colorScheme.onSurface,
+                                height: 1.1,
+                                letterSpacing: -1,
+                              ),
+                            ),
+                            TranslatedText(
+                              'to',
+                              style: textTheme.displaySmall?.copyWith(
+                                fontWeight: FontWeight.w900,
+                                color: colorScheme.onSurface,
+                                height: 1.1,
+                                letterSpacing: -1,
+                              ),
+                            ),
+                            Text(
+                              'Aura',
+                              style: textTheme.displayMedium?.copyWith(
+                                fontWeight: FontWeight.w900,
+                                color: colorScheme.primary,
+                                height: 1.1,
+                                letterSpacing: -1,
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            // Badge de Beta
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color: isAmoled
+                                    ? Colors.white.withAlpha(20)
+                                    : isDark
+                                    ? colorScheme.secondary.withValues(
+                                        alpha: 0.06,
+                                      )
+                                    : colorScheme.secondary.withValues(
+                                        alpha: 0.07,
+                                      ),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: FutureBuilder<PackageInfo>(
+                                future: PackageInfo.fromPlatform(),
+                                builder: (context, snapshot) {
+                                  final version =
+                                      snapshot.data?.version ?? '1.8.1';
+                                  return Text(
+                                    'v$version',
+                                    style: textTheme.labelLarge?.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                      color: colorScheme.onSurface.withValues(
+                                        alpha: 0.6,
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+
+                            const Spacer(flex: 1),
+
+                            // Icono Central Adaptativo
+                            Center(
+                              child: Builder(
+                                builder: (context) {
+                                  final screenHeight = MediaQuery.of(
+                                    context,
+                                  ).size.height;
+                                  final isShortScreen = screenHeight < 700;
+                                  final size = isShortScreen ? 160.0 : 220.0;
+                                  final iconSize = isShortScreen
+                                      ? 110.0
+                                      : 160.0;
+
+                                  return M3Container.c7SidedCookie(
+                                    color: isAmoled
+                                        ? Colors.white.withAlpha(20)
+                                        : isDark
+                                        ? colorScheme.secondary.withValues(
+                                            alpha: 0.06,
+                                          )
+                                        : colorScheme.secondary.withValues(
+                                            alpha: 0.07,
+                                          ),
+                                    width: size,
+                                    height: size,
+                                    child: Center(
+                                      child: SvgPicture.asset(
+                                        'assets/icon/icon_foreground.svg',
+                                        height: iconSize,
+                                        colorFilter: ColorFilter.mode(
+                                          colorScheme.primary,
+                                          BlendMode.srcIn,
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+
+                            const Spacer(flex: 1),
+
+                            // Subtexto
+                            Center(
+                              child: TranslatedText(
+                                "onboarding_setup_desc",
+                                textAlign: TextAlign.center,
+                                style: textTheme.bodyLarge?.copyWith(
+                                  color: colorScheme.onSurface.withValues(
+                                    alpha: 0.6,
+                                  ),
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+
+                            const Spacer(flex: 1),
+                            // Selector de Idioma (Sutil)
+                            Center(
+                              child: ValueListenableBuilder<String>(
+                                valueListenable: languageNotifier,
+                                builder: (context, currentLang, _) {
+                                  return Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      _LanguageButton(
+                                        label: 'ES',
+                                        isSelected: currentLang == 'es',
+                                        onTap: () {
+                                          LocaleProvider.setLanguage('es');
+                                          _saveLanguage('es');
+                                        },
+                                      ),
+                                      const SizedBox(width: 8),
+                                      _LanguageButton(
+                                        label: 'EN',
+                                        isSelected: currentLang == 'en',
+                                        onTap: () {
+                                          LocaleProvider.setLanguage('en');
+                                          _saveLanguage('en');
+                                        },
+                                      ),
+                                    ],
+                                  );
+                                },
+                              ),
+                            ),
+
+                            const Spacer(flex: 1),
+                            const SizedBox(height: 16),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+
+            // Card del Botón "Let's Go!" (Footer)
+            Container(
+              margin: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: isAmoled
+                    ? Colors.white.withAlpha(20)
+                    : isDark
+                    ? colorScheme.secondary.withValues(alpha: 0.06)
+                    : colorScheme.secondary.withValues(alpha: 0.07),
+                borderRadius: BorderRadius.circular(32),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 4,
+                ),
+                child: Row(
+                  children: [
+                    const SizedBox(width: 4),
+                    TranslatedText(
+                      "lets_go",
+                      style: textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.w900,
+                        color: colorScheme.onSurface,
+                        letterSpacing: -0.5,
+                        fontSize: MediaQuery.of(context).size.height < 700
+                            ? 20
+                            : null,
+                      ),
+                    ),
+                    const Spacer(),
+                    Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: onNext,
+                        borderRadius: BorderRadius.circular(22),
+                        child: Container(
+                          width: 64,
+                          height: 64,
+                          decoration: BoxDecoration(
+                            color: colorScheme.primary,
+                            borderRadius: BorderRadius.circular(22),
+                          ),
+                          child: Icon(
+                            Icons.arrow_forward_rounded,
+                            color: colorScheme.onPrimary,
+                            size: 32,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
         Positioned(
           top: 16,
           right: 16,
@@ -338,198 +587,6 @@ class _WelcomePage extends StatelessWidget {
               child: const Icon(Icons.info_outline_rounded, size: 26),
             ),
             tooltip: LocaleProvider.tr('about'),
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 28.0, vertical: 24.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Titulo Estilizado
-              TranslatedText(
-                'welcome',
-                style: textTheme.displaySmall?.copyWith(
-                  fontWeight: FontWeight.w900,
-                  color: colorScheme.onSurface,
-                  height: 1.1,
-                  letterSpacing: -1,
-                ),
-              ),
-              TranslatedText(
-                'to',
-                style: textTheme.displaySmall?.copyWith(
-                  fontWeight: FontWeight.w900,
-                  color: colorScheme.onSurface,
-                  height: 1.1,
-                  letterSpacing: -1,
-                ),
-              ),
-              Text(
-                'Aura',
-                style: textTheme.displayMedium?.copyWith(
-                  fontWeight: FontWeight.w900,
-                  color: colorScheme.primary,
-                  height: 1.1,
-                  letterSpacing: -1,
-                ),
-              ),
-              const SizedBox(height: 16),
-              // Badge de Beta
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: isAmoled
-                      ? Colors.white.withAlpha(20)
-                      : isDark
-                      ? colorScheme.secondary.withValues(alpha: 0.06)
-                      : colorScheme.secondary.withValues(alpha: 0.07),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: FutureBuilder<PackageInfo>(
-                  future: PackageInfo.fromPlatform(),
-                  builder: (context, snapshot) {
-                    final version = snapshot.data?.version ?? '1.8.1';
-                    return Text(
-                      'v$version',
-                      style: textTheme.labelLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: colorScheme.onSurface.withValues(alpha: 0.6),
-                      ),
-                    );
-                  },
-                ),
-              ),
-
-              const Spacer(),
-
-              // Icono Central (en lugar de dibujo)
-              Center(
-                child: M3Container.c7SidedCookie(
-                  color: isAmoled
-                      ? Colors.white.withAlpha(20)
-                      : isDark
-                      ? colorScheme.secondary.withValues(alpha: 0.06)
-                      : colorScheme.secondary.withValues(alpha: 0.07),
-                  width: 220,
-                  height: 220,
-                  child: Center(
-                    child: SvgPicture.asset(
-                      'assets/icon/icon_foreground.svg',
-                      height: 160,
-                      colorFilter: ColorFilter.mode(
-                        colorScheme.primary,
-                        BlendMode.srcIn,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-
-              const Spacer(),
-
-              // Subtexto
-              Center(
-                child: TranslatedText(
-                  "onboarding_setup_desc",
-                  textAlign: TextAlign.center,
-                  style: textTheme.bodyLarge?.copyWith(
-                    color: colorScheme.onSurface.withValues(alpha: 0.6),
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 32),
-
-              // Selector de Idioma (Sutil)
-              Center(
-                child: ValueListenableBuilder<String>(
-                  valueListenable: languageNotifier,
-                  builder: (context, currentLang, _) {
-                    return Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        _LanguageButton(
-                          label: 'ES',
-                          isSelected: currentLang == 'es',
-                          onTap: () {
-                            LocaleProvider.setLanguage('es');
-                            _saveLanguage('es');
-                          },
-                        ),
-                        const SizedBox(width: 8),
-                        _LanguageButton(
-                          label: 'EN',
-                          isSelected: currentLang == 'en',
-                          onTap: () {
-                            LocaleProvider.setLanguage('en');
-                            _saveLanguage('en');
-                          },
-                        ),
-                      ],
-                    );
-                  },
-                ),
-              ),
-
-              const SizedBox(height: 32),
-
-              // Card del Botón "Let's Go!"
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: isAmoled
-                      ? Colors.white.withAlpha(20)
-                      : isDark
-                      ? colorScheme.secondary.withValues(alpha: 0.06)
-                      : colorScheme.secondary.withValues(alpha: 0.07),
-                  borderRadius: BorderRadius.circular(28),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
-                  ),
-                  child: Row(
-                    children: [
-                      TranslatedText(
-                        "lets_go",
-                        style: textTheme.headlineSmall?.copyWith(
-                          fontWeight: FontWeight.w900,
-                          color: colorScheme.onSurface,
-                          letterSpacing: -0.5,
-                        ),
-                      ),
-                      const Spacer(),
-                      Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          onTap: onNext,
-                          borderRadius: BorderRadius.circular(16),
-                          child: Container(
-                            width: 56,
-                            height: 56,
-                            decoration: BoxDecoration(
-                              color: colorScheme.primary,
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            child: Icon(
-                              Icons.arrow_forward_rounded,
-                              color: colorScheme.onPrimary,
-                              size: 28,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
           ),
         ),
       ],
@@ -627,87 +684,113 @@ class _PermissionsPage extends StatelessWidget {
     return Column(
       children: [
         Expanded(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 28.0),
-            child: Column(
-              children: [
-                const SizedBox(height: 48),
-                // Título y Descripción
-                TranslatedText(
-                  'media_permission',
-                  style: textTheme.displaySmall?.copyWith(
-                    fontWeight: FontWeight.w900,
-                    color: colorScheme.onSurface,
-                    letterSpacing: -1,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 12),
-                TranslatedText(
-                  'permissions_desc',
-                  style: textTheme.bodyLarge?.copyWith(
-                    color: colorScheme.onSurface.withValues(alpha: 0.6),
-                    height: 1.4,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-
-                const Spacer(),
-
-                // Composición Visual Simplificada (M3 Shape)
-                SizedBox(
-                  height: 320,
-                  width: double.infinity,
-                  child: Center(
-                    child: M3Container.oval(
-                      color: isAmoled
-                          ? Colors.white.withAlpha(20)
-                          : isDark
-                          ? Theme.of(
-                              context,
-                            ).colorScheme.secondary.withValues(alpha: 0.06)
-                          : Theme.of(
-                              context,
-                            ).colorScheme.secondary.withValues(alpha: 0.07),
-                      width: 220,
-                      height: 220,
-                      child: Center(
-                        child: Transform.rotate(
-                          angle: 0.5,
-                          child: Icon(
-                            Icons.lock_open_rounded,
-                            size: 100,
-                            color: colorScheme.primary,
-                          ),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final isShort = MediaQuery.of(context).size.height < 700;
+              return SingleChildScrollView(
+                physics: isShort
+                    ? const ClampingScrollPhysics()
+                    : const NeverScrollableScrollPhysics(),
+                padding: const EdgeInsets.symmetric(horizontal: 28.0),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                  child: IntrinsicHeight(
+                    child: Column(
+                      children: [
+                        SizedBox(
+                          height: MediaQuery.of(context).size.height < 700
+                              ? 24
+                              : 48,
                         ),
-                      ),
+                        // Título y Descripción
+                        TranslatedText(
+                          'media_permission',
+                          style: textTheme.displaySmall?.copyWith(
+                            fontWeight: FontWeight.w900,
+                            color: colorScheme.onSurface,
+                            letterSpacing: -1,
+                            fontSize: MediaQuery.of(context).size.height < 700
+                                ? 28
+                                : null,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 12),
+                        TranslatedText(
+                          'permissions_desc',
+                          style: textTheme.bodyLarge?.copyWith(
+                            color: colorScheme.onSurface.withValues(alpha: 0.6),
+                            height: 1.4,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+
+                        const Spacer(),
+
+                        // Composición Visual Adaptativa
+                        Builder(
+                          builder: (context) {
+                            final isShort =
+                                MediaQuery.of(context).size.height < 700;
+                            return SizedBox(
+                              height: isShort ? 200 : 320,
+                              width: double.infinity,
+                              child: Center(
+                                child: M3Container.oval(
+                                  color: isAmoled
+                                      ? Colors.white.withAlpha(20)
+                                      : isDark
+                                      ? colorScheme.secondary.withValues(
+                                          alpha: 0.06,
+                                        )
+                                      : colorScheme.secondary.withValues(
+                                          alpha: 0.07,
+                                        ),
+                                  width: isShort ? 160 : 220,
+                                  height: isShort ? 160 : 220,
+                                  child: Center(
+                                    child: Transform.rotate(
+                                      angle: 0.5,
+                                      child: Icon(
+                                        Icons.lock_open_rounded,
+                                        size: isShort ? 70 : 100,
+                                        color: colorScheme.primary,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+
+                        const Spacer(),
+
+                        // Botón de Acción Principal (Dinámico)
+                        if (!mediaGranted)
+                          _ActionCardButton(
+                            labelKey: 'grant_media_permission',
+                            onTap: onRequestMedia,
+                          )
+                        else if (showAllFilesOption && !allFilesGranted)
+                          _ActionCardButton(
+                            labelKey: 'grant_all_files_permission',
+                            onTap: onRequestAllFiles,
+                          )
+                        else
+                          _ActionCardButton(
+                            labelKey: 'permission_granted',
+                            onTap: onNext,
+                            isCompleted: true,
+                          ),
+
+                        const SizedBox(height: 16),
+                      ],
                     ),
                   ),
                 ),
-
-                const Spacer(),
-
-                // Botón de Acción Principal (Dinámico)
-                if (!mediaGranted)
-                  _ActionCardButton(
-                    labelKey: 'grant_media_permission',
-                    onTap: onRequestMedia,
-                  )
-                else if (showAllFilesOption && !allFilesGranted)
-                  _ActionCardButton(
-                    labelKey: 'grant_all_files_permission',
-                    onTap: onRequestAllFiles,
-                  )
-                else
-                  _ActionCardButton(
-                    labelKey: 'permission_granted',
-                    onTap: onNext,
-                    isCompleted: true,
-                  ),
-
-                const SizedBox(height: 16),
-              ],
-            ),
+              );
+            },
           ),
         ),
 
@@ -893,82 +976,108 @@ class _NotificationsPage extends StatelessWidget {
     return Column(
       children: [
         Expanded(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 28.0),
-            child: Column(
-              children: [
-                const SizedBox(height: 48),
-                TranslatedText(
-                  'notifications_title',
-                  style: textTheme.displaySmall?.copyWith(
-                    fontWeight: FontWeight.w900,
-                    color: colorScheme.onSurface,
-                    letterSpacing: -1,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 12),
-                TranslatedText(
-                  'notifications_desc',
-                  style: textTheme.bodyLarge?.copyWith(
-                    color: colorScheme.onSurface.withValues(alpha: 0.6),
-                    height: 1.4,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-
-                const Spacer(),
-
-                // Composición Visual Simplificada
-                SizedBox(
-                  height: 320,
-                  width: double.infinity,
-                  child: Center(
-                    child: M3Container.triangle(
-                      color: isAmoled
-                          ? Colors.white.withAlpha(20)
-                          : isDark
-                          ? Theme.of(
-                              context,
-                            ).colorScheme.secondary.withValues(alpha: 0.06)
-                          : Theme.of(
-                              context,
-                            ).colorScheme.secondary.withValues(alpha: 0.07),
-                      width: 220,
-                      height: 200,
-                      child: Center(
-                        child: Column(
-                          children: [
-                            const SizedBox(height: 70),
-                            Icon(
-                              Icons.notifications_active_rounded,
-                              size: 100,
-                              color: colorScheme.primary,
-                            ),
-                          ],
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final isShort = MediaQuery.of(context).size.height < 700;
+              return SingleChildScrollView(
+                physics: isShort
+                    ? const ClampingScrollPhysics()
+                    : const NeverScrollableScrollPhysics(),
+                padding: const EdgeInsets.symmetric(horizontal: 28.0),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                  child: IntrinsicHeight(
+                    child: Column(
+                      children: [
+                        SizedBox(
+                          height: MediaQuery.of(context).size.height < 700
+                              ? 24
+                              : 48,
                         ),
-                      ),
+                        TranslatedText(
+                          'notifications_title',
+                          style: textTheme.displaySmall?.copyWith(
+                            fontWeight: FontWeight.w900,
+                            color: colorScheme.onSurface,
+                            letterSpacing: -1,
+                            fontSize: MediaQuery.of(context).size.height < 700
+                                ? 28
+                                : null,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 12),
+                        TranslatedText(
+                          'notifications_desc',
+                          style: textTheme.bodyLarge?.copyWith(
+                            color: colorScheme.onSurface.withValues(alpha: 0.6),
+                            height: 1.4,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+
+                        const Spacer(),
+
+                        // Composición Visual Adaptativa
+                        Builder(
+                          builder: (context) {
+                            final isShort =
+                                MediaQuery.of(context).size.height < 700;
+                            return SizedBox(
+                              height: isShort ? 200 : 320,
+                              width: double.infinity,
+                              child: Center(
+                                child: M3Container.triangle(
+                                  color: isAmoled
+                                      ? Colors.white.withAlpha(20)
+                                      : isDark
+                                      ? colorScheme.secondary.withValues(
+                                          alpha: 0.06,
+                                        )
+                                      : colorScheme.secondary.withValues(
+                                          alpha: 0.07,
+                                        ),
+                                  width: isShort ? 160 : 220,
+                                  height: isShort ? 150 : 200,
+                                  child: Center(
+                                    child: Column(
+                                      children: [
+                                        SizedBox(height: isShort ? 40 : 70),
+                                        Icon(
+                                          Icons.notifications_active_rounded,
+                                          size: isShort ? 70 : 100,
+                                          color: colorScheme.primary,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+
+                        const Spacer(),
+
+                        if (!notificationsGranted)
+                          _ActionCardButton(
+                            labelKey: 'grant_notifications',
+                            onTap: onRequestNotifications,
+                          )
+                        else
+                          _ActionCardButton(
+                            labelKey: 'notifications_active',
+                            onTap: onNext,
+                            isCompleted: true,
+                          ),
+
+                        const SizedBox(height: 16),
+                      ],
                     ),
                   ),
                 ),
-
-                const Spacer(),
-
-                if (!notificationsGranted)
-                  _ActionCardButton(
-                    labelKey: 'grant_notifications',
-                    onTap: onRequestNotifications,
-                  )
-                else
-                  _ActionCardButton(
-                    labelKey: 'notifications_active',
-                    onTap: onNext,
-                    isCompleted: true,
-                  ),
-
-                const SizedBox(height: 16),
-              ],
-            ),
+              );
+            },
           ),
         ),
         _OnboardingFooter(
@@ -1012,77 +1121,103 @@ class _BatteryOptimizationPage extends StatelessWidget {
     return Column(
       children: [
         Expanded(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 28.0),
-            child: Column(
-              children: [
-                const SizedBox(height: 38),
-                TranslatedText(
-                  'battery_optimization_onboarding_title',
-                  style: textTheme.displaySmall?.copyWith(
-                    fontWeight: FontWeight.w900,
-                    color: colorScheme.onSurface,
-                    letterSpacing: -1,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 12),
-                TranslatedText(
-                  'battery_optimization_onboarding_desc',
-                  style: textTheme.bodyLarge?.copyWith(
-                    color: colorScheme.onSurface.withValues(alpha: 0.6),
-                    height: 1.4,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-
-                const Spacer(),
-
-                // Composición Visual Simplificada
-                SizedBox(
-                  height: 280,
-                  width: double.infinity,
-                  child: Center(
-                    child: M3Container.arch(
-                      color: isAmoled
-                          ? Colors.white.withAlpha(20)
-                          : isDark
-                          ? Theme.of(
-                              context,
-                            ).colorScheme.secondary.withValues(alpha: 0.06)
-                          : Theme.of(
-                              context,
-                            ).colorScheme.secondary.withValues(alpha: 0.07),
-                      width: 200,
-                      height: 200,
-                      child: Center(
-                        child: Icon(
-                          Icons.battery_saver_rounded,
-                          size: 100,
-                          color: colorScheme.primary,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final isShort = MediaQuery.of(context).size.height < 700;
+              return SingleChildScrollView(
+                physics: isShort
+                    ? const ClampingScrollPhysics()
+                    : const NeverScrollableScrollPhysics(),
+                padding: const EdgeInsets.symmetric(horizontal: 28.0),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                  child: IntrinsicHeight(
+                    child: Column(
+                      children: [
+                        SizedBox(
+                          height: MediaQuery.of(context).size.height < 700
+                              ? 16
+                              : 38,
                         ),
-                      ),
+                        TranslatedText(
+                          'battery_optimization_onboarding_title',
+                          style: textTheme.displaySmall?.copyWith(
+                            fontWeight: FontWeight.w900,
+                            color: colorScheme.onSurface,
+                            letterSpacing: -1,
+                            fontSize: MediaQuery.of(context).size.height < 700
+                                ? 28
+                                : null,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 12),
+                        TranslatedText(
+                          'battery_optimization_onboarding_desc',
+                          style: textTheme.bodyLarge?.copyWith(
+                            color: colorScheme.onSurface.withValues(alpha: 0.6),
+                            height: 1.4,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+
+                        const Spacer(),
+
+                        // Composición Visual Adaptativa
+                        Builder(
+                          builder: (context) {
+                            final isShort =
+                                MediaQuery.of(context).size.height < 700;
+                            return SizedBox(
+                              height: isShort ? 180 : 280,
+                              width: double.infinity,
+                              child: Center(
+                                child: M3Container.arch(
+                                  color: isAmoled
+                                      ? Colors.white.withAlpha(20)
+                                      : isDark
+                                      ? colorScheme.secondary.withValues(
+                                          alpha: 0.06,
+                                        )
+                                      : colorScheme.secondary.withValues(
+                                          alpha: 0.07,
+                                        ),
+                                  width: isShort ? 150 : 200,
+                                  height: isShort ? 150 : 200,
+                                  child: Center(
+                                    child: Icon(
+                                      Icons.battery_saver_rounded,
+                                      size: isShort ? 70 : 100,
+                                      color: colorScheme.primary,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+
+                        const Spacer(),
+
+                        if (!isIgnored)
+                          _ActionCardButton(
+                            labelKey: 'ignore_optimization',
+                            onTap: onRequestIgnore,
+                          )
+                        else
+                          _ActionCardButton(
+                            labelKey: 'optimization_ignored',
+                            onTap: onNext,
+                            isCompleted: true,
+                          ),
+
+                        const Spacer(),
+                      ],
                     ),
                   ),
                 ),
-
-                const Spacer(),
-
-                if (!isIgnored)
-                  _ActionCardButton(
-                    labelKey: 'ignore_optimization',
-                    onTap: onRequestIgnore,
-                  )
-                else
-                  _ActionCardButton(
-                    labelKey: 'optimization_ignored',
-                    onTap: onNext,
-                    isCompleted: true,
-                  ),
-
-                const Spacer(),
-              ],
-            ),
+              );
+            },
           ),
         ),
         _OnboardingFooter(
@@ -1120,59 +1255,89 @@ class _AllSetPage extends StatelessWidget {
     return Column(
       children: [
         Expanded(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 28.0),
-            child: Column(
-              children: [
-                const SizedBox(height: 48),
-                TranslatedText(
-                  'all_set_title',
-                  style: textTheme.displaySmall?.copyWith(
-                    fontWeight: FontWeight.w900,
-                    color: colorScheme.onSurface,
-                    letterSpacing: -1,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 12),
-                TranslatedText(
-                  'all_set_desc',
-                  style: textTheme.bodyLarge?.copyWith(
-                    color: colorScheme.onSurface.withValues(alpha: 0.6),
-                    height: 1.4,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-
-                const Spacer(),
-
-                // Composición Visual (M3 Shape)
-                SizedBox(
-                  height: 320,
-                  width: double.infinity,
-                  child: Center(
-                    child: M3Container.pentagon(
-                      color: isAmoled
-                          ? Colors.white.withAlpha(20)
-                          : isDark
-                          ? colorScheme.secondary.withValues(alpha: 0.06)
-                          : colorScheme.secondary.withValues(alpha: 0.07),
-                      width: 220,
-                      height: 220,
-                      child: Center(
-                        child: Icon(
-                          Icons.done_all_rounded,
-                          size: 110,
-                          color: colorScheme.primary,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final isShort = MediaQuery.of(context).size.height < 700;
+              return SingleChildScrollView(
+                physics: isShort
+                    ? const ClampingScrollPhysics()
+                    : const NeverScrollableScrollPhysics(),
+                padding: const EdgeInsets.symmetric(horizontal: 28.0),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                  child: IntrinsicHeight(
+                    child: Column(
+                      children: [
+                        SizedBox(
+                          height: MediaQuery.of(context).size.height < 700
+                              ? 24
+                              : 48,
                         ),
-                      ),
+                        TranslatedText(
+                          'all_set_title',
+                          style: textTheme.displaySmall?.copyWith(
+                            fontWeight: FontWeight.w900,
+                            color: colorScheme.onSurface,
+                            letterSpacing: -1,
+                            fontSize: MediaQuery.of(context).size.height < 700
+                                ? 28
+                                : null,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 12),
+                        TranslatedText(
+                          'all_set_desc',
+                          style: textTheme.bodyLarge?.copyWith(
+                            color: colorScheme.onSurface.withValues(alpha: 0.6),
+                            height: 1.4,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+
+                        const Spacer(),
+
+                        // Composición Visual Adaptativa
+                        Builder(
+                          builder: (context) {
+                            final isShort =
+                                MediaQuery.of(context).size.height < 700;
+                            return SizedBox(
+                              height: isShort ? 200 : 320,
+                              width: double.infinity,
+                              child: Center(
+                                child: M3Container.pentagon(
+                                  color: isAmoled
+                                      ? Colors.white.withAlpha(20)
+                                      : isDark
+                                      ? colorScheme.secondary.withValues(
+                                          alpha: 0.06,
+                                        )
+                                      : colorScheme.secondary.withValues(
+                                          alpha: 0.07,
+                                        ),
+                                  width: isShort ? 160 : 220,
+                                  height: isShort ? 160 : 220,
+                                  child: Center(
+                                    child: Icon(
+                                      Icons.done_all_rounded,
+                                      size: isShort ? 80 : 110,
+                                      color: colorScheme.primary,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+
+                        const Spacer(),
+                      ],
                     ),
                   ),
                 ),
-
-                const Spacer(),
-              ],
-            ),
+              );
+            },
           ),
         ),
         _OnboardingFooter(

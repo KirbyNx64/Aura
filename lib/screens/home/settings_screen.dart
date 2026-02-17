@@ -2865,7 +2865,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                 ),
                 leading: Icon(
-                  Icons.image_outlined,
+                  Icons.wallpaper,
                   color: Theme.of(context).colorScheme.onSurface,
                 ),
                 shape: const RoundedRectangleBorder(

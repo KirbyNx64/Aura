@@ -1,3 +1,5 @@
+import 'dart:io';
+import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:music/l10n/locale_provider.dart';
@@ -9,6 +11,27 @@ import 'package:music/screens/home/dependencies_screen.dart';
 
 class AboutScreen extends StatelessWidget {
   const AboutScreen({super.key});
+
+  Future<String> _getDeviceInfo() async {
+    final deviceInfo = DeviceInfoPlugin();
+    if (Platform.isAndroid) {
+      final androidInfo = await deviceInfo.androidInfo;
+      return '${androidInfo.brand.toUpperCase()} ${androidInfo.model} • ${androidInfo.supportedAbis.first} • Android ${androidInfo.version.release} (SDK ${androidInfo.version.sdkInt})';
+    } else if (Platform.isIOS) {
+      final iosInfo = await deviceInfo.iosInfo;
+      return '${iosInfo.name} ${iosInfo.systemName} ${iosInfo.systemVersion}';
+    } else if (Platform.isLinux) {
+      final linuxInfo = await deviceInfo.linuxInfo;
+      return linuxInfo.prettyName;
+    } else if (Platform.isWindows) {
+      final windowsInfo = await deviceInfo.windowsInfo;
+      return windowsInfo.computerName;
+    } else if (Platform.isMacOS) {
+      final macOsInfo = await deviceInfo.macOsInfo;
+      return '${macOsInfo.computerName} • ${macOsInfo.osRelease}';
+    }
+    return 'Unknown Device';
+  }
 
   Future<void> _launchUrl(String urlString) async {
     final Uri url = Uri.parse(urlString);
@@ -451,6 +474,52 @@ class AboutScreen extends StatelessWidget {
                       ),
                     ),
                   ),
+                ),
+                const SizedBox(height: 4),
+                // Device Info Card
+                FutureBuilder<String>(
+                  future: _getDeviceInfo(),
+                  builder: (context, snapshot) {
+                    if (!snapshot.hasData) return const SizedBox.shrink();
+                    return Card(
+                      color: isAmoled && isDark
+                          ? Colors.white.withAlpha(20)
+                          : isDark
+                          ? Theme.of(
+                              context,
+                            ).colorScheme.secondary.withValues(alpha: 0.06)
+                          : Theme.of(
+                              context,
+                            ).colorScheme.secondary.withValues(alpha: 0.07),
+                      margin: EdgeInsets.zero,
+                      elevation: 0,
+                      shape: const RoundedRectangleBorder(
+                        borderRadius: BorderRadius.all(Radius.circular(4)),
+                      ),
+                      child: ListTile(
+                        leading: Icon(
+                          Icons.android,
+                          color: Theme.of(context).colorScheme.onSurface,
+                        ),
+                        title: Text(
+                          LocaleProvider.tr('device_info'),
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Theme.of(context).colorScheme.onSurface,
+                          ),
+                        ),
+                        subtitle: Text(
+                          snapshot.data!,
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onSurface.withValues(alpha: 0.9),
+                          ),
+                        ),
+                      ),
+                    );
+                  },
                 ),
                 const SizedBox(height: 4),
                 // Dependencies Card

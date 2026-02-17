@@ -2473,12 +2473,32 @@ class _FoldersScreenState extends State<FoldersScreen>
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(
-                        Icons.folder_off,
-                        size: 48,
-                        color: Theme.of(
-                          context,
-                        ).colorScheme.onSurface.withValues(alpha: 0.6),
+                      Container(
+                        width: 80,
+                        height: 80,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: isDark
+                              ? Theme.of(
+                                  context,
+                                ).colorScheme.secondary.withValues(alpha: 0.04)
+                              : Theme.of(
+                                  context,
+                                ).colorScheme.secondary.withValues(alpha: 0.05),
+                        ),
+                        child: Icon(
+                          Icons.folder_off_rounded,
+                          size: 50,
+                          color:
+                              Theme.of(context).brightness == Brightness.light
+                              ? Theme.of(
+                                  context,
+                                ).colorScheme.onSurface.withValues(alpha: 0.7)
+                              : Theme.of(
+                                  context,
+                                ).colorScheme.onSurface.withValues(alpha: 0.7),
+                        ),
                       ),
                       const SizedBox(height: 16),
                       TranslatedText(
@@ -2625,30 +2645,58 @@ class _FoldersScreenState extends State<FoldersScreen>
         body: _isLoading
             ? Center(child: LoadingIndicator())
             : _filteredPlaylists.isEmpty
-            ? Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.queue_music_outlined,
-                      size: 64,
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.onSurface.withValues(alpha: 0.3),
-                    ),
-                    const SizedBox(height: 16),
-                    TranslatedText(
-                      _playlistSearchController.text.isNotEmpty
-                          ? 'no_results'
-                          : 'no_playlists',
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: Theme.of(
-                          context,
-                        ).colorScheme.onSurface.withValues(alpha: 0.5),
+            ? RefreshIndicator(
+                onRefresh: () async {
+                  await _loadPlaylists();
+                },
+                child: SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  child: SizedBox(
+                    height: MediaQuery.of(context).size.height - 200,
+                    child: Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            width: 80,
+                            height: 80,
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: isDark
+                                  ? Theme.of(context).colorScheme.secondary
+                                        .withValues(alpha: 0.04)
+                                  : Theme.of(context).colorScheme.secondary
+                                        .withValues(alpha: 0.05),
+                            ),
+                            child: Icon(
+                              Icons.queue_music_outlined,
+                              size: 50,
+                              color:
+                                  Theme.of(context).brightness ==
+                                      Brightness.light
+                                  ? Theme.of(context).colorScheme.onSurface
+                                        .withValues(alpha: 0.7)
+                                  : Theme.of(context).colorScheme.onSurface
+                                        .withValues(alpha: 0.7),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          TranslatedText(
+                            _playlistSearchController.text.isNotEmpty
+                                ? 'no_results'
+                                : 'no_playlists',
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSurface.withValues(alpha: 0.5),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                  ],
+                  ),
                 ),
               )
             : RefreshIndicator(
@@ -2671,6 +2719,7 @@ class _FoldersScreenState extends State<FoldersScreen>
                       interactive: true,
                       padding: EdgeInsets.only(bottom: space),
                       child: ListView.builder(
+                        physics: const AlwaysScrollableScrollPhysics(),
                         controller: _playlistsScrollController,
                         padding: EdgeInsets.only(
                           left: 16.0,
@@ -3014,6 +3063,57 @@ class _FoldersScreenState extends State<FoldersScreen>
                                 folderDisplayNames[b.key]!.toLowerCase(),
                               ),
                         );
+
+                  if (sortedEntries.isEmpty) {
+                    return SingleChildScrollView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      child: SizedBox(
+                        height: MediaQuery.of(context).size.height - 200,
+                        child: Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Container(
+                                width: 80,
+                                height: 80,
+                                alignment: Alignment.center,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: isDark
+                                      ? Theme.of(context).colorScheme.secondary
+                                            .withValues(alpha: 0.04)
+                                      : Theme.of(context).colorScheme.secondary
+                                            .withValues(alpha: 0.05),
+                                ),
+                                child: Icon(
+                                  Icons.folder_off_rounded,
+                                  size: 50,
+                                  color:
+                                      Theme.of(context).brightness ==
+                                          Brightness.light
+                                      ? Theme.of(context).colorScheme.onSurface
+                                            .withValues(alpha: 0.7)
+                                      : Theme.of(context).colorScheme.onSurface
+                                            .withValues(alpha: 0.7),
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              TranslatedText(
+                                _folderSearchController.text.isNotEmpty
+                                    ? 'no_results'
+                                    : 'no_folders_with_songs',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  color: Theme.of(context).colorScheme.onSurface
+                                      .withValues(alpha: 0.6),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  }
 
                   return RawScrollbar(
                     controller: _foldersScrollController,
@@ -3534,6 +3634,10 @@ class _FoldersScreenState extends State<FoldersScreen>
           child: ValueListenableBuilder<MediaItem?>(
             valueListenable: _currentMediaItemNotifier,
             builder: (context, currentMediaItem, child) {
+              final colorScheme = colorSchemeNotifier.value;
+              final isAmoled = colorScheme == AppColorScheme.amoled;
+              final isDark = Theme.of(context).brightness == Brightness.dark;
+
               final bottomPadding = MediaQuery.of(context).padding.bottom;
               final space =
                   (currentMediaItem != null ? 100.0 : 0.0) + bottomPadding;
@@ -3547,16 +3651,33 @@ class _FoldersScreenState extends State<FoldersScreen>
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(
-                            _showAllSongs
-                                ? Icons.music_note
-                                : _selectedPlaylist != null
-                                ? Icons.queue_music_outlined
-                                : Icons.folder_off,
-                            size: 48,
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.onSurface.withValues(alpha: 0.6),
+                          Container(
+                            width: 80,
+                            height: 80,
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: isDark
+                                  ? Theme.of(context).colorScheme.secondary
+                                        .withValues(alpha: 0.04)
+                                  : Theme.of(context).colorScheme.secondary
+                                        .withValues(alpha: 0.05),
+                            ),
+                            child: Icon(
+                              _showAllSongs
+                                  ? Icons.music_note_rounded
+                                  : _selectedPlaylist != null
+                                  ? Icons.queue_music_rounded
+                                  : Icons.folder_off_rounded,
+                              size: 50,
+                              color:
+                                  Theme.of(context).brightness ==
+                                      Brightness.light
+                                  ? Theme.of(context).colorScheme.onSurface
+                                        .withValues(alpha: 0.7)
+                                  : Theme.of(context).colorScheme.onSurface
+                                        .withValues(alpha: 0.7),
+                            ),
                           ),
                           const SizedBox(height: 16),
                           TranslatedText(
@@ -3579,9 +3700,6 @@ class _FoldersScreenState extends State<FoldersScreen>
                 );
               }
 
-              final colorScheme = colorSchemeNotifier.value;
-              final isAmoled = colorScheme == AppColorScheme.amoled;
-              final isDark = Theme.of(context).brightness == Brightness.dark;
               final cardColor = isAmoled
                   ? Colors.white.withAlpha(20)
                   : isDark
@@ -5802,7 +5920,7 @@ class _FoldersScreenState extends State<FoldersScreen>
                         TranslatedText(
                           'delete_playlist',
                           style: TextStyle(
-                            fontSize: 24,
+                            fontSize: 18,
                             fontWeight: FontWeight.w500,
                             color: Theme.of(context).colorScheme.onSurface,
                           ),

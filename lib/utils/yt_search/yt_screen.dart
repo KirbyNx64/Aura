@@ -29,6 +29,7 @@ import 'package:music/screens/download/download_history_screen.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import 'package:buttons_tabbar/buttons_tabbar.dart';
 import 'package:material_loading_indicator/loading_indicator.dart';
+import 'package:open_settings_plus/open_settings_plus.dart';
 
 // Top-level function para usar con compute
 Uint8List? decodeAndCropImage(Uint8List bytes) {
@@ -2576,11 +2577,38 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                Icon(
-                                  Icons.wifi_off,
-                                  size: 48,
-                                  color: Theme.of(context).colorScheme.onSurface
-                                      .withValues(alpha: 0.6),
+                                Container(
+                                  width: 80,
+                                  height: 80,
+                                  alignment: Alignment.center,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: isDark
+                                        ? Theme.of(context)
+                                              .colorScheme
+                                              .secondary
+                                              .withValues(alpha: 0.04)
+                                        : Theme.of(context)
+                                              .colorScheme
+                                              .secondary
+                                              .withValues(alpha: 0.05),
+                                  ),
+                                  child: Icon(
+                                    Icons.wifi_off_rounded,
+                                    grade: 300,
+                                    size: 50,
+                                    color:
+                                        Theme.of(context).brightness ==
+                                            Brightness.light
+                                        ? Theme.of(context)
+                                              .colorScheme
+                                              .onSurface
+                                              .withValues(alpha: 0.7)
+                                        : Theme.of(context)
+                                              .colorScheme
+                                              .onSurface
+                                              .withValues(alpha: 0.7),
+                                  ),
                                 ),
                                 const SizedBox(height: 16),
                                 Text(
@@ -2593,6 +2621,59 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                     fontSize: 14,
                                   ),
                                   textAlign: TextAlign.center,
+                                ),
+                                const SizedBox(height: 26),
+                                ElevatedButton.icon(
+                                  onPressed: () {
+                                    switch (OpenSettingsPlus.shared) {
+                                      case OpenSettingsPlusAndroid settings:
+                                        settings.wifi();
+                                        break;
+                                      case OpenSettingsPlusIOS settings:
+                                        settings.wifi();
+                                        break;
+                                      default:
+                                        break;
+                                    }
+                                  },
+                                  icon: Container(
+                                    width: 24,
+                                    height: 24,
+                                    alignment: Alignment.center,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: Colors.white.withValues(
+                                        alpha: 0.2,
+                                      ),
+                                    ),
+                                    child: Icon(
+                                      Icons.settings,
+                                      size: 16,
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.onPrimary,
+                                    ),
+                                  ),
+                                  label: Text(
+                                    LocaleProvider.tr('open_settings'),
+                                  ),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Theme.of(
+                                      context,
+                                    ).colorScheme.primary,
+                                    foregroundColor: Theme.of(
+                                      context,
+                                    ).colorScheme.onPrimary,
+                                    shadowColor: Colors.transparent,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 24,
+                                      vertical: 12,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(24),
+                                    ),
+                                    elevation: 4,
+                                  ),
                                 ),
                               ],
                             ),
@@ -2619,13 +2700,38 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                       mainAxisAlignment:
                                           MainAxisAlignment.center,
                                       children: [
-                                        Icon(
-                                          Icons.history,
-                                          size: 48,
-                                          color: Theme.of(context)
-                                              .colorScheme
-                                              .onSurface
-                                              .withValues(alpha: 0.6),
+                                        Container(
+                                          width: 80,
+                                          height: 80,
+                                          alignment: Alignment.center,
+                                          decoration: BoxDecoration(
+                                            shape: BoxShape.circle,
+                                            color: isDark
+                                                ? Theme.of(context)
+                                                      .colorScheme
+                                                      .secondary
+                                                      .withValues(alpha: 0.04)
+                                                : Theme.of(context)
+                                                      .colorScheme
+                                                      .secondary
+                                                      .withValues(alpha: 0.05),
+                                          ),
+                                          child: Icon(
+                                            Icons.history_rounded,
+                                            grade: 300,
+                                            size: 50,
+                                            color:
+                                                Theme.of(context).brightness ==
+                                                    Brightness.light
+                                                ? Theme.of(context)
+                                                      .colorScheme
+                                                      .onSurface
+                                                      .withValues(alpha: 0.7)
+                                                : Theme.of(context)
+                                                      .colorScheme
+                                                      .onSurface
+                                                      .withValues(alpha: 0.7),
+                                          ),
                                         ),
                                         const SizedBox(height: 16),
                                         Text(

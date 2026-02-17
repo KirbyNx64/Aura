@@ -636,6 +636,7 @@ const Map<String, String> appLocalizationsEs = {
       'Sin conexión a internet. Por favor, verifica tu conexión e inténtalo de nuevo.',
   'no_internet_retry':
       'No hay conexión a internet, por favor, verifica tu conexión y vuelve a intentarlo.',
+  'open_settings': 'Abrir configuración',
   'pause_preview': 'Pausar preview',
   'play_preview': 'Escuchar preview',
   'download_selected': 'Descargar seleccionados',
@@ -773,6 +774,7 @@ const Map<String, String> appLocalizationsEs = {
   'flutter_version': 'Versión de Flutter',
   'issues': 'Errores',
   'developer': 'Desarrollador',
+  'device_info': 'Información del dispositivo',
 
   // Download messages
   'download_started_for_elements': 'Descarga iniciada para @count elementos',

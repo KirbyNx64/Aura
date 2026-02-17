@@ -183,6 +183,10 @@ class DependenciesScreen extends StatelessWidget {
       '^2.0.0+1',
     ),
     'marquee': _DependencyInfo('https://pub.dev/packages/marquee', '^2.3.0'),
+    'open_settings_plus': _DependencyInfo(
+      'https://pub.dev/packages/open_settings_plus',
+      '^0.4.0',
+    ),
   };
 
   Future<void> _launchUrl(String urlString) async {
