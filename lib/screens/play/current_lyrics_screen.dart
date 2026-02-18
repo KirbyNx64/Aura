@@ -54,6 +54,21 @@ class _CurrentLyricsScreenState extends State<CurrentLyricsScreen> {
     if (_currentMediaItem != null) {
       _loadLyrics();
     }
+    lyricsUpdatedNotifier.addListener(_onLyricsUpdated);
+  }
+
+  void _onLyricsUpdated() {
+    final updatedId = lyricsUpdatedNotifier.value;
+    if (updatedId != null && updatedId == _currentMediaItem?.id) {
+      _lyricsCache.remove(updatedId);
+      _loadLyrics();
+    }
+  }
+
+  @override
+  void dispose() {
+    lyricsUpdatedNotifier.removeListener(_onLyricsUpdated);
+    super.dispose();
   }
 
   @override
@@ -382,6 +397,9 @@ class _CurrentLyricsScreenState extends State<CurrentLyricsScreen> {
                                           ),
                                         );
                                         // Reload lyrics after return?
+                                        _lyricsCache.remove(
+                                          _currentMediaItem?.id,
+                                        );
                                         _loadLyrics(); // Force reload if changed
                                       },
                                       icon: const Icon(
@@ -603,6 +621,7 @@ class _CurrentLyricsScreenState extends State<CurrentLyricsScreen> {
                       },
                 ),
               );
+              _lyricsCache.remove(currentMediaItem.id);
               _loadLyrics();
             },
             icon: const Icon(Icons.search_rounded),

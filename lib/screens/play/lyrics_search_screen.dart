@@ -276,6 +276,7 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
 
       if (mounted) {
         // Notificar que se actualizó la letra usando el ValueNotifier global
+        lyricsUpdatedNotifier.value = null;
         lyricsUpdatedNotifier.value = widget.currentSong.id;
 
         // Mostrar mensaje de éxito y esperar a que el usuario presione "Aceptar"

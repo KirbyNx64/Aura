@@ -159,6 +159,8 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
   final standard_panel.PanelController _playlistPanelController =
       standard_panel.PanelController();
   final ValueNotifier<bool> _hidePlayerContentNotifier = ValueNotifier(false);
+  final ValueNotifier<bool> _hidePanelContentNotifier = ValueNotifier(true);
+  Timer? _hidePanelTimer;
   bool _isPlaylistPanelOpen = false;
 
   String _formatDuration(Duration duration) {
@@ -3126,8 +3128,8 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                                         return Opacity(
                                                                           opacity:
                                                                               ((position -
-                                                                                          0.1) /
-                                                                                      0.4)
+                                                                                          0.35) /
+                                                                                      0.55)
                                                                                   .clamp(
                                                                                     0.0,
                                                                                     1.0,
@@ -5071,40 +5073,69 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
             widget.onPlaylistStateChanged?.call(isOpen);
           }
 
-          final shouldHide = position >= 0.98;
-          if (_hidePlayerContentNotifier.value != shouldHide) {
-            _hidePlayerContentNotifier.value = shouldHide;
+          final shouldHidePlayer = position >= 0.98;
+          if (_hidePlayerContentNotifier.value != shouldHidePlayer) {
+            _hidePlayerContentNotifier.value = shouldHidePlayer;
+          }
+
+          final shouldHidePanel = position <= 0.005;
+          if (shouldHidePanel) {
+            if (_hidePanelTimer == null && !_hidePanelContentNotifier.value) {
+              _hidePanelTimer = Timer(const Duration(seconds: 1), () {
+                if (mounted) {
+                  _hidePanelContentNotifier.value = true;
+                }
+                _hidePanelTimer = null;
+              });
+            }
+          } else {
+            _hidePanelTimer?.cancel();
+            _hidePanelTimer = null;
+            if (_hidePanelContentNotifier.value) {
+              _hidePanelContentNotifier.value = false;
+            }
           }
         },
         panelBuilder: (sc) {
-          if (_panelContent == PanelContent.lyrics) {
-            final currentMediaItem = audioHandler?.mediaItem.valueOrNull;
-            return CurrentLyricsScreen(
-              currentMediaItem: currentMediaItem,
-              panelController: _playlistPanelController,
-            );
-          }
-          return StreamBuilder<List<MediaItem>>(
-            stream: audioHandler?.queue,
-            initialData: const [],
-            builder: (context, snapshot) {
-              final queue = audioHandler is MyAudioHandler
-                  ? (audioHandler as MyAudioHandler).effectiveQueue
-                  : snapshot.data ?? [];
-
-              final currentMediaItem = audioHandler?.mediaItem.valueOrNull;
-              final currentIndex = queue.indexWhere(
-                (item) => item.id == currentMediaItem?.id,
-              );
-
-              return CurrentPlaylistScreen(
-                queue: queue,
-                currentMediaItem: currentMediaItem,
-                currentIndex: currentIndex,
-                scrollController: sc,
-                panelController: _playlistPanelController,
+          return ValueListenableBuilder<bool>(
+            valueListenable: _hidePanelContentNotifier,
+            builder: (context, hide, child) {
+              return Visibility(
+                visible: !hide,
+                maintainState: true,
+                maintainAnimation: false,
+                maintainSize: false,
+                child: child!,
               );
             },
+            child: _panelContent == PanelContent.lyrics
+                ? CurrentLyricsScreen(
+                    currentMediaItem: audioHandler?.mediaItem.valueOrNull,
+                    panelController: _playlistPanelController,
+                  )
+                : StreamBuilder<List<MediaItem>>(
+                    stream: audioHandler?.queue,
+                    initialData: const [],
+                    builder: (context, snapshot) {
+                      final queue = audioHandler is MyAudioHandler
+                          ? (audioHandler as MyAudioHandler).effectiveQueue
+                          : snapshot.data ?? [];
+
+                      final currentMediaItem =
+                          audioHandler?.mediaItem.valueOrNull;
+                      final currentIndex = queue.indexWhere(
+                        (item) => item.id == currentMediaItem?.id,
+                      );
+
+                      return CurrentPlaylistScreen(
+                        queue: queue,
+                        currentMediaItem: currentMediaItem,
+                        currentIndex: currentIndex,
+                        scrollController: sc,
+                        panelController: _playlistPanelController,
+                      );
+                    },
+                  ),
           );
         },
         body: ValueListenableBuilder<bool>(

@@ -7,7 +7,8 @@ import 'package:music/l10n/locale_provider.dart';
 import 'package:music/utils/notifiers.dart';
 import 'package:music/utils/theme_preferences.dart';
 import 'package:material_symbols_icons/symbols.dart';
-import 'package:flutter/services.dart';
+// import 'package:flutter/services.dart';
+import 'dart:async';
 import 'package:music/widgets/sliding_up_panel/sliding_up_panel_overlay.dart'
     as overlay_panel;
 
@@ -104,6 +105,9 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
   bool _playlistOpen = false;
   final ValueNotifier<double> _panelPositionNotifier = ValueNotifier(0.0);
   final ValueNotifier<bool> _hideBackgroundNotifier = ValueNotifier(false);
+  final ValueNotifier<bool> _hidePlayerPanelNotifier = ValueNotifier(true);
+  Timer? _hidePlayerTimer;
+  Timer? _hideBackgroundTimer;
 
   @override
   void initState() {
@@ -144,35 +148,47 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
   // Función para manejar el botón atrás de forma centralizada
   bool _handleBackNavigation() {
     final tab = widget.selectedTabIndex.value;
+    bool handledInternally = false;
 
     if (tab == 1) {
       // YT
       final state = ytScreenKey.currentState as dynamic;
       if (state?.canPopInternally() == true) {
         state.handleInternalPop();
-        return true;
+        handledInternally = true;
       }
     } else if (tab == 3) {
       // Folders
       final state = foldersScreenKey.currentState as dynamic;
       if (state?.canPopInternally() == true) {
         state.handleInternalPop();
-        return true;
+        handledInternally = true;
       }
     } else if (tab == 0) {
       // Home screen
       final state = homeScreenKey.currentState as dynamic;
       if (state?.canPopInternally() == true) {
         state.handleInternalPop();
-        return true;
+        handledInternally = true;
       }
     }
+
+    if (handledInternally) return true;
+
+    // Si no se manejó internamente y no estamos en la pestaña Home, ir a Home
+    if (tab != 0) {
+      _onItemTapped(0);
+      return true;
+    }
+
     return false;
   }
 
   @override
   void dispose() {
     openPlayerPanelNotifier.removeListener(_onOpenPlayerPanelRequested);
+    _hidePlayerTimer?.cancel();
+    _hideBackgroundTimer?.cancel();
     super.dispose();
   }
 
@@ -274,10 +290,7 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
                 canPop: false,
                 onPopInvokedWithResult: (didPop, result) {
                   if (didPop) return;
-                  final handled = _handleBackNavigation();
-                  if (!handled) {
-                    SystemChannels.platform.invokeMethod('SystemNavigator.pop');
-                  }
+                  _handleBackNavigation();
                 },
                 child: IndexedStack(
                   index: _selectedIndex,
@@ -316,12 +329,7 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
                       canPop: false,
                       onPopInvokedWithResult: (didPop, result) {
                         if (didPop) return;
-                        final handled = _handleBackNavigation();
-                        if (!handled) {
-                          SystemChannels.platform.invokeMethod(
-                            'SystemNavigator.pop',
-                          );
-                        }
+                        _handleBackNavigation();
                       },
                       child: pageContent,
                     );
@@ -361,12 +369,7 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
                           }
 
                           // Si no hay panel abierto, manejar navegación interna de tabs
-                          final handled = _handleBackNavigation();
-                          if (!handled) {
-                            SystemChannels.platform.invokeMethod(
-                              'SystemNavigator.pop',
-                            );
-                          }
+                          _handleBackNavigation();
                         },
                         child: overlay_panel.SlidingUpPanel(
                           controller: _overlayPanelController,
@@ -401,12 +404,48 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
                             if (_hideBackgroundNotifier.value != shouldHide) {
                               _hideBackgroundNotifier.value = shouldHide;
                             }
+
+                            final shouldHidePlayer = position <= 0.005;
+                            if (shouldHidePlayer) {
+                              if (_hidePlayerTimer == null &&
+                                  !_hidePlayerPanelNotifier.value) {
+                                _hidePlayerTimer = Timer(
+                                  const Duration(seconds: 2),
+                                  () {
+                                    if (mounted) {
+                                      _hidePlayerPanelNotifier.value = true;
+                                    }
+                                    _hidePlayerTimer = null;
+                                  },
+                                );
+                              }
+                            } else {
+                              _hidePlayerTimer?.cancel();
+                              _hidePlayerTimer = null;
+                              if (_hidePlayerPanelNotifier.value) {
+                                _hidePlayerPanelNotifier.value = false;
+                              }
+                            }
                           },
                           onPanelClosed: () {
                             bottomNavVisibleNotifier.value = true;
                             // Asegurar que se muestre al cerrar
                             if (_hideBackgroundNotifier.value) {
                               _hideBackgroundNotifier.value = false;
+                            }
+
+                            // Iniciar el delay de 1 seg para ocultar el reproductor
+                            if (_hidePlayerTimer == null &&
+                                !_hidePlayerPanelNotifier.value) {
+                              _hidePlayerTimer = Timer(
+                                const Duration(seconds: 1),
+                                () {
+                                  if (mounted) {
+                                    _hidePlayerPanelNotifier.value = true;
+                                  }
+                                  _hidePlayerTimer = null;
+                                },
+                              );
                             }
                             // Asegurar que _playlistOpen se resetee al cerrar el panel
                             if (_playlistOpen) {
@@ -417,7 +456,13 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
                           },
                           onPanelOpened: () {
                             bottomNavVisibleNotifier.value = false;
-                            // Asegurar que se oculte al abrir completamente
+                            // Mostrar reproductor inmediatamente al abrir
+                            _hidePlayerTimer?.cancel();
+                            _hidePlayerTimer = null;
+                            if (_hidePlayerPanelNotifier.value) {
+                              _hidePlayerPanelNotifier.value = false;
+                            }
+
                             if (!_hideBackgroundNotifier.value) {
                               _hideBackgroundNotifier.value = true;
                             }
@@ -481,23 +526,35 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
                                     borderRadius: const BorderRadius.vertical(
                                       top: Radius.circular(20),
                                     ),
-                                    child: FullPlayerScreen(
-                                      initialMediaItem: snapshot.data,
-                                      panelPositionNotifier:
-                                          _panelPositionNotifier,
-                                      onClose: () {
-                                        if (_overlayPanelController
-                                            .isAttached) {
-                                          _overlayPanelController.close();
-                                        }
+                                    child: ValueListenableBuilder<bool>(
+                                      valueListenable: _hidePlayerPanelNotifier,
+                                      builder: (context, hide, child) {
+                                        return Visibility(
+                                          visible: !hide,
+                                          maintainState: true,
+                                          maintainAnimation: false,
+                                          maintainSize: false,
+                                          child: child!,
+                                        );
                                       },
-                                      onPlaylistStateChanged: (isOpen) {
-                                        if (_playlistOpen != isOpen) {
-                                          setState(() {
-                                            _playlistOpen = isOpen;
-                                          });
-                                        }
-                                      },
+                                      child: FullPlayerScreen(
+                                        initialMediaItem: snapshot.data,
+                                        panelPositionNotifier:
+                                            _panelPositionNotifier,
+                                        onClose: () {
+                                          if (_overlayPanelController
+                                              .isAttached) {
+                                            _overlayPanelController.close();
+                                          }
+                                        },
+                                        onPlaylistStateChanged: (isOpen) {
+                                          if (_playlistOpen != isOpen) {
+                                            setState(() {
+                                              _playlistOpen = isOpen;
+                                            });
+                                          }
+                                        },
+                                      ),
                                     ),
                                   ),
                                 ),

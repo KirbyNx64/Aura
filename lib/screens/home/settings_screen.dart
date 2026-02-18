@@ -26,6 +26,7 @@ import 'package:device_info_plus/device_info_plus.dart';
 import 'dart:convert';
 import 'package:music/utils/db/playlist_model.dart' as hive_model;
 import 'package:music/widgets/gesture_settings_dialog.dart';
+import 'package:open_settings_plus/open_settings_plus.dart';
 
 class SettingsScreen extends StatefulWidget {
   final void Function(AppThemeMode)? setThemeMode;
@@ -3034,6 +3035,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             ),
                           )
                         : null,
+                    onTap: () {
+                      switch (OpenSettingsPlus.shared) {
+                        case OpenSettingsPlusAndroid settings:
+                          settings.internalStorage();
+                          break;
+                        case OpenSettingsPlusIOS settings:
+                          settings.general();
+                          break;
+                        default:
+                          break;
+                      }
+                    },
                     shape: const RoundedRectangleBorder(
                       borderRadius: BorderRadius.only(
                         topLeft: Radius.circular(16),
