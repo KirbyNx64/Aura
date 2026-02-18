@@ -353,8 +353,11 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   DateTime _lastShuffleToggle = DateTime.fromMillisecondsSinceEpoch(0);
   bool _initializing = true;
   Timer? _sleepTimer;
+  StreamSubscription? _sleepTimerSub;
   Duration? _sleepDuration;
   Duration? _sleepStartPosition;
+  int? _lastSleepIndex;
+  bool _stopAtEndOfSong = false;
   bool _isSkipping = false;
   bool _isPreloadingNext = false;
   bool _isInitialized = false;
@@ -970,6 +973,25 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
             // Enviar la notificación inmediatamente
             mediaItem.add(finalMediaItem);
+
+            // Verificar que se envió correctamente
+            // print('✅ MediaItem enviado a notificación');
+
+            // Re-enviar la notificación después de un pequeño delay para asegurar que se procese
+            unawaited(() async {
+              await Future.delayed(const Duration(milliseconds: 200));
+              if (_lastProcessedSongId == currentSongId && mounted) {
+                // print('🔄 Re-enviando MediaItem para asegurar carátula');
+                mediaItem.add(finalMediaItem);
+
+                // Segundo retry después de más tiempo
+                await Future.delayed(const Duration(milliseconds: 500));
+                if (_lastProcessedSongId == currentSongId && mounted) {
+                  // print('🔄 Segundo retry para asegurar carátula');
+                  mediaItem.add(finalMediaItem);
+                }
+              }
+            }());
 
             return;
           } else {
@@ -1984,6 +2006,27 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     isShuffleNotifier.value = _player.shuffleModeEnabled;
   }
 
+  /// Obtiene la cola actual respetando el orden del shuffle si está activo
+  List<MediaItem> get effectiveQueue {
+    if (_mediaQueue.isEmpty) return [];
+
+    // Si shuffle NO está activo, devolver la cola original
+    if (!isShuffleNotifier.value) {
+      return List<MediaItem>.from(_mediaQueue);
+    }
+
+    try {
+      final indices = _player.shuffleIndices;
+      if (indices.isEmpty || indices.length != _mediaQueue.length) {
+        return List<MediaItem>.from(_mediaQueue);
+      }
+
+      return indices.map((i) => _mediaQueue[i]).toList();
+    } catch (e) {
+      return List<MediaItem>.from(_mediaQueue);
+    }
+  }
+
   /// Activa o desactiva el modo aleatorio usando shuffle nativo de just_audio
   /// Esto evita completamente las pausas de audio
   Future<void> toggleShuffle(bool enable) async {
@@ -2155,37 +2198,52 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   }
 
   /// Inicia el temporizador de apagado automático.
-  void startSleepTimer(Duration duration) {
-    _sleepTimer?.cancel();
-    _sleepDuration = duration;
-    _sleepStartPosition = _player.position;
+  /// Si [duration] es null, se activará el modo "Pausar al finalizar la canción actual".
+  /// Inicia el temporizador de apagado automático.
+  /// Si [duration] es null, se activará el modo "Pausar al finalizar la canción actual".
+  void startSleepTimer([Duration? duration]) {
+    cancelSleepTimer();
 
-    // Calcula el tiempo restante basado en la posición actual
-    final remainingTime = _calculateRemainingTime();
-    if (remainingTime != null && remainingTime.inMilliseconds > 0) {
-      _sleepTimer = Timer(remainingTime, () async {
-        await pause();
-        _sleepDuration = null;
-        _sleepStartPosition = null;
+    if (duration == null) {
+      _stopAtEndOfSong = true;
+      _lastSleepIndex = _player.currentIndex;
+
+      // Listener de respaldo para detectar cambios de pista o finalización
+      _sleepTimerSub = _player.playbackEventStream.listen((event) {
+        if (!_stopAtEndOfSong) return;
+        final state = event.processingState;
+        final index = _player.currentIndex;
+        if (state == ProcessingState.completed ||
+            (index != null &&
+                _lastSleepIndex != null &&
+                index != _lastSleepIndex)) {
+          unawaited(pause());
+          cancelSleepTimer();
+        }
       });
-    } else if (remainingTime != null && remainingTime.inMilliseconds == 0) {
-      // Si el tiempo restante es 0, pausa inmediatamente
-      pause();
-      _sleepDuration = null;
-      _sleepStartPosition = null;
+    } else {
+      _stopAtEndOfSong = false;
+      _sleepDuration = duration;
+      _sleepStartPosition = _player.position;
     }
+
+    _updateSleepTimer();
   }
 
   void cancelSleepTimer() {
     _sleepTimer?.cancel();
+    _sleepTimerSub?.cancel();
     _sleepTimer = null;
+    _sleepTimerSub = null;
     _sleepDuration = null;
     _sleepStartPosition = null;
+    _lastSleepIndex = null;
+    _stopAtEndOfSong = false;
   }
 
   /// Actualiza el temporizador cuando cambia la posición de reproducción
   void _updateSleepTimer() {
-    if (_sleepDuration == null || _sleepStartPosition == null) return;
+    if (!isSleepTimerActive) return;
 
     _sleepTimer?.cancel();
     final remainingTime = _calculateRemainingTime();
@@ -2193,51 +2251,38 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     if (remainingTime != null && remainingTime.inMilliseconds > 0) {
       _sleepTimer = Timer(remainingTime, () async {
         await pause();
-        _sleepDuration = null;
-        _sleepStartPosition = null;
+        cancelSleepTimer();
       });
-    } else if (remainingTime != null && remainingTime.inMilliseconds == 0) {
-      // Si el tiempo restante es 0, pausa inmediatamente
-      pause();
-      _sleepDuration = null;
-      _sleepStartPosition = null;
-    } else {
-      // Si el tiempo restante es negativo, cancela el temporizador
-      _sleepDuration = null;
-      _sleepStartPosition = null;
+    } else if (remainingTime != null) {
+      unawaited(pause());
+      cancelSleepTimer();
     }
   }
 
   /// Calcula el tiempo restante basado en la posición actual
   Duration? _calculateRemainingTime() {
-    if (_sleepDuration == null || _sleepStartPosition == null) return null;
+    if (!isSleepTimerActive) return null;
 
     final currentPosition = _player.position;
-    final songDuration = _player.duration;
 
-    // Si no tenemos la duración de la canción, usa la lógica original
-    if (songDuration == null) {
-      final elapsedSinceStart = currentPosition - _sleepStartPosition!;
-      final remaining = _sleepDuration! - elapsedSinceStart;
+    if (_stopAtEndOfSong) {
+      final songDuration = _player.duration;
+      if (songDuration == null) return null;
+      final remaining = songDuration - currentPosition;
       return remaining.isNegative ? Duration.zero : remaining;
     }
 
-    // Calcula cuándo debe pausar (1 segundo antes del final de la canción)
-    final pauseTime = songDuration - const Duration(seconds: 1);
+    if (_sleepDuration == null || _sleepStartPosition == null) return null;
 
-    // Si ya pasamos el tiempo de pausa, pausa inmediatamente
-    if (currentPosition >= pauseTime) {
-      return Duration.zero;
-    }
-
-    // Calcula el tiempo restante hasta el momento de pausa
-    return pauseTime - currentPosition;
+    final elapsedSinceStart = currentPosition - _sleepStartPosition!;
+    final remaining = _sleepDuration! - elapsedSinceStart;
+    return remaining.isNegative ? Duration.zero : remaining;
   }
 
   /// Devuelve el tiempo restante o null si no hay temporizador activo.
   Duration? get sleepTimeRemaining => _calculateRemainingTime();
 
-  bool get isSleepTimerActive => _sleepDuration != null;
+  bool get isSleepTimerActive => _sleepDuration != null || _stopAtEndOfSong;
 
   /// Precarga todas las carátulas en background SIN actualizar MediaItem para evitar parpadeos
   Future<void> _preloadAllArtworksInBackground(List<SongModel> songs) async {

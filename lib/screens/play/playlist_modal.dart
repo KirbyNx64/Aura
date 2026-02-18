@@ -733,7 +733,9 @@ class _PlaylistListViewState extends State<PlaylistListView>
                                     style: TextStyle(
                                       fontWeight: isCurrent
                                           ? FontWeight.bold
-                                          : FontWeight.normal,
+                                          : Theme.of(
+                                              context,
+                                            ).textTheme.titleMedium?.fontWeight,
                                       color: isCurrent
                                           ? (isAmoledTheme
                                                 ? Colors.white

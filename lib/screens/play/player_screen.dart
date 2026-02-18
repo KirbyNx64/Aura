@@ -2245,7 +2245,15 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
 
   Future<void> _showPlaylistDialog(BuildContext context) async {
     final mediaItem = audioHandler?.mediaItem.valueOrNull;
-    final queue = audioHandler?.queue.value ?? [];
+
+    // Obtener la cola efectiva (con shuffle aplicado si es necesario)
+    List<MediaItem> queue = [];
+    if (audioHandler is MyAudioHandler) {
+      queue = (audioHandler as MyAudioHandler).effectiveQueue;
+    } else {
+      queue = audioHandler?.queue.value ?? [];
+    }
+
     if (mediaItem == null) return;
 
     final currentIndex = queue.indexWhere((item) => item.id == mediaItem.id);
@@ -6237,7 +6245,7 @@ class _AnimatedTapButtonState extends State<AnimatedTapButton> {
 class SleepTimerOptionsSheet extends StatelessWidget {
   const SleepTimerOptionsSheet({super.key});
 
-  void _setTimer(BuildContext context, Duration duration) {
+  void _setTimer(BuildContext context, [Duration? duration]) {
     (audioHandler as MyAudioHandler).startSleepTimer(duration);
     Navigator.of(context).pop();
   }
@@ -6268,12 +6276,6 @@ class SleepTimerOptionsSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final mediaItem = audioHandler?.mediaItem.valueOrNull;
-    final playbackState = audioHandler?.playbackState.valueOrNull;
-    final position = playbackState?.position ?? Duration.zero;
-    final duration = mediaItem?.duration ?? Duration.zero;
-    final remaining = duration > position ? duration - position : Duration.zero;
-
     return ValueListenableBuilder<bool>(
       valueListenable: useDynamicColorBackgroundNotifier,
       builder: (context, useDynamicBg, _) {
@@ -6355,9 +6357,7 @@ class SleepTimerOptionsSheet extends StatelessWidget {
                         ),
                         ListTile(
                           title: Text(LocaleProvider.tr('until_song_ends')),
-                          onTap: remaining > Duration.zero
-                              ? () => _setTimer(context, remaining)
-                              : null,
+                          onTap: () => _setTimer(context),
                         ),
                         const Divider(),
                         ListTile(
