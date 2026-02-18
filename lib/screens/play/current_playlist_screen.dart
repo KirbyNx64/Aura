@@ -10,7 +10,7 @@ import 'package:music/widgets/title_marquee.dart';
 import 'package:music/widgets/artwork_list_tile.dart';
 import 'package:music/utils/audio/background_audio_handler.dart';
 import 'dart:io';
-import 'dart:math';
+
 import 'package:music/utils/theme_controller.dart';
 
 class CurrentPlaylistScreen extends StatefulWidget {
@@ -41,7 +41,7 @@ class _CurrentPlaylistScreenState extends State<CurrentPlaylistScreen>
   late final ScrollController _scrollController;
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
-  bool _isShuffling = false;
+
   String _searchQuery = '';
   double _lastBottomInset = 0.0;
 
@@ -344,52 +344,37 @@ class _CurrentPlaylistScreenState extends State<CurrentPlaylistScreen>
                                         ),
                                       ),
                                       const SizedBox(width: 12),
-                                      // Ícono de aleatorio
-                                      InkWell(
-                                        onTap: _isShuffling
-                                            ? null
-                                            : () async {
-                                                if (widget.queue.isNotEmpty &&
-                                                    !_isShuffling) {
-                                                  setState(() {
-                                                    _isShuffling = true;
-                                                  });
-
-                                                  final random = Random();
-                                                  final randomIndex = random
-                                                      .nextInt(
-                                                        widget.queue.length,
-                                                      );
-                                                  audioHandler?.skipToQueueItem(
-                                                    randomIndex,
-                                                  );
-
-                                                  // Delay de 500ms antes de permitir otro toque
-                                                  await Future.delayed(
-                                                    const Duration(
-                                                      milliseconds: 500,
-                                                    ),
-                                                  );
-
-                                                  if (mounted) {
-                                                    setState(() {
-                                                      _isShuffling = false;
-                                                    });
-                                                  }
-                                                }
-                                              },
-                                        borderRadius: BorderRadius.circular(20),
-                                        child: Container(
-                                          padding: const EdgeInsets.all(8),
-                                          child: Icon(
-                                            Icons.shuffle_rounded,
-                                            size: 32,
-                                            color: Theme.of(
-                                              context,
-                                            ).colorScheme.onSurface,
-                                            weight: 600,
-                                          ),
-                                        ),
+                                      // Botón de play/pause
+                                      StreamBuilder<PlaybackState>(
+                                        stream: audioHandler?.playbackState,
+                                        builder: (context, snapshot) {
+                                          final playing =
+                                              snapshot.data?.playing ?? false;
+                                          return InkWell(
+                                            onTap: () {
+                                              if (playing) {
+                                                audioHandler?.pause();
+                                              } else {
+                                                audioHandler?.play();
+                                              }
+                                            },
+                                            borderRadius: BorderRadius.circular(
+                                              20,
+                                            ),
+                                            child: Container(
+                                              padding: const EdgeInsets.all(8),
+                                              child: Icon(
+                                                playing
+                                                    ? Icons.pause_rounded
+                                                    : Icons.play_arrow_rounded,
+                                                size: 32,
+                                                color: Theme.of(
+                                                  context,
+                                                ).colorScheme.onSurface,
+                                              ),
+                                            ),
+                                          );
+                                        },
                                       ),
                                     ],
                                   ),

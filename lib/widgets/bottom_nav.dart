@@ -103,6 +103,7 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
       overlay_panel.PanelController();
   bool _playlistOpen = false;
   final ValueNotifier<double> _panelPositionNotifier = ValueNotifier(0.0);
+  final ValueNotifier<bool> _hideBackgroundNotifier = ValueNotifier(false);
 
   @override
   void initState() {
@@ -392,9 +393,21 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
                                 bottomNavVisibleNotifier.value = true;
                               }
                             }
+
+                            // Optimización: Ocultar el contenido de fondo (Home, Search, etc.)
+                            // cuando el panel está casi totalmente abierto para evitar pintado innecesario.
+                            // Usamos 0.98 como umbral de seguridad.
+                            final shouldHide = position >= 0.98;
+                            if (_hideBackgroundNotifier.value != shouldHide) {
+                              _hideBackgroundNotifier.value = shouldHide;
+                            }
                           },
                           onPanelClosed: () {
                             bottomNavVisibleNotifier.value = true;
+                            // Asegurar que se muestre al cerrar
+                            if (_hideBackgroundNotifier.value) {
+                              _hideBackgroundNotifier.value = false;
+                            }
                             // Asegurar que _playlistOpen se resetee al cerrar el panel
                             if (_playlistOpen) {
                               setState(() {
@@ -404,11 +417,27 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
                           },
                           onPanelOpened: () {
                             bottomNavVisibleNotifier.value = false;
+                            // Asegurar que se oculte al abrir completamente
+                            if (!_hideBackgroundNotifier.value) {
+                              _hideBackgroundNotifier.value = true;
+                            }
                           },
                           body: RepaintBoundary(
                             // Aislar el contenido de tabs (FoldersScreen, etc.) del scroll
                             // del panel del reproductor. Reduce lag cuando hay listas de canciones.
-                            child: pageContent,
+                            child: ValueListenableBuilder<bool>(
+                              valueListenable: _hideBackgroundNotifier,
+                              builder: (context, hide, child) {
+                                return Visibility(
+                                  visible: !hide,
+                                  maintainState: true,
+                                  maintainAnimation: false,
+                                  maintainSize: false,
+                                  child: child!,
+                                );
+                              },
+                              child: pageContent,
+                            ),
                           ),
                           collapsed: ValueListenableBuilder<double>(
                             valueListenable: _panelPositionNotifier,
