@@ -1,0 +1,120 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - "**"
+  workflow_dispatch:
+
+jobs:
+  rust_lint:
+    name: Rust Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          ref: ${{ github.ref_name }}
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly
+          profile: minimal
+          components: rustfmt, clippy
+      # Clippy builds the project so we need build dependencies.
+      - uses: subosito/flutter-action@v2.10.0
+        with:
+          channel: "stable"
+          cache: true
+      - name: flutter pub get
+        run: |
+          cd audiotags
+          flutter pub get
+
+      - name: Format
+        run: |
+          cd audiotags/rust
+          cargo +nightly fmt --check
+          cd ..
+      - name: Clippy
+        run: |
+          cd audiotags/rust
+          cargo +nightly clippy
+          cd ..
+      - name: Run Tests
+        run: |
+          cd audiotags/rust
+          cargo test
+          cd ..
+
+  dart_lint:
+    name: Dart Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          ref: ${{ github.ref_name }}
+      - uses: subosito/flutter-action@v2.10.0
+        with:
+          channel: "stable"
+          cache: true
+      - run: cd audiotags && flutter pub get
+      - name: Format
+        working-directory: audiotags/lib/src
+        run: dart format --set-exit-if-changed .
+      - name: Lint
+        working-directory: audiotags/lib/src
+        run: dart analyze --fatal-infos
+      - name: Format Example
+        working-directory: audiotags/example/lib
+        run: dart format --set-exit-if-changed .
+      - name: Lint Example
+        working-directory: audiotags/example/lib
+        run: dart analyze --fatal-infos
+
+  dart_cli_lint:
+    name: Dart CLI Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          ref: ${{ github.ref_name }}
+      - uses: subosito/flutter-action@v2.10.0
+        with:
+          channel: "stable"
+          cache: true
+      - run: cd cli && flutter pub get
+      - name: Format
+        working-directory: cli
+        run: dart format --set-exit-if-changed .
+      - name: Lint
+        working-directory: cli
+        run: dart analyze --fatal-infos
+
+  build:
+    name: Build Libraries
+    needs: [rust_lint, dart_lint, dart_cli_lint]
+    strategy:
+      matrix:
+        include:
+          - target: linux
+            os: ubuntu-22.04
+          - target: android
+            os: ubuntu-latest
+          - target: windows
+            os: windows-latest
+          - target: macos
+            os: macos-latest
+          - target: ios
+            os: macos-latest
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          ref: ${{ github.ref_name }}
+      - uses: ./.github/actions/setup_build
+      - name: Install MUSL dependencies
+        if: ${{ matrix.target == 'linux' }}
+        run: |
+          sudo apt install musl-tools
+      - name: Build
+        run: dart run cli build ${{ matrix.target }} -v
