@@ -1,9 +1,9 @@
 {
-  "version": "1.8.3",
+  "version": "1.8.4",
   "apk_urls": {
-    "arm64-v8a": "https://github.com/KirbyNx64/Aura/releases/download/v1.8.3/AuraMusic-v1.8.3-arm64-v8a.apk",
-    "armeabi-v7a": "https://github.com/KirbyNx64/Aura/releases/download/v1.8.3/AuraMusic-v1.8.3-armeabi-v7a.apk",
-    "x86_64": "https://github.com/KirbyNx64/Aura/releases/download/v1.8.3/AuraMusic-v1.8.3-x86_64.apk"
+    "arm64-v8a": "https://github.com/KirbyNx64/Aura/releases/download/v1.8.4/AuraMusic-v1.8.4-arm64-v8a.apk",
+    "armeabi-v7a": "https://github.com/KirbyNx64/Aura/releases/download/v1.8.4/AuraMusic-v1.8.4-armeabi-v7a.apk",
+    "x86_64": "https://github.com/KirbyNx64/Aura/releases/download/v1.8.4/AuraMusic-v1.8.4-x86_64.apk"
   },
-  "changelog": "• Se añadió una nueva opción llamada Fondo de color dinámico, que utiliza el color predominante de la carátula como fondo del reproductor (disponible solo con el tema AMOLED).\n\n• Se rediseñó la animación de apertura del reproductor, reemplazando la antigua animación Hero.\n\n• Se rediseñaron varias opciones y botones dentro del reproductor.\n\n• Se añadió un nuevo botón de No me gusta, que permite marcar canciones con un icono de corazón roto (función únicamente visual).\n\n• Ahora, al activar el modo de reproducción aleatoria, la nueva lista generada se muestra correctamente en el panel de lista de reproducción.\n\n• Se añadió la opción de abrir directamente la pantalla de almacenamiento de la app en los ajustes de Android desde la configuración de la aplicación.\n\n• La pantalla “Acerca de” ahora muestra información básica del dispositivo.\n\n• Se corrigió la pantalla de bienvenida en dispositivos con pantallas más pequeñas (relación 16:9).\n\n• Se optimizó el uso de la carátula desenfocada como fondo del reproductor, reduciendo el consumo de GPU.\n\n• Se optimizó la indexación de archivos de audio, mejorando la velocidad de detección de canciones.\n\n• Se mejoró la detección del temporizador de apagado al usar la opción de detener la reproducción al finalizar la canción.\n\n• Se actualizó la versión de Flutter (3.41.1) utilizada para compilar la aplicación.\n\n• Se aplicaron pequeñas mejoras visuales y se corrigieron errores menores."
+  "changelog": "• Se añadió una opción que permite evitar que el dispositivo entre en suspensión mientras la aplicación está en uso.\n\n• Se optimizó el proceso de descarga de canciones reutilizando la misma instancia de YouTube cuando hay múltiples descargas en cola, mejorando la eficiencia y velocidad.\n\n• Se optimizó la carga de las carátulas en el reproductor, logrando una visualización más rápida y fluida.\n\n• Se actualizaron varias dependencias internas.\n\n• Se aplicaron pequeñas mejoras visuales en la interfaz.\n\n• Se corrigieron errores menores y se optimizó la estabilidad general de la aplicación."
 }
