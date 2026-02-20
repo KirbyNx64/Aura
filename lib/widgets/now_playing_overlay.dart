@@ -4,7 +4,11 @@ import 'dart:ui' as ui;
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
 import 'package:music/main.dart'
-    show audioHandler, audioServiceReady, overlayVisibleNotifier;
+    show
+        audioHandler,
+        audioServiceReady,
+        overlayVisibleNotifier,
+        AudioHandlerSafeCast;
 // import 'package:music/widgets/hero_cached.dart';
 import 'package:music/widgets/artwork_cached.dart';
 import 'package:music/utils/audio/background_audio_handler.dart';
@@ -282,7 +286,7 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> {
             }
 
             final isLoading =
-                (audioHandler as MyAudioHandler).initializingNotifier.value;
+                audioHandler.myHandler?.initializingNotifier.value ?? false;
 
             return ValueListenableBuilder<bool>(
               valueListenable: overlayPlayerNavigationEnabled,
@@ -391,25 +395,35 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> {
                                               ValueListenableBuilder<bool>(
                                                 valueListenable:
                                                     (audioHandler
-                                                            as MyAudioHandler)
-                                                        .initializingNotifier,
+                                                        .myHandler
+                                                        ?.initializingNotifier ??
+                                                    ValueNotifier(false)),
                                                 builder: (context, isLoading, child) {
-                                                  final songIdKey = (currentSong.extras?['songId'] ?? currentSong.id).toString();
-                                                  final artUri = currentSong.artUri;
-                                                  
+                                                  final songIdKey =
+                                                      (currentSong.extras?['songId'] ??
+                                                              currentSong.id)
+                                                          .toString();
+                                                  final artUri =
+                                                      currentSong.artUri;
+
                                                   // Key único que incluye el estado de loading para evitar duplicados
-                                                  final switcherKey = 'switcher_art_${songIdKey}_${isLoading ? 'loading' : 'ready'}_${artUri?.toString() ?? 'null'}';
-                                                  
+                                                  final switcherKey =
+                                                      'switcher_art_${songIdKey}_${isLoading ? 'loading' : 'ready'}_${artUri?.toString() ?? 'null'}';
+
                                                   return AnimatedSwitcher(
                                                     key: ValueKey(switcherKey),
                                                     duration: const Duration(
                                                       milliseconds: 200,
                                                     ),
-                                                    switchInCurve: Curves.easeInOut,
-                                                    switchOutCurve: Curves.easeInOut,
+                                                    switchInCurve:
+                                                        Curves.easeInOut,
+                                                    switchOutCurve:
+                                                        Curves.easeInOut,
                                                     child: isLoading
                                                         ? Container(
-                                                            key: const ValueKey('loading_overlay_art'),
+                                                            key: const ValueKey(
+                                                              'loading_overlay_art',
+                                                            ),
                                                             width: 50,
                                                             height: 50,
                                                             decoration: BoxDecoration(
@@ -427,21 +441,30 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> {
                                                                 height: 28,
                                                                 child:
                                                                     CircularProgressIndicator(
-                                                                      strokeWidth: 3,
+                                                                      strokeWidth:
+                                                                          3,
                                                                     ),
                                                               ),
                                                             ),
                                                           )
                                                         : ArtworkCached(
-                                                            key: ValueKey('overlay_art_${songIdKey}_${artUri?.toString() ?? 'null'}'),
+                                                            key: ValueKey(
+                                                              'overlay_art_${songIdKey}_${artUri?.toString() ?? 'null'}',
+                                                            ),
                                                             artUri: artUri,
                                                             size: 50,
                                                             borderRadius:
                                                                 BorderRadius.circular(
                                                                   8,
                                                                 ),
-                                                            songPath: currentSong.extras?['data'] as String?,
-                                                            songId: currentSong.extras?['songId'] as int?,
+                                                            songPath:
+                                                                currentSong
+                                                                        .extras?['data']
+                                                                    as String?,
+                                                            songId:
+                                                                currentSong
+                                                                        .extras?['songId']
+                                                                    as int?,
                                                           ),
                                                   );
                                                 },
@@ -798,10 +821,9 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> {
                                                   colorSchemeNotifier,
                                               builder: (context, colorScheme, child) {
                                                 return StreamBuilder<Duration>(
-                                                  stream:
-                                                      (audioHandler
-                                                              as MyAudioHandler)
-                                                          .positionStream,
+                                                  stream: audioHandler
+                                                      .myHandler
+                                                      ?.positionStream,
                                                   initialData: Duration.zero,
                                                   builder: (context, posSnapshot) {
                                                     final position =
@@ -815,11 +837,10 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> {
                                                     return StreamBuilder<
                                                       Duration?
                                                     >(
-                                                      stream:
-                                                          (audioHandler
-                                                                  as MyAudioHandler)
-                                                              .player
-                                                              .durationStream,
+                                                      stream: audioHandler
+                                                          .myHandler
+                                                          ?.player
+                                                          .durationStream,
                                                       builder: (context, durationSnapshot) {
                                                         final fallbackDuration =
                                                             durationSnapshot

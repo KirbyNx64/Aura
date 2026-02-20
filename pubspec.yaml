@@ -65,6 +65,9 @@ dependencies:
   palette_generator_master: ^1.0.1
   wakelock_plus: ^1.4.0
   android_nav_setting: ^0.0.2+2
+  material_new_shapes: ^1.0.0
+  progress_indicator_m3e: ^0.1.1
+  m3e_design: ^0.2.1
 
 dev_dependencies:
   flutter_test:

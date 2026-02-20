@@ -1,9 +1,10 @@
 import 'dart:async';
+import 'package:music/widgets/refresh_m3e.dart';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 import 'package:on_audio_query/on_audio_query.dart';
-import 'package:music/main.dart';
+import 'package:music/main.dart' show AudioHandlerSafeCast, audioHandler;
 import 'package:audio_service/audio_service.dart';
 import 'package:music/utils/audio/background_audio_handler.dart';
 import 'package:music/utils/db/favorites_db.dart';
@@ -700,9 +701,7 @@ class _FoldersScreenState extends State<FoldersScreen>
                     title: TranslatedText('add_to_queue'),
                     onTap: () async {
                       Navigator.of(context).pop();
-                      await (audioHandler as MyAudioHandler).addSongsToQueueEnd(
-                        [song],
-                      );
+                      await audioHandler.myHandler?.addSongsToQueueEnd([song]);
                     },
                   ),
                   ListTile(
@@ -998,7 +997,7 @@ class _FoldersScreenState extends State<FoldersScreen>
     // Desactiva visualmente el shuffle de inmediato
     try {
       if (audioHandler is MyAudioHandler) {
-        (audioHandler as MyAudioHandler).isShuffleNotifier.value = false;
+        audioHandler.myHandler?.isShuffleNotifier.value = false;
       }
     } catch (_) {}
 
@@ -1030,13 +1029,13 @@ class _FoldersScreenState extends State<FoldersScreen>
       } catch (_) {
         // Si no es rápido, actualizar cuando esté listo para evitar el flash del placeholder
         artUriFuture.then((uri) {
-          if (uri != null && mounted && audioHandler is MyAudioHandler) {
-            final handler = audioHandler as MyAudioHandler;
-            final current = handler.mediaItem.value;
+          if (uri != null && mounted) {
+            final handler = audioHandler.myHandler;
+            final current = handler?.mediaItem.value;
             // Verificar que seguimos en la misma canción
             if (current != null && current.extras?['songId'] == songId) {
               final updatedItem = current.copyWith(artUri: uri);
-              handler.mediaItem.add(updatedItem);
+              handler?.mediaItem.add(updatedItem);
             }
           }
         });
@@ -1058,7 +1057,7 @@ class _FoldersScreenState extends State<FoldersScreen>
             'queueIndex': 0,
           },
         );
-        (audioHandler as MyAudioHandler).mediaItem.add(tempMediaItem);
+        audioHandler.myHandler?.mediaItem.add(tempMediaItem);
       }
 
       // Abrir el panel del reproductor con la nueva animación
@@ -1089,7 +1088,7 @@ class _FoldersScreenState extends State<FoldersScreen>
         .toList();
     final index = filtered.indexWhere((s) => s.data == path);
     if (index != -1) {
-      final handler = audioHandler as MyAudioHandler;
+      final handler = audioHandler.myHandler;
       // Guardar solo el nombre de la carpeta como origen
       final prefs = await SharedPreferences.getInstance();
       String origen;
@@ -1110,13 +1109,13 @@ class _FoldersScreenState extends State<FoldersScreen>
       await prefs.setString('last_queue_source', origen);
 
       // Limpiar la cola y el MediaItem antes de mostrar la nueva canción (Comportamiento Favorites)
-      handler.queue.add([]);
+      handler?.queue.add([]);
 
       // Limpiar el fallback de las carátulas para evitar parpadeo
       // ArtworkHeroCached.clearFallback();
 
-      await handler.setQueueFromSongs(filtered, initialIndex: index);
-      await handler.play();
+      await handler?.setQueueFromSongs(filtered, initialIndex: index);
+      await handler?.play();
     }
   }
 
@@ -1126,16 +1125,16 @@ class _FoldersScreenState extends State<FoldersScreen>
       if (await file.exists()) {
         // Si está reproduciéndose esta canción, pasar a la siguiente antes de borrar
         try {
-          final handler = audioHandler as MyAudioHandler;
-          final current = handler.mediaItem.valueOrNull;
+          final handler = audioHandler.myHandler;
+          final current = handler?.mediaItem.valueOrNull;
           final isCurrent =
               current?.id == song.data || current?.extras?['data'] == song.data;
           if (isCurrent) {
             // Quitar de la cola priorizando saltar a la siguiente
-            await handler.removeSongByPath(song.data);
+            await handler?.removeSongByPath(song.data);
           } else {
             // Quitarla de la cola si estuviera presente
-            await handler.removeSongByPath(song.data);
+            await handler?.removeSongByPath(song.data);
           }
         } catch (_) {}
 
@@ -1253,7 +1252,7 @@ class _FoldersScreenState extends State<FoldersScreen>
 
   void _onSongSelected(SongModel song) {
     try {
-      (audioHandler as MyAudioHandler).isShuffleNotifier.value = false;
+      audioHandler.myHandler?.isShuffleNotifier.value = false;
     } catch (_) {}
     if (_isSelecting) {
       setState(() {
@@ -2452,7 +2451,7 @@ class _FoldersScreenState extends State<FoldersScreen>
         !_showPlaylists &&
         _selectedPlaylist == null) {
       return Scaffold(
-        body: RefreshIndicator(
+        body: ExpressiveRefreshIndicator(
           onRefresh: () async {
             // Recargar las carpetas al hacer scroll hacia abajo
             await cargarCanciones(forceIndex: true);
@@ -2645,10 +2644,11 @@ class _FoldersScreenState extends State<FoldersScreen>
         body: _isLoading
             ? Center(child: LoadingIndicator())
             : _filteredPlaylists.isEmpty
-            ? RefreshIndicator(
+            ? ExpressiveRefreshIndicator(
                 onRefresh: () async {
                   await _loadPlaylists();
                 },
+                color: Theme.of(context).colorScheme.primary,
                 child: SingleChildScrollView(
                   physics: const AlwaysScrollableScrollPhysics(),
                   child: SizedBox(
@@ -2699,10 +2699,11 @@ class _FoldersScreenState extends State<FoldersScreen>
                   ),
                 ),
               )
-            : RefreshIndicator(
+            : ExpressiveRefreshIndicator(
                 onRefresh: () async {
                   await _loadPlaylists();
                 },
+                color: Theme.of(context).colorScheme.primary,
                 child: ValueListenableBuilder<MediaItem?>(
                   valueListenable: _currentMediaItemNotifier,
                   builder: (context, debouncedMediaItem, child) {
@@ -3026,11 +3027,12 @@ class _FoldersScreenState extends State<FoldersScreen>
             ),
           ),
         ),
-        body: RefreshIndicator(
+        body: ExpressiveRefreshIndicator(
           onRefresh: () async {
             // Recargar las carpetas al hacer scroll hacia abajo
             await cargarCanciones(forceIndex: true);
           },
+          color: Theme.of(context).colorScheme.primary,
           child: ValueListenableBuilder<MediaItem?>(
             valueListenable: _currentMediaItemNotifier,
             builder: (context, current, child) {
@@ -3629,8 +3631,9 @@ class _FoldersScreenState extends State<FoldersScreen>
             ),
           ),
         ),
-        body: RefreshIndicator(
+        body: ExpressiveRefreshIndicator(
           onRefresh: _refreshCurrentFolder,
+          color: Theme.of(context).colorScheme.primary,
           child: ValueListenableBuilder<MediaItem?>(
             valueListenable: _currentMediaItemNotifier,
             builder: (context, currentMediaItem, child) {
@@ -3967,8 +3970,8 @@ class _FoldersScreenState extends State<FoldersScreen>
                       : () {
                           if (isCurrent) {
                             playing
-                                ? (audioHandler as MyAudioHandler).pause()
-                                : (audioHandler as MyAudioHandler).play();
+                                ? audioHandler.myHandler?.pause()
+                                : audioHandler.myHandler?.play();
                           } else {
                             _onSongSelected(song);
                           }
@@ -4350,8 +4353,8 @@ class _FoldersScreenState extends State<FoldersScreen>
     try {
       // Primero retirar todas las canciones de la cola de una vez
       try {
-        final handler = audioHandler as MyAudioHandler;
-        await handler.removeSongsByPath(List<String>.from(songPaths));
+        final handler = audioHandler.myHandler;
+        await handler?.removeSongsByPath(List<String>.from(songPaths));
       } catch (_) {}
 
       // Borrar archivos físicos
@@ -5075,8 +5078,8 @@ class _FoldersScreenState extends State<FoldersScreen>
       bool allDeleted = true;
       // Primero retirar todas las canciones de la cola (maneja salto si alguna es la actual)
       try {
-        final handler = audioHandler as MyAudioHandler;
-        await handler.removeSongsByPath(List<String>.from(songPaths));
+        final handler = audioHandler.myHandler;
+        await handler?.removeSongsByPath(List<String>.from(songPaths));
       } catch (_) {}
 
       for (final path in songPaths) {

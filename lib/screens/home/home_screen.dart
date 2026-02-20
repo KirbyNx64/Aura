@@ -5,7 +5,8 @@ import 'package:music/utils/db/recent_db.dart';
 import 'package:music/utils/db/mostplayer_db.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
 import 'package:music/utils/audio/background_audio_handler.dart';
-import 'package:music/main.dart' show audioHandler, getAudioServiceSafely;
+import 'package:music/main.dart'
+    show audioHandler, getAudioServiceSafely, AudioHandlerSafeCast;
 import 'package:music/utils/db/favorites_db.dart';
 import 'package:music/utils/notifiers.dart';
 import 'package:flutter/services.dart';
@@ -32,6 +33,7 @@ import 'package:music/utils/song_info_dialog.dart';
 import 'package:music/screens/artist/artist_screen.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'dart:async';
+import 'package:music/widgets/refresh_m3e.dart';
 
 enum OrdenCancionesPlaylist { normal, alfabetico, invertido, ultimoAgregado }
 
@@ -372,7 +374,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   /// Helper para obtener el AudioHandler de forma segura
   Future<MyAudioHandler?> _getAudioHandler() async {
     final handler = await getAudioServiceSafely();
-    return handler as MyAudioHandler?;
+    return handler.myHandler;
   }
 
   // Devuelve la lista de accesos directos para mostrar en quick_access
@@ -695,7 +697,9 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
       // Si no hay artistas y hay canciones disponibles, o si se fuerza el refresh, indexar
       if ((artists.isEmpty && allSongs.isNotEmpty) || forceRefresh) {
-        // print('🎵 ${forceRefresh ? 'Forzando' : 'No hay artistas, '}indexando con ${allSongs.length} canciones...');
+        // print(
+        //   '🎵 ${forceRefresh ? 'Forzando' : 'No hay artistas, '}indexando con ${allSongs.length} canciones...',
+        // );
         await artistsDB.indexArtists(allSongs);
         artists = await artistsDB.getTopArtists(limit: 20);
         // print('🎵 Artistas después de indexar: ${artists.length}');
@@ -1352,171 +1356,67 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   // Widget para mostrar un artista en círculo
   Widget _buildArtistWidget(Map<String, dynamic> artist, BuildContext context) {
-    final String artistKey =
-        'artist_${artist['name']}_${artist['song_count']}_${artist['thumbUrl'] ?? 'no_image'}_${colorSchemeNotifier.value.name}_${Theme.of(context).brightness}';
+    return AnimatedTapButton(
+      onTap: () async {
+        // Obtener canciones del artista
+        final artistsDB = ArtistsDB();
+        final artistSongs = await artistsDB.getArtistSongs(artist['name']);
 
-    // print('🎨 Construyendo widget para ${artist['name']} - ThumbUrl: ${artist['thumbUrl'] != null ? 'Sí' : 'No'}');
+        // Convertir rutas a SongModel
+        final List<SongModel> songs = [];
+        for (final path in artistSongs) {
+          try {
+            final song = allSongs.firstWhere((s) => s.data == path);
+            songs.add(song);
+          } catch (_) {}
+        }
 
-    Widget artistWidget;
-    if (_artistWidgetCache.containsKey(artistKey)) {
-      // print('📦 Usando widget desde cache para ${artist['name']}');
-      artistWidget = _artistWidgetCache[artistKey]!;
-    } else {
-      // print('🆕 Creando nuevo widget para ${artist['name']}');
-      artistWidget = AnimatedTapButton(
-        onTap: () async {
-          // Obtener canciones del artista
-          final artistsDB = ArtistsDB();
-          final artistSongs = await artistsDB.getArtistSongs(artist['name']);
+        if (songs.isNotEmpty && mounted) {
+          await _playSongAndOpenPlayer(
+            songs.first,
+            songs,
+            queueSource: '${LocaleProvider.tr('artist')}: ${artist['name']}',
+          );
+        }
+      },
+      onLongPress: () async {
+        HapticFeedback.mediumImpact();
+        if (!context.mounted) return;
 
-          // Convertir rutas a SongModel
-          final List<SongModel> songs = [];
-          for (final path in artistSongs) {
-            try {
-              final song = allSongs.firstWhere((s) => s.data == path);
-              songs.add(song);
-            } catch (_) {}
-          }
+        // Obtener canciones del artista
+        final artistsDB = ArtistsDB();
+        final artistSongs = await artistsDB.getArtistSongs(artist['name']);
 
-          if (songs.isNotEmpty && mounted) {
-            await _playSongAndOpenPlayer(
-              songs.first,
-              songs,
-              queueSource: '${LocaleProvider.tr('artist')}: ${artist['name']}',
-            );
-          }
-        },
-        onLongPress: () async {
-          HapticFeedback.mediumImpact();
+        // Convertir rutas a SongModel
+        final List<SongModel> songs = [];
+        for (final path in artistSongs) {
+          try {
+            final song = allSongs.firstWhere((s) => s.data == path);
+            songs.add(song);
+          } catch (_) {}
+        }
+
+        if (songs.isNotEmpty && mounted) {
           if (!context.mounted) return;
-
-          // Obtener canciones del artista
-          final artistsDB = ArtistsDB();
-          final artistSongs = await artistsDB.getArtistSongs(artist['name']);
-
-          // Convertir rutas a SongModel
-          final List<SongModel> songs = [];
-          for (final path in artistSongs) {
-            try {
-              final song = allSongs.firstWhere((s) => s.data == path);
-              songs.add(song);
-            } catch (_) {}
-          }
-
-          if (songs.isNotEmpty && mounted) {
-            if (!context.mounted) return;
-            await _showArtistSongsModal(context, artist['name'], songs);
-          }
-        },
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            SizedBox(
-              width: 80,
-              height: 80,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: artist['thumbUrl'] != null
-                    ? CachedNetworkImage(
-                        imageUrl: artist['thumbUrl'] as String,
-                        width: 80,
-                        height: 80,
-                        fit: BoxFit.cover,
-                        errorWidget: (context, url, error) {
-                          final firstSongId = artist['first_song_id'];
-                          if (firstSongId != null) {
-                            return QueryArtworkWidget(
-                              id: firstSongId is int
-                                  ? firstSongId
-                                  : int.tryParse(firstSongId.toString()) ?? 0,
-                              type: ArtworkType.AUDIO,
-                              artworkBorder: BorderRadius.circular(16),
-                              nullArtworkWidget: Container(
-                                decoration: BoxDecoration(
-                                  color:
-                                      colorSchemeNotifier.value ==
-                                          AppColorScheme.amoled
-                                      ? Colors.white.withValues(alpha: 0.1)
-                                      : Theme.of(context)
-                                            .colorScheme
-                                            .secondaryContainer
-                                            .withValues(alpha: 0.8),
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                                child: Center(
-                                  child: Icon(Icons.person, size: 40),
-                                ),
-                              ),
-                            );
-                          }
-                          return Container(
-                            decoration: BoxDecoration(
-                              color:
-                                  colorSchemeNotifier.value ==
-                                      AppColorScheme.amoled
-                                  ? Colors.white.withValues(alpha: 0.1)
-                                  : Theme.of(context)
-                                        .colorScheme
-                                        .secondaryContainer
-                                        .withValues(alpha: 0.8),
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            child: Center(child: Icon(Icons.person, size: 40)),
-                          );
-                        },
-                        placeholder: (context, url) {
-                          final firstSongId = artist['first_song_id'];
-                          if (firstSongId != null) {
-                            return QueryArtworkWidget(
-                              id: firstSongId is int
-                                  ? firstSongId
-                                  : int.tryParse(firstSongId.toString()) ?? 0,
-                              type: ArtworkType.AUDIO,
-                              artworkBorder: BorderRadius.circular(16),
-                              nullArtworkWidget: Container(
-                                decoration: BoxDecoration(
-                                  color:
-                                      colorSchemeNotifier.value ==
-                                          AppColorScheme.amoled
-                                      ? Colors.white.withValues(alpha: 0.1)
-                                      : Theme.of(context)
-                                            .colorScheme
-                                            .secondaryContainer
-                                            .withValues(alpha: 0.8),
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                                child: Center(
-                                  child: Icon(Icons.person, size: 40),
-                                ),
-                              ),
-                            );
-                          }
-                          return Container(
-                            decoration: BoxDecoration(
-                              color:
-                                  colorSchemeNotifier.value ==
-                                      AppColorScheme.amoled
-                                  ? Colors.white.withValues(alpha: 0.1)
-                                  : Theme.of(context)
-                                        .colorScheme
-                                        .secondaryContainer
-                                        .withValues(alpha: 0.8),
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            child: Center(child: LoadingIndicator()),
-                          );
-                        },
-                      )
-                    : QueryArtworkWidget(
-                        id: artist['first_song_id'] is int
-                            ? artist['first_song_id']
-                            : int.tryParse(
-                                    artist['first_song_id']?.toString() ?? '',
-                                  ) ??
-                                  0,
-                        type: ArtworkType.AUDIO,
-                        artworkBorder: BorderRadius.circular(16),
-                        nullArtworkWidget: Container(
+          await _showArtistSongsModal(context, artist['name'], songs);
+        }
+      },
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            width: 80,
+            height: 80,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: artist['thumbUrl'] != null
+                  ? CachedNetworkImage(
+                      imageUrl: artist['thumbUrl'] as String,
+                      width: 80,
+                      height: 80,
+                      fit: BoxFit.cover,
+                      errorWidget: (context, url, error) {
+                        return Container(
                           decoration: BoxDecoration(
                             color:
                                 colorSchemeNotifier.value ==
@@ -1526,43 +1426,61 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                       .colorScheme
                                       .secondaryContainer
                                       .withValues(alpha: 0.8),
-                            borderRadius: BorderRadius.circular(16),
+                            borderRadius: BorderRadius.circular(8),
                           ),
                           child: Center(child: Icon(Icons.person, size: 40)),
+                        );
+                      },
+                      placeholder: (context, url) => Container(
+                        decoration: BoxDecoration(
+                          color:
+                              colorSchemeNotifier.value == AppColorScheme.amoled
+                              ? Colors.white.withValues(alpha: 0.1)
+                              : Theme.of(context).colorScheme.secondaryContainer
+                                    .withValues(alpha: 0.8),
+                          borderRadius: BorderRadius.circular(8),
                         ),
+                        child: Center(child: LoadingIndicator()),
                       ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            SizedBox(
-              width: 80,
-              child: ValueListenableBuilder<AppColorScheme>(
-                valueListenable: colorSchemeNotifier,
-                builder: (context, colorScheme, child) {
-                  return Text(
-                    artist['name'],
-                    textAlign: TextAlign.center,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      fontWeight: FontWeight.w500,
-                      fontSize: 14,
-                      color: colorScheme == AppColorScheme.amoled
-                          ? Colors.white
-                          : Theme.of(context).colorScheme.onSurface,
+                    )
+                  : Container(
+                      decoration: BoxDecoration(
+                        color:
+                            colorSchemeNotifier.value == AppColorScheme.amoled
+                            ? Colors.white.withValues(alpha: 0.1)
+                            : Theme.of(context).colorScheme.secondaryContainer
+                                  .withValues(alpha: 0.8),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Center(child: Icon(Icons.person, size: 40)),
                     ),
-                  );
-                },
-              ),
             ),
-          ],
-        ),
-      );
-
-      _artistWidgetCache[artistKey] = artistWidget;
-    }
-
-    return artistWidget;
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: 80,
+            child: ValueListenableBuilder<AppColorScheme>(
+              valueListenable: colorSchemeNotifier,
+              builder: (context, colorScheme, child) {
+                return Text(
+                  artist['name'],
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    fontWeight: FontWeight.w500,
+                    fontSize: 14,
+                    color: colorScheme == AppColorScheme.amoled
+                        ? Colors.white
+                        : Theme.of(context).colorScheme.onSurface,
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> refreshShortcuts() async {
@@ -1884,9 +1802,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     onTap: () async {
                       if (!context.mounted) return;
                       Navigator.of(context).pop();
-                      await (audioHandler as MyAudioHandler).addSongsToQueueEnd(
-                        [song],
-                      );
+                      await audioHandler.myHandler?.addSongsToQueueEnd([song]);
                     },
                   ),
                   if (isPinned)
@@ -2557,9 +2473,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (playLoadingNotifier.value) return;
     // Desactiva visualmente el shuffle de inmediato
     try {
-      if (audioHandler is MyAudioHandler) {
-        (audioHandler as MyAudioHandler).isShuffleNotifier.value = false;
-      }
+      audioHandler.myHandler?.isShuffleNotifier.value = false;
     } catch (_) {}
 
     // Obtener la carátula para la pantalla del reproductor
@@ -2582,13 +2496,13 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     } catch (_) {
       // Si no es rápido, actualizar cuando esté listo para evitar el flash del placeholder
       artUriFuture.then((uri) {
-        if (uri != null && mounted && audioHandler is MyAudioHandler) {
-          final handler = audioHandler as MyAudioHandler;
-          final current = handler.mediaItem.value;
+        if (uri != null && mounted) {
+          final handler = audioHandler.myHandler;
+          final current = handler?.mediaItem.value;
           // Verificar que seguimos en la misma canción
           if (current != null && current.extras?['songId'] == songId) {
             final updatedItem = current.copyWith(artUri: uri);
-            handler.mediaItem.add(updatedItem);
+            handler?.mediaItem.add(updatedItem);
           }
         }
       });
@@ -2610,7 +2524,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           'queueIndex': 0,
         },
       );
-      (audioHandler as MyAudioHandler).mediaItem.add(tempMediaItem);
+      audioHandler.myHandler?.mediaItem.add(tempMediaItem);
     }
 
     // Abrir el panel del reproductor con la nueva animación
@@ -2653,10 +2567,10 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (index == -1) return;
 
     // Obtener AudioService de forma segura
-    final handler = audioHandler as MyAudioHandler;
+    final handler = audioHandler.myHandler;
 
     // Limpiar la cola y el MediaItem antes de mostrar la nueva canción (Comportamiento Favorites)
-    (audioHandler as MyAudioHandler).queue.add([]);
+    handler?.queue.add([]);
 
     // Limpiar el fallback de las carátulas para evitar parpadeo
     // ArtworkHeroCached.clearFallback();
@@ -2671,8 +2585,8 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             ? LocaleProvider.tr('recent_songs_title')
             : "Home");
     await prefs.setString('last_queue_source', origen);
-    await (handler).setQueueFromSongs(queue, initialIndex: index);
-    await (handler).play();
+    await handler?.setQueueFromSongs(queue, initialIndex: index);
+    await handler?.play();
   }
 
   Future<void> _addToFavorites(SongModel song) async {
@@ -2793,9 +2707,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 onTap: () async {
                   if (!context.mounted) return;
                   Navigator.of(context).pop();
-                  await (audioHandler as MyAudioHandler).addSongsToQueueEnd([
-                    song,
-                  ]);
+                  await audioHandler.myHandler?.addSongsToQueueEnd([song]);
                 },
               ),
               ListTile(
@@ -3707,10 +3619,11 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             if (songsToShow.isEmpty) {
               final isDark = Theme.of(context).brightness == Brightness.dark;
 
-              return RefreshIndicator(
+              return ExpressiveRefreshIndicator(
                 onRefresh: () async {
                   await _loadRecents();
                 },
+                color: Theme.of(context).colorScheme.primary,
                 child: SingleChildScrollView(
                   physics: const AlwaysScrollableScrollPhysics(),
                   child: SizedBox(
@@ -3771,10 +3684,11 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     context,
                   ).colorScheme.secondary.withValues(alpha: 0.07);
 
-            return RefreshIndicator(
+            return ExpressiveRefreshIndicator(
               onRefresh: () async {
                 await _loadRecents();
               },
+              color: Theme.of(context).colorScheme.primary,
               child: RawScrollbar(
                 controller: _recentsScrollController,
                 thumbColor: Theme.of(context).colorScheme.primary,
@@ -3915,10 +3829,8 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                 onPressed: () {
                                   if (isCurrent) {
                                     playing
-                                        ? (audioHandler as MyAudioHandler)
-                                              .pause()
-                                        : (audioHandler as MyAudioHandler)
-                                              .play();
+                                        ? audioHandler.myHandler?.pause()
+                                        : audioHandler.myHandler?.play();
                                   } else {
                                     unawaited(_preloadArtworkForSong(song));
                                     _playSongAndOpenPlayer(song, songsToShow);
@@ -4115,9 +4027,10 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                               ),
                                               onTap: () async {
                                                 Navigator.of(context).pop();
-                                                await (audioHandler
-                                                        as MyAudioHandler)
-                                                    .addSongsToQueueEnd([song]);
+                                                await audioHandler.myHandler
+                                                    ?.addSongsToQueueEnd([
+                                                      song,
+                                                    ]);
                                               },
                                             ),
                                             ListTile(
@@ -4500,9 +4413,8 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                           title: TranslatedText('add_to_queue'),
                                           onTap: () async {
                                             Navigator.of(context).pop();
-                                            await (audioHandler
-                                                    as MyAudioHandler)
-                                                .addSongsToQueueEnd([song]);
+                                            await audioHandler.myHandler
+                                                ?.addSongsToQueueEnd([song]);
                                           },
                                         ),
                                         ListTile(
@@ -4659,8 +4571,9 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           }
 
           return _showingPlaylistSongs
-              ? RefreshIndicator(
+              ? ExpressiveRefreshIndicator(
                   onRefresh: _refreshPlaylistSongs,
+                  color: Theme.of(context).colorScheme.primary,
                   child: Builder(
                     builder: (context) {
                       final List<SongModel> songsToShow =
@@ -5030,9 +4943,9 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                       Navigator.of(
                                                         context,
                                                       ).pop();
-                                                      await (audioHandler
-                                                              as MyAudioHandler)
-                                                          .addSongsToQueueEnd([
+                                                      await audioHandler
+                                                          .myHandler
+                                                          ?.addSongsToQueueEnd([
                                                             song,
                                                           ]);
                                                     },
@@ -5354,10 +5267,8 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                       onPressed: () {
                                         if (isCurrent) {
                                           playing
-                                              ? (audioHandler as MyAudioHandler)
-                                                    .pause()
-                                              : (audioHandler as MyAudioHandler)
-                                                    .play();
+                                              ? audioHandler.myHandler?.pause()
+                                              : audioHandler.myHandler?.play();
                                         } else {
                                           // Precargar la carátula antes de reproducir
                                           unawaited(
@@ -5610,9 +5521,8 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                     return;
                                                   }
                                                   Navigator.of(context).pop();
-                                                  await (audioHandler
-                                                          as MyAudioHandler)
-                                                      .addSongsToQueueEnd([
+                                                  await audioHandler.myHandler
+                                                      ?.addSongsToQueueEnd([
                                                         song,
                                                       ]);
                                                 },
@@ -5905,10 +5815,8 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                   onPressed: () {
                                     if (isCurrent) {
                                       playing
-                                          ? (audioHandler as MyAudioHandler)
-                                                .pause()
-                                          : (audioHandler as MyAudioHandler)
-                                                .play();
+                                          ? audioHandler.myHandler?.pause()
+                                          : audioHandler.myHandler?.play();
                                     } else {
                                       // Precargar la carátula antes de reproducir
                                       unawaited(_preloadArtworkForSong(song));
@@ -5959,7 +5867,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     },
                   ),
                 )
-              : RefreshIndicator(
+              : ExpressiveRefreshIndicator(
                   onRefresh: () async {
                     // print('🔄 Iniciando refresh completo...');
                     // Actualizar accesos directos y selección rápida
@@ -5978,6 +5886,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     _artistWidgetCache.clear();
                     setState(() {});
                   },
+                  color: Theme.of(context).colorScheme.primary,
                   child: SingleChildScrollView(
                     controller: _homeScrollController,
                     physics: const AlwaysScrollableScrollPhysics(),

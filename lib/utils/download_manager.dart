@@ -266,7 +266,7 @@ class DownloadManager {
       await for (final chunk in stream) {
         received += chunk.length;
         sink.add(chunk);
-        _updateProgress(received / totalBytes * 0.8);
+        _updateProgress(received / totalBytes * 0.99);
       }
 
       await sink.flush();

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
 import 'dart:io';
 import '../../l10n/locale_provider.dart';
 import '../../services/download_history_service.dart';
@@ -10,6 +11,7 @@ import '../../widgets/song_info_dialog.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:media_scanner/media_scanner.dart';
 import 'package:material_loading_indicator/loading_indicator.dart';
+import '../../utils/simple_yt_download.dart';
 
 class DownloadHistoryScreen extends StatefulWidget {
   const DownloadHistoryScreen({super.key});
@@ -25,14 +27,59 @@ class _DownloadHistoryScreenState extends State<DownloadHistoryScreen> {
   // Cache para IDs de canciones para evitar consultas repetidas
   final Map<String, int?> _songIdCache = {};
 
+  // Cache de los *objetos* Future — evita que FutureBuilder reinicie
+  // en ConnectionState.waiting en cada rebuild del padre (sin este cache
+  // hay un flash de carátula en cada setState).
+  final Map<String, Future<int?>> _songIdFutureCache = {};
+
   // Cache global de todas las canciones (path -> song ID)
   Map<String, int>? _allSongsPathMap;
+
+  // Estado de descargas activas
+  DownloadTask? _currentTask;
+  List<DownloadTask> _queuedTasks = [];
+  StreamSubscription? _downloadStateSubscription;
 
   @override
   void initState() {
     super.initState();
-    _loadDownloadHistory();
+    _loadDownloadHistory(withDelay: true);
     _markAsViewed();
+    _setupDownloadListener();
+  }
+
+  void _setupDownloadListener() {
+    // Polling ligero para actualizar current/queue (igual que SimpleDownloadButton)
+    // El progreso ya se maneja dentro de _ActiveDownloadCard con ValueListenableBuilder.
+    _downloadStateSubscription =
+        Stream.periodic(const Duration(milliseconds: 200)).listen((_) {
+          if (!mounted) return;
+          final q = DownloadQueue();
+          final current = q.currentTask;
+          final queued = List<DownloadTask>.from(q.queue);
+
+          final currentChanged =
+              current?.notificationId != _currentTask?.notificationId;
+
+          if (currentChanged || queued.length != _queuedTasks.length) {
+            // Recargar historial cada vez que cambia la tarea actual:
+            // - cuando termina una sola descarga y pasa a la siguiente
+            // - cuando termina la cola completa
+            if (currentChanged && _currentTask != null) {
+              _appendNewDownloads();
+            }
+            setState(() {
+              _currentTask = current;
+              _queuedTasks = queued;
+            });
+          }
+        });
+  }
+
+  @override
+  void dispose() {
+    _downloadStateSubscription?.cancel();
+    super.dispose();
   }
 
   Future<void> _markAsViewed() async {
@@ -40,40 +87,70 @@ class _DownloadHistoryScreenState extends State<DownloadHistoryScreen> {
     hasNewDownloadsNotifier.value = false;
   }
 
-  Future<void> _loadDownloadHistory() async {
+  /// Añade solo las canciones nuevas al inicio de la lista, sin recargar todo.
+  /// Actualiza el mapa de paths para que las carátulas aparezcan correctamente.
+  Future<void> _appendNewDownloads() async {
+    try {
+      // Obtener todos los registros de la DB
+      final allRecords = await DownloadHistoryService().getCompletedDownloads();
+
+      // Calcular cuáles NO están ya en la lista actual
+      final existingIds = _downloadRecords.map((r) => r.id).toSet();
+      final newRecords = allRecords
+          .where((r) => !existingIds.contains(r.id))
+          .toList();
+
+      if (newRecords.isEmpty || !mounted) return;
+
+      // Refrescar el mapa de paths del MediaStore para poder resolver carátulas
+      // de las canciones recién escaneadas (re-query completo, una sola vez).
+      // IMPORTANTE: solo se invalida _allSongsPathMap, NO _songIdCache,
+      // porque los IDs ya conocidos siguen siendo válidos. Limpiar el caché
+      // haría que todos los FutureBuilder pasaran por ConnectionState.waiting
+      // y mostraran el icono de fallback un instante (flash de carátulas).
+      _allSongsPathMap = null;
+      await _preloadSongPaths();
+
+      if (!mounted) return;
+      setState(() {
+        // Insertar los nuevos al inicio (el historial muestra el más reciente arriba)
+        _downloadRecords = [...newRecords, ..._downloadRecords];
+      });
+    } catch (e) {
+      // No hacer nada — la lista existente sigue intacta
+    }
+  }
+
+  Future<void> _loadDownloadHistory({bool withDelay = false}) async {
     try {
       setState(() {
         _isLoading = true;
       });
 
-      // Iniciar timer para delay mínimo
       final startTime = DateTime.now();
 
-      // Pre-cargar el mapa de rutas de canciones UNA SOLA VEZ
+      // Pre-cargar el mapa de rutas de canciones
       await _preloadSongPaths();
 
       final records = await DownloadHistoryService().getCompletedDownloads();
 
-      // Calcular tiempo transcurrido
-      final elapsed = DateTime.now().difference(startTime);
-      final remainingDelay = const Duration(seconds: 1) - elapsed;
-
-      // Si no han pasado 2 segundos, esperar el tiempo restante
-      if (remainingDelay > Duration.zero) {
-        await Future.delayed(remainingDelay);
+      // Al entrar por primera vez aplicar delay mínimo para evitar lag visual
+      if (withDelay) {
+        final elapsed = DateTime.now().difference(startTime);
+        final remaining = const Duration(seconds: 1) - elapsed;
+        if (remaining > Duration.zero) await Future.delayed(remaining);
       }
 
+      if (!mounted) return;
       setState(() {
         _downloadRecords = records;
         _isLoading = false;
       });
     } catch (e) {
-      // En caso de error, esperar al menos 1 segundo antes de mostrar el mensaje
-      await Future.delayed(const Duration(seconds: 1));
+      if (!mounted) return;
       setState(() {
         _isLoading = false;
       });
-      // print('Error cargando historial: $e');
     }
   }
 
@@ -133,9 +210,13 @@ class _DownloadHistoryScreenState extends State<DownloadHistoryScreen> {
       // Eliminar de la base de datos
       await DownloadHistoryService().deleteDownload(record.id!);
 
-      // Limpiar del cache
+      // Limpiar del cache (resultado e historia del Future)
       _songIdCache.remove(record.filePath);
       _songIdCache.remove(
+        record.filePath.replaceFirst('/storage/emulated/0', ''),
+      );
+      _songIdFutureCache.remove(record.filePath);
+      _songIdFutureCache.remove(
         record.filePath.replaceFirst('/storage/emulated/0', ''),
       );
 
@@ -361,7 +442,12 @@ class _DownloadHistoryScreenState extends State<DownloadHistoryScreen> {
 
   Widget _buildAudioArtwork(String filePath) {
     return FutureBuilder<int?>(
-      future: _getSongIdFromPath(filePath),
+      // putIfAbsent garantiza que el mismo objeto Future se reutiliza
+      // en cada rebuild, evitando el flash de ConnectionState.waiting.
+      future: _songIdFutureCache.putIfAbsent(
+        filePath,
+        () => _getSongIdFromPath(filePath),
+      ),
       builder: (context, snapshot) {
         if (snapshot.hasData && snapshot.data != null) {
           return QueryArtworkWidget(
@@ -428,9 +514,14 @@ class _DownloadHistoryScreenState extends State<DownloadHistoryScreen> {
   // Función para construir la carátula del modal
   Widget _buildModalArtwork(DownloadRecord record) {
     final isSystem = colorSchemeNotifier.value == AppColorScheme.system;
+    final normalizedPath = record.filePath.replaceFirst(
+      '/storage/emulated/0',
+      '',
+    );
     return FutureBuilder<int?>(
-      future: _getSongIdFromPath(
-        record.filePath.replaceFirst('/storage/emulated/0', ''),
+      future: _songIdFutureCache.putIfAbsent(
+        normalizedPath,
+        () => _getSongIdFromPath(normalizedPath),
       ),
       builder: (context, snapshot) {
         if (snapshot.hasData && snapshot.data != null) {
@@ -514,7 +605,9 @@ class _DownloadHistoryScreenState extends State<DownloadHistoryScreen> {
       ),
       body: _isLoading
           ? Center(child: LoadingIndicator())
-          : _downloadRecords.isEmpty
+          : (_downloadRecords.isEmpty &&
+                _currentTask == null &&
+                _queuedTasks.isEmpty)
           ? Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -555,8 +648,14 @@ class _DownloadHistoryScreenState extends State<DownloadHistoryScreen> {
                         context,
                       ).colorScheme.secondary.withValues(alpha: 0.07);
 
+                // Construir lista de tareas activas (current + queued)
+                final activeTasks = <DownloadTask>[
+                  ..._queuedTasks,
+                  if (_currentTask != null) _currentTask!,
+                ];
+
                 return ListView.builder(
-                  itemCount: _downloadRecords.length,
+                  itemCount: activeTasks.length + _downloadRecords.length,
                   padding: EdgeInsets.only(
                     left: 16.0,
                     right: 16.0,
@@ -564,30 +663,97 @@ class _DownloadHistoryScreenState extends State<DownloadHistoryScreen> {
                     bottom: MediaQuery.of(context).padding.bottom + 16,
                   ),
                   itemBuilder: (context, index) {
-                    final record = _downloadRecords[index];
+                    // ── Descargas activas al inicio ──
+                    if (index < activeTasks.length) {
+                      final task = activeTasks[index];
+                      final isCurrentlyDownloading =
+                          _currentTask?.notificationId == task.notificationId;
+
+                      final bool activeIsFirst = index == 0;
+                      final bool activeIsLast =
+                          index == activeTasks.length - 1 &&
+                          _downloadRecords.isEmpty;
+                      final bool activeIsOnly =
+                          activeTasks.length == 1 && _downloadRecords.isEmpty;
+
+                      BorderRadius activeBorderRadius;
+                      if (activeIsOnly) {
+                        activeBorderRadius = BorderRadius.circular(16);
+                      } else if (activeIsFirst) {
+                        activeBorderRadius = const BorderRadius.only(
+                          topLeft: Radius.circular(16),
+                          topRight: Radius.circular(16),
+                          bottomLeft: Radius.circular(4),
+                          bottomRight: Radius.circular(4),
+                        );
+                      } else if (activeIsLast) {
+                        activeBorderRadius = const BorderRadius.only(
+                          topLeft: Radius.circular(4),
+                          topRight: Radius.circular(4),
+                          bottomLeft: Radius.circular(16),
+                          bottomRight: Radius.circular(16),
+                        );
+                      } else {
+                        activeBorderRadius = BorderRadius.circular(4);
+                      }
+
+                      return _ActiveDownloadCard(
+                        key: ValueKey(task.notificationId),
+                        task: task,
+                        isCurrentlyDownloading: isCurrentlyDownloading,
+                        borderRadius: activeBorderRadius,
+                        cardColor: cardColor,
+                        isLast: activeIsLast && _downloadRecords.isEmpty,
+                      );
+                    }
+
+                    // ── Historial de descargas completadas ──
+                    final recordIndex = index - activeTasks.length;
+                    final record = _downloadRecords[recordIndex];
                     final fileSize = _formatFileSize(record.fileSize);
 
-                    final bool isFirst = index == 0;
-                    final bool isLast = index == _downloadRecords.length - 1;
-                    final bool isOnly = _downloadRecords.length == 1;
+                    final bool isFirst =
+                        recordIndex == 0 && activeTasks.isEmpty;
+                    final bool isLast =
+                        recordIndex == _downloadRecords.length - 1;
+                    final bool isOnly =
+                        _downloadRecords.length == 1 && activeTasks.isEmpty;
+                    // Si hay tareas activas, el primer record tiene esquinas superiores redondeadas pequeñas
+                    final bool hasActivesAbove =
+                        activeTasks.isNotEmpty && recordIndex == 0;
 
                     BorderRadius borderRadius;
                     if (isOnly) {
                       borderRadius = BorderRadius.circular(16);
-                    } else if (isFirst) {
+                    } else if (isFirst && !hasActivesAbove) {
                       borderRadius = const BorderRadius.only(
                         topLeft: Radius.circular(16),
                         topRight: Radius.circular(16),
                         bottomLeft: Radius.circular(4),
                         bottomRight: Radius.circular(4),
                       );
-                    } else if (isLast) {
+                    } else if (isLast && !hasActivesAbove && !isFirst) {
                       borderRadius = const BorderRadius.only(
                         topLeft: Radius.circular(4),
                         topRight: Radius.circular(4),
                         bottomLeft: Radius.circular(16),
                         bottomRight: Radius.circular(16),
                       );
+                    } else if (isLast && (hasActivesAbove || isFirst)) {
+                      // Solo el elemento si no hay previos en historial, redondear abajo
+                      borderRadius = hasActivesAbove && isFirst
+                          ? const BorderRadius.only(
+                              topLeft: Radius.circular(4),
+                              topRight: Radius.circular(4),
+                              bottomLeft: Radius.circular(16),
+                              bottomRight: Radius.circular(16),
+                            )
+                          : const BorderRadius.only(
+                              topLeft: Radius.circular(4),
+                              topRight: Radius.circular(4),
+                              bottomLeft: Radius.circular(16),
+                              bottomRight: Radius.circular(16),
+                            );
                     } else {
                       borderRadius = BorderRadius.circular(4);
                     }
@@ -693,6 +859,139 @@ class _DownloadHistoryScreenState extends State<DownloadHistoryScreen> {
                 );
               },
             ),
+    );
+  }
+}
+
+/// Tarjeta de descarga activa. Aislada en su propio widget para que los
+/// rebuildeos del [progressNotifier] NO afecten al resto del ListView.
+class _ActiveDownloadCard extends StatelessWidget {
+  const _ActiveDownloadCard({
+    super.key,
+    required this.task,
+    required this.isCurrentlyDownloading,
+    required this.borderRadius,
+    required this.cardColor,
+    required this.isLast,
+  });
+
+  final DownloadTask task;
+  final bool isCurrentlyDownloading;
+  final BorderRadius borderRadius;
+  final Color cardColor;
+  final bool isLast;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: isLast ? 0 : 4),
+      child: Card(
+        color: cardColor,
+        margin: EdgeInsets.zero,
+        elevation: 0,
+        shape: RoundedRectangleBorder(borderRadius: borderRadius),
+        child: ClipRRect(
+          borderRadius: borderRadius,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: SizedBox(
+                  width: 50,
+                  height: 50,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      Container(
+                        width: 50,
+                        height: 50,
+                        decoration: BoxDecoration(
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.primary.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      Icon(
+                        isCurrentlyDownloading
+                            ? Icons.downloading
+                            : Icons.queue_music,
+                        color: Theme.of(context).colorScheme.primary,
+                        size: 24,
+                      ),
+                    ],
+                  ),
+                ),
+                title: Text(
+                  task.title,
+                  style: Theme.of(context).textTheme.titleMedium,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                subtitle: Text(
+                  isCurrentlyDownloading
+                      ? LocaleProvider.tr('downloading')
+                      : LocaleProvider.tr('in_queue'),
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.primary,
+                    fontSize: 12,
+                  ),
+                ),
+                // Trailing: porcentaje, solo cuando se está descargando
+                trailing: isCurrentlyDownloading
+                    ? ValueListenableBuilder<Map<int, double>>(
+                        valueListenable: DownloadQueue().progressNotifier,
+                        builder: (context, progressMap, _) {
+                          final p = progressMap[task.notificationId] ?? 0.0;
+                          if (p <= 0) return const SizedBox.shrink();
+                          return Text(
+                            '${(p * 100).toStringAsFixed(0)}%',
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.primary,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 13,
+                            ),
+                          );
+                        },
+                      )
+                    : null,
+              ),
+              // Progress bar — solo se reconstruye este widget, no el ListView
+              Padding(
+                padding: const EdgeInsets.only(left: 16, right: 16, bottom: 12),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: isCurrentlyDownloading
+                      ? ValueListenableBuilder<Map<int, double>>(
+                          valueListenable: DownloadQueue().progressNotifier,
+                          builder: (context, progressMap, _) {
+                            final p = progressMap[task.notificationId] ?? 0.0;
+                            return LinearProgressIndicator(
+                              value: p > 0 ? p : null,
+                              minHeight: 4,
+                              backgroundColor: Theme.of(
+                                context,
+                              ).colorScheme.primary.withValues(alpha: 0.15),
+                              color: Theme.of(context).colorScheme.primary,
+                            );
+                          },
+                        )
+                      : LinearProgressIndicator(
+                          value: null, // indeterminado para los de la cola
+                          minHeight: 4,
+                          backgroundColor: Theme.of(
+                            context,
+                          ).colorScheme.primary.withValues(alpha: 0.15),
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.primary.withValues(alpha: 0.4),
+                        ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

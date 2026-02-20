@@ -1466,8 +1466,9 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                   ListTile(
                                     leading: () {
                                       final isActive =
-                                          (audioHandler as MyAudioHandler)
-                                              .sleepTimeRemaining !=
+                                          audioHandler
+                                              .myHandler
+                                              ?.sleepTimeRemaining !=
                                           null;
                                       return Icon(
                                         isActive
@@ -1476,9 +1477,9 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                       );
                                     }(),
                                     title: Text(() {
-                                      final remaining =
-                                          (audioHandler as MyAudioHandler)
-                                              .sleepTimeRemaining;
+                                      final remaining = audioHandler
+                                          .myHandler
+                                          ?.sleepTimeRemaining;
                                       if (remaining != null) {
                                         return '${LocaleProvider.tr('sleep_timer_remaining')}: ${_formatSleepTimerDuration(remaining)}';
                                       } else {
@@ -2225,7 +2226,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                     return;
                   }
 
-                  await (audioHandler as MyAudioHandler).setVolumeBoost(
+                  await audioHandler.myHandler?.setVolumeBoost(
                     tempBoost,
                   );
 
@@ -3010,10 +3011,11 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
 
                                                       // Obtener la posición actual de reproducción
                                                       final currentPosition =
-                                                          (audioHandler
-                                                                  as MyAudioHandler)
-                                                              .player
-                                                              .position;
+                                                          audioHandler
+                                                              .myHandler
+                                                              ?.player
+                                                              .position ??
+                                                          Duration.zero;
 
                                                       // Cancelar timer anterior si existe
                                                       _hideIndicatorsTimer
@@ -3378,10 +3380,9 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                           : StreamBuilder<
                                                               Duration
                                                             >(
-                                                              stream:
-                                                                  (audioHandler
-                                                                          as MyAudioHandler)
-                                                                      .positionStream,
+                                                              stream: audioHandler
+                                                                  .myHandler
+                                                                  ?.positionStream,
                                                               builder:
                                                                   (
                                                                     context,
@@ -4263,15 +4264,15 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
 
                                             return ValueListenableBuilder<bool>(
                                               valueListenable:
-                                                  (audioHandler
-                                                          as MyAudioHandler)
-                                                      .isQueueTransitioning,
+                                                  audioHandler
+                                                      .myHandler
+                                                      ?.isQueueTransitioning ??
+                                                  ValueNotifier(false),
                                               builder: (context, isTransitioning, _) {
                                                 return StreamBuilder<Duration>(
-                                                  stream:
-                                                      (audioHandler
-                                                              as MyAudioHandler)
-                                                          .positionStream,
+                                                  stream: audioHandler
+                                                      .myHandler
+                                                      ?.positionStream,
                                                   initialData: Duration.zero,
                                                   builder: (context, posSnapshot) {
                                                     Duration position =
@@ -4288,11 +4289,10 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                     return StreamBuilder<
                                                       Duration?
                                                     >(
-                                                      stream:
-                                                          (audioHandler
-                                                                  as MyAudioHandler)
-                                                              .player
-                                                              .durationStream,
+                                                      stream: audioHandler
+                                                          .myHandler
+                                                          ?.player
+                                                          .durationStream,
                                                       builder: (context, durationSnapshot) {
                                                         final fallbackDuration =
                                                             durationSnapshot
@@ -4635,9 +4635,12 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                                 bool
                                                               >(
                                                                 valueListenable:
-                                                                    (audioHandler
-                                                                            as MyAudioHandler)
-                                                                        .isShuffleNotifier,
+                                                                    audioHandler
+                                                                        .myHandler
+                                                                        ?.isShuffleNotifier ??
+                                                                    ValueNotifier(
+                                                                      false,
+                                                                    ),
                                                                 builder:
                                                                     (
                                                                       context,
@@ -4672,11 +4675,9 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                                                       if (isLoading) {
                                                                                         return;
                                                                                       }
-                                                                                      await (audioHandler
-                                                                                              as MyAudioHandler)
-                                                                                          .toggleShuffle(
-                                                                                            !isShuffle,
-                                                                                          );
+                                                                                      await audioHandler.myHandler?.toggleShuffle(
+                                                                                        !isShuffle,
+                                                                                      );
                                                                                     },
                                                                                     tooltip: LocaleProvider.tr(
                                                                                       'shuffle',
@@ -4713,11 +4714,9 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                                                     if (isLoading) {
                                                                                       return;
                                                                                     }
-                                                                                    await (audioHandler
-                                                                                            as MyAudioHandler)
-                                                                                        .toggleShuffle(
-                                                                                          !isShuffle,
-                                                                                        );
+                                                                                    await audioHandler.myHandler?.toggleShuffle(
+                                                                                      !isShuffle,
+                                                                                    );
                                                                                   },
                                                                                   tooltip: LocaleProvider.tr(
                                                                                     'shuffle',
@@ -5216,7 +5215,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                       initialData: const [],
                       builder: (context, snapshot) {
                         final queue = audioHandler is MyAudioHandler
-                            ? (audioHandler as MyAudioHandler).effectiveQueue
+                            ? audioHandler.myHandler!.effectiveQueue
                             : snapshot.data ?? [];
 
                         final currentMediaItem =
@@ -5343,7 +5342,7 @@ class SleepTimerOptionsSheet extends StatelessWidget {
   const SleepTimerOptionsSheet({super.key});
 
   void _setTimer(BuildContext context, [Duration? duration]) {
-    (audioHandler as MyAudioHandler).startSleepTimer(duration);
+    audioHandler.myHandler?.startSleepTimer(duration);
     Navigator.of(context).pop();
   }
 
@@ -5460,7 +5459,7 @@ class SleepTimerOptionsSheet extends StatelessWidget {
                         ListTile(
                           title: Text(LocaleProvider.tr('cancel_timer')),
                           onTap: () {
-                            (audioHandler as MyAudioHandler).cancelSleepTimer();
+                            audioHandler.myHandler?.cancelSleepTimer();
                             Navigator.of(context).pop();
                           },
                         ),

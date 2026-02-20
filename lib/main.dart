@@ -38,11 +38,22 @@ AudioHandler? audioHandler;
 bool _audioHandlerInitialized = false;
 bool _audioHandlerInitializing = false;
 
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
 /// Notifier para indicar cuando el AudioService está listo
 final ValueNotifier<bool> audioServiceReady = ValueNotifier<bool>(false);
 final ValueNotifier<bool> overlayVisibleNotifier = ValueNotifier<bool>(
   false,
 ); // Notificador global para el overlay
+
+/// Extension para facilitar el acceso seguro a MyAudioHandler
+extension AudioHandlerSafeCast on AudioHandler? {
+  MyAudioHandler? get myHandler {
+    final handler = this;
+    if (handler is MyAudioHandler) return handler;
+    return null;
+  }
+}
 
 /// Verifica si el AudioService está inicializando
 bool get isAudioServiceInitializing => _audioHandlerInitializing;
@@ -376,6 +387,11 @@ void main() async {
     colorSchemeNotifier.value = AppColorScheme.values[colorIndex];
   }
 
+  // Cargar directorio de descargas
+  final downloadDir =
+      prefs.getString('download_directory') ?? '/storage/emulated/0/Music';
+  downloadDirectoryNotifier.value = downloadDir;
+
   bool permisosOk = false;
 
   if (!isFirstRun) {
@@ -623,8 +639,8 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
       // Restaurar configuración de audio (volumen, equalizer, etc.)
       // Esto es crucial para evitar que el volumen se quede bajo después de
       // que la app ha estado en segundo plano por mucho tiempo
-      if (audioHandler != null && audioHandler is MyAudioHandler) {
-        (audioHandler as MyAudioHandler).restoreAudioConfiguration();
+      if (audioHandler != null) {
+        audioHandler.myHandler?.restoreAudioConfiguration();
       }
 
       // Reconfigurar la barra de navegación
@@ -892,7 +908,6 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
     // Mostrar pantalla de carga mientras se cargan las preferencias
     if (_isLoading) {
       return MaterialApp(
-        debugShowCheckedModeBanner: false,
         localizationsDelegates: const [
           GlobalMaterialLocalizations.delegate,
           GlobalWidgetsLocalizations.delegate,
@@ -928,7 +943,6 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
                   builder: (context, artworkColor, _) {
                     return MaterialApp(
                       title: 'Aura',
-                      debugShowCheckedModeBanner: false,
                       themeAnimationDuration: Duration.zero,
                       localizationsDelegates: const [
                         GlobalMaterialLocalizations.delegate,

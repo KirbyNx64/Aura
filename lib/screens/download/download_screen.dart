@@ -2028,9 +2028,10 @@ class _DownloadScreenState extends State<DownloadScreen>
         author.replaceFirst(RegExp(r' - Topic$', caseSensitive: false), ''),
       );
       final safeTitle = limpiarMetadato(baseName);
-      
+
       // Limpiar el título de la playlist si está disponible
-      final safePlaylistTitle = playlistTitle != null && playlistTitle.isNotEmpty
+      final safePlaylistTitle =
+          playlistTitle != null && playlistTitle.isNotEmpty
           ? limpiarMetadato(playlistTitle)
           : null;
 
@@ -2038,7 +2039,8 @@ class _DownloadScreenState extends State<DownloadScreen>
         final tag = Tag(
           title: safeTitle,
           trackArtist: cleanedAuthor,
-          album: safePlaylistTitle, // Usar el título de la playlist como "álbum"
+          album:
+              safePlaylistTitle, // Usar el título de la playlist como "álbum"
           pictures: [
             Picture(
               bytes: bytes,

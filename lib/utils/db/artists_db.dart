@@ -6,11 +6,11 @@ class ArtistsDB {
   factory ArtistsDB() => _instance;
   ArtistsDB._internal();
 
-  Box<Map<String, dynamic>>? _box;
+  Box? _box;
 
-  Future<Box<Map<String, dynamic>>> get box async {
+  Future<Box> get box async {
     if (_box != null) return _box!;
-    _box = await Hive.openBox<Map<String, dynamic>>('artists_index');
+    _box = await Hive.openBox('artists_index');
     return _box!;
   }
 
@@ -65,7 +65,7 @@ class ArtistsDB {
 
     // Guardar artistas con sus canciones usando hash como clave
     int artistId = 0;
-    final Map<dynamic, Map<String, dynamic>> entries = {};
+    final Map<dynamic, dynamic> entries = {};
 
     for (final entry in artistSongs.entries) {
       final artist = entry.key;
@@ -92,7 +92,9 @@ class ArtistsDB {
       await b.putAll(entries);
     }
 
-    // print('🎵 ArtistsDB: Indexación completada, ${artistSongs.length} artistas guardados');
+    // print(
+    //   '🎵 ArtistsDB: Indexación completada, ${artistSongs.length} artistas guardados',
+    // );
   }
 
   /// Obtiene los artistas más populares (con más canciones)
@@ -128,12 +130,16 @@ class ArtistsDB {
       }
 
       // Ordenar por cantidad de canciones (descendente)
-      artists.sort(
-        (a, b) => (b['song_count'] as int).compareTo(a['song_count'] as int),
-      );
+      artists.sort((a, b) {
+        final countA = int.tryParse(a['song_count'].toString()) ?? 0;
+        final countB = int.tryParse(b['song_count'].toString()) ?? 0;
+        return countB.compareTo(countA);
+      });
 
       final result = artists.take(limit).toList();
-      // print('🎵 ArtistsDB: Retornando ${result.length} artistas (después de filtrar desconocidos)');
+      // print(
+      //   '🎵 ArtistsDB: Retornando ${result.length} artistas (después de filtrar desconocidos)',
+      // );
 
       return result;
     } catch (e) {

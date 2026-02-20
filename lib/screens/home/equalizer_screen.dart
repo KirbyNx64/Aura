@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
-import 'package:music/main.dart';
+import 'package:music/main.dart' show AudioHandlerSafeCast, audioHandler;
 import 'package:music/l10n/locale_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:music/utils/notifiers.dart';
@@ -62,11 +62,7 @@ class _EqualizerScreenState extends State<EqualizerScreen> {
       }
 
       // Acceder al equalizer del handler con timeout
-      try {
-        _equalizer = (handler as dynamic).equalizer as AndroidEqualizer?;
-      } catch (e) {
-        _equalizer = null;
-      }
+      _equalizer = handler.myHandler?.equalizer;
 
       if (_equalizer != null) {
         try {
@@ -101,26 +97,19 @@ class _EqualizerScreenState extends State<EqualizerScreen> {
 
       // Cargar volume boost desde el handler (que ya lo cargó de SharedPreferences)
       try {
-        // Obtener el valor actual del notifier del handler
-        _volumeBoostNotifier =
-            (handler as dynamic).volumeBoostNotifier as ValueNotifier<double>;
-
-        // Establecer el valor inicial
-        if (mounted) {
-          setState(() {
-            _volumeBoost = _volumeBoostNotifier!.value;
-          });
+        final h = handler.myHandler;
+        if (h != null) {
+          _volumeBoostNotifier = h.volumeBoostNotifier;
+          _volumeBoost = _volumeBoostNotifier!.value;
+          _volumeBoostListener = () {
+            if (mounted) {
+              setState(() {
+                _volumeBoost = _volumeBoostNotifier!.value;
+              });
+            }
+          };
+          _volumeBoostNotifier!.addListener(_volumeBoostListener!);
         }
-
-        // Crear y agregar listener para cambios futuros
-        _volumeBoostListener = () {
-          if (mounted) {
-            setState(() {
-              _volumeBoost = _volumeBoostNotifier!.value;
-            });
-          }
-        };
-        _volumeBoostNotifier!.addListener(_volumeBoostListener!);
       } catch (e) {
         // Si hay error al cargar volume boost, intentar obtener directamente de SharedPreferences
         try {
@@ -224,7 +213,7 @@ class _EqualizerScreenState extends State<EqualizerScreen> {
       _volumeBoost = value;
     });
 
-    await (handler as dynamic).setVolumeBoost(value);
+    await handler.myHandler?.setVolumeBoost(value);
   }
 
   Future<void> _resetEqualizer() async {

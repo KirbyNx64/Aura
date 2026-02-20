@@ -21,6 +21,11 @@ class DownloadQueue {
   bool _isFirstDownload = true;
   int _nextNotificationId = 1; // Contador para IDs únicos de notificación
 
+  /// Notifier público para el progreso de cada descarga (notificationId -> 0..1)
+  /// Cualquier widget puede escucharlo sin romper otros callbacks.
+  final ValueNotifier<Map<int, double>> progressNotifier =
+      ValueNotifier<Map<int, double>>({});
+
   // Callbacks globales para actualizar la UI
   Function(double progress, int notificationId)? _onProgressCallback;
   Function(bool isDownloading, bool isProcessing)? _onStateChangeCallback;
@@ -142,6 +147,9 @@ class DownloadQueue {
       onProgressUpdate: (progress) {
         // print('Progreso: ${(progress * 100).toStringAsFixed(1)}%');
         _onProgressCallback?.call(progress, task.notificationId);
+        // Actualizar el notifier público de progreso
+        progressNotifier.value = Map<int, double>.from(progressNotifier.value)
+          ..[task.notificationId] = progress;
         // Usar el servicio global de notificaciones
         DownloadNotificationThrottler().show(
           progress * 100,

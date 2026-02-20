@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:music/utils/db/favorites_db.dart';
 import 'package:on_audio_query/on_audio_query.dart';
-import 'package:music/main.dart';
+import 'package:music/main.dart' show AudioHandlerSafeCast, audioHandler;
 import 'package:music/utils/audio/background_audio_handler.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:music/utils/notifiers.dart';
@@ -19,6 +19,7 @@ import 'package:music/widgets/song_info_dialog.dart';
 // import 'package:music/widgets/hero_cached.dart';
 import 'package:music/widgets/artwork_list_tile.dart';
 import 'package:music/screens/artist/artist_screen.dart';
+import 'package:music/widgets/refresh_m3e.dart';
 
 enum OrdenFavoritos { normal, alfabetico, invertido, ultimoAgregado }
 
@@ -190,7 +191,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
 
     if (index == -1) return;
 
-    final handler = audioHandler as MyAudioHandler;
+    final handler = audioHandler.myHandler;
     /*
     final currentQueue = handler.queue.value;
     bool isSameQueue = false;
@@ -212,7 +213,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     */
 
     // Limpiar la cola y el MediaItem antes de mostrar la nueva canción
-    (audioHandler as MyAudioHandler).queue.add([]);
+    audioHandler.myHandler?.queue.add([]);
     // (audioHandler as MyAudioHandler).mediaItem.add(null);
 
     // Limpiar el fallback de las carátulas para evitar parpadeo
@@ -243,7 +244,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
         'queueIndex': 0,
       },
     );
-    (audioHandler as MyAudioHandler).mediaItem.add(tempMediaItem);
+    audioHandler.myHandler?.mediaItem.add(tempMediaItem);
     */
 
     // Solo guardar el origen si se va a cambiar la cola
@@ -253,8 +254,8 @@ class _FavoritesScreenState extends State<FavoritesScreen>
       LocaleProvider.tr('favorites_title'),
     );
 
-    await handler.setQueueFromSongs(_favorites, initialIndex: index);
-    await handler.play();
+    await handler?.setQueueFromSongs(_favorites, initialIndex: index);
+    await handler?.play();
   }
 
   Future<void> _removeFromFavorites(SongModel song) async {
@@ -375,7 +376,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     FocusManager.instance.primaryFocus?.unfocus();
     if (playLoadingNotifier.value) return;
     try {
-      (audioHandler as MyAudioHandler).isShuffleNotifier.value = false;
+      audioHandler.myHandler?.isShuffleNotifier.value = false;
     } catch (_) {}
     if (_isSelecting) {
       setState(() {
@@ -410,13 +411,13 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     } catch (_) {
       // Si no es rápido, actualizar cuando esté listo para evitar el flash del placeholder
       artUriFuture.then((uri) {
-        if (uri != null && mounted && audioHandler is MyAudioHandler) {
-          final handler = audioHandler as MyAudioHandler;
-          final current = handler.mediaItem.value;
+        if (uri != null && mounted) {
+          final handler = audioHandler.myHandler;
+          final current = handler?.mediaItem.value;
           // Verificar que seguimos en la misma canción
           if (current != null && current.extras?['songId'] == songId) {
             final updatedItem = current.copyWith(artUri: uri);
-            handler.mediaItem.add(updatedItem);
+            handler?.mediaItem.add(updatedItem);
           }
         }
       });
@@ -437,7 +438,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
         'queueIndex': 0,
       },
     );
-    (audioHandler as MyAudioHandler).mediaItem.add(tempMediaItem);
+    audioHandler.myHandler?.mediaItem.add(tempMediaItem);
 
     // Abrir el panel del reproductor con la nueva animación
     if (!mounted) return;
@@ -566,9 +567,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                 title: TranslatedText('add_to_queue'),
                 onTap: () async {
                   Navigator.of(context).pop();
-                  await (audioHandler as MyAudioHandler).addSongsToQueueEnd([
-                    song,
-                  ]);
+                  await audioHandler.myHandler?.addSongsToQueueEnd([song]);
                 },
               ),
               ListTile(
@@ -1760,8 +1759,8 @@ class _FavoritesScreenState extends State<FavoritesScreen>
           onPressed: () {
             if (isCurrent) {
               playing
-                  ? (audioHandler as MyAudioHandler).pause()
-                  : (audioHandler as MyAudioHandler).play();
+                  ? audioHandler.myHandler?.pause()
+                  : audioHandler.myHandler?.play();
             } else {
               _onSongSelected(song);
             }
@@ -1943,8 +1942,9 @@ class _FavoritesScreenState extends State<FavoritesScreen>
           ),
         ),
       ),
-      body: RefreshIndicator(
+      body: ExpressiveRefreshIndicator(
         onRefresh: _refreshFavorites,
+        color: Theme.of(context).colorScheme.primary,
         child: ValueListenableBuilder<MediaItem?>(
           valueListenable: _currentMediaItemNotifier,
           builder: (context, currentMediaItem, child) {

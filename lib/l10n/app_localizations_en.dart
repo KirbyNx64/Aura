@@ -406,6 +406,7 @@ const Map<String, String> appLocalizationsEn = {
   // Download screen
   'download': 'Download',
   'youtube_link': 'YouTube Link',
+  'in_queue': 'In queue...',
   'paste_link': 'Paste link',
   'large_playlist_detected': 'Large playlist detected',
   'fetching_playlist_info':
