@@ -13,13 +13,17 @@ class LyricsSearchResult {
   final String syncedLyrics;
   final String? plainLyrics;
   final int duration;
+  final String? album;
+  final bool isInstrumental;
 
   LyricsSearchResult({
     required this.title,
     required this.artist,
+    this.album,
     required this.syncedLyrics,
     this.plainLyrics,
     required this.duration,
+    this.isInstrumental = false,
   });
 }
 
@@ -98,6 +102,7 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
         'https://lrclib.net/api/search',
         queryParameters: {'q': query},
         options: Options(
+          headers: {'User-Agent': SyncedLyricsService.userAgent},
           validateStatus: (status) => status != null && status < 500,
         ),
       );
@@ -110,20 +115,22 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
           if (item is Map<String, dynamic>) {
             final title = item['trackName']?.toString() ?? '';
             final artist = item['artistName']?.toString() ?? '';
+            final album = item['albumName']?.toString();
             final syncedLyrics = item['syncedLyrics']?.toString() ?? '';
             final plainLyrics = item['plainLyrics']?.toString();
             final duration = item['duration'] is int ? item['duration'] : 0;
+            final isInstrumental = item['instrumental'] == true;
 
-            if (title.isNotEmpty &&
-                artist.isNotEmpty &&
-                syncedLyrics.isNotEmpty) {
+            if (title.isNotEmpty && artist.isNotEmpty) {
               results.add(
                 LyricsSearchResult(
                   title: title,
                   artist: artist,
+                  album: album,
                   syncedLyrics: syncedLyrics,
                   plainLyrics: plainLyrics,
                   duration: duration,
+                  isInstrumental: isInstrumental,
                 ),
               );
             }
@@ -775,12 +782,42 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          result.title,
-                          style: Theme.of(context).textTheme.titleMedium
-                              ?.copyWith(fontWeight: FontWeight.bold),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                result.title,
+                                style: Theme.of(context).textTheme.titleMedium
+                                    ?.copyWith(fontWeight: FontWeight.bold),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            if (result.isInstrumental)
+                              Container(
+                                margin: const EdgeInsets.only(left: 8),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.primary.withAlpha(40),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  'Instrumental',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.primary,
+                                  ),
+                                ),
+                              ),
+                          ],
                         ),
                         const SizedBox(height: 4),
                         Text(
@@ -794,6 +831,22 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
+                        if (result.album != null &&
+                            result.album!.isNotEmpty) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            result.album!,
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onSurfaceVariant.withAlpha(180),
+                                  fontStyle: FontStyle.italic,
+                                ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
                       ],
                     ),
                   ),

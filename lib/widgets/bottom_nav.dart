@@ -108,6 +108,7 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
   final ValueNotifier<bool> _hidePlayerPanelNotifier = ValueNotifier(true);
   Timer? _hidePlayerTimer;
   Timer? _hideBackgroundTimer;
+  Widget? _playerScreenWidget;
 
   @override
   void initState() {
@@ -192,7 +193,10 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
     super.dispose();
   }
 
-  List<NavigationDestination> _getNavBarItems(BuildContext context) {
+  List<NavigationDestination> _getNavBarItems(
+    BuildContext context,
+    AppColorScheme colorScheme,
+  ) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final iconColor = isDark
@@ -217,7 +221,12 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
           builder: (context, hasNew, child) {
             return Badge(
               isLabelVisible: hasNew,
-              backgroundColor: theme.colorScheme.primary,
+              backgroundColor:
+                  (colorScheme == AppColorScheme.amoled &&
+                      _selectedIndex == 1 &&
+                      isDark)
+                  ? Colors.black
+                  : theme.colorScheme.primary,
               smallSize: 10,
               child: child!,
             );
@@ -232,7 +241,12 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
           builder: (context, hasNew, child) {
             return Badge(
               isLabelVisible: hasNew,
-              backgroundColor: theme.colorScheme.primary,
+              backgroundColor:
+                  (colorScheme == AppColorScheme.amoled &&
+                      _selectedIndex == 1 &&
+                      isDark)
+                  ? Colors.black
+                  : theme.colorScheme.primary,
               smallSize: 10,
               child: child!,
             );
@@ -410,7 +424,7 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
                               if (_hidePlayerTimer == null &&
                                   !_hidePlayerPanelNotifier.value) {
                                 _hidePlayerTimer = Timer(
-                                  const Duration(seconds: 2),
+                                  const Duration(seconds: 1),
                                   () {
                                     if (mounted) {
                                       _hidePlayerPanelNotifier.value = true;
@@ -515,6 +529,25 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
                               // padding modificado por el Scaffold que incluye la
                               // altura del bottom nav (ahora fija con SizedBox).
                               final data = MediaQuery.of(context);
+                              
+                              // Crear el widget del reproductor una vez y mantenerlo en memoria
+                              _playerScreenWidget ??= FullPlayerScreen(
+                                initialMediaItem: snapshot.data,
+                                panelPositionNotifier: _panelPositionNotifier,
+                                onClose: () {
+                                  if (_overlayPanelController.isAttached) {
+                                    _overlayPanelController.close();
+                                  }
+                                },
+                                onPlaylistStateChanged: (isOpen) {
+                                  if (_playlistOpen != isOpen) {
+                                    setState(() {
+                                      _playlistOpen = isOpen;
+                                    });
+                                  }
+                                },
+                              );
+                              
                               return MediaQuery(
                                 data: data.copyWith(
                                   padding: data.padding.copyWith(
@@ -537,24 +570,7 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
                                           child: child!,
                                         );
                                       },
-                                      child: FullPlayerScreen(
-                                        initialMediaItem: snapshot.data,
-                                        panelPositionNotifier:
-                                            _panelPositionNotifier,
-                                        onClose: () {
-                                          if (_overlayPanelController
-                                              .isAttached) {
-                                            _overlayPanelController.close();
-                                          }
-                                        },
-                                        onPlaylistStateChanged: (isOpen) {
-                                          if (_playlistOpen != isOpen) {
-                                            setState(() {
-                                              _playlistOpen = isOpen;
-                                            });
-                                          }
-                                        },
-                                      ),
+                                      child: _playerScreenWidget ?? const SizedBox.shrink(),
                                     ),
                                   ),
                                 ),
@@ -617,7 +633,7 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
                   animationDuration: const Duration(milliseconds: 400),
                   selectedIndex: _selectedIndex,
                   onDestinationSelected: _onItemTapped,
-                  destinations: _getNavBarItems(context),
+                  destinations: _getNavBarItems(context, colorScheme),
                   indicatorColor: isAmoled && isDark ? Colors.white : null,
                   labelTextStyle: WidgetStateProperty.resolveWith<TextStyle?>((
                     Set<WidgetState> states,

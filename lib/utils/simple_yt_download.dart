@@ -116,10 +116,11 @@ class DownloadQueue {
       }
     }
 
-    // Cuando la cola está vacía, notificar que no hay más descargas
+    // Cuando la cola está vacía, notificar que no hay más descargas y cerrar YoutubeExplode
     if (_queue.isEmpty) {
       _onStateChangeCallback?.call(false, false);
       _isFirstDownload = true; // Resetear para la próxima descarga
+      DownloadManager().closeYoutubeExplode();
     }
 
     _isProcessing = false;

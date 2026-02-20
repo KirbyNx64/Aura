@@ -166,6 +166,8 @@ Future<Map<String, dynamic>?> getArtistDetails(String browseId) async {
           'publico',
           'público',
           'audiencia',
+          'audience',
+          'audiences',
           'viewers',
           'vistas',
         ],

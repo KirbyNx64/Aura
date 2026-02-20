@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:palette_generator/palette_generator.dart';
+import 'package:palette_generator_master/palette_generator_master.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:music/utils/audio/background_audio_handler.dart'
     show artworkCache, getOrCacheArtwork;
@@ -155,7 +155,7 @@ class ThemeController {
     // La guardia y estado _processing se manejan en _processPending
 
     try {
-      final generator = await PaletteGenerator.fromImageProvider(
+      final generator = await PaletteGeneratorMaster.fromImageProvider(
         ResizeImage(imageProvider, height: 50, width: 50),
         maximumColorCount: 16,
       );

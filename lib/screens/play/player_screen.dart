@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:android_nav_setting/android_nav_setting.dart';
 import 'package:music/widgets/title_marquee.dart';
 import 'package:music/main.dart';
-import 'package:music/widgets/hero_cached.dart';
+import 'package:music/widgets/artwork_cached.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:music/widgets/slider.dart';
 // import 'package:http/http.dart' as http;
@@ -124,6 +125,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
   bool _showLeftIndicator = false;
   bool _showRightIndicator = false;
   Timer? _hideIndicatorsTimer;
+  bool _isGestureNavigation = false;
   late AnimationController _fadeController;
   late Animation<double> _fadeAnimation;
 
@@ -162,6 +164,8 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
   final ValueNotifier<bool> _hidePanelContentNotifier = ValueNotifier(true);
   Timer? _hidePanelTimer;
   bool _isPlaylistPanelOpen = false;
+  int _lyricsResetCounter = 0;
+  int _playlistResetCounter = 0;
 
   String _formatDuration(Duration duration) {
     final hours = duration.inHours;
@@ -650,6 +654,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     _prefsFuture = SharedPreferences.getInstance();
     _loadGesturePreferences();
     _setupGesturePreferencesListener();
+    _checkNavSetting();
 
     // Escuchar cambios en favoritos/dislikes desde otras fuentes (ej: notificación)
     favoritesShouldReload.addListener(_onFavoritesChanged);
@@ -666,6 +671,20 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
 
     // Eliminado: _loadQueueSource();
     // Eliminado: (audioHandler as MyAudioHandler).queueSourceNotifier.addListener(_onQueueSourceChanged);
+  }
+
+  Future<void> _checkNavSetting() async {
+    try {
+      final navSetting = AndroidNavSetting();
+      bool isGesture = await navSetting.isGestureNavigationEnabled();
+      if (mounted) {
+        setState(() {
+          _isGestureNavigation = isGesture;
+        });
+      }
+    } catch (e) {
+      // Ignorar fallback
+    }
   }
 
   /// Configura el listener para cambios en las preferencias de gestos
@@ -2242,6 +2261,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     // Abrir el panel de playlist
     setState(() {
       _panelContent = PanelContent.playlist;
+      _playlistResetCounter++;
     });
     if (_playlistPanelController.isAttached) {
       _playlistPanelController.open();
@@ -3145,7 +3165,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                                           milliseconds:
                                                                               75,
                                                                         ),
-                                                                        child: ArtworkHeroCached(
+                                                                        child: ArtworkCached(
                                                                           key: ValueKey(
                                                                             'player_art_${(currentMediaItem.extras?['songId'] ?? currentMediaItem.id).toString()}',
                                                                           ),
@@ -3157,16 +3177,14 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                                             artworkSize *
                                                                                 0.04,
                                                                           ),
-                                                                          heroTag:
-                                                                              widget.onClose !=
-                                                                                  null
-                                                                              ? 'panel_player_artwork_${(currentMediaItem.extras?['songId'] ?? currentMediaItem.id).toString()}'
-                                                                              : 'now_playing_artwork_${(currentMediaItem.extras?['songId'] ?? currentMediaItem.id).toString()}',
                                                                           showPlaceholderIcon:
                                                                               !_showLyrics,
                                                                           songPath:
                                                                               currentMediaItem.extras?['data']
                                                                                   as String?,
+                                                                          songId:
+                                                                              currentMediaItem.extras?['songId']
+                                                                                  as int?,
                                                                         ),
                                                                       ),
                                                                       // Indicadores de doble toque solo cuando las letras se muestran en modal y se ha hecho doble toque
@@ -3439,36 +3457,95 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                           child: Row(
                                             children: [
                                               Expanded(
-                                                child: Text(
-                                                  (currentMediaItem.artist ==
-                                                              null ||
-                                                          currentMediaItem
-                                                              .artist!
-                                                              .trim()
-                                                              .isEmpty)
-                                                      ? LocaleProvider.tr(
-                                                          'unknown_artist',
-                                                        )
-                                                      : currentMediaItem
-                                                            .artist!,
-                                                  style: Theme.of(context)
-                                                      .textTheme
-                                                      .titleMedium
-                                                      ?.copyWith(
-                                                        color: Theme.of(context)
-                                                            .colorScheme
-                                                            .onSurface
-                                                            .withValues(
-                                                              alpha: 0.8,
+                                                child: GestureDetector(
+                                                  onTap: () {
+                                                    final name =
+                                                        (currentMediaItem
+                                                                    .artist ??
+                                                                '')
+                                                            .trim();
+                                                    if (name.isEmpty) return;
+                                                    Navigator.of(context).push(
+                                                      PageRouteBuilder(
+                                                        pageBuilder:
+                                                            (
+                                                              context,
+                                                              animation,
+                                                              secondaryAnimation,
+                                                            ) => ArtistScreen(
+                                                              artistName: name,
                                                             ),
-                                                        fontWeight:
-                                                            FontWeight.w400,
-                                                        fontSize: 14,
+                                                        transitionsBuilder:
+                                                            (
+                                                              context,
+                                                              animation,
+                                                              secondaryAnimation,
+                                                              child,
+                                                            ) {
+                                                              const begin =
+                                                                  Offset(
+                                                                    1.0,
+                                                                    0.0,
+                                                                  );
+                                                              const end =
+                                                                  Offset.zero;
+                                                              const curve =
+                                                                  Curves.ease;
+                                                              final tween =
+                                                                  Tween(
+                                                                    begin:
+                                                                        begin,
+                                                                    end: end,
+                                                                  ).chain(
+                                                                    CurveTween(
+                                                                      curve:
+                                                                          curve,
+                                                                    ),
+                                                                  );
+                                                              return SlideTransition(
+                                                                position:
+                                                                    animation
+                                                                        .drive(
+                                                                          tween,
+                                                                        ),
+                                                                child: child,
+                                                              );
+                                                            },
                                                       ),
-                                                  maxLines: 1,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                  textAlign: TextAlign.left,
+                                                    );
+                                                  },
+                                                  child: Text(
+                                                    (currentMediaItem.artist ==
+                                                                null ||
+                                                            currentMediaItem
+                                                                .artist!
+                                                                .trim()
+                                                                .isEmpty)
+                                                        ? LocaleProvider.tr(
+                                                            'unknown_artist',
+                                                          )
+                                                        : currentMediaItem
+                                                              .artist!,
+                                                    style: Theme.of(context)
+                                                        .textTheme
+                                                        .titleMedium
+                                                        ?.copyWith(
+                                                          color:
+                                                              Theme.of(context)
+                                                                  .colorScheme
+                                                                  .onSurface
+                                                                  .withValues(
+                                                                    alpha: 0.8,
+                                                                  ),
+                                                          fontWeight:
+                                                              FontWeight.w400,
+                                                          fontSize: 14,
+                                                        ),
+                                                    maxLines: 1,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                    textAlign: TextAlign.left,
+                                                  ),
                                                 ),
                                               ),
                                             ],
@@ -4646,6 +4723,11 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                                                     'shuffle',
                                                                                   ),
                                                                                 ),
+                                                                          SizedBox(
+                                                                            width:
+                                                                                iconSize /
+                                                                                6,
+                                                                          ),
                                                                           IconButton(
                                                                             icon: const Icon(
                                                                               Icons.skip_previous_rounded,
@@ -4858,6 +4940,11 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                                               audioHandler?.skipToNext();
                                                                             },
                                                                           ),
+                                                                          SizedBox(
+                                                                            width:
+                                                                                iconSize /
+                                                                                6,
+                                                                          ),
                                                                           (isAmoledTheme &&
                                                                                   repeatMode !=
                                                                                       AudioServiceRepeatMode.none)
@@ -4945,11 +5032,13 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                         ),
                                         const Spacer(),
                                         if (!is16by9 && !isSmallScreen) ...[
-                                          const SizedBox(height: 30),
-                                          Align(
-                                            alignment: Alignment.bottomCenter,
-                                            child: SafeArea(
-                                              top: false,
+                                          Transform.translate(
+                                            offset: Offset(
+                                              0,
+                                              _isGestureNavigation ? 14 : -4,
+                                            ),
+                                            child: Align(
+                                              alignment: Alignment.bottomCenter,
                                               child: InkWell(
                                                 borderRadius:
                                                     BorderRadius.circular(12),
@@ -4961,9 +5050,13 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                   }
                                                 },
                                                 child: Padding(
-                                                  padding: const EdgeInsets.all(
-                                                    12.0,
-                                                  ),
+                                                  padding:
+                                                      const EdgeInsets.only(
+                                                        top: 12.0,
+                                                        left: 12.0,
+                                                        right: 12.0,
+                                                        bottom: 4.0,
+                                                      ),
                                                   child: Icon(
                                                     Icons
                                                         .keyboard_arrow_up_rounded,
@@ -5017,6 +5110,10 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                 (widget.panelPositionNotifier == null ||
                     widget.panelPositionNotifier!.value >= 0.95)) {
               if (_playlistPanelController.isAttached) {
+                setState(() {
+                  _panelContent = PanelContent.playlist;
+                  _playlistResetCounter++;
+                });
                 _playlistPanelController.open();
               }
             }
@@ -5040,6 +5137,10 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                 (widget.panelPositionNotifier == null ||
                     widget.panelPositionNotifier!.value >= 0.95)) {
               if (_playlistPanelController.isAttached) {
+                setState(() {
+                  _panelContent = PanelContent.playlist;
+                  _playlistResetCounter++;
+                });
                 _playlistPanelController.open();
               }
             }
@@ -5099,43 +5200,42 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
         panelBuilder: (sc) {
           return ValueListenableBuilder<bool>(
             valueListenable: _hidePanelContentNotifier,
-            builder: (context, hide, child) {
-              return Visibility(
-                visible: !hide,
-                maintainState: true,
-                maintainAnimation: false,
-                maintainSize: false,
-                child: child!,
-              );
+            builder: (context, hide, _) {
+              if (hide) {
+                return const SizedBox.shrink();
+              }
+
+              return _panelContent == PanelContent.lyrics
+                  ? CurrentLyricsScreen(
+                      key: ValueKey('lyrics_$_lyricsResetCounter'),
+                      currentMediaItem: audioHandler?.mediaItem.valueOrNull,
+                      panelController: _playlistPanelController,
+                    )
+                  : StreamBuilder<List<MediaItem>>(
+                      stream: audioHandler?.queue,
+                      initialData: const [],
+                      builder: (context, snapshot) {
+                        final queue = audioHandler is MyAudioHandler
+                            ? (audioHandler as MyAudioHandler).effectiveQueue
+                            : snapshot.data ?? [];
+
+                        final currentMediaItem =
+                            audioHandler?.mediaItem.valueOrNull;
+                        final currentIndex = queue.indexWhere(
+                          (item) => item.id == currentMediaItem?.id,
+                        );
+
+                        return CurrentPlaylistScreen(
+                          key: ValueKey('playlist_$_playlistResetCounter'),
+                          queue: queue,
+                          currentMediaItem: currentMediaItem,
+                          currentIndex: currentIndex,
+                          scrollController: sc,
+                          panelController: _playlistPanelController,
+                        );
+                      },
+                    );
             },
-            child: _panelContent == PanelContent.lyrics
-                ? CurrentLyricsScreen(
-                    currentMediaItem: audioHandler?.mediaItem.valueOrNull,
-                    panelController: _playlistPanelController,
-                  )
-                : StreamBuilder<List<MediaItem>>(
-                    stream: audioHandler?.queue,
-                    initialData: const [],
-                    builder: (context, snapshot) {
-                      final queue = audioHandler is MyAudioHandler
-                          ? (audioHandler as MyAudioHandler).effectiveQueue
-                          : snapshot.data ?? [];
-
-                      final currentMediaItem =
-                          audioHandler?.mediaItem.valueOrNull;
-                      final currentIndex = queue.indexWhere(
-                        (item) => item.id == currentMediaItem?.id,
-                      );
-
-                      return CurrentPlaylistScreen(
-                        queue: queue,
-                        currentMediaItem: currentMediaItem,
-                        currentIndex: currentIndex,
-                        scrollController: sc,
-                        panelController: _playlistPanelController,
-                      );
-                    },
-                  ),
           );
         },
         body: ValueListenableBuilder<bool>(
@@ -5161,6 +5261,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
   ) async {
     setState(() {
       _panelContent = PanelContent.lyrics;
+      _lyricsResetCounter++;
     });
     if (_playlistPanelController.isAttached) {
       _playlistPanelController.open();

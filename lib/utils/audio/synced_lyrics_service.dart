@@ -1,6 +1,7 @@
 import 'package:audio_service/audio_service.dart';
 import 'package:dio/dio.dart';
-import 'package:hive_flutter/hive_flutter.dart';
+import 'package:hive_ce_flutter/hive_ce_flutter.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import '../connectivity_helper.dart';
 
 part 'synced_lyrics_service.g.dart';
@@ -16,19 +17,10 @@ class LyricsData extends HiveObject {
   @HiveField(2)
   String? plainLyrics;
 
-  LyricsData({
-    required this.id,
-    this.synced,
-    this.plainLyrics,
-  });
+  LyricsData({required this.id, this.synced, this.plainLyrics});
 }
 
-enum LyricsResultType {
-  found,
-  notFound,
-  apiUnavailable,
-  noConnection,
-}
+enum LyricsResultType { found, notFound, apiUnavailable, noConnection }
 
 class LyricsResult {
   final LyricsResultType type;
@@ -42,6 +34,7 @@ class SyncedLyricsService {
   static Box<LyricsData>? _box;
   static const String _apiBaseUrl = 'https://lrclib.net';
   static const String _apiEndpoint = '/api/get';
+  static String userAgent = 'Aura';
 
   static Future<Box<LyricsData>> get box async {
     if (_box != null) return _box!;
@@ -52,16 +45,26 @@ class SyncedLyricsService {
   static Future<void> initialize() async {
     await Hive.initFlutter();
     Hive.registerAdapter(LyricsDataAdapter());
+
+    // Obtener la versión de la app para el User-Agent
+    try {
+      final packageInfo = await PackageInfo.fromPlatform();
+      userAgent =
+          'Aura v${packageInfo.version} (https://github.com/KirbyNx64/Aura)';
+    } catch (e) {
+      userAgent = 'Aura (https://github.com/KirbyNx64/Aura)';
+    }
   }
 
   // Verificar si la API está disponible usando el endpoint de búsqueda
   static Future<bool> _isApiAvailable() async {
     try {
       // Verificar conectividad usando el helper
-      final hasConnection = await ConnectivityHelper.hasInternetConnectionWithTimeout(
-        timeout: const Duration(seconds: 5),
-      );
-      
+      final hasConnection =
+          await ConnectivityHelper.hasInternetConnectionWithTimeout(
+            timeout: const Duration(seconds: 5),
+          );
+
       if (!hasConnection) {
         return false;
       }
@@ -70,17 +73,16 @@ class SyncedLyricsService {
       final dio = Dio();
       dio.options.connectTimeout = const Duration(seconds: 10);
       dio.options.receiveTimeout = const Duration(seconds: 10);
-      
+
       final response = await dio.get(
         '$_apiBaseUrl/api/search',
-        queryParameters: {
-          'q': 'hello'
-        },
+        queryParameters: {'q': 'hello'},
         options: Options(
+          headers: {'User-Agent': userAgent},
           validateStatus: (status) => status != null && status < 500,
         ),
       );
-      
+
       // La API está disponible si responde correctamente (200, 404, etc.)
       return response.statusCode != null && response.statusCode! < 500;
     } catch (e) {
@@ -112,10 +114,11 @@ class SyncedLyricsService {
     }
 
     // Verificar conectividad antes de intentar cualquier operación de red
-    final hasConnection = await ConnectivityHelper.hasInternetConnectionWithTimeout(
-      timeout: const Duration(seconds: 3),
-    );
-    
+    final hasConnection =
+        await ConnectivityHelper.hasInternetConnectionWithTimeout(
+          timeout: const Duration(seconds: 3),
+        );
+
     if (!hasConnection) {
       return LyricsResult(type: LyricsResultType.noConnection);
     }
@@ -135,7 +138,8 @@ class SyncedLyricsService {
 
     try {
       // Verificar conectividad una vez más antes de la petición final
-      final finalConnectionCheck = await ConnectivityHelper.hasInternetConnection();
+      final finalConnectionCheck =
+          await ConnectivityHelper.hasInternetConnection();
       if (!finalConnectionCheck) {
         return LyricsResult(type: LyricsResultType.noConnection);
       }
@@ -143,17 +147,18 @@ class SyncedLyricsService {
       final dio = Dio();
       dio.options.connectTimeout = const Duration(seconds: 10);
       dio.options.receiveTimeout = const Duration(seconds: 10);
-      
+
       final response = await dio.get(
         url,
         options: Options(
+          headers: {'User-Agent': userAgent},
           validateStatus: (status) => status != null && status < 500,
         ),
       );
 
       if (response.statusCode == 200 && response.data != null) {
         final data = response.data;
-        if (data is Map<String, dynamic> && 
+        if (data is Map<String, dynamic> &&
             (data["syncedLyrics"] != null || data["plainLyrics"] != null)) {
           final lyricsData = LyricsData(
             id: song.id,
@@ -169,7 +174,7 @@ class SyncedLyricsService {
       }
     } on DioException catch (e) {
       // Si es un error de conectividad, marcar como API no disponible
-      if (e.type == DioExceptionType.connectionTimeout || 
+      if (e.type == DioExceptionType.connectionTimeout ||
           e.type == DioExceptionType.receiveTimeout ||
           e.type == DioExceptionType.connectionError) {
         return LyricsResult(type: LyricsResultType.apiUnavailable);

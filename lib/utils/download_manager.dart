@@ -102,6 +102,29 @@ class DownloadManager {
   // Contexto opcional para mostrar diálogos directamente desde el manager
   BuildContext? _dialogContext;
 
+  // Instancia única de YoutubeExplode para reutilizar entre descargas
+  YoutubeExplode? _ytInstance;
+
+  // Obtener o crear la instancia única de YoutubeExplode (no se cierra aquí, solo cuando la cola esté vacía)
+  YoutubeExplode _getYoutubeExplode() {
+    if (_ytInstance == null) {
+      _ytInstance = YoutubeExplode();
+      // print('🟩 YoutubeExplode: nueva instancia creada');
+    } else {
+      // print('🟩 YoutubeExplode: reutilizando instancia existente');
+    }
+    return _ytInstance!;
+  }
+
+  // Cerrar la instancia (solo lo llama DownloadQueue cuando la cola está vacía, o al cerrar la app)
+  void closeYoutubeExplode() {
+    if (_ytInstance != null) {
+      // print('🔴 YoutubeExplode: cerrando instancia (cola vacía o app cerrada)');
+      _ytInstance!.close();
+      _ytInstance = null;
+    }
+  }
+
   // Inicializar configuración
   Future<void> initialize() async {
     final prefs = await SharedPreferences.getInstance();
@@ -195,9 +218,9 @@ class DownloadManager {
     bool usarFFmpeg,
     String? songTitle,
   ) async {
-    final yt = YoutubeExplode();
+    final yt = _getYoutubeExplode();
     try {
-      final video = await _intentarObtenerVideo(url);
+      final video = await _intentarObtenerVideo(url, ytInstance: yt);
       final manifest = await yt.videos.streamsClient.getManifest(video.id);
 
       final audioList = manifest.audioOnly
@@ -253,16 +276,7 @@ class DownloadManager {
 
       // Procesar audio
       if (usarFFmpeg) {
-        /*
-        await _procesarAudio(
-          video.id.toString(),
-          filePath,
-          video.title,
-          video.author,
-          video.thumbnails.highResUrl,
-          coverBytes ?? Uint8List(0),
-        );
-        */
+        // ...
       } else {
         await _procesarAudioSinFFmpeg(
           video.id.toString(),
@@ -272,11 +286,13 @@ class DownloadManager {
           video.thumbnails.highResUrl,
           coverBytes ?? Uint8List(0),
           songTitle,
+          video.duration ?? Duration.zero,
           url,
         );
       }
     } finally {
-      yt.close();
+      // No cerramos la instancia: se reutiliza para la siguiente descarga en cola
+      // Se cierra solo cuando DownloadQueue detecta que la cola está vacía
     }
   }
 
@@ -296,17 +312,14 @@ class DownloadManager {
     late StreamManifest manifest;
 
     for (int intento = 1; intento <= 1; intento++) {
-      final yt = YoutubeExplode();
+      final yt = _getYoutubeExplode();
       try {
         video = await yt.videos.get(videoId);
         manifest = await yt.videos.streamsClient.getManifest(videoId);
-        yt.close();
         break;
       } on VideoUnavailableException {
-        yt.close();
         await Future.delayed(const Duration(seconds: 3));
       } catch (_) {
-        yt.close();
         await Future.delayed(const Duration(seconds: 3));
       }
 
@@ -322,14 +335,23 @@ class DownloadManager {
       throw Exception(LocaleProvider.tr('no_audio_available_desc'));
     }
 
-    // Elegir stream de audio según calidad configurada
+    // Elegir stream de audio según calidad configurada, filtrando por MP4A para asegurar compatibilidad
     final audioFormats = streamProvider.audioFormats;
     if (audioFormats == null || audioFormats.isEmpty) {
       throw Exception('No se encontró stream de audio válido.');
     }
 
+    // Filtrar por MP4A para asegurar compatibilidad con el contenedor .m4a
+    final mp4aFormats = audioFormats
+        .where((a) => a.audioCodec == Codec.mp4a)
+        .toList();
+
+    if (mp4aFormats.isEmpty) {
+      throw Exception('No se encontró stream de audio MP4 compatible.');
+    }
+
     // Ordenar por bitrate (mayor a menor)
-    final sortedFormats = List<Audio>.from(audioFormats)
+    final sortedFormats = mp4aFormats
       ..sort((a, b) => b.bitrate.compareTo(a.bitrate));
 
     Audio audio;
@@ -385,16 +407,7 @@ class DownloadManager {
     MediaScanner.loadMedia(path: filePath);
 
     if (usarFFmpeg) {
-      /*
-      await _procesarAudio(
-        video.id.toString(),
-        filePath,
-        video.title,
-        video.author,
-        video.thumbnails.highResUrl,
-        coverBytes ?? Uint8List(0),
-      );
-      */
+      // ...
     } else {
       await _procesarAudioSinFFmpeg(
         video.id.toString(),
@@ -404,6 +417,7 @@ class DownloadManager {
         video.thumbnails.highResUrl,
         coverBytes ?? Uint8List(0),
         songTitle,
+        video.duration ?? Duration.zero,
         url,
       );
     }
@@ -553,6 +567,7 @@ class DownloadManager {
     String thumbnailUrl,
     Uint8List bytes,
     String? songTitle,
+    Duration duration,
     String downloadUrl,
   ) async {
     _updateState(true, true);
@@ -571,6 +586,7 @@ class DownloadManager {
         final tag = Tag(
           title: safeTitle,
           trackArtist: cleanedAuthor,
+          duration: duration.inSeconds,
           pictures: [
             Picture(
               bytes: bytes,
@@ -634,19 +650,16 @@ class DownloadManager {
   Future<Video> _intentarObtenerVideo(
     String url, {
     int maxIntentos = 10,
+    YoutubeExplode? ytInstance,
   }) async {
-    for (int intento = 1; intento <= maxIntentos; intento++) {
-      final yt = YoutubeExplode(YoutubeHttpClient());
+    final yt = ytInstance ?? _getYoutubeExplode();
 
+    for (int intento = 1; intento <= maxIntentos; intento++) {
       try {
-        final video = await yt.videos.get(url);
-        yt.close();
-        return video;
+        return await yt.videos.get(url);
       } on VideoUnavailableException {
-        yt.close();
         await Future.delayed(const Duration(seconds: 3));
       } catch (e) {
-        yt.close();
         await Future.delayed(const Duration(seconds: 3));
       }
     }

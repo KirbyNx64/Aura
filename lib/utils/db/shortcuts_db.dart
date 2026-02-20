@@ -1,4 +1,4 @@
-import 'package:hive/hive.dart';
+import 'package:hive_ce/hive_ce.dart';
 
 class ShortcutsDB {
   static final ShortcutsDB _instance = ShortcutsDB._internal();
@@ -50,4 +50,4 @@ class ShortcutsDB {
     final b = await box;
     await b.put('shortcuts', <String>[]);
   }
-} 
+}

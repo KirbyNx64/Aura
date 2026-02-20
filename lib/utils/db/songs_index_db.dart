@@ -1,4 +1,4 @@
-import 'package:hive/hive.dart';
+import 'package:hive_ce/hive_ce.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 import 'dart:io';
 import 'package:path/path.dart' as p;

@@ -72,6 +72,40 @@ class _ArtistScreenState extends State<ArtistScreen> {
     super.dispose();
   }
 
+  // Helper para traducir/formatear el texto de audiencia/subs
+  String? _formatArtistSubtitle(String? text) {
+    if (text == null) return null;
+
+    String cleanNumber(String input, String term) {
+      return input
+          .replaceAll(RegExp(term, caseSensitive: false), '')
+          .replaceAll(RegExp(r'\s+de\s+', caseSensitive: false), '')
+          .trim();
+    }
+
+    if (text.toLowerCase().contains('monthly audience')) {
+      return '${LocaleProvider.tr('monthly_audience_label')} ${cleanNumber(text, 'monthly audience')}';
+    }
+    if (text.toLowerCase().contains('oyentes mensuales')) {
+      return '${LocaleProvider.tr('monthly_audience_label')} ${cleanNumber(text, 'oyentes mensuales')}';
+    }
+    if (text.toLowerCase().contains('audiencia mensual')) {
+      return '${LocaleProvider.tr('monthly_audience_label')} ${cleanNumber(text, 'audiencia mensual')}';
+    }
+    if (text.toLowerCase().contains('monthly listeners')) {
+      return '${LocaleProvider.tr('monthly_audience_label')} ${cleanNumber(text, 'monthly listeners')}';
+    }
+
+    if (text.toLowerCase().contains('subscribers')) {
+      return '${cleanNumber(text, 'subscribers')} ${LocaleProvider.tr('subscribers_label')}';
+    }
+    if (text.toLowerCase().contains('suscriptores')) {
+      return '${cleanNumber(text, 'suscriptores')} ${LocaleProvider.tr('subscribers_label')}';
+    }
+
+    return text;
+  }
+
   // Función helper para manejar imágenes de red de forma segura
   Widget _buildSafeNetworkImage(
     String? imageUrl, {
@@ -1284,7 +1318,10 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                             ),
                                             const SizedBox(width: 8),
                                             Text(
-                                              _artist!['subscribers'],
+                                              _formatArtistSubtitle(
+                                                    _artist!['subscribers'],
+                                                  ) ??
+                                                  '',
                                               style: TextStyle(
                                                 fontSize: 13,
                                                 fontWeight: FontWeight.w500,
@@ -1348,7 +1385,10 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                             ),
                                             const SizedBox(width: 8),
                                             Text(
-                                              _artist!['monthlyListeners'],
+                                              _formatArtistSubtitle(
+                                                    _artist!['monthlyListeners'],
+                                                  ) ??
+                                                  '',
                                               style: TextStyle(
                                                 fontSize: 13,
                                                 fontWeight: FontWeight.w500,

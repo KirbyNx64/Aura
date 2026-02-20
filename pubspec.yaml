@@ -1,7 +1,7 @@
 name: music
 description: "A new Flutter project."
 publish_to: 'none'
-version: 1.8.3+4013
+version: 1.8.4+4014
 
 environment:
   sdk: ^3.8.1
@@ -11,8 +11,8 @@ dependencies:
     sdk: flutter
   flutter_localizations:
     sdk: flutter
-  hive: ^2.2.3
-  hive_flutter: ^1.1.0
+  hive_ce: ^2.19.3
+  hive_ce_flutter: ^2.3.4
   on_audio_query:
     path: ./on_audio_query
   just_audio: ^0.10.5
@@ -32,7 +32,8 @@ dependencies:
       url: https://github.com/anandnet/youtube_explode_dart.git
       ref: 1d9ec9baa806705b1d859260eeb389ec28c6b024
   file_selector: ^1.0.3
-  audiotags: ^1.4.5
+  audiotags:
+    path: ./audiotags/audiotags
   url_launcher: ^6.3.2
   media_scanner: ^2.2.0
   device_info_plus: ^12.3.0
@@ -57,18 +58,20 @@ dependencies:
   image: ^4.7.2
   cached_network_image: ^3.4.1
   material_loading_indicator: ^1.0.0
-  palette_generator: ^0.3.3+7
   flutter_m3shapes: ^1.0.0+2
   material_symbols_icons: ^4.2906.0
   sliding_up_panel: ^2.0.0+1
   open_settings_plus: ^0.4.0
+  palette_generator_master: ^1.0.1
+  wakelock_plus: ^1.4.0
+  android_nav_setting: ^0.0.2+2
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
   flutter_launcher_icons: ^0.14.4
-  hive_generator: ^2.0.1
+  hive_ce_generator: ^1.11.1
   build_runner: ^2.4.13
 
 flutter:

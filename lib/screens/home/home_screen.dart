@@ -23,7 +23,7 @@ import 'package:music/utils/db/songs_index_db.dart';
 import 'package:music/utils/db/artists_db.dart';
 import 'package:music/utils/db/artist_images_cache_db.dart';
 import 'package:music/utils/yt_search/service.dart';
-import 'package:music/widgets/hero_cached.dart';
+// import 'package:music/widgets/hero_cached.dart';
 import 'package:music/widgets/artwork_list_tile.dart';
 import 'package:mini_music_visualizer/mini_music_visualizer.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -1415,7 +1415,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               width: 80,
               height: 80,
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(8),
                 child: artist['thumbUrl'] != null
                     ? CachedNetworkImage(
                         imageUrl: artist['thumbUrl'] as String,
@@ -1423,6 +1423,32 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         height: 80,
                         fit: BoxFit.cover,
                         errorWidget: (context, url, error) {
+                          final firstSongId = artist['first_song_id'];
+                          if (firstSongId != null) {
+                            return QueryArtworkWidget(
+                              id: firstSongId is int
+                                  ? firstSongId
+                                  : int.tryParse(firstSongId.toString()) ?? 0,
+                              type: ArtworkType.AUDIO,
+                              artworkBorder: BorderRadius.circular(16),
+                              nullArtworkWidget: Container(
+                                decoration: BoxDecoration(
+                                  color:
+                                      colorSchemeNotifier.value ==
+                                          AppColorScheme.amoled
+                                      ? Colors.white.withValues(alpha: 0.1)
+                                      : Theme.of(context)
+                                            .colorScheme
+                                            .secondaryContainer
+                                            .withValues(alpha: 0.8),
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                child: Center(
+                                  child: Icon(Icons.person, size: 40),
+                                ),
+                              ),
+                            );
+                          }
                           return Container(
                             decoration: BoxDecoration(
                               color:
@@ -1438,7 +1464,59 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                             child: Center(child: Icon(Icons.person, size: 40)),
                           );
                         },
-                        placeholder: (context, url) => Container(
+                        placeholder: (context, url) {
+                          final firstSongId = artist['first_song_id'];
+                          if (firstSongId != null) {
+                            return QueryArtworkWidget(
+                              id: firstSongId is int
+                                  ? firstSongId
+                                  : int.tryParse(firstSongId.toString()) ?? 0,
+                              type: ArtworkType.AUDIO,
+                              artworkBorder: BorderRadius.circular(16),
+                              nullArtworkWidget: Container(
+                                decoration: BoxDecoration(
+                                  color:
+                                      colorSchemeNotifier.value ==
+                                          AppColorScheme.amoled
+                                      ? Colors.white.withValues(alpha: 0.1)
+                                      : Theme.of(context)
+                                            .colorScheme
+                                            .secondaryContainer
+                                            .withValues(alpha: 0.8),
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                child: Center(
+                                  child: Icon(Icons.person, size: 40),
+                                ),
+                              ),
+                            );
+                          }
+                          return Container(
+                            decoration: BoxDecoration(
+                              color:
+                                  colorSchemeNotifier.value ==
+                                      AppColorScheme.amoled
+                                  ? Colors.white.withValues(alpha: 0.1)
+                                  : Theme.of(context)
+                                        .colorScheme
+                                        .secondaryContainer
+                                        .withValues(alpha: 0.8),
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Center(child: LoadingIndicator()),
+                          );
+                        },
+                      )
+                    : QueryArtworkWidget(
+                        id: artist['first_song_id'] is int
+                            ? artist['first_song_id']
+                            : int.tryParse(
+                                    artist['first_song_id']?.toString() ?? '',
+                                  ) ??
+                                  0,
+                        type: ArtworkType.AUDIO,
+                        artworkBorder: BorderRadius.circular(16),
+                        nullArtworkWidget: Container(
                           decoration: BoxDecoration(
                             color:
                                 colorSchemeNotifier.value ==
@@ -1450,19 +1528,8 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                       .withValues(alpha: 0.8),
                             borderRadius: BorderRadius.circular(16),
                           ),
-                          child: Center(child: LoadingIndicator()),
+                          child: Center(child: Icon(Icons.person, size: 40)),
                         ),
-                      )
-                    : Container(
-                        decoration: BoxDecoration(
-                          color:
-                              colorSchemeNotifier.value == AppColorScheme.amoled
-                              ? Colors.white.withValues(alpha: 0.1)
-                              : Theme.of(context).colorScheme.secondaryContainer
-                                    .withValues(alpha: 0.8),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Center(child: Icon(Icons.person, size: 40)),
                       ),
               ),
             ),
@@ -2592,7 +2659,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     (audioHandler as MyAudioHandler).queue.add([]);
 
     // Limpiar el fallback de las carátulas para evitar parpadeo
-    ArtworkHeroCached.clearFallback();
+    // ArtworkHeroCached.clearFallback();
 
     // Guardar el origen en SharedPreferences
     final prefs = await SharedPreferences.getInstance();

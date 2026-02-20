@@ -52,6 +52,9 @@ const Map<String, String> appLocalizationsEn = {
   'choose_language': 'Choose language',
   'spanish': 'Spanish',
   'english': 'English',
+  'keep_screen_on': 'Keep screen on',
+  'keep_screen_on_desc':
+      'Prevent the screen from turning off while the app is open',
   'gesture_settings': 'Player gestures',
   'gesture_settings_desc': 'Customize player gestures',
   'disable_gestures': 'Player gestures',

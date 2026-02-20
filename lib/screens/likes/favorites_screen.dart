@@ -16,7 +16,7 @@ import 'package:mini_music_visualizer/mini_music_visualizer.dart';
 import 'package:music/utils/db/playlist_model.dart' as hive_model;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:music/widgets/song_info_dialog.dart';
-import 'package:music/widgets/hero_cached.dart';
+// import 'package:music/widgets/hero_cached.dart';
 import 'package:music/widgets/artwork_list_tile.dart';
 import 'package:music/screens/artist/artist_screen.dart';
 
@@ -216,7 +216,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     // (audioHandler as MyAudioHandler).mediaItem.add(null);
 
     // Limpiar el fallback de las carátulas para evitar parpadeo
-    ArtworkHeroCached.clearFallback();
+    // ArtworkHeroCached.clearFallback();
 
     // Precargar la carátula antes de crear el MediaItem temporal
     /*

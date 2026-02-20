@@ -5,7 +5,8 @@ import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
 import 'package:music/main.dart'
     show audioHandler, audioServiceReady, overlayVisibleNotifier;
-import 'package:music/widgets/hero_cached.dart';
+// import 'package:music/widgets/hero_cached.dart';
+import 'package:music/widgets/artwork_cached.dart';
 import 'package:music/utils/audio/background_audio_handler.dart';
 import 'marquee.dart';
 import 'package:music/utils/notifiers.dart';
@@ -191,8 +192,8 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> {
         borderRadius: BorderRadius.only(
           topLeft: Radius.circular(20),
           topRight: Radius.circular(20),
-          bottomLeft: Radius.circular(4),
-          bottomRight: Radius.circular(4),
+          bottomLeft: Radius.circular(0),
+          bottomRight: Radius.circular(0),
         ),
         child: Stack(
           children: [
@@ -329,8 +330,8 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> {
                                     borderRadius: BorderRadius.only(
                                       topLeft: Radius.circular(20),
                                       topRight: Radius.circular(20),
-                                      bottomLeft: Radius.circular(4),
-                                      bottomRight: Radius.circular(4),
+                                      bottomLeft: Radius.circular(0),
+                                      bottomRight: Radius.circular(0),
                                     ),
                                   ),
                                 ),
@@ -354,8 +355,8 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> {
                                   borderRadius: BorderRadius.only(
                                     topLeft: Radius.circular(20),
                                     topRight: Radius.circular(20),
-                                    bottomLeft: Radius.circular(4),
-                                    bottomRight: Radius.circular(4),
+                                    bottomLeft: Radius.circular(0),
+                                    bottomRight: Radius.circular(0),
                                   ),
                                 ),
                                 child: Stack(
@@ -393,55 +394,55 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> {
                                                             as MyAudioHandler)
                                                         .initializingNotifier,
                                                 builder: (context, isLoading, child) {
-                                                  if (isLoading) {
-                                                    return Container(
-                                                      width: 50,
-                                                      height: 50,
-                                                      decoration: BoxDecoration(
-                                                        color: Theme.of(context)
-                                                            .colorScheme
-                                                            .surfaceContainerHighest,
-                                                        borderRadius:
-                                                            BorderRadius.circular(
-                                                              8,
-                                                            ),
-                                                      ),
-                                                      child: const Center(
-                                                        child: SizedBox(
-                                                          width: 28,
-                                                          height: 28,
-                                                          child:
-                                                              CircularProgressIndicator(
-                                                                strokeWidth: 3,
-                                                              ),
-                                                        ),
-                                                      ),
-                                                    );
-                                                  }
-
-                                                  final artUri =
-                                                      currentSong.artUri;
-
+                                                  final songIdKey = (currentSong.extras?['songId'] ?? currentSong.id).toString();
+                                                  final artUri = currentSong.artUri;
+                                                  
+                                                  // Key único que incluye el estado de loading para evitar duplicados
+                                                  final switcherKey = 'switcher_art_${songIdKey}_${isLoading ? 'loading' : 'ready'}_${artUri?.toString() ?? 'null'}';
+                                                  
                                                   return AnimatedSwitcher(
+                                                    key: ValueKey(switcherKey),
                                                     duration: const Duration(
                                                       milliseconds: 200,
                                                     ),
-                                                    child: ArtworkHeroCached(
-                                                      key: ValueKey(
-                                                        'overlay_art_${(currentSong.extras?['songId'] ?? currentSong.id).toString()}',
-                                                      ),
-                                                      artUri: artUri,
-                                                      size: 50,
-                                                      borderRadius:
-                                                          BorderRadius.circular(
-                                                            8,
+                                                    switchInCurve: Curves.easeInOut,
+                                                    switchOutCurve: Curves.easeInOut,
+                                                    child: isLoading
+                                                        ? Container(
+                                                            key: const ValueKey('loading_overlay_art'),
+                                                            width: 50,
+                                                            height: 50,
+                                                            decoration: BoxDecoration(
+                                                              color: Theme.of(context)
+                                                                  .colorScheme
+                                                                  .surfaceContainerHighest,
+                                                              borderRadius:
+                                                                  BorderRadius.circular(
+                                                                    8,
+                                                                  ),
+                                                            ),
+                                                            child: const Center(
+                                                              child: SizedBox(
+                                                                width: 28,
+                                                                height: 28,
+                                                                child:
+                                                                    CircularProgressIndicator(
+                                                                      strokeWidth: 3,
+                                                                    ),
+                                                              ),
+                                                            ),
+                                                          )
+                                                        : ArtworkCached(
+                                                            key: ValueKey('overlay_art_${songIdKey}_${artUri?.toString() ?? 'null'}'),
+                                                            artUri: artUri,
+                                                            size: 50,
+                                                            borderRadius:
+                                                                BorderRadius.circular(
+                                                                  8,
+                                                                ),
+                                                            songPath: currentSong.extras?['data'] as String?,
+                                                            songId: currentSong.extras?['songId'] as int?,
                                                           ),
-                                                      heroTag:
-                                                          'now_playing_artwork_${(currentSong.extras?['songId'] ?? currentSong.id).toString()}',
-                                                      showPlaceholderIcon: true,
-                                                      isLoading:
-                                                          false, // El overlay maneja el loading externamente
-                                                    ),
                                                   );
                                                 },
                                               ),

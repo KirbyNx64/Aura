@@ -20,7 +20,7 @@ import 'package:music/utils/db/shortcuts_db.dart';
 import 'package:music/utils/db/mostplayer_db.dart';
 import 'package:music/screens/artist/artist_screen.dart';
 import 'package:mini_music_visualizer/mini_music_visualizer.dart';
-import 'package:music/widgets/hero_cached.dart';
+// import 'package:music/widgets/hero_cached.dart';
 import 'package:music/widgets/artwork_list_tile.dart';
 import 'package:music/utils/db/playlist_model.dart' as hive_model;
 import 'package:share_plus/share_plus.dart';
@@ -1113,7 +1113,7 @@ class _FoldersScreenState extends State<FoldersScreen>
       handler.queue.add([]);
 
       // Limpiar el fallback de las carátulas para evitar parpadeo
-      ArtworkHeroCached.clearFallback();
+      // ArtworkHeroCached.clearFallback();
 
       await handler.setQueueFromSongs(filtered, initialIndex: index);
       await handler.play();

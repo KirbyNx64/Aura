@@ -55,6 +55,9 @@ const Map<String, String> appLocalizationsEs = {
   'choose_language': 'Seleccionar idioma',
   'spanish': 'Español',
   'english': 'English',
+  'keep_screen_on': 'Mantener pantalla encendida',
+  'keep_screen_on_desc':
+      'Evita que la pantalla se apague mientras la aplicación está abierta',
   'gesture_settings': 'Gestos en el reproductor',
   'gesture_settings_desc': 'Personaliza los gestos del reproductor',
   'disable_gestures': 'Gestos en el reproductor',

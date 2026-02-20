@@ -1,4 +1,4 @@
-import 'package:hive/hive.dart';
+import 'package:hive_ce/hive_ce.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 import 'playlist_model.dart' as hive_model;
 import 'songs_index_db.dart';
@@ -20,7 +20,11 @@ class PlaylistsDB {
   Future<String> createPlaylist(String name) async {
     final b = await box;
     final id = DateTime.now().millisecondsSinceEpoch.toString();
-    final playlist = hive_model.PlaylistModel(id: id, name: name, songPaths: []);
+    final playlist = hive_model.PlaylistModel(
+      id: id,
+      name: name,
+      songPaths: [],
+    );
     await b.put(id, playlist);
     return id;
   }
@@ -58,7 +62,10 @@ class PlaylistsDB {
   }
 
   // Quitar canción de una lista
-  Future<void> removeSongFromPlaylist(String playlistId, String songPath) async {
+  Future<void> removeSongFromPlaylist(
+    String playlistId,
+    String songPath,
+  ) async {
     final b = await box;
     final playlist = b.get(playlistId);
     if (playlist != null && playlist.songPaths.contains(songPath)) {
@@ -72,11 +79,11 @@ class PlaylistsDB {
     final b = await box;
     final playlist = b.get(playlistId);
     if (playlist == null) return [];
-    
+
     // Usar SongsIndexDB para obtener solo canciones no ignoradas
     final SongsIndexDB songsIndex = SongsIndexDB();
     final indexedSongs = await songsIndex.getIndexedSongs();
-    
+
     List<SongModel> ordered = [];
     for (final path in playlist.songPaths) {
       final match = indexedSongs.where((s) => s.data == path);

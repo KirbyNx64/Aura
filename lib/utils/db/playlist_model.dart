@@ -1,4 +1,4 @@
-import 'package:hive/hive.dart';
+import 'package:hive_ce/hive_ce.dart';
 
 part 'playlist_model.g.dart';
 
@@ -13,5 +13,9 @@ class PlaylistModel extends HiveObject {
   @HiveField(2)
   List<String> songPaths;
 
-  PlaylistModel({required this.id, required this.name, required this.songPaths});
-} 
+  PlaylistModel({
+    required this.id,
+    required this.name,
+    required this.songPaths,
+  });
+}

@@ -283,9 +283,15 @@ class _EqualizerScreenState extends State<EqualizerScreen> {
           ),
           FilledButton.tonal(
             onPressed: () => Navigator.of(context).pop(true),
+            style: FilledButton.styleFrom(
+              backgroundColor: isAmoled ? Colors.white : null,
+            ),
             child: Text(
               LocaleProvider.tr('reset'),
-              style: const TextStyle(fontWeight: FontWeight.bold),
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: isAmoled ? Colors.black : null,
+              ),
             ),
           ),
         ],

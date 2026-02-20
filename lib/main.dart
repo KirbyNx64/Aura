@@ -15,7 +15,7 @@ import 'package:music/l10n/locale_provider.dart';
 import 'package:music/utils/notifiers.dart';
 import 'package:music/utils/notification_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:hive_flutter/hive_flutter.dart';
+import 'package:hive_ce_flutter/hive_ce_flutter.dart';
 import 'package:music/utils/db/playlist_model.dart';
 import 'package:music/utils/audio/synced_lyrics_service.dart';
 import 'package:music/utils/audio/background_audio_handler.dart';
@@ -29,6 +29,8 @@ import 'package:music/services/download_history_service.dart';
 import 'package:material_loading_indicator/loading_indicator.dart';
 import 'package:music/screens/onboarding/onboarding_screen.dart';
 import 'package:music/utils/theme_controller.dart';
+import 'package:music/utils/download_manager.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 import 'dart:async';
 
 // Cambiar de late final a nullable para mejor manejo de errores
@@ -151,6 +153,8 @@ class LifecycleHandler extends WidgetsBindingObserver {
     if (state == AppLifecycleState.detached) {
       try {
         await audioHandler?.customAction("saveSession");
+        // Cerrar YoutubeExplode cuando la app se cierra
+        DownloadManager().closeYoutubeExplode();
       } catch (_) {}
     }
   }
@@ -409,7 +413,6 @@ void main() async {
     runApp(
       MaterialApp(
         home: PermisosScreen(),
-        debugShowCheckedModeBanner: false,
         localizationsDelegates: const [
           GlobalMaterialLocalizations.delegate,
           GlobalWidgetsLocalizations.delegate,
@@ -628,6 +631,11 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         // Usar los colores dinámicos guardados
         _updateSystemNavigationBar(_currentLightDynamic, _currentDarkDynamic);
+
+        // Re-aplicar wakelock si está habilitado
+        if (wakelockEnabledNotifier.value) {
+          WakelockPlus.toggle(enable: true);
+        }
       });
     }
   }
@@ -741,6 +749,11 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
         _showOnboarding = isFirstRun;
 
         overlayNextButtonEnabled.value = nextButtonEnabled;
+        wakelockEnabledNotifier.value =
+            prefs.getBool('wakelock_enabled') ?? false;
+        if (wakelockEnabledNotifier.value) {
+          WakelockPlus.toggle(enable: true);
+        }
         useArtworkAsBackgroundOverlayNotifier.value = useArtworkOverlay;
         useArtworkAsBackgroundPlayerNotifier.value = useArtworkPlayer;
         useDynamicColorBackgroundNotifier.value =

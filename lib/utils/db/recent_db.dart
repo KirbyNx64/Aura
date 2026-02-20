@@ -1,4 +1,4 @@
-import 'package:hive/hive.dart';
+import 'package:hive_ce/hive_ce.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 import 'songs_index_db.dart';
 
@@ -28,7 +28,9 @@ class RecentsDB {
     // Limita a los 50 más recientes
     if (b.length > maxRecents) {
       final entries = b.toMap().entries.toList();
-      entries.sort((a, b) => b.value.compareTo(a.value)); // Más recientes primero
+      entries.sort(
+        (a, b) => b.value.compareTo(a.value),
+      ); // Más recientes primero
       final toRemove = entries.skip(maxRecents).map((e) => e.key).toList();
       await b.deleteAll(toRemove);
     }

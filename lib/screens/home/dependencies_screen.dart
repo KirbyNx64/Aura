@@ -16,9 +16,9 @@ class DependenciesScreen extends StatelessWidget {
   final Map<String, _DependencyInfo> _dependencies = const {
     'flutter': _DependencyInfo('https://flutter.dev', 'sdk'),
     'flutter_localizations': _DependencyInfo('https://flutter.dev', 'sdk'),
-    'hive': _DependencyInfo('https://pub.dev/packages/hive', '^2.2.3'),
-    'hive_flutter': _DependencyInfo(
-      'https://pub.dev/packages/hive_flutter',
+    'hive_ce': _DependencyInfo('https://pub.dev/packages/hive_ce', '^2.2.3'),
+    'hive_ce_flutter': _DependencyInfo(
+      'https://pub.dev/packages/hive_ce_flutter',
       '^1.1.0',
     ),
     'on_audio_query': _DependencyInfo(
@@ -166,9 +166,9 @@ class DependenciesScreen extends StatelessWidget {
       'https://pub.dev/packages/material_loading_indicator',
       '^1.0.0',
     ),
-    'palette_generator': _DependencyInfo(
-      'https://pub.dev/packages/palette_generator',
-      '^0.3.3+7',
+    'palette_generator_master': _DependencyInfo(
+      'https://pub.dev/packages/palette_generator_master',
+      '^1.0.1',
     ),
     'flutter_m3shapes': _DependencyInfo(
       'https://pub.dev/packages/flutter_m3shapes',
@@ -186,6 +186,10 @@ class DependenciesScreen extends StatelessWidget {
     'open_settings_plus': _DependencyInfo(
       'https://pub.dev/packages/open_settings_plus',
       '^0.4.0',
+    ),
+    'android_nav_setting': _DependencyInfo(
+      'https://pub.dev/packages/android_nav_setting',
+      '^0.0.2+2',
     ),
   };
 

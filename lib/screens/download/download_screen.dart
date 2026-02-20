@@ -779,6 +779,7 @@ class _DownloadScreenState extends State<DownloadScreen>
           video.thumbnails.highResUrl,
           bytes ?? Uint8List(0),
           isPlaylistDownload: true,
+          playlistTitle: _playlistTitle,
         );
       }
     } catch (e) {
@@ -2010,6 +2011,7 @@ class _DownloadScreenState extends State<DownloadScreen>
     String thumbnailUrl,
     Uint8List bytes, {
     bool isPlaylistDownload = false,
+    String? playlistTitle,
   }) async {
     // Procesar audio sin cambiar estado de UI
     final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
@@ -2026,11 +2028,17 @@ class _DownloadScreenState extends State<DownloadScreen>
         author.replaceFirst(RegExp(r' - Topic$', caseSensitive: false), ''),
       );
       final safeTitle = limpiarMetadato(baseName);
+      
+      // Limpiar el título de la playlist si está disponible
+      final safePlaylistTitle = playlistTitle != null && playlistTitle.isNotEmpty
+          ? limpiarMetadato(playlistTitle)
+          : null;
 
       try {
         final tag = Tag(
           title: safeTitle,
           trackArtist: cleanedAuthor,
+          album: safePlaylistTitle, // Usar el título de la playlist como "álbum"
           pictures: [
             Picture(
               bytes: bytes,

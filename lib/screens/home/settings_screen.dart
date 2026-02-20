@@ -27,6 +27,8 @@ import 'dart:convert';
 import 'package:music/utils/db/playlist_model.dart' as hive_model;
 import 'package:music/widgets/gesture_settings_dialog.dart';
 import 'package:open_settings_plus/open_settings_plus.dart';
+import 'package:material_symbols_icons/symbols.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 
 class SettingsScreen extends StatefulWidget {
   final void Function(AppThemeMode)? setThemeMode;
@@ -3820,6 +3822,78 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           grade: 200,
                           fill: 1,
                           size: 28,
+                          color: Theme.of(context).colorScheme.onSurface,
+                        ),
+                        shape: const RoundedRectangleBorder(
+                          borderRadius: BorderRadius.all(Radius.circular(4)),
+                        ),
+                        thumbIcon: WidgetStateProperty.resolveWith<Icon?>((
+                          Set<WidgetState> states,
+                        ) {
+                          final iconColor = isAmoled && isDark
+                              ? Colors.white
+                              : null;
+                          if (states.contains(WidgetState.selected)) {
+                            return Icon(
+                              Icons.check,
+                              size: 20,
+                              color: iconColor,
+                            );
+                          } else {
+                            return const Icon(Icons.close, size: 20);
+                          }
+                        }),
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 4),
+            Card(
+              color: cardColor,
+              margin: EdgeInsets.zero,
+              elevation: 0,
+              shape: const RoundedRectangleBorder(
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(4),
+                  topRight: Radius.circular(4),
+                  bottomLeft: Radius.circular(4),
+                  bottomRight: Radius.circular(4),
+                ),
+              ),
+              child: Column(
+                children: [
+                  ValueListenableBuilder<bool>(
+                    valueListenable: wakelockEnabledNotifier,
+                    builder: (context, value, child) {
+                      return SwitchListTile(
+                        value: value,
+                        onChanged: (v) async {
+                          final prefs = await SharedPreferences.getInstance();
+                          await prefs.setBool('wakelock_enabled', v);
+                          wakelockEnabledNotifier.value = v;
+                          await WakelockPlus.toggle(enable: v);
+                          setState(() {});
+                        },
+                        title: Text(
+                          LocaleProvider.tr('keep_screen_on'),
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Theme.of(context).colorScheme.onSurface,
+                          ),
+                        ),
+                        subtitle: Text(
+                          LocaleProvider.tr('keep_screen_on_desc'),
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onSurface.withValues(alpha: 0.9),
+                          ),
+                        ),
+                        secondary: Icon(
+                          Symbols.mobile_unlock,
                           color: Theme.of(context).colorScheme.onSurface,
                         ),
                         shape: const RoundedRectangleBorder(
