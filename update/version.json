@@ -1,9 +1,9 @@
 {
-  "version": "1.8.4",
+  "version": "1.8.5",
   "apk_urls": {
-    "arm64-v8a": "https://github.com/KirbyNx64/Aura/releases/download/v1.8.4/AuraMusic-v1.8.4-arm64-v8a.apk",
-    "armeabi-v7a": "https://github.com/KirbyNx64/Aura/releases/download/v1.8.4/AuraMusic-v1.8.4-armeabi-v7a.apk",
-    "x86_64": "https://github.com/KirbyNx64/Aura/releases/download/v1.8.4/AuraMusic-v1.8.4-x86_64.apk"
+    "arm64-v8a": "https://github.com/KirbyNx64/Aura/releases/download/v1.8.5/AuraMusic-v1.8.5-arm64-v8a.apk",
+    "armeabi-v7a": "https://github.com/KirbyNx64/Aura/releases/download/v1.8.5/AuraMusic-v1.8.5-armeabi-v7a.apk",
+    "x86_64": "https://github.com/KirbyNx64/Aura/releases/download/v1.8.5/AuraMusic-v1.8.5-x86_64.apk"
   },
-  "changelog": "• Se añadió una opción que permite evitar que el dispositivo entre en suspensión mientras la aplicación está en uso.\n\n• Se optimizó el proceso de descarga de canciones reutilizando la misma instancia de YouTube cuando hay múltiples descargas en cola, mejorando la eficiencia y velocidad.\n\n• Se optimizó la carga de las carátulas en el reproductor, logrando una visualización más rápida y fluida.\n\n• Se actualizaron varias dependencias internas.\n\n• Se aplicaron pequeñas mejoras visuales en la interfaz.\n\n• Se corrigieron errores menores y se optimizó la estabilidad general de la aplicación."
+  "changelog": "• Ahora se muestra el dispositivo de salida de audio directamente en el reproductor.\n\n• Se añadió un nuevo servicio de búsqueda de letras de canciones, permitiendo elegir entre el servicio anterior o el nuevo.\n\n• Ahora puedes generar imágenes con la letra de las canciones y compartirlas en otras aplicaciones.\n\n• Se mejoró el sistema de respaldo de datos del usuario.\n\n• Se aplicaron pequeñas mejoras visuales y se corrigieron errores menores."
 }
