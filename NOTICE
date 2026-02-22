@@ -1,0 +1,18 @@
+This project includes code from the following open source projects:
+
+Harmony-Music
+https://github.com/anandnet/Harmony-Music
+Copyright (C) anandnet and contributors
+Licensed under GNU General Public License v3.0 (GPL-3.0)
+
+AudioTags
+https://github.com/erikas-taroza/audiotags
+Copyright (C) erikas-taroza and contributors
+Licensed under the MIT License
+
+OnAudioQuery
+https://github.com/LucJosin/on_audio_query
+Copyright (C) LucJosin and contributors
+Licensed under the MIT License
+
+Modifications may have been made to these components.
