@@ -221,8 +221,10 @@ class _CurrentPlaylistScreenState extends State<CurrentPlaylistScreen>
 
   @override
   Widget build(BuildContext context) {
+    final keyboardOpen = MediaQuery.of(context).viewInsets.bottom > 0;
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: keyboardOpen ? Colors.black : Colors.transparent,
+      resizeToAvoidBottomInset: false,
       body: AnimatedBuilder(
         animation: Listenable.merge([
           useDynamicColorBackgroundNotifier,

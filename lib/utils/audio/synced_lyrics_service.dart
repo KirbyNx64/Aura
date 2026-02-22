@@ -2,6 +2,8 @@ import 'package:audio_service/audio_service.dart';
 import 'package:dio/dio.dart';
 import 'package:hive_ce_flutter/hive_ce_flutter.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import '../notifiers.dart';
+import 'simpmusic_lyrics_service.dart';
 import '../connectivity_helper.dart';
 
 part 'synced_lyrics_service.g.dart';
@@ -103,6 +105,15 @@ class SyncedLyricsService {
     int? durInSec,
     bool forceReload = false,
   }) async {
+    // Si el proveedor seleccionado es SimpMusic, usar su servicio
+    if (lyricsServiceProviderNotifier.value ==
+        LyricsServiceProvider.simpmusic) {
+      return await SimpMusicLyricsService.getLyricsWithResult(
+        song,
+        forceReload: forceReload,
+      );
+    }
+
     final lyricsBox = await box;
 
     // Buscar en la base local primero (solo si no se fuerza la recarga)

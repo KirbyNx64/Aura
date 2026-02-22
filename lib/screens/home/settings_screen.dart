@@ -1,4 +1,6 @@
 import 'dart:io';
+import 'package:music/main.dart' show audioHandler;
+import 'package:terminate_restart/terminate_restart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:music/screens/home/ota_update_screen.dart';
@@ -14,6 +16,7 @@ import 'package:music/utils/db/playlists_db.dart';
 import 'package:music/utils/db/recent_db.dart';
 import 'package:music/utils/db/mostplayer_db.dart';
 import 'package:music/utils/db/shortcuts_db.dart';
+import 'package:music/utils/db/dislikes_db.dart';
 import 'package:music/utils/db/artwork_db.dart';
 import 'package:music/utils/db/songs_index_db.dart';
 import 'package:music/utils/db/artists_db.dart';
@@ -422,6 +425,163 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             );
           },
+        );
+      },
+    );
+  }
+
+  Future<void> _setLyricsProvider(LyricsServiceProvider provider) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('lyrics_service_provider', provider.index);
+    lyricsServiceProviderNotifier.value = provider;
+  }
+
+  void _showLyricsProviderDialog() {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return ValueListenableBuilder<AppColorScheme>(
+          valueListenable: colorSchemeNotifier,
+          builder: (context, colorScheme, child) {
+            final isAmoled = colorScheme == AppColorScheme.amoled;
+            final isDark = Theme.of(context).brightness == Brightness.dark;
+            final primaryColor = Theme.of(context).colorScheme.primary;
+
+            return AlertDialog(
+              backgroundColor: isAmoled && isDark
+                  ? Colors.black
+                  : Theme.of(context).colorScheme.surface,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(28),
+                side: isAmoled && isDark
+                    ? const BorderSide(color: Colors.white24, width: 1)
+                    : BorderSide.none,
+              ),
+              contentPadding: const EdgeInsets.fromLTRB(0, 24, 0, 8),
+              content: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: 400,
+                  maxHeight: MediaQuery.of(context).size.height * 0.8,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.lyrics_rounded,
+                      size: 32,
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+                    const SizedBox(height: 16),
+                    _buildDialogTitle(context, 'lyrics_service'),
+                    const SizedBox(height: 16),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: TranslatedText(
+                        'lyrics_service_desc',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onSurface.withAlpha(180),
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    _buildLyricsProviderOption(
+                      context: context,
+                      title: LocaleProvider.tr('lyrics_provider_lrclib'),
+                      provider: LyricsServiceProvider.lrclib,
+                    ),
+                    _buildLyricsProviderOption(
+                      context: context,
+                      title: LocaleProvider.tr('lyrics_provider_simpmusic'),
+                      provider: LyricsServiceProvider.simpmusic,
+                    ),
+                    const SizedBox(height: 16),
+                    Padding(
+                      padding: const EdgeInsets.only(right: 24, bottom: 8),
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          child: TranslatedText(
+                            'ok',
+                            style: TextStyle(
+                              color: primaryColor,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildLyricsProviderOption({
+    required BuildContext context,
+    required String title,
+    required LyricsServiceProvider provider,
+  }) {
+    return ValueListenableBuilder<LyricsServiceProvider>(
+      valueListenable: lyricsServiceProviderNotifier,
+      builder: (context, currentProvider, _) {
+        final isSelected = currentProvider == provider;
+        final primaryColor = Theme.of(context).colorScheme.primary;
+        final onPrimaryColor = Theme.of(context).colorScheme.onPrimary;
+        final onSurfaceColor = Theme.of(context).colorScheme.onSurface;
+
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+          child: InkWell(
+            onTap: () {
+              if (!isSelected) {
+                _setLyricsProvider(provider);
+              }
+              Navigator.of(context).pop();
+            },
+            borderRadius: BorderRadius.circular(28),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+              decoration: BoxDecoration(
+                color: isSelected ? primaryColor : Colors.transparent,
+                borderRadius: BorderRadius.circular(28),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    isSelected
+                        ? Icons.radio_button_checked
+                        : Icons.radio_button_off,
+                    color: isSelected ? onPrimaryColor : onSurfaceColor,
+                    size: 24,
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: isSelected
+                            ? FontWeight.w600
+                            : FontWeight.normal,
+                        color: isSelected ? onPrimaryColor : onSurfaceColor,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         );
       },
     );
@@ -4012,6 +4172,57 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       color: Theme.of(context).colorScheme.onSurface,
                     ),
                     title: Text(
+                      LocaleProvider.tr('lyrics_service'),
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
+                    ),
+                    subtitle: ValueListenableBuilder<LyricsServiceProvider>(
+                      valueListenable: lyricsServiceProviderNotifier,
+                      builder: (context, provider, _) {
+                        return Text(
+                          provider == LyricsServiceProvider.lrclib
+                              ? LocaleProvider.tr('lyrics_provider_lrclib')
+                              : LocaleProvider.tr('lyrics_provider_simpmusic'),
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onSurface.withValues(alpha: 0.9),
+                          ),
+                        );
+                      },
+                    ),
+                    shape: const RoundedRectangleBorder(
+                      borderRadius: BorderRadius.all(Radius.circular(4)),
+                    ),
+                    onTap: () => _showLyricsProviderDialog(),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 4),
+            Card(
+              color: cardColor,
+              margin: EdgeInsets.zero,
+              elevation: 0,
+              shape: const RoundedRectangleBorder(
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(4),
+                  topRight: Radius.circular(4),
+                  bottomLeft: Radius.circular(4),
+                  bottomRight: Radius.circular(4),
+                ),
+              ),
+              child: Column(
+                children: [
+                  ListTile(
+                    leading: Icon(
+                      Icons.delete_outline,
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+                    title: Text(
                       LocaleProvider.tr('delete_lyrics'),
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
@@ -4447,12 +4658,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
           'songs': songs.map((s) => s.data).toList(),
         });
       }
+      final dislikesBox = await DislikesDB().box;
+      final dislikes = dislikesBox.values.toList();
+      final shortcuts = await ShortcutsDB().getShortcuts();
+
+      // Obtener carpetas y canciones ignoradas/fijadas de SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      final ignoredFolders = prefs.getStringList('ignored_folders') ?? [];
+      final ignoredSongs = prefs.getStringList('ignored_songs') ?? [];
+      final pinnedSongs = prefs.getStringList('pinned_songs') ?? [];
+
       // Serializar a JSON
       final backup = {
         'favorites': favorites.map((s) => s.data).toList(),
         'recents': recents.map((s) => s.data).toList(),
         'mostPlayed': mostPlayed.map((s) => s.data).toList(),
         'playlists': playlists,
+        'dislikes': dislikes,
+        'shortcuts': shortcuts,
+        'ignored_folders': ignoredFolders,
+        'ignored_songs': ignoredSongs,
+        'pinned_songs': pinnedSongs,
       };
       final jsonStr = JsonEncoder.withIndent('  ').convert(backup);
       // Seleccionar carpeta y guardar
@@ -4530,6 +4756,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
       );
       if (confirmed != true) return;
+
+      // Detener el reproductor antes de importar por seguridad
+      await audioHandler?.stop();
+
       // Limpiar bases de datos
       final boxFav = await FavoritesDB().box;
       await boxFav.clear();
@@ -4539,6 +4769,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       await boxMost.clear();
       final boxPl = await PlaylistsDB().box;
       await boxPl.clear();
+      final boxDis = await DislikesDB().box;
+      await boxDis.clear();
+      await ShortcutsDB().clearAll();
       // Restaurar favoritos
       if (data['favorites'] is List) {
         for (final path in data['favorites']) {
@@ -4578,6 +4811,39 @@ class _SettingsScreenState extends State<SettingsScreen> {
           await boxPl.put(id, playlist);
         }
       }
+      // Restaurar dislikes
+      if (data['dislikes'] is List) {
+        for (final path in data['dislikes']) {
+          await DislikesDB().addDislikePath(path.toString());
+        }
+      }
+      // Restaurar shortcuts
+      if (data['shortcuts'] is List) {
+        for (final path in data['shortcuts']) {
+          await ShortcutsDB().addShortcut(path.toString());
+        }
+      }
+
+      // Restaurar carpetas ignoradas, canciones ignoradas y fijadas en SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      if (data['ignored_folders'] is List) {
+        await prefs.setStringList(
+          'ignored_folders',
+          List<String>.from(data['ignored_folders']),
+        );
+      }
+      if (data['ignored_songs'] is List) {
+        await prefs.setStringList(
+          'ignored_songs',
+          List<String>.from(data['ignored_songs']),
+        );
+      }
+      if (data['pinned_songs'] is List) {
+        await prefs.setStringList(
+          'pinned_songs',
+          List<String>.from(data['pinned_songs']),
+        );
+      }
       if (!mounted) return;
 
       // Activar notifiers para recargar datos sin reiniciar la app
@@ -4585,6 +4851,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       playlistsShouldReload.value = !playlistsShouldReload.value;
       shortcutsShouldReload.value = !shortcutsShouldReload.value;
       mostPlayedShouldReload.value = !mostPlayedShouldReload.value;
+      dislikesShouldReload.value = !dislikesShouldReload.value;
+      recentsShouldReload.value = !recentsShouldReload.value;
+      foldersShouldReload.value = !foldersShouldReload.value;
 
       showDialog(
         context: context,
@@ -4599,7 +4868,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
           content: Text(LocaleProvider.tr('backup_imported')),
           actions: [
             TextButton(
-              onPressed: () => Navigator.of(context).pop(),
+              onPressed: () async {
+                Navigator.of(context).pop();
+                // Marcamos como configurado para evitar el onboarding tras el reinicio
+                final prefs = await SharedPreferences.getInstance();
+                await prefs.setBool('first_run', false);
+                // Aumentamos el retraso para mayor fiabilidad en el reinicio
+                await Future.delayed(const Duration(milliseconds: 800));
+                await TerminateRestart.instance.restartApp(
+                  options: const TerminateRestartOptions(terminate: true),
+                );
+              },
               child: Text(LocaleProvider.tr('ok')),
             ),
           ],
@@ -4718,6 +4997,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
       if (confirmed != true) return;
 
+      // Detener el reproductor
+      await audioHandler?.stop();
+
       // Borrar todas las bases de datos
       final boxFav = await FavoritesDB().box;
       await boxFav.clear();
@@ -4733,6 +5015,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
       final boxShortcuts = await ShortcutsDB().box;
       await boxShortcuts.clear();
+
+      final boxDislikes = await DislikesDB().box;
+      await boxDislikes.clear();
 
       final boxSongs = await SongsIndexDB().box;
       await boxSongs.clear();
@@ -4756,6 +5041,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       playlistsShouldReload.value = !playlistsShouldReload.value;
       shortcutsShouldReload.value = !shortcutsShouldReload.value;
       mostPlayedShouldReload.value = !mostPlayedShouldReload.value;
+      dislikesShouldReload.value = !dislikesShouldReload.value;
+      recentsShouldReload.value = !recentsShouldReload.value;
+      foldersShouldReload.value = !foldersShouldReload.value;
 
       // Mostrar mensaje de éxito
       showDialog(
@@ -4813,7 +5101,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         child: Align(
                           alignment: Alignment.centerRight,
                           child: TextButton(
-                            onPressed: () => Navigator.of(context).pop(),
+                            onPressed: () async {
+                              Navigator.of(context).pop();
+                              // Marcamos como configurado para evitar el onboarding tras el reinicio
+                              final prefs =
+                                  await SharedPreferences.getInstance();
+                              await prefs.setBool('first_run', false);
+                              // Usamos terminate_restart para un reinicio completo del proceso
+                              await TerminateRestart.instance.restartApp(
+                                options: const TerminateRestartOptions(
+                                  terminate: true,
+                                ),
+                              );
+                            },
                             child: TranslatedText(
                               'ok',
                               style: TextStyle(

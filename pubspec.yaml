@@ -1,7 +1,7 @@
 name: music
 description: "A new Flutter project."
 publish_to: 'none'
-version: 1.8.4+4014
+version: 1.8.5+4015
 
 environment:
   sdk: ^3.8.1
@@ -68,6 +68,7 @@ dependencies:
   material_new_shapes: ^1.0.0
   progress_indicator_m3e: ^0.1.1
   m3e_design: ^0.2.1
+  terminate_restart: ^1.0.11
 
 dev_dependencies:
   flutter_test:

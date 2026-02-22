@@ -157,14 +157,18 @@ class ThemeController {
     try {
       final generator = await PaletteGeneratorMaster.fromImageProvider(
         ResizeImage(imageProvider, height: 50, width: 50),
-        maximumColorCount: 16,
+        filters: [
+          // Este filtro solo permite colores con luminosidad entre 0.4 y 0.9
+          (HSLColor hsl) => hsl.lightness > 0.15 && hsl.lightness < 0.7,
+          avoidRedBlackWhitePaletteFilterMaster, // Mantener el filtro por defecto
+        ],
       );
 
       final paletteColor =
-          generator.vibrantColor ??
           generator.dominantColor ??
           generator.darkVibrantColor ??
           generator.lightVibrantColor ??
+          generator.vibrantColor ??
           generator.mutedColor;
 
       if (paletteColor != null) {

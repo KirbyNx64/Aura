@@ -550,6 +550,7 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> {
                                                   ],
                                                 ),
                                               ),
+                                              const SizedBox(width: 10),
 
                                               Row(
                                                 mainAxisSize: MainAxisSize.min,
@@ -941,7 +942,7 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> {
   }
 }
 
-class TitleMarquee extends StatefulWidget {
+class TitleMarquee extends StatelessWidget {
   final String text;
   final double maxWidth;
   final TextStyle? style;
@@ -954,36 +955,10 @@ class TitleMarquee extends StatefulWidget {
   });
 
   @override
-  State<TitleMarquee> createState() => _TitleMarqueeState();
-}
-
-class _TitleMarqueeState extends State<TitleMarquee> {
-  bool _showMarquee = false;
-
-  @override
-  void didUpdateWidget(covariant TitleMarquee oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.text != widget.text) {
-      setState(() => _showMarquee = false);
-      Future.delayed(const Duration(milliseconds: 1000), () {
-        if (mounted) setState(() => _showMarquee = true);
-      });
-    }
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    Future.delayed(const Duration(milliseconds: 3000), () {
-      if (mounted) setState(() => _showMarquee = true);
-    });
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final textStyle = widget.style ?? DefaultTextStyle.of(context).style;
+    final textStyle = style ?? DefaultTextStyle.of(context).style;
     final textPainter = TextPainter(
-      text: TextSpan(text: widget.text, style: textStyle),
+      text: TextSpan(text: text, style: textStyle),
       maxLines: 1,
       textDirection: TextDirection.ltr,
     )..layout();
@@ -993,49 +968,49 @@ class _TitleMarqueeState extends State<TitleMarquee> {
 
     final boxHeight = textHeight + 4; // pequeño margen
 
-    if (textWidth > widget.maxWidth) {
-      if (!_showMarquee) {
-        return SizedBox(
-          height: boxHeight,
-          width: widget.maxWidth,
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: Text(
-              widget.text,
-              style: textStyle,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        );
-      }
+    if (textWidth > maxWidth) {
+      // Siempre usar Marquee desde el inicio, con delay de 3s antes de scrollear
       return SizedBox(
         height: boxHeight,
-        width: widget.maxWidth,
-        child: Align(
-          alignment: Alignment.centerLeft,
-          child: Marquee(
-            key: ValueKey(widget.text),
-            text: widget.text,
-            style: textStyle,
-            velocity: 30.0,
-            blankSpace: 80.0,
-            startPadding: 0.0,
-            fadingEdgeStartFraction: 0.1,
-            fadingEdgeEndFraction: 0.1,
-            showFadingOnlyWhenScrolling: false,
-            pauseAfterRound: const Duration(seconds: 3),
+        width: maxWidth,
+        child: ShaderMask(
+          shaderCallback: (Rect bounds) {
+            return LinearGradient(
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+              colors: const [Colors.white, Colors.white, Colors.transparent],
+              // El último 10% del ancho se desvanece (siempre presente)
+              stops: const [0.0, 0.9, 1.0],
+            ).createShader(bounds);
+          },
+          blendMode: BlendMode.dstIn,
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Marquee(
+              key: ValueKey(text),
+              text: text,
+              style: textStyle,
+              velocity: 30.0,
+              blankSpace: 80.0,
+              startPadding: 0.0,
+              startAfter: const Duration(seconds: 3),
+              fadingEdgeStartFraction: 0.1,
+              fadingEdgeEndFraction:
+                  0.0, // El fading derecho se maneja en ShaderMask
+              showFadingOnlyWhenScrolling: false,
+              pauseAfterRound: const Duration(seconds: 3),
+            ),
           ),
         ),
       );
     } else {
       return SizedBox(
         height: boxHeight,
-        width: widget.maxWidth,
+        width: maxWidth,
         child: Align(
           alignment: Alignment.centerLeft,
           child: Text(
-            widget.text,
+            text,
             style: textStyle,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,

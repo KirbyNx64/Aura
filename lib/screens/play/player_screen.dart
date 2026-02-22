@@ -40,6 +40,7 @@ import 'package:music/widgets/sliding_up_panel/sliding_up_panel.dart'
     as standard_panel;
 import 'package:music/screens/play/current_playlist_screen.dart';
 import 'package:music/screens/play/current_lyrics_screen.dart';
+import 'package:audio_session/audio_session.dart';
 
 enum PanelContent { playlist, lyrics }
 
@@ -2558,11 +2559,8 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                               ),
                                               curve: Curves.easeInOut,
                                               color: normalizePaletteColor(
-                                                domColor ??
-                                                    Theme.of(
-                                                      context,
-                                                    ).scaffoldBackgroundColor,
-                                              ).withValues(alpha: 0.2),
+                                                domColor ?? Colors.black,
+                                              ).withValues(alpha: 0.20),
                                             ),
                                           );
                                         },
@@ -4759,7 +4757,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                                             padding: EdgeInsets.symmetric(
                                                                               horizontal:
                                                                                   iconSize /
-                                                                                  4,
+                                                                                  3,
                                                                             ),
                                                                             child: Material(
                                                                               color: Colors.transparent,
@@ -5036,36 +5034,229 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                               0,
                                               _isGestureNavigation ? 14 : -4,
                                             ),
-                                            child: Align(
-                                              alignment: Alignment.bottomCenter,
-                                              child: InkWell(
-                                                borderRadius:
-                                                    BorderRadius.circular(12),
-                                                onTap: () {
-                                                  if (mounted) {
-                                                    _showPlaylistDialog(
-                                                      context,
-                                                    );
-                                                  }
-                                                },
-                                                child: Padding(
-                                                  padding:
-                                                      const EdgeInsets.only(
-                                                        top: 12.0,
-                                                        left: 12.0,
-                                                        right: 12.0,
-                                                        bottom: 4.0,
+                                            child: SizedBox(
+                                              height: 46,
+                                              child: Stack(
+                                                children: [
+                                                  // ── Dispositivo de salida (izquierda) ──
+                                                  Align(
+                                                    alignment:
+                                                        Alignment.centerLeft,
+                                                    child: Padding(
+                                                      padding:
+                                                          const EdgeInsets.only(
+                                                            left: 20.0,
+                                                          ),
+                                                      child: FutureBuilder<AudioSession>(
+                                                        future: AudioSession
+                                                            .instance,
+                                                        builder: (context, sessionSnap) {
+                                                          if (!sessionSnap
+                                                              .hasData) {
+                                                            return const SizedBox.shrink();
+                                                          }
+                                                          return StreamBuilder<
+                                                            Set<AudioDevice>
+                                                          >(
+                                                            stream: sessionSnap
+                                                                .data!
+                                                                .devicesStream,
+                                                            builder: (context, snapshot) {
+                                                              final devices =
+                                                                  (snapshot.data ??
+                                                                          {})
+                                                                      .where(
+                                                                        (d) => d
+                                                                            .isOutput,
+                                                                      )
+                                                                      .toList();
+
+                                                              AudioDevice? best;
+                                                              best = devices
+                                                                  .where(
+                                                                    (d) =>
+                                                                        d.type ==
+                                                                        AudioDeviceType
+                                                                            .bluetoothA2dp,
+                                                                  )
+                                                                  .firstOrNull;
+                                                              best ??= devices
+                                                                  .where(
+                                                                    (d) =>
+                                                                        d.type ==
+                                                                        AudioDeviceType
+                                                                            .bluetoothSco,
+                                                                  )
+                                                                  .firstOrNull;
+                                                              best ??= devices
+                                                                  .where(
+                                                                    (d) =>
+                                                                        d.type ==
+                                                                            AudioDeviceType.wiredHeadset ||
+                                                                        d.type ==
+                                                                            AudioDeviceType.wiredHeadphones,
+                                                                  )
+                                                                  .firstOrNull;
+                                                              best ??= devices
+                                                                  .where(
+                                                                    (d) =>
+                                                                        d.type ==
+                                                                        AudioDeviceType
+                                                                            .builtInSpeaker,
+                                                                  )
+                                                                  .firstOrNull;
+                                                              best ??= devices
+                                                                  .where(
+                                                                    (d) =>
+                                                                        d.type ==
+                                                                        AudioDeviceType
+                                                                            .builtInEarpiece,
+                                                                  )
+                                                                  .firstOrNull;
+
+                                                              final color =
+                                                                  Theme.of(
+                                                                        context,
+                                                                      )
+                                                                      .colorScheme
+                                                                      .onSurface
+                                                                      .withValues(
+                                                                        alpha:
+                                                                            0.65,
+                                                                      );
+
+                                                              final IconData
+                                                              icon;
+                                                              switch (best
+                                                                  ?.type) {
+                                                                case AudioDeviceType
+                                                                    .bluetoothA2dp:
+                                                                case AudioDeviceType
+                                                                    .bluetoothSco:
+                                                                case AudioDeviceType
+                                                                    .bluetoothLe:
+                                                                  icon = Icons
+                                                                      .bluetooth_audio_rounded;
+                                                                case AudioDeviceType
+                                                                    .wiredHeadset:
+                                                                case AudioDeviceType
+                                                                    .wiredHeadphones:
+                                                                  icon = Icons
+                                                                      .headphones_rounded;
+                                                                case AudioDeviceType
+                                                                    .builtInEarpiece:
+                                                                  icon = Icons
+                                                                      .phone_in_talk_rounded;
+                                                                default:
+                                                                  icon = Icons
+                                                                      .volume_up_rounded;
+                                                              }
+
+                                                              final name =
+                                                                  best?.name
+                                                                      .trim() ??
+                                                                  '';
+
+                                                              return Row(
+                                                                mainAxisSize:
+                                                                    MainAxisSize
+                                                                        .min,
+                                                                children: [
+                                                                  Icon(
+                                                                    icon,
+                                                                    size: 18,
+                                                                    color:
+                                                                        color,
+                                                                  ),
+                                                                  if (name
+                                                                      .isNotEmpty) ...[
+                                                                    const SizedBox(
+                                                                      width: 4,
+                                                                    ),
+                                                                    Text(
+                                                                      name,
+                                                                      style: TextStyle(
+                                                                        fontSize:
+                                                                            11,
+                                                                        color:
+                                                                            color,
+                                                                        fontWeight:
+                                                                            FontWeight.w500,
+                                                                      ),
+                                                                      maxLines:
+                                                                          1,
+                                                                      overflow:
+                                                                          TextOverflow
+                                                                              .ellipsis,
+                                                                    ),
+                                                                  ],
+                                                                ],
+                                                              );
+                                                            },
+                                                          );
+                                                        },
                                                       ),
-                                                  child: Icon(
-                                                    Icons
-                                                        .keyboard_arrow_up_rounded,
-                                                    size: 28,
-                                                    color: Theme.of(context)
-                                                        .colorScheme
-                                                        .onSurface
-                                                        .withValues(alpha: 0.6),
+                                                    ),
                                                   ),
-                                                ),
+                                                  // ── Botón lista de reproducción (derecha) ──
+                                                  Align(
+                                                    alignment:
+                                                        Alignment.centerRight,
+                                                    child: Padding(
+                                                      padding:
+                                                          const EdgeInsets.only(
+                                                            right: 20.0,
+                                                          ),
+                                                      child: Builder(
+                                                        builder: (context) {
+                                                          final color =
+                                                              Theme.of(context)
+                                                                  .colorScheme
+                                                                  .onSurface
+                                                                  .withValues(
+                                                                    alpha: 0.65,
+                                                                  );
+                                                          return Material(
+                                                            color: Colors
+                                                                .transparent,
+                                                            child: InkWell(
+                                                              borderRadius:
+                                                                  BorderRadius.circular(
+                                                                    20,
+                                                                  ),
+                                                              onTap: () {
+                                                                _showPlaylistDialog(
+                                                                  context,
+                                                                );
+                                                              },
+                                                              child: Container(
+                                                                width: 44,
+                                                                height: 44,
+                                                                decoration: BoxDecoration(
+                                                                  shape: BoxShape
+                                                                      .circle,
+                                                                  color:
+                                                                      Theme.of(
+                                                                        context,
+                                                                      ).colorScheme.onSurface.withValues(
+                                                                        alpha:
+                                                                            0.06,
+                                                                      ),
+                                                                ),
+                                                                child: Icon(
+                                                                  Icons
+                                                                      .queue_music,
+                                                                  size: 20,
+                                                                  color: color,
+                                                                ),
+                                                              ),
+                                                            ),
+                                                          );
+                                                        },
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
                                               ),
                                             ),
                                           ),

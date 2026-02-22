@@ -536,7 +536,7 @@ class _MarqueeState extends State<Marquee> with SingleTickerProviderStateMixin {
 
   /// A timer that is fired at the start of each round.
   bool _running = false;
-  bool _isOnPause = false;
+  bool _isOnPause = true;
   bool _isAboutToPause = false;
   int _roundCounter = 0;
   bool get isDone => widget.numberOfRounds == null
@@ -554,6 +554,8 @@ class _MarqueeState extends State<Marquee> with SingleTickerProviderStateMixin {
         if (_controller.hasClients) {
           _controller.jumpTo(_startPosition);
           await Future<void>.delayed(widget.startAfter);
+          if (!mounted) return;
+          setState(() => _isOnPause = false);
           Future.doWhile(_scroll);
         }
       }

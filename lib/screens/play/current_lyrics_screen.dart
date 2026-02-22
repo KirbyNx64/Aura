@@ -15,7 +15,12 @@ import 'package:material_loading_indicator/loading_indicator.dart';
 import 'package:translator/translator.dart';
 import 'package:scroll_to_index/scroll_to_index.dart';
 import 'package:music/screens/play/lyrics_search_screen.dart';
-// Assuming getOrCacheArtwork is here or similar
+import 'package:flutter/rendering.dart';
+import 'dart:ui' as ui;
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+import 'package:palette_generator_master/palette_generator_master.dart';
 
 class LyricLine {
   final Duration time;
@@ -146,7 +151,7 @@ class _CurrentLyricsScreenState extends State<CurrentLyricsScreen> {
     }
   }
 
-  Color normalizePaletteColor(Color color) {
+  static Color normalizePaletteColor(Color color) {
     final hsl = HSLColor.fromColor(color);
     final isGrayscale = hsl.saturation < 0.15;
     double effectiveLightness = hsl.lightness;
@@ -559,6 +564,7 @@ class _CurrentLyricsScreenState extends State<CurrentLyricsScreen> {
         lyricLines: _parsedLyrics!,
         isAmoled: isAmoled,
         isDark: isDark,
+        currentMediaItem: currentMediaItem,
       );
     }
 
@@ -645,11 +651,13 @@ class _LyricsWithTranslationView extends StatefulWidget {
   final List<LyricLine> lyricLines;
   final bool isAmoled;
   final bool isDark;
+  final MediaItem currentMediaItem;
 
   const _LyricsWithTranslationView({
     required this.lyricLines,
     required this.isAmoled,
     required this.isDark,
+    required this.currentMediaItem,
   });
 
   @override
@@ -662,6 +670,62 @@ class _LyricsWithTranslationViewState
   bool _showTranslation = false;
   bool _isTranslating = false;
   List<String>? _translatedLines;
+
+  bool _isSelectionMode = false;
+  final Set<int> _selectedIndices = {};
+
+  void _onLineSelected(int index) {
+    setState(() {
+      if (_selectedIndices.contains(index)) {
+        _selectedIndices.remove(index);
+      } else {
+        if (_selectedIndices.length < 5) {
+          _selectedIndices.add(index);
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              backgroundColor: Theme.of(context).colorScheme.onSurface,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              content: Text(
+                LocaleProvider.tr('max_lyrics_reached'),
+                style: TextStyle(color: Theme.of(context).colorScheme.surface),
+              ),
+              duration: const Duration(seconds: 1),
+            ),
+          );
+        }
+      }
+    });
+  }
+
+  void _toggleSelectionMode() {
+    setState(() {
+      _isSelectionMode = !_isSelectionMode;
+      if (!_isSelectionMode) {
+        _selectedIndices.clear();
+      }
+    });
+  }
+
+  Future<void> _shareLyrics() async {
+    if (_selectedIndices.isEmpty) return;
+
+    final sortedItems = _selectedIndices.toList()..sort();
+    final selectedLyrics = sortedItems
+        .map((i) => widget.lyricLines[i])
+        .toList();
+
+    showDialog(
+      context: context,
+      builder: (context) => _LyricShareDialog(
+        lyrics: selectedLyrics,
+        mediaItem: widget.currentMediaItem,
+      ),
+    );
+  }
 
   Future<void> _toggleTranslation() async {
     if (_showTranslation) {
@@ -728,31 +792,74 @@ class _LyricsWithTranslationViewState
           isDark: widget.isDark,
           showTranslation: _showTranslation,
           translatedLines: _translatedLines,
+          isSelectionMode: _isSelectionMode,
+          selectedIndices: _selectedIndices,
+          onLineSelected: _onLineSelected,
         ),
-        Positioned(
-          right: 24,
-          bottom: 80,
-          child: FloatingActionButton(
-            onPressed: _isTranslating ? null : _toggleTranslation,
-            tooltip: _showTranslation
-                ? LocaleProvider.tr('hide_translation')
-                : LocaleProvider.tr('translate_lyrics'),
-            backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-            foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
-            child: _isTranslating
-                ? SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(
-                        Theme.of(context).colorScheme.onPrimaryContainer,
-                      ),
-                    ),
-                  )
-                : Icon(_showTranslation ? Icons.close : Icons.translate),
+        if (!_isSelectionMode) ...[
+          Positioned(
+            right: 24,
+            bottom: 140,
+            child: FloatingActionButton.small(
+              heroTag: 'lyric_selection_toggle_btn',
+              onPressed: _toggleSelectionMode,
+              tooltip: LocaleProvider.tr('share'),
+              backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+              foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
+              child: const Icon(Icons.share_rounded, size: 20),
+            ),
           ),
-        ),
+          Positioned(
+            right: 24,
+            bottom: 70,
+            child: FloatingActionButton(
+              heroTag: 'lyric_translate_btn',
+              onPressed: _isTranslating ? null : _toggleTranslation,
+              tooltip: _showTranslation
+                  ? LocaleProvider.tr('hide_translation')
+                  : LocaleProvider.tr('translate_lyrics'),
+              backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+              foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
+              child: _isTranslating
+                  ? SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          Theme.of(context).colorScheme.onPrimaryContainer,
+                        ),
+                      ),
+                    )
+                  : Icon(_showTranslation ? Icons.close : Icons.translate),
+            ),
+          ),
+        ] else ...[
+          Positioned(
+            right: 24,
+            bottom: 140,
+            child: FloatingActionButton.small(
+              heroTag: 'lyric_cancel_selection_btn',
+              onPressed: _toggleSelectionMode,
+              tooltip: LocaleProvider.tr('cancel'),
+              backgroundColor: Theme.of(context).colorScheme.errorContainer,
+              foregroundColor: Theme.of(context).colorScheme.onErrorContainer,
+              child: const Icon(Icons.close, size: 20),
+            ),
+          ),
+          Positioned(
+            right: 24,
+            bottom: 70,
+            child: FloatingActionButton(
+              heroTag: 'lyric_confirm_share_btn',
+              onPressed: _selectedIndices.isEmpty ? null : _shareLyrics,
+              tooltip: LocaleProvider.tr('share'),
+              backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+              foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
+              child: const Icon(Icons.check_rounded),
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -764,6 +871,9 @@ class _LyricsModalListView extends StatefulWidget {
   final bool isDark;
   final bool showTranslation;
   final List<String>? translatedLines;
+  final bool isSelectionMode;
+  final Set<int> selectedIndices;
+  final ValueChanged<int> onLineSelected;
 
   const _LyricsModalListView({
     required this.lyricLines,
@@ -771,6 +881,9 @@ class _LyricsModalListView extends StatefulWidget {
     required this.isDark,
     this.showTranslation = false,
     this.translatedLines,
+    required this.isSelectionMode,
+    required this.selectedIndices,
+    required this.onLineSelected,
   });
 
   @override
@@ -886,7 +999,9 @@ class _LyricsModalListViewState extends State<_LyricsModalListView>
         _currentLyricIndex = currentIndex;
       });
 
-      if (_currentLyricIndex != _lastCurrentIndex && !_isManualScrolling) {
+      if (_currentLyricIndex != _lastCurrentIndex &&
+          !_isManualScrolling &&
+          !widget.isSelectionMode) {
         _lastCurrentIndex = _currentLyricIndex;
         _scrollToCurrentLyric(previousIndex);
       }
@@ -938,19 +1053,32 @@ class _LyricsModalListViewState extends State<_LyricsModalListView>
           itemCount: widget.lyricLines.length,
           itemBuilder: (context, index) {
             final isCurrent = index == _currentLyricIndex;
+            final isSelected = widget.selectedIndices.contains(index);
             // Text style copied from PlayerScreen line 6119
             final textStyle = TextStyle(
-              color: isCurrent
-                  ? (widget.isAmoled && widget.isDark
-                        ? Colors.white
-                        : Theme.of(context).colorScheme.primary)
-                  : widget.isAmoled && widget.isDark
-                  ? Theme.of(
-                      context,
-                    ).colorScheme.onSurface.withValues(alpha: 0.5)
-                  : Theme.of(
-                      context,
-                    ).colorScheme.onSurface.withValues(alpha: 0.7),
+              color: widget.isSelectionMode
+                  ? (isSelected
+                        ? (widget.isAmoled && widget.isDark
+                              ? Colors.white
+                              : Theme.of(context).colorScheme.primary)
+                        : (widget.isAmoled && widget.isDark
+                              ? Theme.of(
+                                  context,
+                                ).colorScheme.onSurface.withValues(alpha: 0.3)
+                              : Theme.of(
+                                  context,
+                                ).colorScheme.onSurface.withValues(alpha: 0.4)))
+                  : (isCurrent
+                        ? (widget.isAmoled && widget.isDark
+                              ? Colors.white
+                              : Theme.of(context).colorScheme.primary)
+                        : widget.isAmoled && widget.isDark
+                        ? Theme.of(
+                            context,
+                          ).colorScheme.onSurface.withValues(alpha: 0.5)
+                        : Theme.of(
+                            context,
+                          ).colorScheme.onSurface.withValues(alpha: 0.7)),
               fontWeight: FontWeight.bold,
               fontSize: 22,
             );
@@ -961,6 +1089,10 @@ class _LyricsModalListViewState extends State<_LyricsModalListView>
               index: index,
               child: GestureDetector(
                 onTap: () {
+                  if (widget.isSelectionMode) {
+                    widget.onLineSelected(index);
+                    return;
+                  }
                   final targetTime = widget.lyricLines[index].time;
                   audioHandler?.seek(targetTime);
 
@@ -987,16 +1119,23 @@ class _LyricsModalListViewState extends State<_LyricsModalListView>
                 },
                 child: AnimatedContainer(
                   duration: Duration(
-                    milliseconds: _tappedLyricIndex == index ? 100 : 400,
+                    milliseconds: _tappedLyricIndex == index ? 100 : 150,
                   ),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(12),
-                    color: _tappedLyricIndex == index
-                        ? (widget.isAmoled
-                                  ? Colors.white
-                                  : Theme.of(context).colorScheme.primary)
-                              .withValues(alpha: 0.05)
-                        : Colors.transparent,
+                    color: widget.isSelectionMode
+                        ? (isSelected
+                              ? (widget.isAmoled
+                                        ? Colors.white
+                                        : Theme.of(context).colorScheme.primary)
+                                    .withValues(alpha: 0.1)
+                              : Colors.transparent)
+                        : (_tappedLyricIndex == index
+                              ? (widget.isAmoled
+                                        ? Colors.white
+                                        : Theme.of(context).colorScheme.primary)
+                                    .withValues(alpha: 0.05)
+                              : Colors.transparent),
                   ),
                   margin: const EdgeInsets.symmetric(horizontal: 16),
                   padding: const EdgeInsets.symmetric(
@@ -1052,6 +1191,320 @@ class _LyricsModalListViewState extends State<_LyricsModalListView>
           ),
         ),
       ],
+    );
+  }
+}
+
+class _LyricShareDialog extends StatefulWidget {
+  final List<LyricLine> lyrics;
+  final MediaItem mediaItem;
+
+  const _LyricShareDialog({required this.lyrics, required this.mediaItem});
+
+  @override
+  State<_LyricShareDialog> createState() => _LyricShareDialogState();
+}
+
+class _LyricShareDialogState extends State<_LyricShareDialog> {
+  final GlobalKey _globalKey = GlobalKey();
+  bool _isGenerating = false;
+  Color? _extractedColor;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchDominantColor();
+  }
+
+  Future<void> _fetchDominantColor() async {
+    final artUri = widget.mediaItem.artUri;
+    if (artUri == null) return;
+
+    ImageProvider? provider;
+    final scheme = artUri.scheme.toLowerCase();
+    if (scheme == 'file' || scheme == 'content') {
+      try {
+        final file = File(artUri.toFilePath());
+        if (file.existsSync() && file.lengthSync() > 0) {
+          provider = FileImage(file);
+        }
+      } catch (_) {}
+    } else if (scheme == 'http' || scheme == 'https') {
+      provider = NetworkImage(artUri.toString());
+    }
+
+    if (provider == null) return;
+
+    try {
+      final generator = await PaletteGeneratorMaster.fromImageProvider(
+        ResizeImage(provider, height: 50, width: 50),
+        filters: [
+          (HSLColor hsl) => hsl.lightness > 0.15 && hsl.lightness < 0.7,
+          avoidRedBlackWhitePaletteFilterMaster,
+        ],
+      );
+
+      final paletteColor =
+          generator.dominantColor ??
+          generator.darkVibrantColor ??
+          generator.lightVibrantColor ??
+          generator.vibrantColor ??
+          generator.mutedColor;
+
+      if (paletteColor != null && mounted) {
+        setState(() {
+          _extractedColor = paletteColor.color;
+        });
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _captureAndShare() async {
+    setState(() {
+      _isGenerating = true;
+    });
+
+    try {
+      final boundary =
+          _globalKey.currentContext?.findRenderObject()
+              as RenderRepaintBoundary?;
+      if (boundary == null) return;
+
+      final image = await boundary.toImage(pixelRatio: 3.0);
+      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      if (byteData == null) return;
+
+      final uint8List = byteData.buffer.asUint8List();
+      final tempDir = await getTemporaryDirectory();
+      final file = await File(
+        '${tempDir.path}/lyrics_share_${DateTime.now().millisecondsSinceEpoch}.png',
+      ).create();
+      await file.writeAsBytes(uint8List);
+
+      //ignore: deprecated_member_use
+      await Share.shareXFiles([XFile(file.path)], text: widget.mediaItem.title);
+      if (mounted) Navigator.of(context).pop();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Error al generar la imagen')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isGenerating = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+      contentPadding: EdgeInsets.zero,
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          RepaintBoundary(
+            key: _globalKey,
+            child: _LyricShareWidget(
+              lyrics: widget.lyrics,
+              mediaItem: widget.mediaItem,
+              extractedColor: _extractedColor,
+            ),
+          ),
+          const SizedBox(height: 24),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              FloatingActionButton.extended(
+                onPressed: _isGenerating
+                    ? null
+                    : () => Navigator.of(context).pop(),
+                label: Text(LocaleProvider.tr('cancel')),
+                icon: const Icon(Icons.close),
+                backgroundColor: Colors.white10,
+                foregroundColor: Colors.white,
+                elevation: 0,
+              ),
+              const SizedBox(width: 16),
+              FloatingActionButton.extended(
+                onPressed: _isGenerating ? null : _captureAndShare,
+                label: Text(
+                  _isGenerating
+                      ? LocaleProvider.tr('generating')
+                      : LocaleProvider.tr('share'),
+                ),
+                icon: _isGenerating
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 3,
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            Colors.black,
+                          ),
+                        ),
+                      )
+                    : const Icon(Icons.share_rounded),
+                backgroundColor: Theme.of(context).colorScheme.primary,
+                foregroundColor: Theme.of(context).colorScheme.onPrimary,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LyricShareWidget extends StatelessWidget {
+  final List<LyricLine> lyrics;
+  final MediaItem mediaItem;
+  final Color? extractedColor;
+
+  const _LyricShareWidget({
+    required this.lyrics,
+    required this.mediaItem,
+    this.extractedColor,
+  });
+
+  Widget _buildArtwork() {
+    final artUri = mediaItem.artUri;
+    if (artUri != null) {
+      final scheme = artUri.scheme.toLowerCase();
+      if (scheme == 'file' || scheme == 'content') {
+        return Image.file(
+          File(artUri.toFilePath()),
+          width: 60,
+          height: 60,
+          fit: BoxFit.cover,
+        );
+      } else if (scheme == 'http' || scheme == 'https') {
+        return Image.network(
+          artUri.toString(),
+          width: 60,
+          height: 60,
+          fit: BoxFit.cover,
+        );
+      }
+    }
+    return Container(
+      width: 60,
+      height: 60,
+      color: Colors.white10,
+      child: const Icon(Icons.music_note, color: Colors.white, size: 30),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<Color?>(
+      valueListenable: ThemeController.instance.dominantColor,
+      builder: (context, domColor, _) {
+        final baseColor = extractedColor ?? domColor ?? const Color(0xFF1A1A1A);
+        final normalizedColor = _CurrentLyricsScreenState.normalizePaletteColor(
+          baseColor,
+        );
+        // Creamos el fondo oscuro (negro + 20% del color normalizado) para que sea idéntico a la pantalla
+        final bgColor = Color.alphaBlend(
+          normalizedColor.withValues(alpha: 0.2),
+          Colors.black,
+        );
+
+        return Container(
+          width: 400,
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: bgColor,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: _buildArtwork(),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          mediaItem.title,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          mediaItem.artist ?? 'Artista desconocido',
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.7),
+                            fontSize: 14,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Divider(color: Colors.white.withValues(alpha: 0.2)),
+              const SizedBox(height: 10),
+              ...lyrics.map(
+                (line) => Padding(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: Text(
+                    line.text,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      height: 1.3,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  SvgPicture.asset(
+                    'assets/icon/icon_foreground.svg',
+                    height: 32,
+                    colorFilter: const ColorFilter.mode(
+                      Colors.white70,
+                      BlendMode.srcIn,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Aura Music',
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.7),
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

@@ -310,7 +310,9 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
                   index: _selectedIndex,
                   children: List.generate(
                     _pages.length,
-                    (i) => _pages[i] ?? const SizedBox.shrink(),
+                    (i) => RepaintBoundary(
+                      child: _pages[i] ?? const SizedBox.shrink(),
+                    ),
                   ),
                 ),
               ),
@@ -333,7 +335,9 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
                       index: _selectedIndex,
                       children: List.generate(
                         _pages.length,
-                        (i) => _pages[i] ?? const SizedBox.shrink(),
+                        (i) => RepaintBoundary(
+                          child: _pages[i] ?? const SizedBox.shrink(),
+                        ),
                       ),
                     ),
                   );
@@ -529,7 +533,7 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
                               // padding modificado por el Scaffold que incluye la
                               // altura del bottom nav (ahora fija con SizedBox).
                               final data = MediaQuery.of(context);
-                              
+
                               // Crear el widget del reproductor una vez y mantenerlo en memoria
                               _playerScreenWidget ??= FullPlayerScreen(
                                 initialMediaItem: snapshot.data,
@@ -547,7 +551,7 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
                                   }
                                 },
                               );
-                              
+
                               return MediaQuery(
                                 data: data.copyWith(
                                   padding: data.padding.copyWith(
@@ -570,7 +574,9 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
                                           child: child!,
                                         );
                                       },
-                                      child: _playerScreenWidget ?? const SizedBox.shrink(),
+                                      child:
+                                          _playerScreenWidget ??
+                                          const SizedBox.shrink(),
                                     ),
                                   ),
                                 ),

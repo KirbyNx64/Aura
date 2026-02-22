@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:dio/dio.dart';
 import 'package:music/utils/audio/synced_lyrics_service.dart';
+import 'package:music/utils/audio/simpmusic_lyrics_service.dart';
 import 'package:music/l10n/locale_provider.dart';
 import 'package:music/utils/notifiers.dart';
 import 'package:music/utils/theme_preferences.dart';
 import 'package:material_loading_indicator/loading_indicator.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class LyricsSearchResult {
   final String title;
@@ -15,6 +17,7 @@ class LyricsSearchResult {
   final int duration;
   final String? album;
   final bool isInstrumental;
+  final String? videoId;
 
   LyricsSearchResult({
     required this.title,
@@ -24,6 +27,7 @@ class LyricsSearchResult {
     this.plainLyrics,
     required this.duration,
     this.isInstrumental = false,
+    this.videoId,
   });
 }
 
@@ -98,9 +102,15 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
       dio.options.connectTimeout = const Duration(seconds: 10);
       dio.options.receiveTimeout = const Duration(seconds: 10);
 
+      final isSimpMusic =
+          lyricsServiceProviderNotifier.value ==
+          LyricsServiceProvider.simpmusic;
+
       final response = await dio.get(
-        'https://lrclib.net/api/search',
-        queryParameters: {'q': query},
+        isSimpMusic
+            ? 'https://api-lyrics.simpmusic.org/v1/search'
+            : 'https://lrclib.net/api/search',
+        queryParameters: isSimpMusic ? {'q': query} : {'q': query},
         options: Options(
           headers: {'User-Agent': SyncedLyricsService.userAgent},
           validateStatus: (status) => status != null && status < 500,
@@ -108,31 +118,78 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
       );
 
       if (response.statusCode == 200 && response.data != null) {
-        final List<dynamic> data = response.data;
+        final List<dynamic> data;
+        if (isSimpMusic) {
+          final responseData = response.data;
+          if (responseData is Map<String, dynamic> &&
+              responseData['data'] is List) {
+            data = responseData['data'];
+          } else {
+            data = [];
+          }
+        } else {
+          data = response.data is List ? response.data : [];
+        }
+
         final results = <LyricsSearchResult>[];
 
         for (final item in data) {
           if (item is Map<String, dynamic>) {
-            final title = item['trackName']?.toString() ?? '';
-            final artist = item['artistName']?.toString() ?? '';
-            final album = item['albumName']?.toString();
-            final syncedLyrics = item['syncedLyrics']?.toString() ?? '';
-            final plainLyrics = item['plainLyrics']?.toString();
-            final duration = item['duration'] is int ? item['duration'] : 0;
-            final isInstrumental = item['instrumental'] == true;
+            if (isSimpMusic) {
+              final title =
+                  item['songTitle']?.toString() ??
+                  item['title']?.toString() ??
+                  '';
+              final artist =
+                  item['artistName']?.toString() ??
+                  item['artist']?.toString() ??
+                  '';
+              final album =
+                  item['albumName']?.toString() ?? item['album']?.toString();
+              final syncedLyrics = item['syncedLyrics']?.toString() ?? '';
+              final plainLyrics =
+                  item['plainLyric']?.toString() ??
+                  item['plainLyrics']?.toString();
+              final duration = item['durationSeconds'] is int
+                  ? item['durationSeconds']
+                  : 0;
+              final videoId = item['videoId']?.toString();
 
-            if (title.isNotEmpty && artist.isNotEmpty) {
-              results.add(
-                LyricsSearchResult(
-                  title: title,
-                  artist: artist,
-                  album: album,
-                  syncedLyrics: syncedLyrics,
-                  plainLyrics: plainLyrics,
-                  duration: duration,
-                  isInstrumental: isInstrumental,
-                ),
-              );
+              if (title.isNotEmpty && artist.isNotEmpty) {
+                results.add(
+                  LyricsSearchResult(
+                    title: title,
+                    artist: artist,
+                    album: album,
+                    syncedLyrics: syncedLyrics,
+                    plainLyrics: plainLyrics,
+                    duration: duration,
+                    videoId: videoId,
+                  ),
+                );
+              }
+            } else {
+              final title = item['trackName']?.toString() ?? '';
+              final artist = item['artistName']?.toString() ?? '';
+              final album = item['albumName']?.toString();
+              final syncedLyrics = item['syncedLyrics']?.toString() ?? '';
+              final plainLyrics = item['plainLyrics']?.toString();
+              final duration = item['duration'] is int ? item['duration'] : 0;
+              final isInstrumental = item['instrumental'] == true;
+
+              if (title.isNotEmpty && artist.isNotEmpty) {
+                results.add(
+                  LyricsSearchResult(
+                    title: title,
+                    artist: artist,
+                    album: album,
+                    syncedLyrics: syncedLyrics,
+                    plainLyrics: plainLyrics,
+                    duration: duration,
+                    isInstrumental: isInstrumental,
+                  ),
+                );
+              }
             }
           }
         }
@@ -271,12 +328,28 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
 
   Future<void> _applyLyrics(LyricsSearchResult result) async {
     try {
+      String? synced = result.syncedLyrics;
+      String? plain = result.plainLyrics;
+
+      // Si no hay letra sincronizada pero hay un videoId (SimpMusic)
+      if (synced.isEmpty && result.videoId != null) {
+        final lyricsResult = await SimpMusicLyricsService.getLyricsByVideoId(
+          result.videoId!,
+          widget.currentSong.id,
+        );
+        if (lyricsResult.type == LyricsResultType.found &&
+            lyricsResult.data != null) {
+          synced = lyricsResult.data!.synced;
+          plain = lyricsResult.data!.plainLyrics;
+        }
+      }
+
       final lyricsBox = await SyncedLyricsService.box;
 
       final lyricsData = LyricsData(
         id: widget.currentSong.id,
-        synced: result.syncedLyrics,
-        plainLyrics: result.plainLyrics,
+        synced: synced,
+        plainLyrics: plain,
       );
 
       await lyricsBox.put(widget.currentSong.id, lyricsData);
@@ -412,14 +485,7 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
                       color: Theme.of(context).colorScheme.onSurface,
                     ),
                     const SizedBox(height: 16),
-                    TranslatedText(
-                      'info',
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w500,
-                        color: Theme.of(context).colorScheme.onSurface,
-                      ),
-                    ),
+                    _buildDialogTitle('info'),
                     const SizedBox(height: 16),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -458,6 +524,181 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
           },
         );
       },
+    );
+  }
+
+  Future<void> _setLyricsProvider(LyricsServiceProvider provider) async {
+    lyricsServiceProviderNotifier.value = provider;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('lyrics_service_provider', provider.index);
+  }
+
+  void _showLyricsProviderDialog() {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return ValueListenableBuilder<AppColorScheme>(
+          valueListenable: colorSchemeNotifier,
+          builder: (context, colorScheme, child) {
+            final isAmoled = colorScheme == AppColorScheme.amoled;
+            final isDark = Theme.of(context).brightness == Brightness.dark;
+            final primaryColor = Theme.of(context).colorScheme.primary;
+
+            return AlertDialog(
+              backgroundColor: isAmoled && isDark
+                  ? Colors.black
+                  : Theme.of(context).colorScheme.surface,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(28),
+                side: isAmoled && isDark
+                    ? const BorderSide(color: Colors.white24, width: 1)
+                    : BorderSide.none,
+              ),
+              contentPadding: const EdgeInsets.fromLTRB(0, 24, 0, 8),
+              content: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: 400,
+                  maxHeight: MediaQuery.of(context).size.height * 0.8,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.lyrics_rounded,
+                      size: 32,
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+                    const SizedBox(height: 16),
+                    _buildDialogTitle('lyrics_service'),
+                    const SizedBox(height: 16),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: TranslatedText(
+                        'lyrics_service_desc',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onSurface.withAlpha(180),
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    _buildLyricsProviderOption(
+                      context: context,
+                      title: LocaleProvider.tr('lyrics_provider_lrclib'),
+                      provider: LyricsServiceProvider.lrclib,
+                    ),
+                    _buildLyricsProviderOption(
+                      context: context,
+                      title: LocaleProvider.tr('lyrics_provider_simpmusic'),
+                      provider: LyricsServiceProvider.simpmusic,
+                    ),
+                    const SizedBox(height: 16),
+                    Padding(
+                      padding: const EdgeInsets.only(right: 24, bottom: 8),
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          child: TranslatedText(
+                            'ok',
+                            style: TextStyle(
+                              color: primaryColor,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildLyricsProviderOption({
+    required BuildContext context,
+    required String title,
+    required LyricsServiceProvider provider,
+  }) {
+    return ValueListenableBuilder<LyricsServiceProvider>(
+      valueListenable: lyricsServiceProviderNotifier,
+      builder: (context, currentProvider, _) {
+        final isSelected = currentProvider == provider;
+        final primaryColor = Theme.of(context).colorScheme.primary;
+        final onPrimaryColor = Theme.of(context).colorScheme.onPrimary;
+        final onSurfaceColor = Theme.of(context).colorScheme.onSurface;
+
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+          child: InkWell(
+            onTap: () async {
+              if (!isSelected) {
+                await _setLyricsProvider(provider);
+                _performSearch();
+              }
+              if (context.mounted) {
+                Navigator.of(context).pop();
+              }
+            },
+            borderRadius: BorderRadius.circular(28),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+              decoration: BoxDecoration(
+                color: isSelected ? primaryColor : Colors.transparent,
+                borderRadius: BorderRadius.circular(28),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    isSelected
+                        ? Icons.radio_button_checked
+                        : Icons.radio_button_off,
+                    color: isSelected ? onPrimaryColor : onSurfaceColor,
+                    size: 24,
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: isSelected
+                            ? FontWeight.w600
+                            : FontWeight.normal,
+                        color: isSelected ? onPrimaryColor : onSurfaceColor,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildDialogTitle(String key, {double fontSize = 24}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: TranslatedText(
+        key,
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          fontSize: fontSize,
+          fontWeight: FontWeight.w600,
+          color: Theme.of(context).colorScheme.onSurface,
+        ),
+      ),
     );
   }
 
@@ -500,6 +741,11 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
           onPressed: () => Navigator.of(context).pop(),
         ),
         actions: [
+          IconButton(
+            icon: Icon(Icons.lyrics_outlined, size: 28),
+            onPressed: () => _showLyricsProviderDialog(),
+            tooltip: LocaleProvider.tr('lyrics_service'),
+          ),
           IconButton(
             icon: Icon(Icons.info_outline, size: 28),
             onPressed: () => _showInfoDialog(),
@@ -720,8 +966,8 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
     final primaryColor = Theme.of(context).colorScheme.primary;
 
     final isExpanded = _expandedCards.contains(index);
-    final fullLyrics = _getFullLyrics(result.syncedLyrics);
-    final previewLyrics = _getLyricsPreview(result.syncedLyrics);
+    final fullLyrics = _getFullLyrics(result);
+    final previewLyrics = _getLyricsPreview(result);
 
     final cardColor = isAmoled && isDark
         ? Colors.white.withAlpha(20)
@@ -927,9 +1173,18 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
     );
   }
 
-  String _getLyricsPreview(String syncedLyrics) {
+  String _getLyricsPreview(LyricsSearchResult result) {
+    if (result.syncedLyrics.isEmpty) {
+      final plain = result.plainLyrics ?? '';
+      final lines = plain
+          .split('\n')
+          .where((l) => l.trim().isNotEmpty)
+          .toList();
+      return lines.take(3).join('\n');
+    }
+
     // Extraer el texto de la letra sin los timestamps
-    final lines = syncedLyrics.split('\n');
+    final lines = result.syncedLyrics.split('\n');
     final textLines = <String>[];
 
     for (final line in lines) {
@@ -943,12 +1198,22 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
       }
     }
 
+    if (textLines.isEmpty && result.plainLyrics != null) {
+      final lines = result.plainLyrics!
+          .split('\n')
+          .where((l) => l.trim().isNotEmpty)
+          .toList();
+      return lines.take(3).join('\n');
+    }
+
     return textLines.take(3).join('\n');
   }
 
-  String _getFullLyrics(String syncedLyrics) {
+  String _getFullLyrics(LyricsSearchResult result) {
+    if (result.syncedLyrics.isEmpty) return result.plainLyrics ?? '';
+
     // Extraer el texto completo de la letra sin los timestamps
-    final lines = syncedLyrics.split('\n');
+    final lines = result.syncedLyrics.split('\n');
     final textLines = <String>[];
 
     for (final line in lines) {
@@ -960,6 +1225,10 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
           textLines.add(text);
         }
       }
+    }
+
+    if (textLines.isEmpty && result.plainLyrics != null) {
+      return result.plainLyrics!;
     }
 
     return textLines.join('\n');

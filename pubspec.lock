@@ -1462,6 +1462,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.2.2"
+  terminate_restart:
+    dependency: "direct main"
+    description:
+      name: terminate_restart
+      sha256: "82c27b35fb838fa1669123c3cc3f32040489a753d079a74ed217965d2cd7b2e2"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.0.11"
   test_api:
     dependency: transitive
     description:

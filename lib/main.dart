@@ -32,6 +32,7 @@ import 'package:music/utils/theme_controller.dart';
 import 'package:music/utils/download_manager.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import 'dart:async';
+import 'package:terminate_restart/terminate_restart.dart';
 
 // Cambiar de late final a nullable para mejor manejo de errores
 AudioHandler? audioHandler;
@@ -351,6 +352,7 @@ class _MainNavRootState extends State<MainNavRoot> {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  TerminateRestart.instance.initialize();
   await Hive.initFlutter();
   Hive.registerAdapter(PlaylistModelAdapter());
   await SyncedLyricsService.initialize();
@@ -386,6 +388,14 @@ void main() async {
       colorIndex < AppColorScheme.values.length) {
     colorSchemeNotifier.value = AppColorScheme.values[colorIndex];
   }
+
+  // Cargar preferencias de fondo AMOLED/Dinámico
+  useArtworkAsBackgroundPlayerNotifier.value =
+      prefs.getBool('use_artwork_background_player') ?? true;
+  useArtworkAsBackgroundOverlayNotifier.value =
+      prefs.getBool('use_artwork_background_overlay') ?? true;
+  useDynamicColorBackgroundNotifier.value =
+      prefs.getBool('use_dynamic_color_background') ?? false;
 
   // Cargar directorio de descargas
   final downloadDir =
@@ -756,9 +766,9 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
       final nextButtonEnabled =
           prefs.getBool('overlay_next_button_enabled') ?? false;
       final useArtworkOverlay =
-          prefs.getBool('use_artwork_background_overlay') ?? false;
+          prefs.getBool('use_artwork_background_overlay') ?? true;
       final useArtworkPlayer =
-          prefs.getBool('use_artwork_background_player') ?? false;
+          prefs.getBool('use_artwork_background_player') ?? true;
 
       // Actualizar estado una sola vez
       setState(() {
@@ -773,7 +783,17 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
         useArtworkAsBackgroundOverlayNotifier.value = useArtworkOverlay;
         useArtworkAsBackgroundPlayerNotifier.value = useArtworkPlayer;
         useDynamicColorBackgroundNotifier.value =
-            prefs.getBool('use_dynamic_color_background') ?? true;
+            prefs.getBool('use_dynamic_color_background') ?? false;
+
+        final lyricsProviderIndex =
+            prefs.getInt('lyrics_service_provider') ??
+            LyricsServiceProvider.simpmusic.index;
+        if (lyricsProviderIndex >= 0 &&
+            lyricsProviderIndex < LyricsServiceProvider.values.length) {
+          lyricsServiceProviderNotifier.value =
+              LyricsServiceProvider.values[lyricsProviderIndex];
+        }
+
         _isLoading = false;
       });
 

@@ -88,3 +88,9 @@ final ValueNotifier<bool> openPlayerPanelNotifier = ValueNotifier<bool>(false);
 
 // Notifier para controlar si la pantalla debe permanecer encendida
 final ValueNotifier<bool> wakelockEnabledNotifier = ValueNotifier<bool>(false);
+
+enum LyricsServiceProvider { lrclib, simpmusic }
+
+final lyricsServiceProviderNotifier = ValueNotifier<LyricsServiceProvider>(
+  LyricsServiceProvider.simpmusic,
+);

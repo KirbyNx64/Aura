@@ -182,6 +182,10 @@ class DependenciesScreen extends StatelessWidget {
       'https://pub.dev/packages/sliding_up_panel',
       '^2.0.0+1',
     ),
+    'wakelock_plus': _DependencyInfo(
+      'https://pub.dev/packages/wakelock_plus',
+      '^1.4.0',
+    ),
     'marquee': _DependencyInfo('https://pub.dev/packages/marquee', '^2.3.0'),
     'open_settings_plus': _DependencyInfo(
       'https://pub.dev/packages/open_settings_plus',
@@ -190,6 +194,10 @@ class DependenciesScreen extends StatelessWidget {
     'android_nav_setting': _DependencyInfo(
       'https://pub.dev/packages/android_nav_setting',
       '^0.0.2+2',
+    ),
+    'expressive_refresh': _DependencyInfo(
+      'https://pub.dev/packages/expressive_refresh',
+      '^0.1.2',
     ),
   };
 
