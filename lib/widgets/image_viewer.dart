@@ -3,7 +3,7 @@ import 'dart:ui';
 import 'package:http/http.dart' as http;
 import 'dart:io';
 import 'package:flutter/rendering.dart';
-import 'package:media_scanner/media_scanner.dart';
+import 'package:on_audio_query/on_audio_query.dart';
 import 'package:music/l10n/locale_provider.dart';
 import 'package:music/utils/theme_preferences.dart';
 import 'package:music/utils/notifiers.dart';
@@ -165,7 +165,7 @@ class _ImageViewerState extends State<ImageViewer>
       await file.writeAsBytes(pngBytes);
 
       // Indexar la imagen en el sistema (igual que las canciones)
-      await MediaScanner.loadMedia(path: filePath);
+      await OnAudioQuery().scanMedia(filePath);
 
       _showMessage(
         LocaleProvider.tr('success'),

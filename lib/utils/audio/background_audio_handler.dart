@@ -14,6 +14,7 @@ import 'package:music/utils/db/recent_db.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:music/utils/db/favorites_db.dart';
 import 'package:music/utils/notifiers.dart';
+import 'package:music/utils/encoding_utils.dart';
 
 AudioHandler? _audioHandler;
 
@@ -68,7 +69,7 @@ Future<AudioHandler> initAudioService() async {
               'Controles de reproducción de música',
           androidNotificationOngoing: true,
           androidNotificationClickStartsActivity: true,
-          androidStopForegroundOnPause: false,
+          // androidStopForegroundOnPause: false,
           androidResumeOnClick: true,
           preloadArtwork: true,
         ),
@@ -1122,9 +1123,9 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       mediaItems.add(
         MediaItem(
           id: song.data,
-          album: song.album ?? '',
-          title: song.title,
-          artist: song.artist ?? '',
+          album: song.displayAlbum,
+          title: song.displayTitle,
+          artist: song.displayArtist,
           duration: dur,
           artUri: null,
           extras: {
@@ -1206,9 +1207,9 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       mediaItems.add(
         MediaItem(
           id: song.data,
-          album: song.album ?? '',
-          title: song.title,
-          artist: song.artist ?? '',
+          album: song.displayAlbum,
+          title: song.displayTitle,
+          artist: song.displayArtist,
           duration: dur,
           artUri: cachedArtUri, // Usar carátula del caché si está disponible
           extras: {
@@ -2143,9 +2144,9 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
           _currentSongList.add(s);
           final mediaItem = MediaItem(
             id: s.data,
-            album: s.album ?? '',
-            title: s.title,
-            artist: s.artist ?? '',
+            album: s.displayAlbum,
+            title: s.displayTitle,
+            artist: s.displayArtist,
             duration: (s.duration != null && s.duration! > 0)
                 ? Duration(milliseconds: s.duration!)
                 : null,

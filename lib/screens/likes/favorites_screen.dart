@@ -4,6 +4,7 @@ import 'package:music/utils/db/favorites_db.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 import 'package:music/main.dart' show AudioHandlerSafeCast, audioHandler;
 import 'package:music/utils/audio/background_audio_handler.dart';
+import 'package:music/utils/encoding_utils.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:music/utils/notifiers.dart';
 import 'package:music/l10n/locale_provider.dart';
@@ -231,8 +232,8 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     // Crear MediaItem temporal para mostrar el overlay inmediatamente
     final tempMediaItem = MediaItem(
       id: song.data,
-      title: song.title,
-      artist: song.artist,
+      title: song.displayTitle,
+      artist: song.displayArtist,
       duration: (song.duration != null && song.duration! > 0)
           ? Duration(milliseconds: song.duration!)
           : null,
@@ -273,8 +274,8 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     }
     setState(() {
       _filteredFavorites = _favorites.where((song) {
-        final title = quitarDiacriticos(song.title);
-        final artist = quitarDiacriticos(song.artist ?? '');
+        final title = quitarDiacriticos(song.displayTitle);
+        final artist = quitarDiacriticos(song.displayArtist);
         return title.contains(query) || artist.contains(query);
       }).toList();
     });
@@ -348,9 +349,9 @@ class _FavoritesScreenState extends State<FavoritesScreen>
   }
 
   String _formatArtistWithDuration(SongModel song) {
-    final artist = (song.artist == null || song.artist!.trim().isEmpty)
+    final artist = (song.displayArtist.trim().isEmpty)
         ? LocaleProvider.tr('unknown_artist')
-        : song.artist!;
+        : song.displayArtist;
 
     if (song.duration != null && song.duration! > 0) {
       final duration = Duration(milliseconds: song.duration!);
@@ -425,8 +426,8 @@ class _FavoritesScreenState extends State<FavoritesScreen>
 
     final tempMediaItem = MediaItem(
       id: song.data,
-      title: song.title,
-      artist: song.artist,
+      title: song.displayTitle,
+      artist: song.displayArtist,
       duration: (song.duration != null && song.duration! > 0)
           ? Duration(milliseconds: song.duration!)
           : null,
@@ -491,14 +492,14 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Text(
-                            song.title,
+                            song.displayTitle,
                             maxLines: 1,
                             style: Theme.of(context).textTheme.titleMedium,
                             overflow: TextOverflow.ellipsis,
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            song.artist ?? LocaleProvider.tr('unknown_artist'),
+                            song.displayArtist,
                             style: TextStyle(fontSize: 14),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -604,13 +605,13 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                   shortcutsShouldReload.value = !shortcutsShouldReload.value;
                 },
               ),
-              if ((song.artist ?? '').trim().isNotEmpty)
+              if (song.displayArtist.trim().isNotEmpty)
                 ListTile(
                   leading: const Icon(Icons.person_outline),
                   title: const TranslatedText('go_to_artist'),
                   onTap: () {
                     Navigator.of(context).pop();
-                    final name = (song.artist ?? '').trim();
+                    final name = song.displayArtist.trim();
                     if (name.isEmpty) return;
                     Navigator.of(context).push(
                       PageRouteBuilder(
@@ -1397,7 +1398,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                                               ),
                                             ),
                                             title: Text(
-                                              song.title,
+                                              song.displayTitle,
                                               maxLines: 1,
                                               overflow: TextOverflow.ellipsis,
                                               style: const TextStyle(
@@ -1406,8 +1407,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                                               ),
                                             ),
                                             subtitle: Text(
-                                              song.artist ??
-                                                  LocaleProvider.tr('unknown'),
+                                              song.displayArtist,
                                               maxLines: 1,
                                               overflow: TextOverflow.ellipsis,
                                               style: TextStyle(
@@ -1720,7 +1720,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
             ),
           Expanded(
             child: Text(
-              song.title,
+              song.displayTitle,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: isCurrent
@@ -2142,8 +2142,8 @@ class _FavoritesScreenState extends State<FavoritesScreen>
   // Función para buscar la canción en YouTube
   Future<void> _searchSongOnYouTube(SongModel song) async {
     try {
-      final title = song.title;
-      final artist = song.artist ?? '';
+      final title = song.displayTitle;
+      final artist = song.displayArtist;
 
       // Crear la consulta de búsqueda
       String searchQuery = title;
@@ -2172,8 +2172,8 @@ class _FavoritesScreenState extends State<FavoritesScreen>
   // Función para buscar la canción en YouTube Music
   Future<void> _searchSongOnYouTubeMusic(SongModel song) async {
     try {
-      final title = song.title;
-      final artist = song.artist ?? '';
+      final title = song.displayTitle;
+      final artist = song.displayArtist;
 
       // Crear la consulta de búsqueda
       String searchQuery = title;

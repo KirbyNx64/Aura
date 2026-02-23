@@ -7,6 +7,7 @@ import 'package:on_audio_query/on_audio_query.dart';
 import 'package:music/main.dart' show AudioHandlerSafeCast, audioHandler;
 import 'package:audio_service/audio_service.dart';
 import 'package:music/utils/audio/background_audio_handler.dart';
+import 'package:music/utils/encoding_utils.dart';
 import 'package:music/utils/db/favorites_db.dart';
 import 'package:music/utils/notifiers.dart';
 import 'package:music/l10n/locale_provider.dart';
@@ -26,7 +27,6 @@ import 'package:music/widgets/artwork_list_tile.dart';
 import 'package:music/utils/db/playlist_model.dart' as hive_model;
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:media_scanner/media_scanner.dart';
 import 'package:music/widgets/song_info_dialog.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:material_loading_indicator/loading_indicator.dart';
@@ -619,15 +619,14 @@ class _FoldersScreenState extends State<FoldersScreen>
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Text(
-                                song.title,
+                                song.displayTitle,
                                 maxLines: 1,
                                 style: Theme.of(context).textTheme.titleMedium,
                                 overflow: TextOverflow.ellipsis,
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                song.artist ??
-                                    LocaleProvider.tr('unknown_artist'),
+                                song.displayArtist,
                                 style: TextStyle(fontSize: 14),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
@@ -745,7 +744,7 @@ class _FoldersScreenState extends State<FoldersScreen>
                       if (dataPath.isNotEmpty) {
                         await SharePlus.instance.share(
                           ShareParams(
-                            text: song.title,
+                            text: song.displayTitle,
                             files: [XFile(dataPath)],
                           ),
                         );
@@ -825,15 +824,14 @@ class _FoldersScreenState extends State<FoldersScreen>
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Text(
-                                song.title,
+                                song.displayTitle,
                                 maxLines: 1,
                                 style: Theme.of(context).textTheme.titleMedium,
                                 overflow: TextOverflow.ellipsis,
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                song.artist ??
-                                    LocaleProvider.tr('unknown_artist'),
+                                song.displayArtist,
                                 style: TextStyle(fontSize: 14),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
@@ -871,13 +869,13 @@ class _FoldersScreenState extends State<FoldersScreen>
                           !shortcutsShouldReload.value;
                     },
                   ),
-                  if ((song.artist ?? '').trim().isNotEmpty)
+                  if (song.displayArtist.trim().isNotEmpty)
                     ListTile(
                       leading: const Icon(Icons.person_outline),
                       title: const TranslatedText('go_to_artist'),
                       onTap: () {
                         Navigator.of(context).pop();
-                        final name = (song.artist ?? '').trim();
+                        final name = song.displayArtist.trim();
                         if (name.isEmpty) return;
                         Navigator.of(context).push(
                           PageRouteBuilder(
@@ -982,9 +980,9 @@ class _FoldersScreenState extends State<FoldersScreen>
   MediaItem songToMediaItem(SongModel song) {
     return MediaItem(
       id: song.data, // Usar la ruta del archivo como ID para AudioTags
-      album: song.album ?? LocaleProvider.tr('unknown_artist'),
-      title: song.title,
-      artist: song.artist ?? LocaleProvider.tr('unknown_artist'),
+      album: song.displayAlbum,
+      title: song.displayTitle,
+      artist: song.displayArtist,
       artUri: song.uri != null ? Uri.parse(song.uri!) : null,
       extras: {'data': song.data, 'db_id': song.id.toString()},
     );
@@ -1044,8 +1042,8 @@ class _FoldersScreenState extends State<FoldersScreen>
       if (audioHandler != null) {
         final tempMediaItem = MediaItem(
           id: song.data,
-          title: song.title,
-          artist: song.artist,
+          title: song.displayTitle,
+          artist: song.displayArtist,
           duration: (song.duration != null && song.duration! > 0)
               ? Duration(milliseconds: song.duration!)
               : null,
@@ -1142,7 +1140,7 @@ class _FoldersScreenState extends State<FoldersScreen>
 
         // Notificar al MediaStore de Android que el archivo fue eliminado
         try {
-          await MediaScanner.loadMedia(path: song.data);
+          await OnAudioQuery().scanMedia(song.data);
         } catch (_) {}
 
         // Limpiar caches relacionadas con la canción borrada
@@ -1215,9 +1213,9 @@ class _FoldersScreenState extends State<FoldersScreen>
   }
 
   String _formatArtistWithDuration(SongModel song) {
-    final artist = (song.artist == null || song.artist!.trim().isEmpty)
+    final artist = (song.displayArtist.trim().isEmpty)
         ? LocaleProvider.tr('unknown_artist')
-        : song.artist!;
+        : song.displayArtist;
 
     if (song.duration != null && song.duration! > 0) {
       final duration = Duration(milliseconds: song.duration!);
@@ -1352,8 +1350,8 @@ class _FoldersScreenState extends State<FoldersScreen>
       displayList = List<SongModel>.from(allSongsOrdered);
     } else {
       displayList = allSongsOrdered.where((song) {
-        final title = quitarDiacriticos(song.title);
-        final artist = quitarDiacriticos(song.artist ?? '');
+        final title = quitarDiacriticos(song.displayTitle);
+        final artist = quitarDiacriticos(song.displayArtist);
         return title.contains(query) || artist.contains(query);
       }).toList();
     }
@@ -1387,8 +1385,8 @@ class _FoldersScreenState extends State<FoldersScreen>
     try {
       final allSongs = await _audioQuery.querySongs();
       for (final song in allSongs) {
-        final title = quitarDiacriticos(song.title).toLowerCase();
-        final artist = quitarDiacriticos(song.artist ?? '').toLowerCase();
+        final title = quitarDiacriticos(song.displayTitle).toLowerCase();
+        final artist = quitarDiacriticos(song.displayArtist).toLowerCase();
 
         if (title.contains(query) || artist.contains(query)) {
           // Encontrar la carpeta que contiene esta canción
@@ -1436,8 +1434,8 @@ class _FoldersScreenState extends State<FoldersScreen>
   // Función para buscar la canción en YouTube
   Future<void> _searchSongOnYouTube(SongModel song) async {
     try {
-      final title = song.title;
-      final artist = song.artist ?? '';
+      final title = song.displayTitle;
+      final artist = song.displayArtist;
 
       // Crear la consulta de búsqueda
       String searchQuery = title;
@@ -1466,8 +1464,8 @@ class _FoldersScreenState extends State<FoldersScreen>
   // Función para buscar la canción en YouTube Music
   Future<void> _searchSongOnYouTubeMusic(SongModel song) async {
     try {
-      final title = song.title;
-      final artist = song.artist ?? '';
+      final title = song.displayTitle;
+      final artist = song.displayArtist;
 
       // Crear la consulta de búsqueda
       String searchQuery = title;
@@ -3920,7 +3918,7 @@ class _FoldersScreenState extends State<FoldersScreen>
                 ),
               Expanded(
                 child: Text(
-                  song.title,
+                  song.displayTitle,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: isCurrent
@@ -4366,7 +4364,7 @@ class _FoldersScreenState extends State<FoldersScreen>
 
             // Notificar al MediaStore de Android que el archivo fue eliminado
             try {
-              await MediaScanner.loadMedia(path: song.data);
+              await OnAudioQuery().scanMedia(song.data);
             } catch (_) {}
 
             successCount++;
@@ -4756,7 +4754,7 @@ class _FoldersScreenState extends State<FoldersScreen>
       }
 
       // Actualizar el archivo nuevo en el sistema de medios de Android
-      await MediaScanner.loadMedia(path: destinationPath);
+      await OnAudioQuery().scanMedia(destinationPath);
 
       // Actualizar la base de datos para indexar los cambios
       await SongsIndexDB().forceReindex();
@@ -4821,11 +4819,11 @@ class _FoldersScreenState extends State<FoldersScreen>
 
       // Notificar al MediaStore sobre el archivo original eliminado
       try {
-        await MediaScanner.loadMedia(path: song.data);
+        await OnAudioQuery().scanMedia(song.data);
       } catch (_) {}
 
       // Actualizar el archivo nuevo en el sistema de medios de Android
-      await MediaScanner.loadMedia(path: destinationPath);
+      await OnAudioQuery().scanMedia(destinationPath);
 
       // Actualizar la base de datos para indexar los cambios
       await SongsIndexDB().forceReindex();
@@ -5619,7 +5617,7 @@ class _FoldersScreenState extends State<FoldersScreen>
                                               ),
                                             ),
                                             title: Text(
-                                              song.title,
+                                              song.displayTitle,
                                               maxLines: 1,
                                               overflow: TextOverflow.ellipsis,
                                               style: const TextStyle(
@@ -5628,8 +5626,7 @@ class _FoldersScreenState extends State<FoldersScreen>
                                               ),
                                             ),
                                             subtitle: Text(
-                                              song.artist ??
-                                                  LocaleProvider.tr('unknown'),
+                                              song.displayArtist,
                                               maxLines: 1,
                                               overflow: TextOverflow.ellipsis,
                                               style: TextStyle(
@@ -6475,11 +6472,11 @@ class _FoldersScreenState extends State<FoldersScreen>
 
       // Notificar al MediaStore sobre el archivo original eliminado
       try {
-        await MediaScanner.loadMedia(path: song.data);
+        await OnAudioQuery().scanMedia(song.data);
       } catch (_) {}
 
       // Actualizar el archivo nuevo en el sistema de medios de Android
-      await MediaScanner.loadMedia(path: destinationPath);
+      await OnAudioQuery().scanMedia(destinationPath);
 
       // Actualizar la base de datos para indexar los cambios
       await SongsIndexDB().forceReindex();
@@ -6614,7 +6611,7 @@ class _FoldersScreenState extends State<FoldersScreen>
       }
 
       // Actualizar el archivo nuevo en el sistema de medios de Android
-      await MediaScanner.loadMedia(path: destinationPath);
+      await OnAudioQuery().scanMedia(destinationPath);
 
       // Actualizar la base de datos para indexar los cambios
       await SongsIndexDB().forceReindex();

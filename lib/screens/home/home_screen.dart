@@ -5,6 +5,7 @@ import 'package:music/utils/db/recent_db.dart';
 import 'package:music/utils/db/mostplayer_db.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
 import 'package:music/utils/audio/background_audio_handler.dart';
+import 'package:music/utils/encoding_utils.dart';
 import 'package:music/main.dart'
     show audioHandler, getAudioServiceSafely, AudioHandlerSafeCast;
 import 'package:music/utils/db/favorites_db.dart';
@@ -1281,7 +1282,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                         ),
                                       Expanded(
                                         child: Text(
-                                          song.title,
+                                          song.displayTitle,
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
                                           style: isCurrent
@@ -1305,8 +1306,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                     ],
                                   ),
                                   subtitle: Text(
-                                    song.artist ??
-                                        LocaleProvider.tr('unknown_artist'),
+                                    song.displayArtist,
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: TextStyle(
@@ -1556,7 +1556,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       ),
                     ),
                     child: Text(
-                      song.title,
+                      song.displayTitle,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
@@ -1718,15 +1718,14 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Text(
-                                song.title,
+                                song.displayTitle,
                                 maxLines: 1,
                                 style: Theme.of(context).textTheme.titleMedium,
                                 overflow: TextOverflow.ellipsis,
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                song.artist ??
-                                    LocaleProvider.tr('unknown_artist'),
+                                song.displayArtist,
                                 style: TextStyle(fontSize: 14),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
@@ -1850,14 +1849,14 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       await _handleAddToPlaylistSingle(context, song);
                     },
                   ),
-                  if ((song.artist ?? '').trim().isNotEmpty)
+                  if (song.displayArtist.trim().isNotEmpty)
                     ListTile(
                       leading: const Icon(Icons.person_outline),
                       title: const TranslatedText('go_to_artist'),
                       onTap: () {
                         if (!context.mounted) return;
                         Navigator.of(context).pop();
-                        final name = (song.artist ?? '').trim();
+                        final name = song.displayArtist.trim();
                         if (name.isEmpty) return;
                         Navigator.of(context).push(
                           PageRouteBuilder(
@@ -2012,7 +2011,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               ),
             Expanded(
               child: Text(
-                song.title,
+                song.displayTitle,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: isCurrent
@@ -2207,8 +2206,8 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
     setState(() {
       _filteredRecents = _recentSongs.where((song) {
-        final title = _quitarDiacriticos(song.title);
-        final artist = _quitarDiacriticos(song.artist ?? '');
+        final title = _quitarDiacriticos(song.displayTitle);
+        final artist = _quitarDiacriticos(song.displayArtist);
         return title.contains(query) || artist.contains(query);
       }).toList();
     });
@@ -2221,8 +2220,8 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       return;
     }
     List<SongModel> filteredList = _playlistSongs.where((song) {
-      final title = _quitarDiacriticos(song.title);
-      final artist = _quitarDiacriticos(song.artist ?? '');
+      final title = _quitarDiacriticos(song.displayTitle);
+      final artist = _quitarDiacriticos(song.displayArtist);
       return title.contains(query) || artist.contains(query);
     }).toList();
 
@@ -2511,8 +2510,8 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (audioHandler != null) {
       final tempMediaItem = MediaItem(
         id: song.data,
-        title: song.title,
-        artist: song.artist,
+        title: song.displayTitle,
+        artist: song.displayArtist,
         duration: (song.duration != null && song.duration! > 0)
             ? Duration(milliseconds: song.duration!)
             : null,
@@ -2630,14 +2629,14 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Text(
-                            song.title,
+                            song.displayTitle,
                             maxLines: 1,
                             style: Theme.of(context).textTheme.titleMedium,
                             overflow: TextOverflow.ellipsis,
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            song.artist ?? LocaleProvider.tr('unknown_artist'),
+                            song.displayArtist,
                             style: TextStyle(fontSize: 14),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -2740,13 +2739,13 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   await _handleAddToPlaylistSingle(context, song);
                 },
               ),
-              if ((song.artist ?? '').trim().isNotEmpty)
+              if (song.displayArtist.trim().isNotEmpty)
                 ListTile(
                   leading: const Icon(Icons.person_outline),
                   title: const TranslatedText('go_to_artist'),
                   onTap: () {
                     Navigator.of(context).pop();
-                    final name = (song.artist ?? '').trim();
+                    final name = song.displayArtist.trim();
                     if (name.isEmpty) return;
                     Navigator.of(context).push(
                       PageRouteBuilder(
@@ -2940,7 +2939,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                               ],
                             ),
                             title: Text(
-                              song.title,
+                              song.displayTitle,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: Theme.of(context).textTheme.titleMedium,
@@ -3181,9 +3180,9 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   String _formatArtistWithDuration(SongModel song) {
-    final artist = (song.artist == null || song.artist!.trim().isEmpty)
+    final artist = (song.displayArtist.trim().isEmpty)
         ? LocaleProvider.tr('unknown_artist')
-        : song.artist!;
+        : song.displayArtist;
 
     if (song.duration != null && song.duration! > 0) {
       final duration = Duration(milliseconds: song.duration!);
@@ -3780,7 +3779,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                   ),
                                 Expanded(
                                   child: Text(
-                                    song.title,
+                                    song.displayTitle,
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: isCurrent
@@ -3891,7 +3890,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                           MainAxisSize.min,
                                                       children: [
                                                         Text(
-                                                          song.title,
+                                                          song.displayTitle,
                                                           maxLines: 1,
                                                           style:
                                                               Theme.of(context)
@@ -3904,10 +3903,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                           height: 4,
                                                         ),
                                                         Text(
-                                                          song.artist ??
-                                                              LocaleProvider.tr(
-                                                                'unknown_artist',
-                                                              ),
+                                                          song.displayArtist,
                                                           style: TextStyle(
                                                             fontSize: 14,
                                                           ),
@@ -4074,7 +4070,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                 await _loadRecents();
                                               },
                                             ),
-                                            if ((song.artist ?? '')
+                                            if (song.displayArtist.trim()
                                                 .trim()
                                                 .isNotEmpty)
                                               ListTile(
@@ -4087,7 +4083,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                 onTap: () {
                                                   Navigator.of(context).pop();
                                                   final name =
-                                                      (song.artist ?? '')
+                                                      song.displayArtist.trim()
                                                           .trim();
                                                   if (name.isEmpty) {
                                                     return;
@@ -4198,7 +4194,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                               ),
                             Expanded(
                               child: Text(
-                                song.title,
+                                song.displayTitle,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: isCurrent
@@ -4294,7 +4290,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                       MainAxisSize.min,
                                                   children: [
                                                     Text(
-                                                      song.title,
+                                                      song.displayTitle,
                                                       maxLines: 1,
                                                       style: Theme.of(
                                                         context,
@@ -4304,10 +4300,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                     ),
                                                     const SizedBox(height: 4),
                                                     Text(
-                                                      song.artist ??
-                                                          LocaleProvider.tr(
-                                                            'unknown_artist',
-                                                          ),
+                                                      song.displayArtist,
                                                       style: TextStyle(
                                                         fontSize: 14,
                                                       ),
@@ -4455,7 +4448,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                             await _loadRecents();
                                           },
                                         ),
-                                        if ((song.artist ?? '')
+                                        if (song.displayArtist.trim()
                                             .trim()
                                             .isNotEmpty)
                                           ListTile(
@@ -4467,7 +4460,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                             ),
                                             onTap: () {
                                               Navigator.of(context).pop();
-                                              final name = (song.artist ?? '')
+                                              final name = song.displayArtist.trim()
                                                   .trim();
                                               if (name.isEmpty) {
                                                 return;
@@ -4797,7 +4790,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                                     .min,
                                                             children: [
                                                               Text(
-                                                                song.title,
+                                                                song.displayTitle,
                                                                 maxLines: 1,
                                                                 style: Theme.of(
                                                                   context,
@@ -4810,10 +4803,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                                 height: 4,
                                                               ),
                                                               Text(
-                                                                song.artist ??
-                                                                    LocaleProvider.tr(
-                                                                      'unknown_artist',
-                                                                    ),
+                                                                song.displayArtist,
                                                                 style:
                                                                     TextStyle(
                                                                       fontSize:
@@ -5012,7 +5002,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                       );
                                                     },
                                                   ),
-                                                  if ((song.artist ?? '')
+                                                  if (song.displayArtist.trim()
                                                       .trim()
                                                       .isNotEmpty)
                                                     ListTile(
@@ -5028,7 +5018,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                           context,
                                                         ).pop();
                                                         final name =
-                                                            (song.artist ?? '')
+                                                            song.displayArtist.trim()
                                                                 .trim();
                                                         if (name.isEmpty) {
                                                           return;
@@ -5228,7 +5218,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                           ),
                                         Expanded(
                                           child: Text(
-                                            song.title,
+                                            song.displayTitle,
                                             maxLines: 1,
                                             overflow: TextOverflow.ellipsis,
                                             style: isCurrent
@@ -5376,7 +5366,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                             MainAxisSize.min,
                                                         children: [
                                                           Text(
-                                                            song.title,
+                                                            song.displayTitle,
                                                             maxLines: 1,
                                                             style:
                                                                 Theme.of(
@@ -5392,10 +5382,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                             height: 4,
                                                           ),
                                                           Text(
-                                                            song.artist ??
-                                                                LocaleProvider.tr(
-                                                                  'unknown_artist',
-                                                                ),
+                                                            song.displayArtist,
                                                             style: TextStyle(
                                                               fontSize: 14,
                                                             ),
@@ -5616,7 +5603,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                           .value;
                                                 },
                                               ),
-                                              if ((song.artist ?? '')
+                                              if (song.displayArtist.trim()
                                                   .trim()
                                                   .isNotEmpty)
                                                 ListTile(
@@ -5629,7 +5616,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                   onTap: () {
                                                     Navigator.of(context).pop();
                                                     final name =
-                                                        (song.artist ?? '')
+                                                        song.displayArtist.trim()
                                                             .trim();
                                                     if (name.isEmpty) {
                                                       return;
@@ -5778,7 +5765,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                       ),
                                     Expanded(
                                       child: Text(
-                                        song.title,
+                                        song.displayTitle,
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                         style: isCurrent
@@ -6936,8 +6923,8 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   // Función para buscar la canción en YouTube
   Future<void> _searchSongOnYouTube(SongModel song) async {
     try {
-      final title = song.title;
-      final artist = song.artist ?? '';
+      final title = song.displayTitle;
+      final artist = song.displayArtist;
 
       // Crear la consulta de búsqueda
       String searchQuery = title;
@@ -6966,8 +6953,8 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   // Función para buscar la canción en YouTube Music
   Future<void> _searchSongOnYouTubeMusic(SongModel song) async {
     try {
-      final title = song.title;
-      final artist = song.artist ?? '';
+      final title = song.displayTitle;
+      final artist = song.displayArtist;
 
       // Crear la consulta de búsqueda
       String searchQuery = title;

@@ -6,7 +6,7 @@ import 'package:file_selector/file_selector.dart';
 import 'package:music/l10n/locale_provider.dart';
 import 'package:music/utils/notifiers.dart';
 import 'package:audio_service/audio_service.dart';
-import 'package:media_scanner/media_scanner.dart';
+import 'package:on_audio_query/on_audio_query.dart';
 import 'package:music/main.dart' show audioHandler;
 import 'package:music/utils/audio/background_audio_handler.dart';
 import 'package:music/utils/theme_preferences.dart';
@@ -204,7 +204,7 @@ class _EditMetadataScreenState extends State<EditMetadataScreen> {
       // Indexar el archivo en Android para que aparezca en la galería de música
       if (Platform.isAndroid) {
         try {
-          await MediaScanner.loadMedia(path: widget.song.id);
+          await OnAudioQuery().scanMedia(widget.song.id);
           // print('Archivo indexado exitosamente en la galería de música');
         } catch (e) {
           // print('Error al indexar archivo: $e');
@@ -296,7 +296,7 @@ class _EditMetadataScreenState extends State<EditMetadataScreen> {
         // Indexar el archivo después de guardar exitosamente
         if (Platform.isAndroid) {
           try {
-            await MediaScanner.loadMedia(path: widget.song.id);
+            await OnAudioQuery().scanMedia(widget.song.id);
             // print('Archivo indexado exitosamente después de edición');
           } catch (e) {
             // print('Error al indexar archivo después de edición: $e');

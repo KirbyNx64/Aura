@@ -8,6 +8,7 @@ import 'package:music/widgets/artwork_list_tile.dart';
 
 import 'package:music/utils/notifiers.dart';
 import 'package:music/utils/theme_preferences.dart';
+import 'package:music/utils/encoding_utils.dart';
 
 import 'package:share_plus/share_plus.dart';
 
@@ -39,7 +40,7 @@ class _SongInfoScreenState extends State<SongInfoScreen> {
         // ignore: deprecated_member_use
         await Share.shareXFiles([
           XFile(filePath),
-        ], text: widget.mediaItem.title);
+        ], text: fixUtf8Mojibake(widget.mediaItem.title));
       } catch (e) {
         // Fallback for older versions or if standard way fails but user wanted "StartPlus" style?
         // But Share.shareXFiles is the standard.
@@ -75,6 +76,11 @@ class _SongInfoScreenState extends State<SongInfoScreen> {
         });
       }
     }
+  }
+
+  String _displayText(String? value, String fallback) {
+    final s = fixUtf8Mojibake(value ?? '');
+    return s.trim().isEmpty ? fallback : s;
   }
 
   String _formatDuration(int milliseconds) {
@@ -188,23 +194,25 @@ class _SongInfoScreenState extends State<SongInfoScreen> {
                         _buildArtwork(180),
                         const SizedBox(height: 24),
                         Text(
-                          widget.mediaItem.title,
+                          fixUtf8Mojibake(widget.mediaItem.title),
                           style: Theme.of(context).textTheme.headlineSmall
                               ?.copyWith(fontWeight: FontWeight.bold),
                           textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          widget.mediaItem.artist ??
-                              LocaleProvider.tr('unknown_artist'),
+                          _displayText(
+                              widget.mediaItem.artist,
+                              LocaleProvider.tr('unknown_artist')),
                           style: Theme.of(context).textTheme.titleMedium
                               ?.copyWith(color: colorScheme.primary),
                           textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          widget.mediaItem.album ??
-                              LocaleProvider.tr('unknown_album'),
+                          _displayText(
+                              widget.mediaItem.album,
+                              LocaleProvider.tr('unknown_album')),
                           style: Theme.of(context).textTheme.bodyMedium
                               ?.copyWith(color: colorScheme.onSurfaceVariant),
                           textAlign: TextAlign.center,

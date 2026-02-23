@@ -12,13 +12,13 @@ import 'package:music/utils/notifiers.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/services.dart';
 // import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit.dart';
-import 'package:media_scanner/media_scanner.dart';
 import 'package:http/http.dart' as http;
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:dio/dio.dart';
 import 'package:music/screens/download/stream_provider.dart';
 import 'package:audiotags/audiotags.dart';
 import 'package:music/utils/theme_preferences.dart';
+import 'package:on_audio_query/on_audio_query.dart';
 // import 'package:path/path.dart' as p;
 // import 'package:music/main.dart';
 import 'package:image/image.dart' as img;
@@ -756,7 +756,7 @@ class _DownloadScreenState extends State<DownloadScreen>
       );
 
       if (!await File(filePath).exists()) throw Exception("La descarga falló.");
-      MediaScanner.loadMedia(path: filePath);
+      await OnAudioQuery().scanMedia(filePath);
 
       if (_usarFFmpeg) {
         /*
@@ -1651,7 +1651,7 @@ class _DownloadScreenState extends State<DownloadScreen>
       );
 
       if (!await File(filePath).exists()) throw Exception("La descarga falló.");
-      MediaScanner.loadMedia(path: filePath);
+      await OnAudioQuery().scanMedia(filePath);
 
       if (_usarFFmpeg) {
         /*
@@ -2056,7 +2056,7 @@ class _DownloadScreenState extends State<DownloadScreen>
       }
 
       // Indexar en Android
-      MediaScanner.loadMedia(path: m4aPath);
+      await OnAudioQuery().scanMedia(m4aPath);
 
       setState(() => _progress = 1.0);
       await Future.delayed(const Duration(seconds: 1));

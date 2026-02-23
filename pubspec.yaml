@@ -35,7 +35,6 @@ dependencies:
   audiotags:
     path: ./audiotags/audiotags
   url_launcher: ^6.3.2
-  media_scanner: ^2.2.0
   device_info_plus: ^12.3.0
   dio: ^5.9.1
   open_file: ^3.5.11
@@ -69,6 +68,7 @@ dependencies:
   progress_indicator_m3e: ^0.1.1
   m3e_design: ^0.2.1
   terminate_restart: ^1.0.11
+  media_store_plus: ^0.1.3
 
 dev_dependencies:
   flutter_test:

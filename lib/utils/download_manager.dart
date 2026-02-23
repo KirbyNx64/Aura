@@ -4,7 +4,7 @@ import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 // import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit.dart';
-import 'package:media_scanner/media_scanner.dart';
+import 'package:on_audio_query/on_audio_query.dart';
 import 'package:http/http.dart' as http;
 import 'package:dio/dio.dart';
 import 'package:music/screens/download/stream_provider.dart';
@@ -404,7 +404,7 @@ class DownloadManager {
     );
 
     if (!await File(filePath).exists()) throw Exception("La descarga falló.");
-    MediaScanner.loadMedia(path: filePath);
+    await OnAudioQuery().scanMedia(filePath);
 
     if (usarFFmpeg) {
       // ...
@@ -572,19 +572,16 @@ class DownloadManager {
   ) async {
     _updateState(true, true);
 
-    final baseName = title.replaceAll(RegExp(r'[\\/:*?"<>|]'), '').trim();
+    // final baseName = title.replaceAll(RegExp(r'[\\/:*?"<>|]'), '').trim();
     final m4aPath = inputPath;
 
     try {
       // Escribir metadatos con audiotags
-      final cleanedAuthor = _limpiarMetadato(
-        author.replaceFirst(RegExp(r' - Topic$', caseSensitive: false), ''),
-      );
-      final safeTitle = _limpiarMetadato(baseName);
+      final cleanedAuthor = author.replaceFirst(RegExp(r' - Topic$', caseSensitive: false), '');
 
       try {
         final tag = Tag(
-          title: safeTitle,
+          title: songTitle,
           trackArtist: cleanedAuthor,
           duration: duration.inSeconds,
           pictures: [
@@ -602,7 +599,7 @@ class DownloadManager {
       }
 
       // Indexar en Android
-      MediaScanner.loadMedia(path: m4aPath);
+      await OnAudioQuery().scanMedia(m4aPath);
 
       // Guardar en la base de datos de historial en segundo plano
       // usando Future.microtask para no bloquear la UI
@@ -611,7 +608,7 @@ class DownloadManager {
           final file = File(m4aPath);
           final fileSize = await file.length();
           final downloadRecord = DownloadRecord(
-            title: safeTitle,
+            title: songTitle ?? '',
             artist: cleanedAuthor,
             filePath: m4aPath,
             fileName: path.basename(m4aPath),
@@ -847,6 +844,7 @@ class DownloadManager {
     return completer.future;
   }
 
+  /*
   String _limpiarMetadato(String texto) {
     return texto
         .replaceAll('"', '\\"') // Escapar comillas dobles
@@ -854,6 +852,7 @@ class DownloadManager {
         .replaceAll(RegExp(r'[&;|<>$]'), '') // Quitar símbolos peligrosos
         .trim(); // Eliminar espacios al inicio y fin
   }
+  */
 
   void _updateState(bool isDownloading, bool isProcessing) {
     _isDownloading = isDownloading;

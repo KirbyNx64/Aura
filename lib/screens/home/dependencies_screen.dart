@@ -79,10 +79,6 @@ class DependenciesScreen extends StatelessWidget {
       'https://pub.dev/packages/url_launcher',
       '^6.3.2',
     ),
-    'media_scanner': _DependencyInfo(
-      'https://pub.dev/packages/media_scanner',
-      '^2.2.0',
-    ),
     'device_info_plus': _DependencyInfo(
       'https://pub.dev/packages/device_info_plus',
       '^12.3.0',

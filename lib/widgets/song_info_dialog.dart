@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:on_audio_query/on_audio_query.dart';
+import 'package:music/utils/encoding_utils.dart';
 import '../utils/theme_preferences.dart';
 import '../screens/song_info_screen.dart';
 
@@ -37,12 +38,12 @@ class SongInfoDialog {
     SongModel song,
     ValueNotifier<AppColorScheme> colorSchemeNotifier,
   ) async {
-    // Convert SongModel to MediaItem
+    // Convert SongModel to MediaItem (usar display* para corregir mojibake)
     final mediaItem = MediaItem(
       id: song.id.toString(),
-      title: song.title,
-      artist: song.artist,
-      album: song.album,
+      title: song.displayTitle,
+      artist: song.displayArtist,
+      album: song.displayAlbum,
       duration: Duration(milliseconds: song.duration ?? 0),
       // Use standard extras format for path
       extras: {'data': song.data, 'songId': song.id},

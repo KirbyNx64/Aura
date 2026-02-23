@@ -9,7 +9,6 @@ import '../../utils/theme_preferences.dart';
 import '../../utils/notifiers.dart';
 import '../../widgets/song_info_dialog.dart';
 import 'package:audio_service/audio_service.dart';
-import 'package:media_scanner/media_scanner.dart';
 import 'package:material_loading_indicator/loading_indicator.dart';
 import '../../utils/simple_yt_download.dart';
 
@@ -203,7 +202,7 @@ class _DownloadHistoryScreenState extends State<DownloadHistoryScreen> {
 
         // Notificar al MediaStore de Android que el archivo fue eliminado
         try {
-          await MediaScanner.loadMedia(path: record.filePath);
+          await OnAudioQuery().scanMedia(record.filePath);
         } catch (_) {}
       }
 
