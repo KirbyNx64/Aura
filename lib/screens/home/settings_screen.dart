@@ -52,7 +52,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _downloadTypeExplode = false; // true: Explode, false: Directo
   String _coverQuality = 'high'; // 'high', 'medium', 'low'
   String _audioQuality = 'high'; // 'high', 'medium', 'low'
-  AppColorScheme _currentColorScheme = AppColorScheme.system;
+  AppColorScheme _currentColorScheme = AppColorScheme.amoled;
   int _artworkQuality = 410; // 80% por defecto
   int? _availableBytesAtDownloadDir;
   int? _totalBytesAtDownloadDir;
@@ -77,7 +77,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _loadOverlayNextButtonSetting() async {
     final prefs = await SharedPreferences.getInstance();
     final nextButtonEnabled =
-        prefs.getBool('overlay_next_button_enabled') ?? false;
+        prefs.getBool('overlay_next_button_enabled') ?? true;
     overlayNextButtonEnabled.value = nextButtonEnabled;
   }
 
@@ -90,7 +90,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _loadArtworkBackgroundSetting() async {
     final prefs = await SharedPreferences.getInstance();
     final usePlayer = prefs.getBool('use_artwork_background_player') ?? true;
-    final useOverlay = prefs.getBool('use_artwork_background_overlay') ?? true;
+    final useOverlay = prefs.getBool('use_artwork_background_overlay') ?? false;
     final useDynamic = prefs.getBool('use_dynamic_color_background') ?? false;
     final useDynamicDialogs =
         prefs.getBool('use_dynamic_color_in_dialogs') ?? false;

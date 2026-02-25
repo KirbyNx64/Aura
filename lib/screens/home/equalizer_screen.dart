@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:music/utils/notifiers.dart';
 import 'package:music/utils/theme_preferences.dart';
 import 'package:material_loading_indicator/loading_indicator.dart';
+import 'package:music/widgets/slider_m3/slider_m3e.dart';
 
 class EqualizerScreen extends StatefulWidget {
   const EqualizerScreen({super.key});
@@ -672,39 +673,14 @@ class _EqualizerScreenState extends State<EqualizerScreen> {
                                 Expanded(
                                   child: RotatedBox(
                                     quarterTurns: -1,
-                                    child: SliderTheme(
-                                      data: SliderTheme.of(context).copyWith(
-                                        trackHeight: 6, // Thicker track
-                                        thumbShape: const RoundSliderThumbShape(
-                                          enabledThumbRadius:
-                                              0, // Hidden thumb for cleaner look or keep it small
-                                          elevation: 0,
-                                        ),
-                                        overlayShape:
-                                            const RoundSliderOverlayShape(
-                                              overlayRadius: 10,
-                                            ),
-                                        activeTrackColor: colorScheme.primary,
-                                        inactiveTrackColor:
-                                            colorScheme.surfaceContainerHighest,
-                                        disabledActiveTrackColor: colorScheme
-                                            .primary
-                                            .withValues(alpha: 0.4),
-                                        disabledInactiveTrackColor: colorScheme
-                                            .surfaceContainerHighest
-                                            .withValues(alpha: 0.4),
-                                        trackShape:
-                                            _RoundedRectSliderTrackShape(),
-                                      ),
-                                      child: Slider(
-                                        value: currentGain,
-                                        min: _parameters!.minDecibels,
-                                        max: _parameters!.maxDecibels,
-                                        onChanged: _isEnabled
-                                            ? (value) =>
-                                                  _updateBandGain(index, value)
-                                            : null,
-                                      ),
+                                    child: SliderM3E(
+                                      value: currentGain,
+                                      min: _parameters!.minDecibels,
+                                      max: _parameters!.maxDecibels,
+                                      onChanged: _isEnabled
+                                          ? (value) =>
+                                                _updateBandGain(index, value)
+                                          : null,
                                     ),
                                   ),
                                 ),
@@ -826,27 +802,9 @@ class _EqualizerScreenState extends State<EqualizerScreen> {
                   const SizedBox(height: 12),
 
                   // Slider
-                  SliderTheme(
-                    data: SliderTheme.of(context).copyWith(
-                      trackHeight: 12,
-                      thumbShape: const RoundSliderThumbShape(
-                        enabledThumbRadius: 12,
-                        elevation: 2,
-                      ),
-                      overlayShape: const RoundSliderOverlayShape(
-                        overlayRadius: 24,
-                      ),
-                      activeTrackColor: colorScheme.primary,
-                      inactiveTrackColor: colorScheme.surfaceContainerHighest,
-                      disabledActiveTrackColor: colorScheme.primary.withValues(
-                        alpha: 0.4,
-                      ),
-                      disabledInactiveTrackColor: colorScheme
-                          .surfaceContainerHighest
-                          .withValues(alpha: 0.4),
-                      trackShape: _RoundedRectSliderTrackShape(),
-                    ),
-                    child: Slider(
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8.0),
+                    child: SliderM3E(
                       value: _volumeBoost,
                       min: 1.0,
                       max: 3.0,
@@ -893,100 +851,5 @@ class _EqualizerScreenState extends State<EqualizerScreen> {
         ],
       ),
     );
-  }
-}
-
-class _RoundedRectSliderTrackShape extends SliderTrackShape {
-  @override
-  void paint(
-    PaintingContext context,
-    Offset offset, {
-    required RenderBox parentBox,
-    required SliderThemeData sliderTheme,
-    required Animation<double> enableAnimation,
-    required TextDirection textDirection,
-    required Offset thumbCenter,
-    Offset? secondaryOffset,
-    bool isDiscrete = false,
-    bool isEnabled = false,
-    double additionalActiveTrackHeight = 0,
-  }) {
-    if (sliderTheme.trackHeight == null) {
-      return;
-    }
-
-    final ColorTween activeTrackColorTween = ColorTween(
-      begin: sliderTheme.disabledActiveTrackColor,
-      end: sliderTheme.activeTrackColor,
-    );
-    final ColorTween inactiveTrackColorTween = ColorTween(
-      begin: sliderTheme.disabledInactiveTrackColor,
-      end: sliderTheme.inactiveTrackColor,
-    );
-    final Paint activePaint = Paint()
-      ..color = activeTrackColorTween.evaluate(enableAnimation)!;
-    final Paint inactivePaint = Paint()
-      ..color = inactiveTrackColorTween.evaluate(enableAnimation)!;
-    final Paint leftTrackPaint;
-    final Paint rightTrackPaint;
-    switch (textDirection) {
-      case TextDirection.ltr:
-        leftTrackPaint = activePaint;
-        rightTrackPaint = inactivePaint;
-        break;
-      case TextDirection.rtl:
-        leftTrackPaint = inactivePaint;
-        rightTrackPaint = activePaint;
-        break;
-    }
-
-    final Rect trackRect = getPreferredRect(
-      parentBox: parentBox,
-      offset: offset,
-      sliderTheme: sliderTheme,
-      isEnabled: isEnabled,
-      isDiscrete: isDiscrete,
-    );
-
-    final Radius trackRadius = Radius.circular(trackRect.height / 2);
-
-    context.canvas.drawRRect(
-      RRect.fromLTRBAndCorners(
-        trackRect.left,
-        trackRect.top,
-        thumbCenter.dx,
-        trackRect.bottom,
-        topLeft: trackRadius,
-        bottomLeft: trackRadius,
-      ),
-      leftTrackPaint,
-    );
-    context.canvas.drawRRect(
-      RRect.fromLTRBAndCorners(
-        thumbCenter.dx,
-        trackRect.top,
-        trackRect.right,
-        trackRect.bottom,
-        topRight: trackRadius,
-        bottomRight: trackRadius,
-      ),
-      rightTrackPaint,
-    );
-  }
-
-  @override
-  Rect getPreferredRect({
-    required RenderBox parentBox,
-    Offset offset = Offset.zero,
-    required SliderThemeData sliderTheme,
-    bool isEnabled = false,
-    bool isDiscrete = false,
-  }) {
-    final double trackHeight = sliderTheme.trackHeight!;
-    final double trackLeft = offset.dx;
-    final double trackTop =
-        offset.dy + (parentBox.size.height - trackHeight) / 2;
-    final double trackWidth = parentBox.size.width;
-    return Rect.fromLTWH(trackLeft, trackTop, trackWidth, trackHeight);
   }
 }

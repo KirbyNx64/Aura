@@ -63,10 +63,10 @@ Future<void> showDownloadProgressNotification(
   );
 
   await flutterLocalNotificationsPlugin.show(
-    notificationId,
-    title,
-    '${progress.toInt()}%',
-    platformChannelSpecifics,
+    id: notificationId,
+    title: title,
+    body: '${progress.toInt()}%',
+    notificationDetails: platformChannelSpecifics,
     payload: 'download',
   );
 }
@@ -92,10 +92,10 @@ Future<void> showDownloadCompletedNotification(
   );
 
   await flutterLocalNotificationsPlugin.show(
-    notificationId,
-    title,
-    LocaleProvider.tr('download_complete'),
-    platformChannelSpecifics,
+    id: notificationId,
+    title: title,
+    body: LocaleProvider.tr('download_complete'),
+    notificationDetails: platformChannelSpecifics,
     payload: 'download_completed',
   );
 }
@@ -122,17 +122,17 @@ Future<void> showDownloadFailedNotification(
   );
 
   await flutterLocalNotificationsPlugin.show(
-    notificationId,
-    title,
-    LocaleProvider.tr('download_failed_title'),
-    platformChannelSpecifics,
+    id: notificationId,
+    title: title,
+    body: LocaleProvider.tr('download_failed_title'),
+    notificationDetails: platformChannelSpecifics,
     payload: 'download_failed',
   );
 }
 
 // Función para cancelar la notificación de descarga
 Future<void> cancelDownloadNotification({int notificationId = 0}) async {
-  await flutterLocalNotificationsPlugin.cancel(notificationId);
+  await flutterLocalNotificationsPlugin.cancel(id: notificationId);
 }
 
 // Servicio global de notificaciones
@@ -150,7 +150,7 @@ class NotificationService {
         InitializationSettings(android: initializationSettingsAndroid);
 
     await flutterLocalNotificationsPlugin.initialize(
-      initializationSettings,
+      settings: initializationSettings,
       onDidReceiveNotificationResponse: _onNotificationTapped,
     );
 

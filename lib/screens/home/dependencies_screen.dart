@@ -16,10 +16,10 @@ class DependenciesScreen extends StatelessWidget {
   final Map<String, _DependencyInfo> _dependencies = const {
     'flutter': _DependencyInfo('https://flutter.dev', 'sdk'),
     'flutter_localizations': _DependencyInfo('https://flutter.dev', 'sdk'),
-    'hive_ce': _DependencyInfo('https://pub.dev/packages/hive_ce', '^2.2.3'),
+    'hive_ce': _DependencyInfo('https://pub.dev/packages/hive_ce', '^2.19.3'),
     'hive_ce_flutter': _DependencyInfo(
       'https://pub.dev/packages/hive_ce_flutter',
-      '^1.1.0',
+      '^2.3.4',
     ),
     'on_audio_query': _DependencyInfo(
       'https://pub.dev/packages/on_audio_query',
@@ -41,6 +41,10 @@ class DependenciesScreen extends StatelessWidget {
     'shared_preferences': _DependencyInfo(
       'https://pub.dev/packages/shared_preferences',
       '^2.5.4',
+    ),
+    'shared_preferences_android': _DependencyInfo(
+      'https://pub.dev/packages/shared_preferences_android',
+      '^2.4.20',
     ),
     'path_provider': _DependencyInfo(
       'https://pub.dev/packages/path_provider',
@@ -70,6 +74,10 @@ class DependenciesScreen extends StatelessWidget {
     'file_selector': _DependencyInfo(
       'https://pub.dev/packages/file_selector',
       '^1.0.3',
+    ),
+    'file_selector_android': _DependencyInfo(
+      'https://pub.dev/packages/file_selector_android',
+      '^0.5.2+4',
     ),
     'audiotags': _DependencyInfo(
       'https://pub.dev/packages/audiotags',
@@ -118,7 +126,7 @@ class DependenciesScreen extends StatelessWidget {
     ),
     'flutter_local_notifications': _DependencyInfo(
       'https://pub.dev/packages/flutter_local_notifications',
-      '^19.5.0',
+      '^20.1.0',
     ),
     'flutter_svg': _DependencyInfo(
       'https://pub.dev/packages/flutter_svg',
@@ -137,6 +145,10 @@ class DependenciesScreen extends StatelessWidget {
       'https://pub.dev/packages/dynamic_color',
       '^1.8.1',
     ),
+    'sqflite_android': _DependencyInfo(
+      'https://pub.dev/packages/sqflite_android',
+      '^2.4.2+2',
+    ),
     'flutter_sharing_intent': _DependencyInfo(
       'https://pub.dev/packages/flutter_sharing_intent',
       '^1.1.1',
@@ -153,7 +165,7 @@ class DependenciesScreen extends StatelessWidget {
       'https://pub.dev/packages/buttons_tabbar',
       '^1.3.15',
     ),
-    'image': _DependencyInfo('https://pub.dev/packages/image', '^4.7.2'),
+    'image': _DependencyInfo('https://pub.dev/packages/image', '^4.8.0'),
     'cached_network_image': _DependencyInfo(
       'https://pub.dev/packages/cached_network_image',
       '^3.4.1',
@@ -194,6 +206,10 @@ class DependenciesScreen extends StatelessWidget {
     'expressive_refresh': _DependencyInfo(
       'https://pub.dev/packages/expressive_refresh',
       '^0.1.2',
+    ),
+    'terminate_restart': _DependencyInfo(
+      'https://pub.dev/packages/terminate_restart',
+      '^1.0.11',
     ),
   };
 

@@ -395,7 +395,7 @@ void main() async {
   useArtworkAsBackgroundPlayerNotifier.value =
       prefs.getBool('use_artwork_background_player') ?? true;
   useArtworkAsBackgroundOverlayNotifier.value =
-      prefs.getBool('use_artwork_background_overlay') ?? true;
+      prefs.getBool('use_artwork_background_overlay') ?? false;
   useDynamicColorBackgroundNotifier.value =
       prefs.getBool('use_dynamic_color_background') ?? false;
   useDynamicColorInDialogsNotifier.value =
@@ -768,9 +768,9 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
       final isFirstRun = prefs.getBool('first_run') ?? true;
 
       final nextButtonEnabled =
-          prefs.getBool('overlay_next_button_enabled') ?? false;
+          prefs.getBool('overlay_next_button_enabled') ?? true;
       final useArtworkOverlay =
-          prefs.getBool('use_artwork_background_overlay') ?? true;
+          prefs.getBool('use_artwork_background_overlay') ?? false;
       final useArtworkPlayer =
           prefs.getBool('use_artwork_background_player') ?? true;
 

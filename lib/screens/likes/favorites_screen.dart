@@ -1794,6 +1794,9 @@ class _FavoritesScreenState extends State<FavoritesScreen>
 
   @override
   Widget build(BuildContext context) {
+    final isAmoledTheme =
+        Theme.of(context).brightness == Brightness.dark &&
+        Theme.of(context).colorScheme.surface == Colors.black;
     return Scaffold(
       resizeToAvoidBottomInset: true,
       appBar: AppBar(
@@ -2120,9 +2123,10 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                       padding: EdgeInsets.only(bottom: isLast ? 0 : 4),
                       child: Card(
                         color: isCurrent
-                            ? Theme.of(
-                                context,
-                              ).colorScheme.primary.withAlpha(isDark ? 40 : 25)
+                            ? isAmoledTheme
+                                  ? cardColor
+                                  : Theme.of(context).colorScheme.primary
+                                        .withAlpha(isDark ? 40 : 25)
                             : cardColor,
                         margin: EdgeInsets.zero,
                         elevation: 0,

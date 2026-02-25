@@ -1,44 +1,58 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
-
     <!-- Permisos para almacenamiento y multimedia -->
     <!-- Para Android 13+ -->
-    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
-    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" tools:ignore="ScopedStorage" />
-
+    <uses-permission
+        android:name="android.permission.READ_MEDIA_AUDIO"/>
+    <uses-permission
+        android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
+        tools:ignore="ScopedStorage"/>
     <!-- Para Android 10-12 -->
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
-
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32"/>
     <!-- Para Android 9 y anteriores -->
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29"/>
-
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="29"/>
     <!-- Otros permisos necesarios -->
-    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
-    <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.WAKE_LOCK" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
-    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>
-
+    <uses-permission
+        android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
+    <uses-permission
+        android:name="android.permission.INTERNET"/>
+    <uses-permission
+        android:name="android.permission.WAKE_LOCK"/>
+    <uses-permission
+        android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission
+        android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"/>
+    <uses-permission
+        android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>
     <!-- Permiso para mostrar notificaciones (Android 13+) -->
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
-
+    <uses-permission
+        android:name="android.permission.POST_NOTIFICATIONS"/>
     <!-- Eliminar permiso de vibración para que las notificaciones no vibren -->
-    <uses-permission android:name="android.permission.VIBRATE" tools:node="remove" />
-
+    <uses-permission
+        android:name="android.permission.VIBRATE"
+        tools:node="remove"/>
     <queries>
         <intent>
-            <action android:name="android.intent.action.VIEW" />
-            <category android:name="android.intent.category.BROWSABLE" />
-            <data android:scheme="http" />
+            <action
+                android:name="android.intent.action.VIEW"/>
+            <category
+                android:name="android.intent.category.BROWSABLE"/>
+            <data
+                android:scheme="http"/>
         </intent>
         <intent>
-            <action android:name="android.intent.action.VIEW" />
-            <category android:name="android.intent.category.BROWSABLE" />
-            <data android:scheme="https" />
+            <action
+                android:name="android.intent.action.VIEW"/>
+            <category
+                android:name="android.intent.category.BROWSABLE"/>
+            <data
+                android:scheme="https"/>
         </intent>
     </queries>
-
     <application
         android:name="${applicationName}"
         android:label="Aura Music"
@@ -47,14 +61,11 @@
         android:extractNativeLibs="false"
         android:usesCleartextTraffic="false"
         android:networkSecurityConfig="@xml/network_security_config">
-        
         <!-- Política de privacidad -->
         <meta-data
             android:name="com.google.android.play.core.assetpacks.privacyPolicyUrl"
-            android:value="https://tusitio.com/politica-privacidad" />
-            
+            android:value="https://tusitio.com/politica-privacidad"/>
         <!-- Configuración de FileProvider para compartir archivos de forma segura -->
-        
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.ota_update_provider"
@@ -62,19 +73,18 @@
             android:grantUriPermissions="true">
             <meta-data
                 android:name="android.support.FILE_PROVIDER_PATHS"
-                android:resource="@xml/ota_update_file_paths" />
+                android:resource="@xml/ota_update_file_paths"/>
         </provider>
-
         <!-- Media Button Receiver (reemplazada por la del plugin audio_service) -->
         <receiver
             android:name="com.ryanheise.audioservice.MediaButtonReceiver"
             android:exported="true"
             tools:ignore="Instantiatable">
             <intent-filter>
-                <action android:name="android.intent.action.MEDIA_BUTTON" />
+                <action
+                    android:name="android.intent.action.MEDIA_BUTTON"/>
             </intent-filter>
         </receiver>
-
         <!-- Servicio de audio_service -->
         <service
             android:name="com.ryanheise.audioservice.AudioService"
@@ -82,30 +92,37 @@
             android:foregroundServiceType="mediaPlayback"
             tools:ignore="Instantiatable">
             <intent-filter>
-                <action android:name="android.media.browse.MediaBrowserService" />
+                <action
+                    android:name="android.media.browse.MediaBrowserService"/>
             </intent-filter>
         </service>
-
         <!-- Receiver para notificaciones programadas -->
-        <receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver" />
-        <receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver">
+        <receiver
+            android:exported="false"
+            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver"/>
+        <receiver
+            android:exported="false"
+            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver">
             <intent-filter>
-                <action android:name="android.intent.action.BOOT_COMPLETED"/>
-                <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
-                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
-                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON"/>
+                <action
+                    android:name="android.intent.action.BOOT_COMPLETED"/>
+                <action
+                    android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
+                <action
+                    android:name="android.intent.action.QUICKBOOT_POWERON"/>
+                <action
+                    android:name="com.htc.intent.action.QUICKBOOT_POWERON"/>
             </intent-filter>
         </receiver>
-
         <!-- Receiver para OTA Update con PackageInstaller -->
-        <receiver 
-            android:name="sk.fourq.otaupdate.InstallResultReceiver" 
+        <receiver
+            android:name="sk.fourq.otaupdate.InstallResultReceiver"
             android:exported="false">
             <intent-filter>
-                <action android:name="${applicationId}.ACTION_INSTALL_COMPLETE"/>
+                <action
+                    android:name="${applicationId}.ACTION_INSTALL_COMPLETE"/>
             </intent-filter>
         </receiver>
-
         <!-- Actividad principal con soporte para audio_service -->
         <activity
             android:name="com.kirby.aura.MainActivity"
@@ -114,7 +131,6 @@
             android:taskAffinity=""
             android:clearTaskOnLaunch="true"
             android:finishOnTaskLaunch="false"
-            android:screenOrientation="portrait"
             android:theme="@style/LaunchTheme"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:hardwareAccelerated="true"
@@ -122,64 +138,82 @@
             android:windowSoftInputMode="adjustResize">
             <meta-data
                 android:name="io.flutter.embedding.android.NormalTheme"
-                android:resource="@style/NormalTheme" />
+                android:resource="@style/NormalTheme"/>
             <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
-            
             <!-- Intent filter para recibir enlaces de YouTube compartidos -->
             <intent-filter>
-                <action android:name="android.intent.action.SEND" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <data android:mimeType="text/plain" />
+                <action
+                    android:name="android.intent.action.SEND"/>
+                <category
+                    android:name="android.intent.category.DEFAULT"/>
+                <data
+                    android:mimeType="text/plain"/>
             </intent-filter>
-            
             <!-- Intent filter para recibir enlaces de YouTube desde el navegador -->
-            <intent-filter android:autoVerify="true">
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="https" 
-                      android:host="youtube.com" />
+            <intent-filter
+                android:autoVerify="true">
+                <action
+                    android:name="android.intent.action.VIEW"/>
+                <category
+                    android:name="android.intent.category.DEFAULT"/>
+                <category
+                    android:name="android.intent.category.BROWSABLE"/>
+                <data
+                    android:scheme="https"
+                    android:host="youtube.com"/>
             </intent-filter>
-            
-            <intent-filter android:autoVerify="true">
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="https" 
-                      android:host="www.youtube.com" />
+            <intent-filter
+                android:autoVerify="true">
+                <action
+                    android:name="android.intent.action.VIEW"/>
+                <category
+                    android:name="android.intent.category.DEFAULT"/>
+                <category
+                    android:name="android.intent.category.BROWSABLE"/>
+                <data
+                    android:scheme="https"
+                    android:host="www.youtube.com"/>
             </intent-filter>
-            
-            <intent-filter android:autoVerify="true">
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="https" 
-                      android:host="youtu.be" />
+            <intent-filter
+                android:autoVerify="true">
+                <action
+                    android:name="android.intent.action.VIEW"/>
+                <category
+                    android:name="android.intent.category.DEFAULT"/>
+                <category
+                    android:name="android.intent.category.BROWSABLE"/>
+                <data
+                    android:scheme="https"
+                    android:host="youtu.be"/>
             </intent-filter>
-            
-            <intent-filter android:autoVerify="true">
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="https" 
-                      android:host="m.youtube.com" />
+            <intent-filter
+                android:autoVerify="true">
+                <action
+                    android:name="android.intent.action.VIEW"/>
+                <category
+                    android:name="android.intent.category.DEFAULT"/>
+                <category
+                    android:name="android.intent.category.BROWSABLE"/>
+                <data
+                    android:scheme="https"
+                    android:host="m.youtube.com"/>
             </intent-filter>
         </activity>
-
         <!-- Metadata para Flutter -->
         <meta-data
             android:name="flutterEmbedding"
-            android:value="2" />
+            android:value="2"/>
     </application>
-
     <!-- Visibilidad de apps que procesan texto (usado por Flutter) -->
     <queries>
         <intent>
-            <action android:name="android.intent.action.PROCESS_TEXT" />
-            <data android:mimeType="text/plain" />
+            <action
+                android:name="android.intent.action.PROCESS_TEXT"/>
+            <data
+                android:mimeType="text/plain"/>
         </intent>
     </queries>
 </manifest>

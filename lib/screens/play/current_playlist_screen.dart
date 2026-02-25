@@ -514,9 +514,9 @@ class _CurrentPlaylistScreenState extends State<CurrentPlaylistScreen>
                                           .withValues(alpha: 0.06)
                                     : Theme.of(context).colorScheme.secondary
                                           .withValues(alpha: 0.07);
-                                final currentCardColor = primaryColor.withAlpha(
-                                  isDark ? 40 : 25,
-                                );
+                                final currentCardColor = isAmoledTheme
+                                    ? cardColor
+                                    : primaryColor.withAlpha(isDark ? 40 : 25);
                                 final textColor = isAmoledTheme
                                     ? Colors.white
                                     : primaryColor;

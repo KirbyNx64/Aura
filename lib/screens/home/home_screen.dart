@@ -1200,14 +1200,16 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                             padding: EdgeInsets.only(bottom: isLast ? 0 : 4),
                             child: Card(
                               color: isCurrent
-                                  ? Theme.of(
-                                      context,
-                                    ).colorScheme.primary.withAlpha(
-                                      Theme.of(context).brightness ==
-                                              Brightness.dark
-                                          ? 40
-                                          : 25,
-                                    )
+                                  ? isAmoledTheme
+                                        ? cardColor
+                                        : Theme.of(
+                                            context,
+                                          ).colorScheme.primary.withAlpha(
+                                            Theme.of(context).brightness ==
+                                                    Brightness.dark
+                                                ? 40
+                                                : 25,
+                                          )
                                   : cardColor,
                               margin: EdgeInsets.zero,
                               elevation: 0,
@@ -4583,9 +4585,10 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         padding: EdgeInsets.only(bottom: isLastItem ? 0 : 4),
                         child: Card(
                           color: isCurrent
-                              ? Theme.of(context).colorScheme.primary.withAlpha(
-                                  isDark ? 40 : 25,
-                                )
+                              ? isAmoledTheme
+                                    ? cardColor
+                                    : Theme.of(context).colorScheme.primary
+                                          .withAlpha(isDark ? 40 : 25)
                               : cardColor,
                           margin: EdgeInsets.zero,
                           elevation: 0,

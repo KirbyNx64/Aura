@@ -69,7 +69,7 @@ class ThemePreferences {
     }
 
     // Default to system theme
-    return AppThemeMode.system;
+    return AppThemeMode.dark;
   }
 
   // Guardar la preferencia del color
@@ -86,7 +86,7 @@ class ThemePreferences {
       return AppColorScheme.values[index];
     }
     // Default to system (dynamic colors)
-    return AppColorScheme.system;
+    return AppColorScheme.amoled;
   }
 
   // Guardar si se aceptó la advertencia de tema dinámico

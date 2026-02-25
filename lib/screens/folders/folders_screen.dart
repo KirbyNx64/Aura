@@ -3838,8 +3838,10 @@ class _FoldersScreenState extends State<FoldersScreen>
                             padding: EdgeInsets.only(bottom: isLast ? 0 : 4),
                             child: Card(
                               color: isCurrent
-                                  ? Theme.of(context).colorScheme.primary
-                                        .withAlpha(isDark ? 40 : 25)
+                                  ? isAmoled
+                                        ? cardColor
+                                        : Theme.of(context).colorScheme.primary
+                                              .withAlpha(isDark ? 40 : 25)
                                   : cardColor,
                               margin: EdgeInsets.zero,
                               elevation: 0,

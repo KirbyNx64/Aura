@@ -72,11 +72,13 @@ class SquigglySliderTrackShape extends SliderTrackShape
     // Assign the track segment paints, which are leading: active and
     // trailing: inactive.
     final ColorTween activeTrackColorTween = ColorTween(
-        begin: sliderTheme.disabledActiveTrackColor,
-        end: sliderTheme.activeTrackColor);
+      begin: sliderTheme.disabledActiveTrackColor,
+      end: sliderTheme.activeTrackColor,
+    );
     final ColorTween inactiveTrackColorTween = ColorTween(
-        begin: sliderTheme.disabledInactiveTrackColor,
-        end: sliderTheme.inactiveTrackColor);
+      begin: sliderTheme.disabledInactiveTrackColor,
+      end: sliderTheme.inactiveTrackColor,
+    );
     final Paint activePaint = Paint()
       ..color = activeTrackColorTween.evaluate(enableAnimation)!;
     final Paint inactivePaint = Paint()
@@ -102,8 +104,9 @@ class SquigglySliderTrackShape extends SliderTrackShape
       isDiscrete: isDiscrete,
     );
     final Radius trackRadius = Radius.circular(trackRect.height / 2);
-    final Radius activeTrackRadius =
-        Radius.circular((trackRect.height + additionalActiveTrackHeight) / 2);
+    final Radius activeTrackRadius = Radius.circular(
+      (trackRect.height + additionalActiveTrackHeight) / 2,
+    );
 
     final ll = trackRect.left;
     final lt = (textDirection == TextDirection.ltr)
@@ -120,33 +123,46 @@ class SquigglySliderTrackShape extends SliderTrackShape
 
     const ppp = 1.0; // pixels per point -- the resolution of the curve
     final int pointCount = ((lr - ll) / ppp).ceil();
-    
-    final List<Offset> points = List.generate(
-      pointCount,
-      (index) {
-        final double xOff = index * ppp;
-        final double x = ll + xOff;
-        final double easeLength = squiggleWavelength * 3;
-        final double easeFactor = (xOff < easeLength
-            ? xOff / easeLength
-            : xOff > lr - ll - easeLength
-                ? (lr - ll - xOff) / easeLength
-                : 1);
-        return Offset(
-          x,
-          heightCenter +
-              (sin(x / squiggleWavelength + phase * 2 * pi) *
-                      squiggleAmplitude) *
-                  easeFactor,
-        );
-      },
-    );
-    
-    // Asegurar que el último punto esté exactamente en lr
+
+    final List<Offset> points = List.generate(pointCount, (index) {
+      final double xOff = index * ppp;
+      final double x = ll + xOff;
+      final double easeLength = squiggleWavelength * 3;
+      final double totalLength = lr - ll;
+
+      double easeFactor = 1.0;
+      if (easeLength <= 0 || totalLength <= 0) {
+        easeFactor = 0.0;
+      } else if (totalLength < easeLength * 2) {
+        if (xOff < totalLength / 2) {
+          easeFactor = xOff / easeLength;
+        } else {
+          easeFactor = (totalLength - xOff) / easeLength;
+        }
+      } else {
+        if (xOff < easeLength) {
+          easeFactor = xOff / easeLength;
+        } else if (xOff > totalLength - easeLength) {
+          easeFactor = (totalLength - xOff) / easeLength;
+        }
+      }
+
+      final double wave = (easeLength <= 0)
+          ? 0.0
+          : sin(x / squiggleWavelength + phase * 2 * pi);
+
+      return Offset(x, heightCenter + (wave * squiggleAmplitude * easeFactor));
+    });
+
+    // Asegurar que el último punto esté exactamente en lr evaluando la curva para evitar cortes
     if (points.isNotEmpty) {
-      points[points.length - 1] = Offset(lr, points.last.dy);
+      if (points.last.dx < lr) {
+        points.add(Offset(lr, heightCenter));
+      } else {
+        points.last = Offset(lr, heightCenter);
+      }
     }
-    
+
     // Crear un Path para mejor control de los extremos
     final Path path = Path();
     if (points.isNotEmpty) {
@@ -155,7 +171,7 @@ class SquigglySliderTrackShape extends SliderTrackShape
         path.lineTo(points[i].dx, points[i].dy);
       }
     }
-    
+
     context.canvas.drawPath(
       path,
       leftTrackPaint
@@ -184,15 +200,17 @@ class SquigglySliderTrackShape extends SliderTrackShape
       rightTrackPaint,
     );
 
-    final bool showSecondaryTrack = (secondaryOffset != null) &&
+    final bool showSecondaryTrack =
+        (secondaryOffset != null) &&
         ((textDirection == TextDirection.ltr)
             ? (secondaryOffset.dx > thumbCenter.dx)
             : (secondaryOffset.dx < thumbCenter.dx));
 
     if (showSecondaryTrack) {
       final ColorTween secondaryTrackColorTween = ColorTween(
-          begin: sliderTheme.disabledSecondaryActiveTrackColor,
-          end: sliderTheme.secondaryActiveTrackColor);
+        begin: sliderTheme.disabledSecondaryActiveTrackColor,
+        end: sliderTheme.secondaryActiveTrackColor,
+      );
       final Paint secondaryTrackPaint = Paint()
         ..color = secondaryTrackColorTween.evaluate(enableAnimation)!;
       if (textDirection == TextDirection.ltr) {
