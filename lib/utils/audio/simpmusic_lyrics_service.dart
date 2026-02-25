@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:music/utils/audio/synced_lyrics_service.dart';
 import 'package:music/utils/connectivity_helper.dart';
+import 'package:music/utils/db/download_history_hive.dart';
 
 class SimpMusicLyricsService {
   static const String _apiBaseUrl = 'https://api-lyrics.simpmusic.org';
@@ -58,6 +59,7 @@ class SimpMusicLyricsService {
 
     final isAvailable = await isApiAvailable();
     if (!isAvailable) {
+      // print('SimpMusic: API no disponible');
       final hasConnection = await ConnectivityHelper.hasInternetConnection();
       if (!hasConnection) {
         return LyricsResult(type: LyricsResultType.noConnection);
@@ -66,12 +68,30 @@ class SimpMusicLyricsService {
     }
 
     // Attempt to find by videoId if present in extras
-    final videoId = song.extras?['videoId'];
-    if (videoId != null && videoId.toString().isNotEmpty) {
-      // print('SimpMusic: Found videoId in extras: $videoId');
-      final result = await getLyricsByVideoId(videoId.toString(), song.id);
-      if (result.type == LyricsResultType.found) return result;
+    var videoId = song.extras?['videoId'];
+
+    // Si no está en extras, buscar en el historial de Hive por el path (song.id)
+    if (videoId == null || videoId.toString().isEmpty) {
+      final historyItem = await DownloadHistoryHive.getDownloadByPath(song.id);
+      if (historyItem != null) {
+        videoId = historyItem.videoId;
+        // print('SimpMusic: videoId encontrado en Hive: $videoId');
+      }
+    } else {
+      // print('SimpMusic: videoId encontrado en extras: $videoId');
     }
+
+    if (videoId != null && videoId.toString().isNotEmpty) {
+      final result = await getLyricsByVideoId(videoId.toString(), song.id);
+      if (result.type == LyricsResultType.found) {
+        // print('SimpMusic: Letras encontradas usando videoId: $videoId');
+        return result;
+      }
+    }
+
+    // print(
+    //   'SimpMusic: videoId no encontrado o falló la obtención. Intentando búsqueda general...',
+    // );
 
     // print(
     //   'SimpMusic: No videoId in extras or lyrics not found by videoId, falling back to search',
@@ -90,33 +110,53 @@ class SimpMusicLyricsService {
     dio.options.receiveTimeout = const Duration(seconds: 10);
 
     try {
-      // print('SimpMusic: Requesting lyrics for videoId: $videoId');
+      final requestUrl = '$_apiBaseUrl/v1/$videoId';
+      // print('SimpMusic: Requesting lyrics by videoId: $requestUrl');
       final response = await dio.get(
-        '$_apiBaseUrl/v1/$videoId',
+        requestUrl,
         options: Options(
           headers: {'User-Agent': userAgent},
           validateStatus: (status) => status != null && status < 500,
         ),
       );
 
-      // print(
-      //   'SimpMusic: Lyrics by videoId response status: ${response.statusCode}',
-      // );
-
+      // print('SimpMusic: Response status for videoId: ${response.statusCode}');
       if (response.statusCode == 200 && response.data != null) {
-        final data = response.data;
-        if (data is Map<String, dynamic>) {
-          // print('SimpMusic: Lyrics found for videoId: $videoId');
-          final lyricsData = LyricsData(
-            id: songId,
-            synced: data["syncedLyrics"],
-            plainLyrics: data["plainLyric"] ?? data["plainLyrics"],
-          );
-          final lyricsBox = await SyncedLyricsService.box;
-          await lyricsBox.put(songId, lyricsData);
-          return LyricsResult(type: LyricsResultType.found, data: lyricsData);
+        final responseData = response.data;
+        if (responseData is Map<String, dynamic>) {
+          Map<String, dynamic>? actualData;
+
+          // La API puede devolver los datos directamente o envueltos en "data" (como lista o mapa)
+          if (responseData.containsKey('data')) {
+            final wrapped = responseData['data'];
+            if (wrapped is List && wrapped.isNotEmpty) {
+              actualData = wrapped.first as Map<String, dynamic>;
+            } else if (wrapped is Map<String, dynamic>) {
+              actualData = wrapped;
+            }
+          } else if (responseData.containsKey('syncedLyrics') ||
+              responseData.containsKey('plainLyrics') ||
+              responseData.containsKey('plainLyric')) {
+            actualData = responseData;
+          }
+
+          if (actualData != null) {
+            // print('SimpMusic: Lyrics parsed correctly for videoId: $videoId');
+            final lyricsData = LyricsData(
+              id: songId,
+              synced: actualData["syncedLyrics"],
+              plainLyrics:
+                  actualData["plainLyric"] ?? actualData["plainLyrics"],
+            );
+            final lyricsBox = await SyncedLyricsService.box;
+            await lyricsBox.put(songId, lyricsData);
+            return LyricsResult(type: LyricsResultType.found, data: lyricsData);
+          }
         }
       }
+      // print(
+      //   'SimpMusic: Lyrics NOT FOUND or invalid format for videoId: $videoId',
+      // );
     } catch (e) {
       // print('SimpMusic: Error fetching lyrics by videoId: $e');
     }

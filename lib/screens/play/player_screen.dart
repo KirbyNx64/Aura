@@ -17,6 +17,7 @@ import 'package:music/utils/notifiers.dart';
 import 'package:music/utils/db/playlists_db.dart';
 import 'package:music/utils/db/shortcuts_db.dart';
 import 'package:music/utils/audio/synced_lyrics_service.dart';
+import 'package:music/utils/db/download_history_hive.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'dart:async';
@@ -376,22 +377,44 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
 
   Future<void> _searchSongOnYouTube(MediaItem mediaItem) async {
     try {
-      final title = mediaItem.title;
-      final artist = mediaItem.artist ?? '';
+      // 1. Intentar obtener videoId desde extras
+      var videoId = mediaItem.extras?['videoId']?.toString();
 
-      // Crear la consulta de búsqueda
-      String searchQuery = title;
-      if (artist.isNotEmpty) {
-        searchQuery = '$artist $title';
+      // 2. Si no está en extras o está vacío, intentar desde el historial (por path/id)
+      if (videoId == null || videoId.trim().isEmpty) {
+        final historyItem = await DownloadHistoryHive.getDownloadByPath(
+          mediaItem.id,
+        );
+        if (historyItem != null) {
+          videoId = historyItem.videoId;
+        }
       }
 
-      // Codificar la consulta para la URL
-      final encodedQuery = Uri.encodeComponent(searchQuery);
-      final youtubeSearchUrl =
-          'https://www.youtube.com/results?search_query=$encodedQuery';
+      final Uri url;
 
-      // Intentar abrir YouTube en el navegador o en la app
-      final url = Uri.parse(youtubeSearchUrl);
+      if (videoId != null && videoId.trim().isNotEmpty) {
+        final normalizedId = videoId.trim();
+        // print('Video ID: $normalizedId');
+        url = Uri.parse('https://www.youtube.com/watch?v=$normalizedId');
+      } else {
+        // print('No Video ID');
+        final title = mediaItem.title;
+        final artist = mediaItem.artist ?? '';
+
+        // Crear la consulta de búsqueda
+        String searchQuery = title;
+        if (artist.isNotEmpty) {
+          searchQuery = '$artist $title';
+        }
+
+        // Codificar la consulta para la URL
+        final encodedQuery = Uri.encodeComponent(searchQuery);
+        final youtubeSearchUrl =
+            'https://www.youtube.com/results?search_query=$encodedQuery';
+
+        // Intentar abrir YouTube en el navegador o en la app
+        url = Uri.parse(youtubeSearchUrl);
+      }
 
       if (await canLaunchUrl(url)) {
         await launchUrl(url, mode: LaunchMode.externalApplication);
@@ -406,24 +429,46 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
   // Función para buscar la canción en YouTube Music
   Future<void> _searchSongOnYouTubeMusic(MediaItem mediaItem) async {
     try {
-      final title = mediaItem.title;
-      final artist = mediaItem.artist ?? '';
+      // 1. Intentar obtener videoId desde extras
+      var videoId = mediaItem.extras?['videoId']?.toString();
 
-      // Crear la consulta de búsqueda
-      String searchQuery = title;
-      if (artist.isNotEmpty) {
-        searchQuery = '$artist $title';
+      // 2. Si no está en extras o está vacío, intentar desde el historial (por path/id)
+      if (videoId == null || videoId.trim().isEmpty) {
+        final historyItem = await DownloadHistoryHive.getDownloadByPath(
+          mediaItem.id,
+        );
+        if (historyItem != null) {
+          videoId = historyItem.videoId;
+        }
       }
 
-      // Codificar la consulta para la URL
-      final encodedQuery = Uri.encodeComponent(searchQuery);
+      final Uri url;
 
-      // URL correcta para búsqueda en YouTube Music
-      final ytMusicSearchUrl =
-          'https://music.youtube.com/search?q=$encodedQuery';
+      if (videoId != null && videoId.trim().isNotEmpty) {
+        final normalizedId = videoId.trim();
+        // print('Video ID: $normalizedId');
+        url = Uri.parse('https://music.youtube.com/watch?v=$normalizedId');
+      } else {
+        // print('No Video ID');
+        final title = mediaItem.title;
+        final artist = mediaItem.artist ?? '';
 
-      // Intentar abrir YouTube Music en el navegador o en la app
-      final url = Uri.parse(ytMusicSearchUrl);
+        // Crear la consulta de búsqueda
+        String searchQuery = title;
+        if (artist.isNotEmpty) {
+          searchQuery = '$artist $title';
+        }
+
+        // Codificar la consulta para la URL
+        final encodedQuery = Uri.encodeComponent(searchQuery);
+
+        // URL correcta para búsqueda en YouTube Music
+        final ytMusicSearchUrl =
+            'https://music.youtube.com/search?q=$encodedQuery';
+
+        // Intentar abrir YouTube Music en el navegador o en la app
+        url = Uri.parse(ytMusicSearchUrl);
+      }
 
       if (await canLaunchUrl(url)) {
         await launchUrl(url, mode: LaunchMode.externalApplication);
@@ -444,39 +489,41 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
   }) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(28),
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.primary,
-            borderRadius: BorderRadius.circular(28),
-          ),
-          child: Row(
-            children: [
-              if (leading != null)
-                SizedBox(width: 24, height: 24, child: Center(child: leading))
-              else if (icon != null)
-                Icon(
-                  icon,
-                  color: Theme.of(context).colorScheme.onPrimary,
-                  size: 24,
-                ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
+      child: Ink(
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.primary,
+          borderRadius: BorderRadius.circular(28),
+        ),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(28),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            child: Row(
+              children: [
+                if (leading != null)
+                  SizedBox(width: 24, height: 24, child: Center(child: leading))
+                else if (icon != null)
+                  Icon(
+                    icon,
                     color: Theme.of(context).colorScheme.onPrimary,
+                    size: 24,
                   ),
-                  overflow: TextOverflow.ellipsis,
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      color: Theme.of(context).colorScheme.onPrimary,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -935,11 +982,28 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
       effectiveLightness = 0.15;
     }
 
-    final fixedLightness = (effectiveLightness * 0.85).clamp(0.55, 0.85);
+    // Ajustar el brillo: bajamos el rango para que el color sea más "rico"
+    // y no se vea pálido (pastel), permitiendo que la saturación resalte.
+    // Brillo dinámico: Si el color original es muy oscuro, le damos un pequeño boost
+    // para que se note. Si es muy claro, lo oscurecemos para que no se vea pálido.
+    double targetLightness;
+    if (hsl.lightness < 0.2) {
+      // Colores muy oscuros: subirlos un poco menos (0.18 - 0.28)
+      targetLightness = 0.18 + (hsl.lightness * 0.5);
+    } else if (hsl.lightness > 0.5) {
+      // Colores muy claros: bajarlos más (0.3 - 0.4)
+      targetLightness = 0.3 + (hsl.lightness * 0.1);
+    } else {
+      // Colores medios: rango más bajo
+      targetLightness = hsl.lightness.clamp(0.2, 0.4);
+    }
 
+    final fixedLightness = targetLightness.clamp(0.15, 0.36);
+
+    // Saturación extrema mantenida para que el color explote
     final fixedSaturation = isGrayscale
         ? hsl.saturation
-        : hsl.saturation.clamp(0.35, 1.0);
+        : (hsl.saturation * 1.7).clamp(0.8, 1.0);
 
     return hsl
         .withLightness(fixedLightness)
@@ -964,25 +1028,34 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
           builder: (context, snapshot) {
             final mediaItem = snapshot.data ?? initialMediaItem;
 
-            return ValueListenableBuilder<bool>(
-              valueListenable: useDynamicColorBackgroundNotifier,
-              builder: (context, useDynamicBg, _) {
-                return ValueListenableBuilder<AppColorScheme>(
-                  valueListenable: colorSchemeNotifier,
-                  builder: (context, colorScheme, _) {
+            return AnimatedBuilder(
+              animation: Listenable.merge([
+                useDynamicColorBackgroundNotifier,
+                useDynamicColorInDialogsNotifier,
+                colorSchemeNotifier,
+              ]),
+              builder: (context, _) {
+                return Builder(
+                  builder: (context) {
+                    final useDynamicBg =
+                        useDynamicColorBackgroundNotifier.value;
+                    final useDynamicDialogs =
+                        useDynamicColorInDialogsNotifier.value;
+                    final colorScheme = colorSchemeNotifier.value;
                     final isAmoled = colorScheme == AppColorScheme.amoled;
                     final isDark =
                         Theme.of(context).brightness == Brightness.dark;
-                    final showDynamicBg = useDynamicBg && isAmoled && isDark;
+                    final showDynamicBg =
+                        (useDynamicBg || useDynamicDialogs) &&
+                        isAmoled &&
+                        isDark;
 
-                    return Container(
-                      decoration: BoxDecoration(
-                        color: showDynamicBg
-                            ? Colors.black
-                            : Theme.of(context).scaffoldBackgroundColor,
-                        borderRadius: const BorderRadius.vertical(
-                          top: Radius.circular(28),
-                        ),
+                    return Material(
+                      color: showDynamicBg
+                          ? Colors.black
+                          : Theme.of(context).scaffoldBackgroundColor,
+                      borderRadius: const BorderRadius.vertical(
+                        top: Radius.circular(28),
                       ),
                       clipBehavior: Clip.antiAlias,
                       child: Stack(
@@ -997,11 +1070,8 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                     duration: const Duration(milliseconds: 200),
                                     curve: Curves.easeInOut,
                                     color: normalizePaletteColor(
-                                      domColor ??
-                                          Theme.of(
-                                            context,
-                                          ).scaffoldBackgroundColor,
-                                    ).withValues(alpha: 0.2),
+                                      domColor ?? Colors.black,
+                                    ).withValues(alpha: 0.35),
                                   ),
                                 );
                               },
@@ -1052,7 +1122,14 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                     LocaleProvider.tr(
                                                       'unknown_artist',
                                                     ),
-                                                style: TextStyle(fontSize: 14),
+                                                style: TextStyle(
+                                                  fontSize: 14,
+                                                  color: isAmoled
+                                                      ? Colors.white.withValues(
+                                                          alpha: 0.85,
+                                                        )
+                                                      : null,
+                                                ),
                                                 maxLines: 1,
                                                 overflow: TextOverflow.ellipsis,
                                               ),
@@ -1061,59 +1138,44 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                         ),
                                         const SizedBox(width: 8),
                                         // Botón de búsqueda para abrir opciones
-                                        InkWell(
-                                          onTap: () async {
-                                            Navigator.of(context).pop();
-                                            await _showSearchOptions(mediaItem);
-                                          },
-                                          borderRadius: BorderRadius.circular(
-                                            12,
+                                        Ink(
+                                          decoration: BoxDecoration(
+                                            color:
+                                                Theme.of(context).brightness ==
+                                                    Brightness.dark
+                                                ? Theme.of(
+                                                    context,
+                                                  ).colorScheme.primary
+                                                : Theme.of(context)
+                                                      .colorScheme
+                                                      .onPrimaryContainer
+                                                      .withValues(alpha: 0.7),
+                                            borderRadius: BorderRadius.circular(
+                                              12,
+                                            ),
                                           ),
-                                          child: Container(
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 16,
-                                              vertical: 8,
+                                          child: InkWell(
+                                            onTap: () async {
+                                              Navigator.of(context).pop();
+                                              await _showSearchOptions(
+                                                mediaItem,
+                                              );
+                                            },
+                                            borderRadius: BorderRadius.circular(
+                                              12,
                                             ),
-                                            decoration: BoxDecoration(
-                                              color:
-                                                  Theme.of(
-                                                        context,
-                                                      ).brightness ==
-                                                      Brightness.dark
-                                                  ? Theme.of(
-                                                      context,
-                                                    ).colorScheme.primary
-                                                  : Theme.of(context)
-                                                        .colorScheme
-                                                        .onPrimaryContainer
-                                                        .withValues(alpha: 0.7),
-                                              borderRadius:
-                                                  BorderRadius.circular(12),
-                                            ),
-                                            child: Row(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                Icon(
-                                                  Icons.search,
-                                                  size: 20,
-                                                  color:
-                                                      Theme.of(
-                                                            context,
-                                                          ).brightness ==
-                                                          Brightness.dark
-                                                      ? Theme.of(
-                                                          context,
-                                                        ).colorScheme.onPrimary
-                                                      : Theme.of(context)
-                                                            .colorScheme
-                                                            .surfaceContainer,
-                                                ),
-                                                const SizedBox(width: 8),
-                                                TranslatedText(
-                                                  'search',
-                                                  style: TextStyle(
-                                                    fontWeight: FontWeight.w600,
-                                                    fontSize: 14,
+                                            child: Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 16,
+                                                    vertical: 8,
+                                                  ),
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Icon(
+                                                    Icons.search,
+                                                    size: 20,
                                                     color:
                                                         Theme.of(
                                                               context,
@@ -1126,8 +1188,28 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                               .colorScheme
                                                               .surfaceContainer,
                                                   ),
-                                                ),
-                                              ],
+                                                  const SizedBox(width: 8),
+                                                  TranslatedText(
+                                                    'search',
+                                                    style: TextStyle(
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                      fontSize: 14,
+                                                      color:
+                                                          Theme.of(
+                                                                context,
+                                                              ).brightness ==
+                                                              Brightness.dark
+                                                          ? Theme.of(context)
+                                                                .colorScheme
+                                                                .onPrimary
+                                                          : Theme.of(context)
+                                                                .colorScheme
+                                                                .surfaceContainer,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
                                             ),
                                           ),
                                         ),
@@ -1230,19 +1312,47 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                     },
                                   ),
                                   if ((mediaItem.artist ?? '')
-                                      .trim()
-                                      .isNotEmpty)
+                                          .trim()
+                                          .isNotEmpty ||
+                                      (mediaItem.extras?['videoId']
+                                              ?.toString()
+                                              .trim()
+                                              .isNotEmpty ??
+                                          false))
                                     ListTile(
                                       leading: const Icon(Icons.person_outline),
                                       title: const TranslatedText(
                                         'go_to_artist',
                                       ),
-                                      onTap: () {
-                                        Navigator.of(context).pop();
-                                        final name = (mediaItem.artist ?? '')
+                                      onTap: () async {
+                                        final navigator = Navigator.of(context);
+                                        navigator.pop();
+
+                                        final videoId =
+                                            (mediaItem.extras?['videoId']
+                                                        ?.toString() ??
+                                                    '')
+                                                .trim();
+
+                                        var name = (mediaItem.artist ?? '')
                                             .trim();
+
+                                        if (videoId.isNotEmpty) {
+                                          final historyItem =
+                                              await DownloadHistoryHive.getDownloadByVideoId(
+                                                videoId,
+                                              );
+                                          final hiveArtist = historyItem?.artist
+                                              .trim();
+                                          if (hiveArtist != null &&
+                                              hiveArtist.isNotEmpty) {
+                                            name = hiveArtist;
+                                          }
+                                        }
+
                                         if (name.isEmpty) return;
-                                        Navigator.of(context).push(
+
+                                        navigator.push(
                                           PageRouteBuilder(
                                             pageBuilder:
                                                 (
@@ -1464,6 +1574,49 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                       }
                                     },
                                   ),
+                                  FutureBuilder<String?>(
+                                    future: () async {
+                                      var videoId = mediaItem.extras?['videoId']
+                                          ?.toString();
+
+                                      if (videoId == null ||
+                                          videoId.trim().isEmpty) {
+                                        final historyItem =
+                                            await DownloadHistoryHive.getDownloadByPath(
+                                              mediaItem.id,
+                                            );
+                                        videoId = historyItem?.videoId;
+                                      }
+
+                                      final normalized = videoId?.trim();
+                                      return (normalized == null ||
+                                              normalized.isEmpty)
+                                          ? null
+                                          : normalized;
+                                    }(),
+                                    builder: (context, snapshot) {
+                                      final videoId = snapshot.data;
+                                      if (videoId == null || videoId.isEmpty) {
+                                        return const SizedBox.shrink();
+                                      }
+
+                                      return ListTile(
+                                        leading: const Icon(Icons.link),
+                                        title: Text(
+                                          LocaleProvider.tr('share_link'),
+                                        ),
+                                        onTap: () async {
+                                          Navigator.of(context).pop();
+
+                                          final url =
+                                              'https://music.youtube.com/watch?v=$videoId';
+                                          await SharePlus.instance.share(
+                                            ShareParams(text: url),
+                                          );
+                                        },
+                                      );
+                                    },
+                                  ),
                                   ListTile(
                                     leading: () {
                                       final isActive =
@@ -1556,24 +1709,30 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
             ? Theme.of(context).colorScheme.secondary.withValues(alpha: 0.06)
             : Theme.of(context).colorScheme.secondary.withValues(alpha: 0.07);
 
-        return ValueListenableBuilder<bool>(
-          valueListenable: useDynamicColorBackgroundNotifier,
-          builder: (context, useDynamicBg, _) {
-            return ValueListenableBuilder<AppColorScheme>(
-              valueListenable: colorSchemeNotifier,
-              builder: (context, colorScheme, _) {
+        return AnimatedBuilder(
+          animation: Listenable.merge([
+            useDynamicColorBackgroundNotifier,
+            useDynamicColorInDialogsNotifier,
+            colorSchemeNotifier,
+          ]),
+          builder: (context, _) {
+            return Builder(
+              builder: (context) {
+                final useDynamicBg = useDynamicColorBackgroundNotifier.value;
+                final useDynamicDialogs =
+                    useDynamicColorInDialogsNotifier.value;
+                final colorScheme = colorSchemeNotifier.value;
                 final isAmoled = colorScheme == AppColorScheme.amoled;
                 final isDark = Theme.of(context).brightness == Brightness.dark;
-                final showDynamicBg = useDynamicBg && isAmoled && isDark;
+                final showDynamicBg =
+                    (useDynamicBg || useDynamicDialogs) && isAmoled && isDark;
 
-                return Container(
-                  decoration: BoxDecoration(
-                    color: showDynamicBg
-                        ? Colors.black
-                        : Theme.of(context).scaffoldBackgroundColor,
-                    borderRadius: const BorderRadius.vertical(
-                      top: Radius.circular(28),
-                    ),
+                return Material(
+                  color: showDynamicBg
+                      ? Colors.black
+                      : Theme.of(context).scaffoldBackgroundColor,
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(28),
                   ),
                   clipBehavior: Clip.antiAlias,
                   child: Stack(
@@ -1588,9 +1747,8 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                 duration: const Duration(milliseconds: 200),
                                 curve: Curves.easeInOut,
                                 color: normalizePaletteColor(
-                                  domColor ??
-                                      Theme.of(context).scaffoldBackgroundColor,
-                                ).withValues(alpha: 0.2),
+                                  domColor ?? Colors.black,
+                                ).withValues(alpha: 0.35),
                               ),
                             );
                           },
@@ -2512,6 +2670,8 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                         Theme.of(context).brightness == Brightness.dark;
                     final showBackground = isAmoled && isDark && useArtworkBg;
                     final showDynamicBg = useDynamicBg && isAmoled && isDark;
+                    final isDynamicTheme =
+                        colorScheme == AppColorScheme.dynamic;
 
                     return RepaintBoundary(
                       // Aislar el body del player para que no repinte durante el scroll
@@ -2560,7 +2720,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                               curve: Curves.easeInOut,
                                               color: normalizePaletteColor(
                                                 domColor ?? Colors.black,
-                                              ).withValues(alpha: 0.20),
+                                              ).withValues(alpha: 0.45),
                                             ),
                                           );
                                         },
@@ -2900,687 +3060,1072 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                             body: Container(
                               decoration: null,
                               child: SafeArea(
-                                minimum: const EdgeInsets.only(bottom: 28),
+                                minimum: const EdgeInsets.only(bottom: 22),
                                 child: Center(
-                                  child: Padding(
-                                    padding: EdgeInsets.symmetric(
-                                      horizontal: isSmallScreen
-                                          ? width * 0.005
-                                          : width * 0.013,
-                                      vertical: isSmallScreen
-                                          ? height * 0.015
-                                          : height * 0.03,
-                                    ),
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.center,
-                                      mainAxisSize: MainAxisSize.max,
-                                      children: [
-                                        Stack(
-                                          alignment: Alignment.center,
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.center,
+                                    mainAxisSize: MainAxisSize.max,
+                                    children: [
+                                      Padding(
+                                        padding: EdgeInsets.only(
+                                          top: isSmallScreen
+                                              ? height * 0.015
+                                              : height * 0.03,
+                                          left: isSmallScreen
+                                              ? width * 0.005
+                                              : width * 0.013,
+                                          right: isSmallScreen
+                                              ? width * 0.005
+                                              : width * 0.013,
+                                        ),
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.center,
+                                          mainAxisSize: MainAxisSize.max,
                                           children: [
-                                            Builder(
-                                              builder: (context) {
-                                                // Usar initialArtworkUri solo en el primer build
-                                                // Uri? initialUri;
-                                                // if (!_usedInitialArtwork && widget.initialArtworkUri != null) {
-                                                //   initialUri = widget.initialArtworkUri;
-                                                //   _usedInitialArtwork = true;
-                                                // }
-                                                return GestureDetector(
-                                                  behavior:
-                                                      HitTestBehavior.opaque,
-                                                  onHorizontalDragEnd: (details) {
-                                                    // Detectar la dirección del deslizamiento horizontal solo en la carátula
-                                                    // Solo si el gesto de cambiar canción no está desactivado
-                                                    if (!_disableChangeSongGesture &&
-                                                        details.primaryVelocity !=
-                                                            null) {
-                                                      if (details
-                                                              .primaryVelocity! >
-                                                          0) {
-                                                        // Deslizar hacia la derecha: canción anterior
-                                                        audioHandler
-                                                            ?.skipToPrevious();
-                                                      } else if (details
-                                                              .primaryVelocity! <
-                                                          0) {
-                                                        // Deslizar hacia la izquierda: siguiente canción
-                                                        audioHandler
-                                                            ?.skipToNext();
-                                                      }
-                                                    }
-                                                  },
-                                                  onTap: () async {
-                                                    // Check if lyrics on cover is enabled
-                                                    final prefs =
-                                                        await SharedPreferences.getInstance();
-                                                    final showLyricsOnCover =
-                                                        prefs.getBool(
-                                                          'show_lyrics_on_cover',
-                                                        ) ??
-                                                        false;
+                                            Stack(
+                                              alignment: Alignment.center,
+                                              children: [
+                                                Builder(
+                                                  builder: (context) {
+                                                    // Usar initialArtworkUri solo en el primer build
+                                                    // Uri? initialUri;
+                                                    // if (!_usedInitialArtwork && widget.initialArtworkUri != null) {
+                                                    //   initialUri = widget.initialArtworkUri;
+                                                    //   _usedInitialArtwork = true;
+                                                    // }
+                                                    return GestureDetector(
+                                                      behavior: HitTestBehavior
+                                                          .opaque,
+                                                      onHorizontalDragEnd: (details) {
+                                                        // Detectar la dirección del deslizamiento horizontal solo en la carátula
+                                                        // Solo si el gesto de cambiar canción no está desactivado
+                                                        if (!_disableChangeSongGesture &&
+                                                            details.primaryVelocity !=
+                                                                null) {
+                                                          if (details
+                                                                  .primaryVelocity! >
+                                                              0) {
+                                                            // Deslizar hacia la derecha: canción anterior
+                                                            audioHandler
+                                                                ?.skipToPrevious();
+                                                          } else if (details
+                                                                  .primaryVelocity! <
+                                                              0) {
+                                                            // Deslizar hacia la izquierda: siguiente canción
+                                                            audioHandler
+                                                                ?.skipToNext();
+                                                          }
+                                                        }
+                                                      },
+                                                      onTap: () async {
+                                                        // Check if lyrics on cover is enabled
+                                                        final prefs =
+                                                            await SharedPreferences.getInstance();
+                                                        final showLyricsOnCover =
+                                                            prefs.getBool(
+                                                              'show_lyrics_on_cover',
+                                                            ) ??
+                                                            false;
 
-                                                    if (showLyricsOnCover) {
-                                                      // Original behavior: toggle lyrics display on cover
+                                                        if (showLyricsOnCover) {
+                                                          // Original behavior: toggle lyrics display on cover
+                                                          setState(() {
+                                                            _showLyrics =
+                                                                !_showLyrics;
+                                                          });
+
+                                                          // Always load lyrics when enabling, to ensure they match current song
+                                                          if (_showLyrics &&
+                                                              !_loadingLyrics) {
+                                                            _loadLyrics(
+                                                              currentMediaItem,
+                                                            );
+                                                          }
+                                                        }
+                                                        // Cuando las letras se muestran en modal, no hacer nada con el tap simple
+                                                        // Solo el doble toque funciona para controlar la reproducción
+                                                      },
+                                                      onDoubleTapDown: (details) async {
+                                                        // Solo activar cuando las letras se muestran en modal
+                                                        final prefs =
+                                                            await SharedPreferences.getInstance();
+                                                        final showLyricsOnCover =
+                                                            prefs.getBool(
+                                                              'show_lyrics_on_cover',
+                                                            ) ??
+                                                            false;
+
+                                                        if (!showLyricsOnCover) {
+                                                          // Obtener la posición del tap relativa al centro de la carátula
+                                                          if (!context
+                                                              .mounted) {
+                                                            return;
+                                                          }
+                                                          final RenderBox
+                                                          renderBox =
+                                                              context.findRenderObject()
+                                                                  as RenderBox;
+                                                          final localPosition =
+                                                              renderBox
+                                                                  .globalToLocal(
+                                                                    details
+                                                                        .globalPosition,
+                                                                  );
+                                                          final centerX =
+                                                              renderBox
+                                                                  .size
+                                                                  .width /
+                                                              2;
+
+                                                          // Obtener la posición actual de reproducción
+                                                          final currentPosition =
+                                                              audioHandler
+                                                                  .myHandler
+                                                                  ?.player
+                                                                  .position ??
+                                                              Duration.zero;
+
+                                                          // Cancelar timer anterior si existe
+                                                          _hideIndicatorsTimer
+                                                              ?.cancel();
+
+                                                          if (localPosition.dx <
+                                                              centerX) {
+                                                            // Doble toque en el lado izquierdo: retroceder 10 segundos
+                                                            setState(() {
+                                                              _showDoubleTapIndicators =
+                                                                  true;
+                                                              _showLeftIndicator =
+                                                                  true;
+                                                              _showRightIndicator =
+                                                                  false;
+                                                            });
+
+                                                            // Aparecer inmediatamente (sin animación)
+                                                            _fadeController
+                                                                    .value =
+                                                                1.0;
+
+                                                            final newPosition =
+                                                                currentPosition -
+                                                                const Duration(
+                                                                  seconds: 10,
+                                                                );
+                                                            if (newPosition
+                                                                    .inMilliseconds >=
+                                                                0) {
+                                                              audioHandler
+                                                                  ?.seek(
+                                                                    newPosition,
+                                                                  );
+                                                            } else {
+                                                              audioHandler
+                                                                  ?.seek(
+                                                                    Duration
+                                                                        .zero,
+                                                                  );
+                                                            }
+                                                          } else {
+                                                            // Doble toque en el lado derecho: avanzar 10 segundos
+                                                            setState(() {
+                                                              _showDoubleTapIndicators =
+                                                                  true;
+                                                              _showLeftIndicator =
+                                                                  false;
+                                                              _showRightIndicator =
+                                                                  true;
+                                                            });
+
+                                                            // Aparecer inmediatamente (sin animación)
+                                                            _fadeController
+                                                                    .value =
+                                                                1.0;
+
+                                                            final newPosition =
+                                                                currentPosition +
+                                                                const Duration(
+                                                                  seconds: 10,
+                                                                );
+                                                            // No hay límite superior, se puede avanzar más allá de la duración
+                                                            audioHandler?.seek(
+                                                              newPosition,
+                                                            );
+                                                          }
+
+                                                          // Iniciar animación de desvanecimiento después de 1.5 segundos
+                                                          _hideIndicatorsTimer = Timer(
+                                                            const Duration(
+                                                              milliseconds:
+                                                                  1500,
+                                                            ),
+                                                            () {
+                                                              if (mounted) {
+                                                                _fadeController.reverse().then((
+                                                                  _,
+                                                                ) {
+                                                                  if (mounted) {
+                                                                    setState(() {
+                                                                      _showDoubleTapIndicators =
+                                                                          false;
+                                                                      _showLeftIndicator =
+                                                                          false;
+                                                                      _showRightIndicator =
+                                                                          false;
+                                                                    });
+                                                                  }
+                                                                });
+                                                              }
+                                                            },
+                                                          );
+                                                        }
+                                                      },
+                                                      child: RepaintBoundary(
+                                                        child: ValueListenableBuilder<bool>(
+                                                          valueListenable:
+                                                              _artworkLoadingNotifier,
+                                                          builder:
+                                                              (
+                                                                context,
+                                                                isArtworkLoading,
+                                                                child,
+                                                              ) {
+                                                                return FutureBuilder<
+                                                                  bool
+                                                                >(
+                                                                  future: SharedPreferences.getInstance().then(
+                                                                    (prefs) =>
+                                                                        prefs.getBool(
+                                                                          'show_lyrics_on_cover',
+                                                                        ) ??
+                                                                        false,
+                                                                  ),
+                                                                  builder:
+                                                                      (
+                                                                        context,
+                                                                        snapshot,
+                                                                      ) {
+                                                                        final showLyricsOnCover =
+                                                                            snapshot.data ??
+                                                                            false;
+
+                                                                        return ValueListenableBuilder<
+                                                                          double
+                                                                        >(
+                                                                          valueListenable:
+                                                                              widget.panelPositionNotifier ??
+                                                                              const AlwaysStoppedAnimation(
+                                                                                1.0,
+                                                                              ),
+                                                                          builder:
+                                                                              (
+                                                                                context,
+                                                                                position,
+                                                                                child,
+                                                                              ) {
+                                                                                // La carátula aparece un poco antes que los botones (0.4 vs 0.7)
+                                                                                return Opacity(
+                                                                                  opacity:
+                                                                                      ((position -
+                                                                                                  0.35) /
+                                                                                              0.55)
+                                                                                          .clamp(
+                                                                                            0.0,
+                                                                                            1.0,
+                                                                                          ),
+                                                                                  child: child,
+                                                                                );
+                                                                              },
+                                                                          child: Stack(
+                                                                            children: [
+                                                                              AnimatedSwitcher(
+                                                                                duration: const Duration(
+                                                                                  milliseconds: 75,
+                                                                                ),
+                                                                                child: ArtworkCached(
+                                                                                  key: ValueKey(
+                                                                                    'player_art_${(currentMediaItem.extras?['songId'] ?? currentMediaItem.id).toString()}',
+                                                                                  ),
+                                                                                  artUri: currentMediaItem.artUri,
+                                                                                  size: artworkSize,
+                                                                                  borderRadius: BorderRadius.circular(
+                                                                                    artworkSize *
+                                                                                        0.04,
+                                                                                  ),
+                                                                                  showPlaceholderIcon: !_showLyrics,
+                                                                                  songPath:
+                                                                                      currentMediaItem.extras?['data']
+                                                                                          as String?,
+                                                                                  songId:
+                                                                                      currentMediaItem.extras?['songId']
+                                                                                          as int?,
+                                                                                ),
+                                                                              ),
+                                                                              // Indicadores de doble toque solo cuando las letras se muestran en modal y se ha hecho doble toque
+                                                                              if (!showLyricsOnCover &&
+                                                                                  _showDoubleTapIndicators)
+                                                                                Positioned.fill(
+                                                                                  child: Container(
+                                                                                    decoration: BoxDecoration(
+                                                                                      borderRadius: BorderRadius.circular(
+                                                                                        artworkSize *
+                                                                                            0.06,
+                                                                                      ),
+                                                                                    ),
+                                                                                    child: Stack(
+                                                                                      children: [
+                                                                                        // Indicador izquierdo (retroceder) - solo si se tocó el lado izquierdo
+                                                                                        if (_showLeftIndicator)
+                                                                                          Positioned(
+                                                                                            left: 20,
+                                                                                            top: 0,
+                                                                                            bottom: 0,
+                                                                                            child: AnimatedBuilder(
+                                                                                              animation: _fadeAnimation,
+                                                                                              builder:
+                                                                                                  (
+                                                                                                    context,
+                                                                                                    child,
+                                                                                                  ) {
+                                                                                                    return Opacity(
+                                                                                                      opacity: _fadeAnimation.value,
+                                                                                                      child: Center(
+                                                                                                        child: Container(
+                                                                                                          width: 50,
+                                                                                                          height: 50,
+                                                                                                          decoration: BoxDecoration(
+                                                                                                            color: Colors.black.withValues(
+                                                                                                              alpha: 0.5,
+                                                                                                            ),
+                                                                                                            shape: BoxShape.circle,
+                                                                                                          ),
+                                                                                                          child: Center(
+                                                                                                            child: Icon(
+                                                                                                              Icons.replay_10,
+                                                                                                              color: Colors.white,
+                                                                                                              size: 28,
+                                                                                                            ),
+                                                                                                          ),
+                                                                                                        ),
+                                                                                                      ),
+                                                                                                    );
+                                                                                                  },
+                                                                                            ),
+                                                                                          ),
+                                                                                        // Indicador derecho (avanzar) - solo si se tocó el lado derecho
+                                                                                        if (_showRightIndicator)
+                                                                                          Positioned(
+                                                                                            right: 20,
+                                                                                            top: 0,
+                                                                                            bottom: 0,
+                                                                                            child: AnimatedBuilder(
+                                                                                              animation: _fadeAnimation,
+                                                                                              builder:
+                                                                                                  (
+                                                                                                    context,
+                                                                                                    child,
+                                                                                                  ) {
+                                                                                                    return Opacity(
+                                                                                                      opacity: _fadeAnimation.value,
+                                                                                                      child: Center(
+                                                                                                        child: Container(
+                                                                                                          width: 50,
+                                                                                                          height: 50,
+                                                                                                          decoration: BoxDecoration(
+                                                                                                            color: Colors.black.withValues(
+                                                                                                              alpha: 0.5,
+                                                                                                            ),
+                                                                                                            shape: BoxShape.circle,
+                                                                                                          ),
+                                                                                                          child: Center(
+                                                                                                            child: Icon(
+                                                                                                              Icons.forward_10,
+                                                                                                              color: Colors.white,
+                                                                                                              size: 28,
+                                                                                                            ),
+                                                                                                          ),
+                                                                                                        ),
+                                                                                                      ),
+                                                                                                    );
+                                                                                                  },
+                                                                                            ),
+                                                                                          ),
+                                                                                      ],
+                                                                                    ),
+                                                                                  ),
+                                                                                ),
+                                                                            ],
+                                                                          ),
+                                                                        );
+                                                                      },
+                                                                );
+                                                              },
+                                                        ),
+                                                      ),
+                                                    );
+                                                  },
+                                                ),
+                                                if (_showLyrics)
+                                                  GestureDetector(
+                                                    onTap: () {
+                                                      // Toggle lyrics display when tapping on the lyrics overlay
                                                       setState(() {
                                                         _showLyrics =
                                                             !_showLyrics;
                                                       });
-
-                                                      // Always load lyrics when enabling, to ensure they match current song
-                                                      if (_showLyrics &&
-                                                          !_loadingLyrics) {
-                                                        _loadLyrics(
-                                                          currentMediaItem,
-                                                        );
-                                                      }
-                                                    }
-                                                    // Cuando las letras se muestran en modal, no hacer nada con el tap simple
-                                                    // Solo el doble toque funciona para controlar la reproducción
-                                                  },
-                                                  onDoubleTapDown: (details) async {
-                                                    // Solo activar cuando las letras se muestran en modal
-                                                    final prefs =
-                                                        await SharedPreferences.getInstance();
-                                                    final showLyricsOnCover =
-                                                        prefs.getBool(
-                                                          'show_lyrics_on_cover',
-                                                        ) ??
-                                                        false;
-
-                                                    if (!showLyricsOnCover) {
-                                                      // Obtener la posición del tap relativa al centro de la carátula
-                                                      if (!context.mounted) {
-                                                        return;
-                                                      }
-                                                      final RenderBox
-                                                      renderBox =
-                                                          context.findRenderObject()
-                                                              as RenderBox;
-                                                      final localPosition =
-                                                          renderBox.globalToLocal(
-                                                            details
-                                                                .globalPosition,
-                                                          );
-                                                      final centerX =
-                                                          renderBox.size.width /
-                                                          2;
-
-                                                      // Obtener la posición actual de reproducción
-                                                      final currentPosition =
-                                                          audioHandler
-                                                              .myHandler
-                                                              ?.player
-                                                              .position ??
-                                                          Duration.zero;
-
-                                                      // Cancelar timer anterior si existe
-                                                      _hideIndicatorsTimer
-                                                          ?.cancel();
-
-                                                      if (localPosition.dx <
-                                                          centerX) {
-                                                        // Doble toque en el lado izquierdo: retroceder 10 segundos
-                                                        setState(() {
-                                                          _showDoubleTapIndicators =
-                                                              true;
-                                                          _showLeftIndicator =
-                                                              true;
-                                                          _showRightIndicator =
-                                                              false;
-                                                        });
-
-                                                        // Aparecer inmediatamente (sin animación)
-                                                        _fadeController.value =
-                                                            1.0;
-
-                                                        final newPosition =
-                                                            currentPosition -
-                                                            const Duration(
-                                                              seconds: 10,
-                                                            );
-                                                        if (newPosition
-                                                                .inMilliseconds >=
-                                                            0) {
-                                                          audioHandler?.seek(
-                                                            newPosition,
-                                                          );
-                                                        } else {
-                                                          audioHandler?.seek(
-                                                            Duration.zero,
-                                                          );
-                                                        }
-                                                      } else {
-                                                        // Doble toque en el lado derecho: avanzar 10 segundos
-                                                        setState(() {
-                                                          _showDoubleTapIndicators =
-                                                              true;
-                                                          _showLeftIndicator =
-                                                              false;
-                                                          _showRightIndicator =
-                                                              true;
-                                                        });
-
-                                                        // Aparecer inmediatamente (sin animación)
-                                                        _fadeController.value =
-                                                            1.0;
-
-                                                        final newPosition =
-                                                            currentPosition +
-                                                            const Duration(
-                                                              seconds: 10,
-                                                            );
-                                                        // No hay límite superior, se puede avanzar más allá de la duración
-                                                        audioHandler?.seek(
-                                                          newPosition,
-                                                        );
-                                                      }
-
-                                                      // Iniciar animación de desvanecimiento después de 1.5 segundos
-                                                      _hideIndicatorsTimer = Timer(
-                                                        const Duration(
-                                                          milliseconds: 1500,
-                                                        ),
-                                                        () {
-                                                          if (mounted) {
-                                                            _fadeController.reverse().then((
-                                                              _,
-                                                            ) {
-                                                              if (mounted) {
-                                                                setState(() {
-                                                                  _showDoubleTapIndicators =
-                                                                      false;
-                                                                  _showLeftIndicator =
-                                                                      false;
-                                                                  _showRightIndicator =
-                                                                      false;
-                                                                });
-                                                              }
-                                                            });
-                                                          }
-                                                        },
-                                                      );
-                                                    }
-                                                  },
-                                                  child: RepaintBoundary(
-                                                    child: ValueListenableBuilder<bool>(
-                                                      valueListenable:
-                                                          _artworkLoadingNotifier,
-                                                      builder:
-                                                          (
-                                                            context,
-                                                            isArtworkLoading,
-                                                            child,
-                                                          ) {
-                                                            return FutureBuilder<
-                                                              bool
-                                                            >(
-                                                              future: SharedPreferences.getInstance().then(
-                                                                (prefs) =>
-                                                                    prefs.getBool(
-                                                                      'show_lyrics_on_cover',
-                                                                    ) ??
-                                                                    false,
-                                                              ),
-                                                              builder: (context, snapshot) {
-                                                                final showLyricsOnCover =
-                                                                    snapshot
-                                                                        .data ??
-                                                                    false;
-
-                                                                return ValueListenableBuilder<
-                                                                  double
-                                                                >(
-                                                                  valueListenable:
-                                                                      widget
-                                                                          .panelPositionNotifier ??
-                                                                      const AlwaysStoppedAnimation(
-                                                                        1.0,
-                                                                      ),
-                                                                  builder:
-                                                                      (
-                                                                        context,
-                                                                        position,
-                                                                        child,
-                                                                      ) {
-                                                                        // La carátula aparece un poco antes que los botones (0.4 vs 0.7)
-                                                                        return Opacity(
-                                                                          opacity:
-                                                                              ((position -
-                                                                                          0.35) /
-                                                                                      0.55)
-                                                                                  .clamp(
-                                                                                    0.0,
-                                                                                    1.0,
-                                                                                  ),
-                                                                          child:
-                                                                              child,
-                                                                        );
-                                                                      },
-                                                                  child: Stack(
-                                                                    children: [
-                                                                      AnimatedSwitcher(
-                                                                        duration: const Duration(
-                                                                          milliseconds:
-                                                                              75,
-                                                                        ),
-                                                                        child: ArtworkCached(
-                                                                          key: ValueKey(
-                                                                            'player_art_${(currentMediaItem.extras?['songId'] ?? currentMediaItem.id).toString()}',
-                                                                          ),
-                                                                          artUri:
-                                                                              currentMediaItem.artUri,
-                                                                          size:
-                                                                              artworkSize,
-                                                                          borderRadius: BorderRadius.circular(
-                                                                            artworkSize *
-                                                                                0.04,
-                                                                          ),
-                                                                          showPlaceholderIcon:
-                                                                              !_showLyrics,
-                                                                          songPath:
-                                                                              currentMediaItem.extras?['data']
-                                                                                  as String?,
-                                                                          songId:
-                                                                              currentMediaItem.extras?['songId']
-                                                                                  as int?,
-                                                                        ),
-                                                                      ),
-                                                                      // Indicadores de doble toque solo cuando las letras se muestran en modal y se ha hecho doble toque
-                                                                      if (!showLyricsOnCover &&
-                                                                          _showDoubleTapIndicators)
-                                                                        Positioned.fill(
-                                                                          child: Container(
-                                                                            decoration: BoxDecoration(
-                                                                              borderRadius: BorderRadius.circular(
-                                                                                artworkSize *
-                                                                                    0.06,
-                                                                              ),
-                                                                            ),
-                                                                            child: Stack(
-                                                                              children: [
-                                                                                // Indicador izquierdo (retroceder) - solo si se tocó el lado izquierdo
-                                                                                if (_showLeftIndicator)
-                                                                                  Positioned(
-                                                                                    left: 20,
-                                                                                    top: 0,
-                                                                                    bottom: 0,
-                                                                                    child: AnimatedBuilder(
-                                                                                      animation: _fadeAnimation,
-                                                                                      builder:
-                                                                                          (
-                                                                                            context,
-                                                                                            child,
-                                                                                          ) {
-                                                                                            return Opacity(
-                                                                                              opacity: _fadeAnimation.value,
-                                                                                              child: Center(
-                                                                                                child: Container(
-                                                                                                  width: 50,
-                                                                                                  height: 50,
-                                                                                                  decoration: BoxDecoration(
-                                                                                                    color: Colors.black.withValues(
-                                                                                                      alpha: 0.5,
-                                                                                                    ),
-                                                                                                    shape: BoxShape.circle,
-                                                                                                  ),
-                                                                                                  child: Center(
-                                                                                                    child: Icon(
-                                                                                                      Icons.replay_10,
-                                                                                                      color: Colors.white,
-                                                                                                      size: 28,
-                                                                                                    ),
-                                                                                                  ),
-                                                                                                ),
-                                                                                              ),
-                                                                                            );
-                                                                                          },
-                                                                                    ),
-                                                                                  ),
-                                                                                // Indicador derecho (avanzar) - solo si se tocó el lado derecho
-                                                                                if (_showRightIndicator)
-                                                                                  Positioned(
-                                                                                    right: 20,
-                                                                                    top: 0,
-                                                                                    bottom: 0,
-                                                                                    child: AnimatedBuilder(
-                                                                                      animation: _fadeAnimation,
-                                                                                      builder:
-                                                                                          (
-                                                                                            context,
-                                                                                            child,
-                                                                                          ) {
-                                                                                            return Opacity(
-                                                                                              opacity: _fadeAnimation.value,
-                                                                                              child: Center(
-                                                                                                child: Container(
-                                                                                                  width: 50,
-                                                                                                  height: 50,
-                                                                                                  decoration: BoxDecoration(
-                                                                                                    color: Colors.black.withValues(
-                                                                                                      alpha: 0.5,
-                                                                                                    ),
-                                                                                                    shape: BoxShape.circle,
-                                                                                                  ),
-                                                                                                  child: Center(
-                                                                                                    child: Icon(
-                                                                                                      Icons.forward_10,
-                                                                                                      color: Colors.white,
-                                                                                                      size: 28,
-                                                                                                    ),
-                                                                                                  ),
-                                                                                                ),
-                                                                                              ),
-                                                                                            );
-                                                                                          },
-                                                                                    ),
-                                                                                  ),
-                                                                              ],
-                                                                            ),
-                                                                          ),
-                                                                        ),
-                                                                    ],
-                                                                  ),
-                                                                );
-                                                              },
-                                                            );
-                                                          },
-                                                    ),
-                                                  ),
-                                                );
-                                              },
-                                            ),
-                                            if (_showLyrics)
-                                              GestureDetector(
-                                                onTap: () {
-                                                  // Toggle lyrics display when tapping on the lyrics overlay
-                                                  setState(() {
-                                                    _showLyrics = !_showLyrics;
-                                                  });
-                                                },
-                                                child: ClipRRect(
-                                                  borderRadius:
-                                                      BorderRadius.circular(
-                                                        artworkSize * 0.04,
-                                                      ),
-                                                  child: RepaintBoundary(
-                                                    child: Container(
-                                                      width: artworkSize,
-                                                      height: artworkSize,
-                                                      decoration: BoxDecoration(
-                                                        color: Colors.black
-                                                            .withAlpha(
-                                                              (0.75 * 255)
-                                                                  .toInt(),
-                                                            ),
-                                                        borderRadius:
-                                                            BorderRadius.circular(
-                                                              artworkSize *
-                                                                  0.04,
-                                                            ),
-                                                      ),
-                                                      alignment:
-                                                          Alignment.center,
-                                                      padding:
-                                                          const EdgeInsets.all(
-                                                            18,
+                                                    },
+                                                    child: ClipRRect(
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            artworkSize * 0.04,
                                                           ),
-                                                      child: _loadingLyrics
-                                                          ? Center(
-                                                              child: LoadingIndicator(
-                                                                activeIndicatorColor:
-                                                                    Colors
-                                                                        .white,
+                                                      child: RepaintBoundary(
+                                                        child: Container(
+                                                          width: artworkSize,
+                                                          height: artworkSize,
+                                                          decoration: BoxDecoration(
+                                                            color: Colors.black
+                                                                .withAlpha(
+                                                                  (0.75 * 255)
+                                                                      .toInt(),
+                                                                ),
+                                                            borderRadius:
+                                                                BorderRadius.circular(
+                                                                  artworkSize *
+                                                                      0.04,
+                                                                ),
+                                                          ),
+                                                          alignment:
+                                                              Alignment.center,
+                                                          padding:
+                                                              const EdgeInsets.all(
+                                                                18,
                                                               ),
-                                                            )
-                                                          : _lyricLines.isEmpty
-                                                          ? _noConnection
-                                                                ? Column(
-                                                                    mainAxisAlignment:
-                                                                        MainAxisAlignment
-                                                                            .center,
-                                                                    children: [
-                                                                      Text(
-                                                                        LocaleProvider.tr(
-                                                                          'lyrics_no_connection',
-                                                                        ),
+                                                          child: _loadingLyrics
+                                                              ? Center(
+                                                                  child: LoadingIndicator(
+                                                                    activeIndicatorColor:
+                                                                        Colors
+                                                                            .white,
+                                                                  ),
+                                                                )
+                                                              : _lyricLines
+                                                                    .isEmpty
+                                                              ? _noConnection
+                                                                    ? Column(
+                                                                        mainAxisAlignment:
+                                                                            MainAxisAlignment.center,
+                                                                        children: [
+                                                                          Text(
+                                                                            LocaleProvider.tr(
+                                                                              'lyrics_no_connection',
+                                                                            ),
+                                                                            style: const TextStyle(
+                                                                              color: Colors.white70,
+                                                                              fontSize: 16,
+                                                                            ),
+                                                                            textAlign:
+                                                                                TextAlign.center,
+                                                                          ),
+                                                                        ],
+                                                                      )
+                                                                    : Text(
+                                                                        _apiUnavailable
+                                                                            ? LocaleProvider.tr(
+                                                                                'lyrics_api_unavailable',
+                                                                              )
+                                                                            : (_syncedLyrics ??
+                                                                                  LocaleProvider.tr(
+                                                                                    'lyrics_not_found',
+                                                                                  )),
                                                                         style: const TextStyle(
                                                                           color:
-                                                                              Colors.white70,
+                                                                              Colors.white,
                                                                           fontSize:
                                                                               16,
                                                                         ),
                                                                         textAlign:
                                                                             TextAlign.center,
-                                                                      ),
-                                                                    ],
-                                                                  )
-                                                                : Text(
-                                                                    _apiUnavailable
-                                                                        ? LocaleProvider.tr(
-                                                                            'lyrics_api_unavailable',
-                                                                          )
-                                                                        : (_syncedLyrics ??
-                                                                              LocaleProvider.tr(
-                                                                                'lyrics_not_found',
-                                                                              )),
-                                                                    style: const TextStyle(
-                                                                      color: Colors
-                                                                          .white,
-                                                                      fontSize:
-                                                                          16,
-                                                                    ),
-                                                                    textAlign:
-                                                                        TextAlign
-                                                                            .center,
-                                                                  )
-                                                          : StreamBuilder<
-                                                              Duration
-                                                            >(
-                                                              stream: audioHandler
-                                                                  .myHandler
-                                                                  ?.positionStream,
-                                                              builder:
-                                                                  (
-                                                                    context,
-                                                                    posSnapshot,
-                                                                  ) {
-                                                                    final position =
-                                                                        posSnapshot
-                                                                            .data ??
-                                                                        Duration
-                                                                            .zero;
-                                                                    int idx = 0;
-                                                                    for (
-                                                                      int i = 0;
-                                                                      i <
-                                                                          _lyricLines
-                                                                              .length;
-                                                                      i++
-                                                                    ) {
-                                                                      if (position >=
-                                                                          _lyricLines[i]
-                                                                              .time) {
-                                                                        idx = i;
-                                                                      } else {
-                                                                        break;
-                                                                      }
-                                                                    }
-                                                                    // Actualizar índice directamente sin setState
-                                                                    if (_currentLyricIndex !=
-                                                                        idx) {
-                                                                      _currentLyricIndex =
-                                                                          idx;
-                                                                    }
-                                                                    return VerticalMarqueeLyrics(
-                                                                      lyricLines:
-                                                                          _lyricLines,
-                                                                      currentLyricIndex:
-                                                                          _currentLyricIndex,
-                                                                      context:
-                                                                          context,
-                                                                      artworkSize:
-                                                                          artworkSize,
-                                                                    );
-                                                                  },
-                                                            ),
+                                                                      )
+                                                              : StreamBuilder<
+                                                                  Duration
+                                                                >(
+                                                                  stream: audioHandler
+                                                                      .myHandler
+                                                                      ?.positionStream,
+                                                                  builder:
+                                                                      (
+                                                                        context,
+                                                                        posSnapshot,
+                                                                      ) {
+                                                                        final position =
+                                                                            posSnapshot.data ??
+                                                                            Duration.zero;
+                                                                        int
+                                                                        idx = 0;
+                                                                        for (
+                                                                          int
+                                                                          i = 0;
+                                                                          i <
+                                                                              _lyricLines.length;
+                                                                          i++
+                                                                        ) {
+                                                                          if (position >=
+                                                                              _lyricLines[i].time) {
+                                                                            idx =
+                                                                                i;
+                                                                          } else {
+                                                                            break;
+                                                                          }
+                                                                        }
+                                                                        // Actualizar índice directamente sin setState
+                                                                        if (_currentLyricIndex !=
+                                                                            idx) {
+                                                                          _currentLyricIndex =
+                                                                              idx;
+                                                                        }
+                                                                        return VerticalMarqueeLyrics(
+                                                                          lyricLines:
+                                                                              _lyricLines,
+                                                                          currentLyricIndex:
+                                                                              _currentLyricIndex,
+                                                                          context:
+                                                                              context,
+                                                                          artworkSize:
+                                                                              artworkSize,
+                                                                        );
+                                                                      },
+                                                                ),
+                                                        ),
+                                                      ),
                                                     ),
                                                   ),
-                                                ),
+                                              ],
+                                            ),
+                                            const SizedBox(height: 20),
+                                            SizedBox(
+                                              width: width * 0.85,
+                                              child: TitleMarquee(
+                                                text: currentMediaItem.title,
+                                                maxWidth: artworkSize,
+                                                style: Theme.of(context)
+                                                    .textTheme
+                                                    .headlineSmall
+                                                    ?.copyWith(
+                                                      color: Theme.of(
+                                                        context,
+                                                      ).colorScheme.onSurface,
+                                                      fontSize:
+                                                          buttonFontSize + 0.75,
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                    ),
                                               ),
-                                          ],
-                                        ),
-                                        const SizedBox(height: 20),
-                                        SizedBox(
-                                          width: width * 0.85,
-                                          child: TitleMarquee(
-                                            text: currentMediaItem.title,
-                                            maxWidth: artworkSize,
-                                            style: Theme.of(context)
-                                                .textTheme
-                                                .headlineSmall
-                                                ?.copyWith(
-                                                  color: Theme.of(
-                                                    context,
-                                                  ).colorScheme.onSurface,
-                                                  fontSize:
-                                                      buttonFontSize + 0.75,
-                                                  fontWeight: FontWeight.bold,
-                                                ),
-                                          ),
-                                        ),
-                                        SizedBox(height: height * 0.0001),
-                                        SizedBox(
-                                          width: width * 0.85,
-                                          child: Row(
-                                            children: [
-                                              Expanded(
-                                                child: GestureDetector(
-                                                  onTap: () {
-                                                    final name =
-                                                        (currentMediaItem
-                                                                    .artist ??
-                                                                '')
-                                                            .trim();
-                                                    if (name.isEmpty) return;
-                                                    Navigator.of(context).push(
-                                                      PageRouteBuilder(
-                                                        pageBuilder:
-                                                            (
-                                                              context,
-                                                              animation,
-                                                              secondaryAnimation,
-                                                            ) => ArtistScreen(
-                                                              artistName: name,
-                                                            ),
-                                                        transitionsBuilder:
-                                                            (
-                                                              context,
-                                                              animation,
-                                                              secondaryAnimation,
-                                                              child,
-                                                            ) {
-                                                              const begin =
-                                                                  Offset(
-                                                                    1.0,
-                                                                    0.0,
-                                                                  );
-                                                              const end =
-                                                                  Offset.zero;
-                                                              const curve =
-                                                                  Curves.ease;
-                                                              final tween =
-                                                                  Tween(
-                                                                    begin:
-                                                                        begin,
-                                                                    end: end,
-                                                                  ).chain(
-                                                                    CurveTween(
-                                                                      curve:
-                                                                          curve,
-                                                                    ),
-                                                                  );
-                                                              return SlideTransition(
-                                                                position:
-                                                                    animation
+                                            ),
+                                            SizedBox(height: height * 0.0001),
+                                            SizedBox(
+                                              width: width * 0.85,
+                                              child: Row(
+                                                children: [
+                                                  Expanded(
+                                                    child: GestureDetector(
+                                                      onTap: () async {
+                                                        final videoId =
+                                                            (currentMediaItem
+                                                                        .extras?['videoId']
+                                                                        ?.toString() ??
+                                                                    '')
+                                                                .trim();
+
+                                                        var name =
+                                                            (currentMediaItem
+                                                                        .artist ??
+                                                                    '')
+                                                                .trim();
+
+                                                        if (videoId
+                                                            .isNotEmpty) {
+                                                          final historyItem =
+                                                              await DownloadHistoryHive.getDownloadByVideoId(
+                                                                videoId,
+                                                              );
+                                                          final hiveArtist =
+                                                              historyItem
+                                                                  ?.artist
+                                                                  .trim();
+                                                          if (hiveArtist !=
+                                                                  null &&
+                                                              hiveArtist
+                                                                  .isNotEmpty) {
+                                                            name = hiveArtist;
+                                                          }
+                                                        }
+
+                                                        if (name.isEmpty) {
+                                                          return;
+                                                        }
+
+                                                        if (!context.mounted) {
+                                                          return;
+                                                        }
+
+                                                        Navigator.of(
+                                                          context,
+                                                        ).push(
+                                                          PageRouteBuilder(
+                                                            pageBuilder:
+                                                                (
+                                                                  context,
+                                                                  animation,
+                                                                  secondaryAnimation,
+                                                                ) => ArtistScreen(
+                                                                  artistName:
+                                                                      name,
+                                                                ),
+                                                            transitionsBuilder:
+                                                                (
+                                                                  context,
+                                                                  animation,
+                                                                  secondaryAnimation,
+                                                                  child,
+                                                                ) {
+                                                                  const begin =
+                                                                      Offset(
+                                                                        1.0,
+                                                                        0.0,
+                                                                      );
+                                                                  const end =
+                                                                      Offset
+                                                                          .zero;
+                                                                  const curve =
+                                                                      Curves
+                                                                          .ease;
+                                                                  final tween =
+                                                                      Tween(
+                                                                        begin:
+                                                                            begin,
+                                                                        end:
+                                                                            end,
+                                                                      ).chain(
+                                                                        CurveTween(
+                                                                          curve:
+                                                                              curve,
+                                                                        ),
+                                                                      );
+                                                                  return SlideTransition(
+                                                                    position: animation
                                                                         .drive(
                                                                           tween,
                                                                         ),
-                                                                child: child,
-                                                              );
-                                                            },
-                                                      ),
-                                                    );
-                                                  },
-                                                  child: Text(
-                                                    (currentMediaItem.artist ==
-                                                                null ||
-                                                            currentMediaItem
-                                                                .artist!
-                                                                .trim()
-                                                                .isEmpty)
-                                                        ? LocaleProvider.tr(
-                                                            'unknown_artist',
-                                                          )
-                                                        : currentMediaItem
-                                                              .artist!,
-                                                    style: Theme.of(context)
-                                                        .textTheme
-                                                        .titleMedium
-                                                        ?.copyWith(
-                                                          color:
-                                                              Theme.of(context)
-                                                                  .colorScheme
-                                                                  .onSurface
-                                                                  .withValues(
-                                                                    alpha: 0.8,
-                                                                  ),
-                                                          fontWeight:
-                                                              FontWeight.w400,
-                                                          fontSize: 14,
-                                                        ),
-                                                    maxLines: 1,
-                                                    overflow:
-                                                        TextOverflow.ellipsis,
-                                                    textAlign: TextAlign.left,
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                        // Barra de progreso + tiempos
-                                        if (!is16by9 && !isSmallScreen) ...[
-                                          const SizedBox(height: 16),
-                                          LayoutBuilder(
-                                            builder: (context, constraints) {
-                                              final isSmall =
-                                                  constraints.maxWidth < 380;
-                                              return SizedBox(
-                                                width: width,
-                                                child: Center(
-                                                  child: SingleChildScrollView(
-                                                    scrollDirection:
-                                                        Axis.horizontal,
-                                                    child: Padding(
-                                                      padding:
-                                                          const EdgeInsets.symmetric(
-                                                            horizontal: 10,
+                                                                    child:
+                                                                        child,
+                                                                  );
+                                                                },
                                                           ),
-                                                      child: Row(
-                                                        mainAxisAlignment:
-                                                            MainAxisAlignment
-                                                                .start,
-                                                        children: [
-                                                          // Botón Favoritos
-                                                          ValueListenableBuilder<
-                                                            bool
-                                                          >(
-                                                            valueListenable:
-                                                                playLoadingNotifier,
-                                                            builder: (context, isLoading, _) {
-                                                              return Container(
+                                                        );
+                                                      },
+                                                      child: Text(
+                                                        (currentMediaItem
+                                                                        .artist ==
+                                                                    null ||
+                                                                currentMediaItem
+                                                                    .artist!
+                                                                    .trim()
+                                                                    .isEmpty)
+                                                            ? LocaleProvider.tr(
+                                                                'unknown_artist',
+                                                              )
+                                                            : currentMediaItem
+                                                                  .artist!,
+                                                        style: Theme.of(context)
+                                                            .textTheme
+                                                            .titleMedium
+                                                            ?.copyWith(
+                                                              color:
+                                                                  Theme.of(
+                                                                        context,
+                                                                      )
+                                                                      .colorScheme
+                                                                      .onSurface
+                                                                      .withValues(
+                                                                        alpha:
+                                                                            0.8,
+                                                                      ),
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .w400,
+                                                              fontSize: 14,
+                                                            ),
+                                                        maxLines: 1,
+                                                        overflow: TextOverflow
+                                                            .ellipsis,
+                                                        textAlign:
+                                                            TextAlign.left,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      if (!is16by9 && !isSmallScreen) ...[
+                                        const SizedBox(height: 16),
+                                        LayoutBuilder(
+                                          builder: (context, constraints) {
+                                            final isSmall =
+                                                constraints.maxWidth < 380;
+                                            return SizedBox(
+                                              width: width,
+                                              child: Center(
+                                                child: SingleChildScrollView(
+                                                  scrollDirection:
+                                                      Axis.horizontal,
+                                                  child: Padding(
+                                                    padding:
+                                                        const EdgeInsets.symmetric(
+                                                          horizontal: 15,
+                                                        ),
+                                                    child: Row(
+                                                      mainAxisAlignment:
+                                                          MainAxisAlignment
+                                                              .start,
+                                                      children: [
+                                                        // Botón Favoritos
+                                                        ValueListenableBuilder<
+                                                          bool
+                                                        >(
+                                                          valueListenable:
+                                                              playLoadingNotifier,
+                                                          builder: (context, isLoading, _) {
+                                                            return Container(
+                                                              decoration: BoxDecoration(
+                                                                color:
+                                                                    Theme.of(
+                                                                          context,
+                                                                        )
+                                                                        .colorScheme
+                                                                        .primary
+                                                                        .withValues(
+                                                                          alpha:
+                                                                              0.08,
+                                                                        ),
+                                                                borderRadius:
+                                                                    BorderRadius.circular(
+                                                                      26,
+                                                                    ),
+                                                              ),
+                                                              margin:
+                                                                  EdgeInsets.only(
+                                                                    right:
+                                                                        isSmall
+                                                                        ? 8
+                                                                        : 12,
+                                                                  ),
+                                                              child: Row(
+                                                                mainAxisSize:
+                                                                    MainAxisSize
+                                                                        .min,
+                                                                children: [
+                                                                  AnimatedTapButton(
+                                                                    onTap: () {
+                                                                      if (_likeButtonKey
+                                                                              .currentState !=
+                                                                          null) {
+                                                                        _likeButtonKey
+                                                                            .currentState!
+                                                                            .onTap();
+                                                                      }
+                                                                    },
+                                                                    child: Padding(
+                                                                      padding: EdgeInsets.only(
+                                                                        left:
+                                                                            isSmall
+                                                                            ? 12
+                                                                            : 14,
+                                                                        top: 6,
+                                                                        bottom:
+                                                                            6,
+                                                                        right:
+                                                                            4,
+                                                                      ),
+                                                                      child: Row(
+                                                                        mainAxisSize:
+                                                                            MainAxisSize.min,
+                                                                        children: [
+                                                                          IgnorePointer(
+                                                                            child: LikeButton(
+                                                                              key: _likeButtonKey,
+                                                                              isLiked: _isCurrentFavorite,
+                                                                              size: isSmall
+                                                                                  ? 20
+                                                                                  : 24,
+                                                                              padding: EdgeInsets.zero,
+                                                                              animationDuration: const Duration(
+                                                                                milliseconds: 800,
+                                                                              ),
+                                                                              circleColor: CircleColor(
+                                                                                start:
+                                                                                    Theme.of(
+                                                                                          context,
+                                                                                        ).brightness ==
+                                                                                        Brightness.dark
+                                                                                    ? Colors.white
+                                                                                    : Colors.black,
+                                                                                end:
+                                                                                    Theme.of(
+                                                                                          context,
+                                                                                        ).brightness ==
+                                                                                        Brightness.dark
+                                                                                    ? Colors.white
+                                                                                    : Colors.black,
+                                                                              ),
+                                                                              bubblesColor: BubblesColor(
+                                                                                dotPrimaryColor: Theme.of(
+                                                                                  context,
+                                                                                ).colorScheme.primary,
+                                                                                dotSecondaryColor:
+                                                                                    Theme.of(
+                                                                                          context,
+                                                                                        ).brightness ==
+                                                                                        Brightness.dark
+                                                                                    ? Colors.white
+                                                                                    : Colors.black,
+                                                                              ),
+                                                                              likeBuilder:
+                                                                                  (
+                                                                                    bool isLiked,
+                                                                                  ) {
+                                                                                    return Icon(
+                                                                                      isLiked
+                                                                                          ? Icons.favorite_rounded
+                                                                                          : Icons.favorite_border_rounded,
+                                                                                      color: Theme.of(
+                                                                                        context,
+                                                                                      ).colorScheme.onSurface,
+                                                                                      size: isSmall
+                                                                                          ? 20
+                                                                                          : 24,
+                                                                                    );
+                                                                                  },
+                                                                              onTap:
+                                                                                  (
+                                                                                    isLiked,
+                                                                                  ) async {
+                                                                                    if (isLoading) return false;
+
+                                                                                    final path =
+                                                                                        currentMediaItem.extras?['data'] ??
+                                                                                        '';
+                                                                                    if (path.isEmpty) return false;
+
+                                                                                    if (isLiked) {
+                                                                                      await FavoritesDB().removeFavorite(
+                                                                                        path,
+                                                                                      );
+                                                                                      favoritesShouldReload.value = !favoritesShouldReload.value;
+                                                                                      if (!mounted) return false;
+                                                                                      setState(
+                                                                                        () {
+                                                                                          _isCurrentFavorite = false;
+                                                                                        },
+                                                                                      );
+                                                                                      return false;
+                                                                                    } else {
+                                                                                      final allSongs = await _audioQuery.querySongs();
+                                                                                      final songList = allSongs
+                                                                                          .where(
+                                                                                            (
+                                                                                              s,
+                                                                                            ) =>
+                                                                                                s.data ==
+                                                                                                path,
+                                                                                          )
+                                                                                          .toList();
+                                                                                      if (songList.isEmpty) {
+                                                                                        if (!context.mounted) return false;
+                                                                                        ScaffoldMessenger.of(
+                                                                                          context,
+                                                                                        ).showSnackBar(
+                                                                                          SnackBar(
+                                                                                            content: Text(
+                                                                                              LocaleProvider.tr(
+                                                                                                'song_not_found',
+                                                                                              ),
+                                                                                            ),
+                                                                                          ),
+                                                                                        );
+                                                                                        return false;
+                                                                                      }
+
+                                                                                      // Si se marca como favorito, quitar de dislikes automáticamente
+                                                                                      if (_isCurrentDisliked) {
+                                                                                        await DislikesDB().removeDislike(
+                                                                                          path,
+                                                                                        );
+                                                                                        dislikesShouldReload.value = !dislikesShouldReload.value;
+                                                                                        if (mounted) {
+                                                                                          setState(
+                                                                                            () {
+                                                                                              _isCurrentDisliked = false;
+                                                                                            },
+                                                                                          );
+                                                                                        }
+                                                                                      }
+
+                                                                                      await _addToFavorites(
+                                                                                        songList.first,
+                                                                                      );
+                                                                                      favoritesShouldReload.value = !favoritesShouldReload.value;
+                                                                                      if (!mounted) return false;
+                                                                                      setState(
+                                                                                        () {
+                                                                                          _isCurrentFavorite = true;
+                                                                                        },
+                                                                                      );
+                                                                                      return true;
+                                                                                    }
+                                                                                  },
+                                                                            ),
+                                                                          ),
+                                                                          SizedBox(
+                                                                            width:
+                                                                                isSmall
+                                                                                ? 6
+                                                                                : 8,
+                                                                          ),
+                                                                          Text(
+                                                                            LocaleProvider.tr(
+                                                                              'favorites',
+                                                                            ),
+                                                                            style: TextStyle(
+                                                                              color: Theme.of(
+                                                                                context,
+                                                                              ).colorScheme.onSurface,
+                                                                              fontWeight: FontWeight.w600,
+                                                                              fontSize: isSmall
+                                                                                  ? 12
+                                                                                  : 14,
+                                                                            ),
+                                                                          ),
+                                                                        ],
+                                                                      ),
+                                                                    ),
+                                                                  ),
+                                                                  Padding(
+                                                                    padding:
+                                                                        const EdgeInsets.symmetric(
+                                                                          horizontal:
+                                                                              4,
+                                                                        ),
+                                                                    child: Text(
+                                                                      ' | ',
+                                                                      style: TextStyle(
+                                                                        color:
+                                                                            Theme.of(
+                                                                              context,
+                                                                            ).colorScheme.onSurface.withValues(
+                                                                              alpha: 0.3,
+                                                                            ),
+                                                                        fontSize:
+                                                                            isSmall
+                                                                            ? 14
+                                                                            : 16,
+                                                                      ),
+                                                                    ),
+                                                                  ),
+                                                                  AnimatedTapButton(
+                                                                    onTap:
+                                                                        isLoading
+                                                                        ? () {}
+                                                                        : _toggleDislike,
+                                                                    child: Padding(
+                                                                      padding: EdgeInsets.only(
+                                                                        left: 4,
+                                                                        top: 8,
+                                                                        bottom:
+                                                                            8,
+                                                                        right:
+                                                                            isSmall
+                                                                            ? 12
+                                                                            : 14,
+                                                                      ),
+                                                                      child: Icon(
+                                                                        Symbols
+                                                                            .heart_broken,
+                                                                        fill:
+                                                                            _isCurrentDisliked
+                                                                            ? 1.0
+                                                                            : 0.0,
+                                                                        size:
+                                                                            isSmall
+                                                                            ? 20
+                                                                            : 24,
+                                                                        color: Theme.of(
+                                                                          context,
+                                                                        ).colorScheme.onSurface,
+                                                                      ),
+                                                                    ),
+                                                                  ),
+                                                                ],
+                                                              ),
+                                                            );
+                                                          },
+                                                        ),
+
+                                                        // Botón Letra
+                                                        ValueListenableBuilder<
+                                                          bool
+                                                        >(
+                                                          valueListenable:
+                                                              playLoadingNotifier,
+                                                          builder: (context, isLoading, _) {
+                                                            return AnimatedTapButton(
+                                                              onTap: isLoading
+                                                                  ? () {}
+                                                                  : () async {
+                                                                      // Check if lyrics on cover is enabled
+                                                                      final prefs =
+                                                                          await SharedPreferences.getInstance();
+                                                                      final showLyricsOnCover =
+                                                                          prefs.getBool(
+                                                                            'show_lyrics_on_cover',
+                                                                          ) ??
+                                                                          false;
+
+                                                                      if (showLyricsOnCover) {
+                                                                        // Original behavior: toggle lyrics display on cover
+                                                                        if (!_showLyrics) {
+                                                                          setState(
+                                                                            () {
+                                                                              _showLyrics = true;
+                                                                            },
+                                                                          );
+                                                                          await _loadLyrics(
+                                                                            currentMediaItem,
+                                                                          );
+                                                                        } else {
+                                                                          setState(
+                                                                            () {
+                                                                              _showLyrics = false;
+                                                                            },
+                                                                          );
+                                                                        }
+                                                                      } else {
+                                                                        // New behavior: show lyrics in modal
+                                                                        if (!context
+                                                                            .mounted) {
+                                                                          return;
+                                                                        }
+                                                                        _showLyricsModal(
+                                                                          context,
+                                                                          currentMediaItem,
+                                                                        );
+                                                                      }
+                                                                    },
+                                                              child: Container(
                                                                 decoration: BoxDecoration(
                                                                   color:
                                                                       Theme.of(
@@ -3594,6 +4139,15 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                                         26,
                                                                       ),
                                                                 ),
+                                                                padding:
+                                                                    EdgeInsets.symmetric(
+                                                                      horizontal:
+                                                                          isSmall
+                                                                          ? 14
+                                                                          : 20,
+                                                                      vertical:
+                                                                          6,
+                                                                    ),
                                                                 margin:
                                                                     EdgeInsets.only(
                                                                       right:
@@ -3602,1243 +4156,821 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                                           : 12,
                                                                     ),
                                                                 child: Row(
-                                                                  mainAxisSize:
-                                                                      MainAxisSize
-                                                                          .min,
                                                                   children: [
-                                                                    AnimatedTapButton(
-                                                                      onTap: () {
-                                                                        if (_likeButtonKey.currentState !=
-                                                                            null) {
-                                                                          _likeButtonKey
-                                                                              .currentState!
-                                                                              .onTap();
-                                                                        }
-                                                                      },
-                                                                      child: Padding(
-                                                                        padding: EdgeInsets.only(
-                                                                          left:
-                                                                              isSmall
-                                                                              ? 12
-                                                                              : 14,
-                                                                          top:
-                                                                              8,
-                                                                          bottom:
-                                                                              8,
-                                                                          right:
-                                                                              4,
-                                                                        ),
-                                                                        child: Row(
-                                                                          mainAxisSize:
-                                                                              MainAxisSize.min,
-                                                                          children: [
-                                                                            IgnorePointer(
-                                                                              child: LikeButton(
-                                                                                key: _likeButtonKey,
-                                                                                isLiked: _isCurrentFavorite,
-                                                                                size: isSmall
-                                                                                    ? 20
-                                                                                    : 24,
-                                                                                padding: EdgeInsets.zero,
-                                                                                animationDuration: const Duration(
-                                                                                  milliseconds: 800,
-                                                                                ),
-                                                                                circleColor: CircleColor(
-                                                                                  start:
-                                                                                      Theme.of(
-                                                                                            context,
-                                                                                          ).brightness ==
-                                                                                          Brightness.dark
-                                                                                      ? Colors.white
-                                                                                      : Colors.black,
-                                                                                  end:
-                                                                                      Theme.of(
-                                                                                            context,
-                                                                                          ).brightness ==
-                                                                                          Brightness.dark
-                                                                                      ? Colors.white
-                                                                                      : Colors.black,
-                                                                                ),
-                                                                                bubblesColor: BubblesColor(
-                                                                                  dotPrimaryColor: Theme.of(
-                                                                                    context,
-                                                                                  ).colorScheme.primary,
-                                                                                  dotSecondaryColor:
-                                                                                      Theme.of(
-                                                                                            context,
-                                                                                          ).brightness ==
-                                                                                          Brightness.dark
-                                                                                      ? Colors.white
-                                                                                      : Colors.black,
-                                                                                ),
-                                                                                likeBuilder:
-                                                                                    (
-                                                                                      bool isLiked,
-                                                                                    ) {
-                                                                                      return Icon(
-                                                                                        isLiked
-                                                                                            ? Icons.favorite_rounded
-                                                                                            : Icons.favorite_border_rounded,
-                                                                                        color: Theme.of(
-                                                                                          context,
-                                                                                        ).colorScheme.onSurface,
-                                                                                        size: isSmall
-                                                                                            ? 20
-                                                                                            : 24,
-                                                                                      );
-                                                                                    },
-                                                                                onTap:
-                                                                                    (
-                                                                                      isLiked,
-                                                                                    ) async {
-                                                                                      if (isLoading) return false;
-
-                                                                                      final path =
-                                                                                          currentMediaItem.extras?['data'] ??
-                                                                                          '';
-                                                                                      if (path.isEmpty) return false;
-
-                                                                                      if (isLiked) {
-                                                                                        await FavoritesDB().removeFavorite(
-                                                                                          path,
-                                                                                        );
-                                                                                        favoritesShouldReload.value = !favoritesShouldReload.value;
-                                                                                        if (!mounted) return false;
-                                                                                        setState(
-                                                                                          () {
-                                                                                            _isCurrentFavorite = false;
-                                                                                          },
-                                                                                        );
-                                                                                        return false;
-                                                                                      } else {
-                                                                                        final allSongs = await _audioQuery.querySongs();
-                                                                                        final songList = allSongs
-                                                                                            .where(
-                                                                                              (
-                                                                                                s,
-                                                                                              ) =>
-                                                                                                  s.data ==
-                                                                                                  path,
-                                                                                            )
-                                                                                            .toList();
-                                                                                        if (songList.isEmpty) {
-                                                                                          if (!context.mounted) return false;
-                                                                                          ScaffoldMessenger.of(
-                                                                                            context,
-                                                                                          ).showSnackBar(
-                                                                                            SnackBar(
-                                                                                              content: Text(
-                                                                                                LocaleProvider.tr(
-                                                                                                  'song_not_found',
-                                                                                                ),
-                                                                                              ),
-                                                                                            ),
-                                                                                          );
-                                                                                          return false;
-                                                                                        }
-
-                                                                                        // Si se marca como favorito, quitar de dislikes automáticamente
-                                                                                        if (_isCurrentDisliked) {
-                                                                                          await DislikesDB().removeDislike(
-                                                                                            path,
-                                                                                          );
-                                                                                          dislikesShouldReload.value = !dislikesShouldReload.value;
-                                                                                          if (mounted) {
-                                                                                            setState(
-                                                                                              () {
-                                                                                                _isCurrentDisliked = false;
-                                                                                              },
-                                                                                            );
-                                                                                          }
-                                                                                        }
-
-                                                                                        await _addToFavorites(
-                                                                                          songList.first,
-                                                                                        );
-                                                                                        favoritesShouldReload.value = !favoritesShouldReload.value;
-                                                                                        if (!mounted) return false;
-                                                                                        setState(
-                                                                                          () {
-                                                                                            _isCurrentFavorite = true;
-                                                                                          },
-                                                                                        );
-                                                                                        return true;
-                                                                                      }
-                                                                                    },
-                                                                              ),
-                                                                            ),
-                                                                            SizedBox(
-                                                                              width: isSmall
-                                                                                  ? 6
-                                                                                  : 8,
-                                                                            ),
-                                                                            Text(
-                                                                              LocaleProvider.tr(
-                                                                                'favorites',
-                                                                              ),
-                                                                              style: TextStyle(
-                                                                                color: Theme.of(
-                                                                                  context,
-                                                                                ).colorScheme.onSurface,
-                                                                                fontWeight: FontWeight.w600,
-                                                                                fontSize: isSmall
-                                                                                    ? 14
-                                                                                    : 16,
-                                                                              ),
-                                                                            ),
-                                                                          ],
-                                                                        ),
-                                                                      ),
+                                                                    Icon(
+                                                                      Icons
+                                                                          .lyrics_outlined,
+                                                                      color: Theme.of(
+                                                                        context,
+                                                                      ).colorScheme.onSurface,
+                                                                      size:
+                                                                          isSmall
+                                                                          ? 20
+                                                                          : 24,
                                                                     ),
-                                                                    Padding(
-                                                                      padding: const EdgeInsets.symmetric(
-                                                                        horizontal:
-                                                                            4,
-                                                                      ),
-                                                                      child: Text(
-                                                                        ' | ',
-                                                                        style: TextStyle(
-                                                                          color:
-                                                                              Theme.of(
-                                                                                context,
-                                                                              ).colorScheme.onSurface.withValues(
-                                                                                alpha: 0.3,
-                                                                              ),
-                                                                          fontSize:
-                                                                              isSmall
-                                                                              ? 14
-                                                                              : 16,
-                                                                        ),
-                                                                      ),
+                                                                    SizedBox(
+                                                                      width:
+                                                                          isSmall
+                                                                          ? 6
+                                                                          : 8,
                                                                     ),
-                                                                    AnimatedTapButton(
-                                                                      onTap:
-                                                                          isLoading
-                                                                          ? () {}
-                                                                          : _toggleDislike,
-                                                                      child: Padding(
-                                                                        padding: EdgeInsets.only(
-                                                                          left:
-                                                                              4,
-                                                                          top:
-                                                                              8,
-                                                                          bottom:
-                                                                              8,
-                                                                          right:
-                                                                              isSmall
-                                                                              ? 12
-                                                                              : 14,
-                                                                        ),
-                                                                        child: Icon(
-                                                                          Symbols
-                                                                              .heart_broken,
-                                                                          fill:
-                                                                              _isCurrentDisliked
-                                                                              ? 1.0
-                                                                              : 0.0,
-                                                                          size:
-                                                                              isSmall
-                                                                              ? 20
-                                                                              : 24,
-                                                                          color: Theme.of(
-                                                                            context,
-                                                                          ).colorScheme.onSurface,
-                                                                        ),
+                                                                    Text(
+                                                                      LocaleProvider.tr(
+                                                                        'lyrics',
+                                                                      ),
+                                                                      style: TextStyle(
+                                                                        color: Theme.of(
+                                                                          context,
+                                                                        ).colorScheme.onSurface,
+                                                                        fontWeight:
+                                                                            FontWeight.w600,
+                                                                        fontSize:
+                                                                            isSmall
+                                                                            ? 12
+                                                                            : 14,
                                                                       ),
                                                                     ),
                                                                   ],
                                                                 ),
-                                                              );
-                                                            },
-                                                          ),
+                                                              ),
+                                                            );
+                                                          },
+                                                        ),
 
-                                                          // Botón Letra
-                                                          ValueListenableBuilder<
-                                                            bool
-                                                          >(
-                                                            valueListenable:
-                                                                playLoadingNotifier,
-                                                            builder: (context, isLoading, _) {
-                                                              return AnimatedTapButton(
-                                                                onTap: isLoading
-                                                                    ? () {}
-                                                                    : () async {
-                                                                        // Check if lyrics on cover is enabled
-                                                                        final prefs =
-                                                                            await SharedPreferences.getInstance();
-                                                                        final showLyricsOnCover =
-                                                                            prefs.getBool(
-                                                                              'show_lyrics_on_cover',
-                                                                            ) ??
-                                                                            false;
+                                                        // Botón Guardar
+                                                        ValueListenableBuilder<
+                                                          bool
+                                                        >(
+                                                          valueListenable:
+                                                              playLoadingNotifier,
+                                                          builder: (context, isLoading, _) {
+                                                            return AnimatedTapButton(
+                                                              onTap: isLoading
+                                                                  ? () {}
+                                                                  : () async {
+                                                                      if (!mounted) {
+                                                                        return;
+                                                                      }
 
-                                                                        if (showLyricsOnCover) {
-                                                                          // Original behavior: toggle lyrics display on cover
-                                                                          if (!_showLyrics) {
-                                                                            setState(() {
-                                                                              _showLyrics = true;
-                                                                            });
-                                                                            await _loadLyrics(
-                                                                              currentMediaItem,
-                                                                            );
-                                                                          } else {
-                                                                            setState(() {
-                                                                              _showLyrics = false;
-                                                                            });
-                                                                          }
-                                                                        } else {
-                                                                          // New behavior: show lyrics in modal
-                                                                          if (!context
-                                                                              .mounted) {
-                                                                            return;
-                                                                          }
-                                                                          _showLyricsModal(
-                                                                            context,
-                                                                            currentMediaItem,
-                                                                          );
-                                                                        }
-                                                                      },
-                                                                child: Container(
-                                                                  decoration: BoxDecoration(
-                                                                    color: Theme.of(context)
-                                                                        .colorScheme
-                                                                        .primary
-                                                                        .withValues(
-                                                                          alpha:
-                                                                              0.08,
-                                                                        ),
-                                                                    borderRadius:
-                                                                        BorderRadius.circular(
-                                                                          26,
-                                                                        ),
-                                                                  ),
-                                                                  padding: EdgeInsets.symmetric(
-                                                                    horizontal:
-                                                                        isSmall
-                                                                        ? 14
-                                                                        : 20,
-                                                                    vertical: 8,
-                                                                  ),
-                                                                  margin: EdgeInsets.only(
-                                                                    right:
-                                                                        isSmall
-                                                                        ? 8
-                                                                        : 12,
-                                                                  ),
-                                                                  child: Row(
-                                                                    children: [
-                                                                      Icon(
-                                                                        Icons
-                                                                            .lyrics_outlined,
+                                                                      final safeContext =
+                                                                          context;
+                                                                      await _showAddToPlaylistDialog(
+                                                                        safeContext,
+                                                                        currentMediaItem,
+                                                                      );
+                                                                    },
+                                                              child: Container(
+                                                                decoration: BoxDecoration(
+                                                                  color:
+                                                                      Theme.of(
+                                                                        context,
+                                                                      ).colorScheme.primary.withValues(
+                                                                        alpha:
+                                                                            0.08,
+                                                                      ),
+                                                                  borderRadius:
+                                                                      BorderRadius.circular(
+                                                                        26,
+                                                                      ),
+                                                                ),
+                                                                padding:
+                                                                    EdgeInsets.symmetric(
+                                                                      horizontal:
+                                                                          isSmall
+                                                                          ? 12
+                                                                          : 14,
+                                                                      vertical:
+                                                                          6,
+                                                                    ),
+                                                                margin:
+                                                                    EdgeInsets.only(
+                                                                      right:
+                                                                          isSmall
+                                                                          ? 8
+                                                                          : 12,
+                                                                    ),
+                                                                child: Row(
+                                                                  children: [
+                                                                    Icon(
+                                                                      Icons
+                                                                          .playlist_add,
+                                                                      color: Theme.of(
+                                                                        context,
+                                                                      ).colorScheme.onSurface,
+                                                                      size:
+                                                                          isSmall
+                                                                          ? 20
+                                                                          : 24,
+                                                                    ),
+                                                                    SizedBox(
+                                                                      width:
+                                                                          isSmall
+                                                                          ? 6
+                                                                          : 8,
+                                                                    ),
+                                                                    Text(
+                                                                      LocaleProvider.tr(
+                                                                        'save',
+                                                                      ),
+                                                                      style: TextStyle(
                                                                         color: Theme.of(
                                                                           context,
                                                                         ).colorScheme.onSurface,
-                                                                        size:
+                                                                        fontWeight:
+                                                                            FontWeight.w600,
+                                                                        fontSize:
                                                                             isSmall
-                                                                            ? 20
-                                                                            : 24,
+                                                                            ? 12
+                                                                            : 14,
                                                                       ),
-                                                                      SizedBox(
-                                                                        width:
-                                                                            isSmall
-                                                                            ? 6
-                                                                            : 8,
-                                                                      ),
-                                                                      Text(
-                                                                        LocaleProvider.tr(
-                                                                          'lyrics',
-                                                                        ),
-                                                                        style: TextStyle(
-                                                                          color: Theme.of(
-                                                                            context,
-                                                                          ).colorScheme.onSurface,
-                                                                          fontWeight:
-                                                                              FontWeight.w600,
-                                                                          fontSize:
-                                                                              isSmall
-                                                                              ? 14
-                                                                              : 16,
-                                                                        ),
-                                                                      ),
-                                                                    ],
-                                                                  ),
+                                                                    ),
+                                                                  ],
                                                                 ),
-                                                              );
-                                                            },
-                                                          ),
+                                                              ),
+                                                            );
+                                                          },
+                                                        ),
 
-                                                          // Botón Guardar
-                                                          ValueListenableBuilder<
-                                                            bool
-                                                          >(
-                                                            valueListenable:
-                                                                playLoadingNotifier,
-                                                            builder: (context, isLoading, _) {
-                                                              return AnimatedTapButton(
-                                                                onTap: isLoading
-                                                                    ? () {}
-                                                                    : () async {
-                                                                        if (!mounted) {
-                                                                          return;
-                                                                        }
+                                                        // Botón Siguientes
+                                                        ValueListenableBuilder<
+                                                          bool
+                                                        >(
+                                                          valueListenable:
+                                                              playLoadingNotifier,
+                                                          builder: (context, isLoading, _) {
+                                                            return AnimatedTapButton(
+                                                              onTap: isLoading
+                                                                  ? () {}
+                                                                  : () async {
+                                                                      if (!mounted) {
+                                                                        return;
+                                                                      }
 
-                                                                        final safeContext =
-                                                                            context;
-                                                                        await _showAddToPlaylistDialog(
-                                                                          safeContext,
-                                                                          currentMediaItem,
+                                                                      final safeContext =
+                                                                          context;
+                                                                      _showPlaylistDialog(
+                                                                        safeContext,
+                                                                      );
+                                                                    },
+                                                              child: Container(
+                                                                decoration: BoxDecoration(
+                                                                  color:
+                                                                      Theme.of(
+                                                                        context,
+                                                                      ).colorScheme.primary.withValues(
+                                                                        alpha:
+                                                                            0.08,
+                                                                      ),
+                                                                  borderRadius:
+                                                                      BorderRadius.circular(
+                                                                        26,
+                                                                      ),
+                                                                ),
+                                                                padding:
+                                                                    EdgeInsets.symmetric(
+                                                                      horizontal:
+                                                                          isSmall
+                                                                          ? 12
+                                                                          : 14,
+                                                                      vertical:
+                                                                          6,
+                                                                    ),
+                                                                margin:
+                                                                    EdgeInsets.only(
+                                                                      right:
+                                                                          isSmall
+                                                                          ? 8
+                                                                          : 12,
+                                                                    ),
+                                                                child: Row(
+                                                                  children: [
+                                                                    Icon(
+                                                                      Icons
+                                                                          .queue_music,
+                                                                      color: Theme.of(
+                                                                        context,
+                                                                      ).colorScheme.onSurface,
+                                                                      size:
+                                                                          isSmall
+                                                                          ? 20
+                                                                          : 24,
+                                                                    ),
+                                                                    SizedBox(
+                                                                      width:
+                                                                          isSmall
+                                                                          ? 6
+                                                                          : 8,
+                                                                    ),
+                                                                    Text(
+                                                                      LocaleProvider.tr(
+                                                                        'next',
+                                                                      ),
+                                                                      style: TextStyle(
+                                                                        color: Theme.of(
+                                                                          context,
+                                                                        ).colorScheme.onSurface,
+                                                                        fontWeight:
+                                                                            FontWeight.w600,
+                                                                        fontSize:
+                                                                            isSmall
+                                                                            ? 12
+                                                                            : 14,
+                                                                      ),
+                                                                    ),
+                                                                  ],
+                                                                ),
+                                                              ),
+                                                            );
+                                                          },
+                                                        ),
+
+                                                        // Botón Compartir
+                                                        ValueListenableBuilder<
+                                                          bool
+                                                        >(
+                                                          valueListenable:
+                                                              playLoadingNotifier,
+                                                          builder: (context, isLoading, _) {
+                                                            return AnimatedTapButton(
+                                                              onTap: isLoading
+                                                                  ? () {}
+                                                                  : () async {
+                                                                      final dataPath =
+                                                                          currentMediaItem.extras?['data']
+                                                                              as String?;
+                                                                      if (dataPath !=
+                                                                              null &&
+                                                                          dataPath
+                                                                              .isNotEmpty) {
+                                                                        await SharePlus.instance.share(
+                                                                          ShareParams(
+                                                                            text:
+                                                                                currentMediaItem.title,
+                                                                            files: [
+                                                                              XFile(
+                                                                                dataPath,
+                                                                              ),
+                                                                            ],
+                                                                          ),
                                                                         );
-                                                                      },
-                                                                child: Container(
-                                                                  decoration: BoxDecoration(
-                                                                    color: Theme.of(context)
-                                                                        .colorScheme
-                                                                        .primary
-                                                                        .withValues(
-                                                                          alpha:
-                                                                              0.08,
-                                                                        ),
-                                                                    borderRadius:
-                                                                        BorderRadius.circular(
-                                                                          26,
-                                                                        ),
-                                                                  ),
-                                                                  padding: EdgeInsets.symmetric(
-                                                                    horizontal:
-                                                                        isSmall
-                                                                        ? 12
-                                                                        : 14,
-                                                                    vertical: 8,
-                                                                  ),
-                                                                  margin: EdgeInsets.only(
-                                                                    right:
-                                                                        isSmall
-                                                                        ? 8
-                                                                        : 12,
-                                                                  ),
-                                                                  child: Row(
-                                                                    children: [
-                                                                      Icon(
-                                                                        Icons
-                                                                            .playlist_add,
+                                                                      }
+                                                                    },
+                                                              child: Container(
+                                                                decoration: BoxDecoration(
+                                                                  color:
+                                                                      Theme.of(
+                                                                        context,
+                                                                      ).colorScheme.primary.withValues(
+                                                                        alpha:
+                                                                            0.08,
+                                                                      ),
+                                                                  borderRadius:
+                                                                      BorderRadius.circular(
+                                                                        26,
+                                                                      ),
+                                                                ),
+                                                                padding:
+                                                                    EdgeInsets.symmetric(
+                                                                      horizontal:
+                                                                          isSmall
+                                                                          ? 14
+                                                                          : 20,
+                                                                      vertical:
+                                                                          6,
+                                                                    ),
+                                                                child: Row(
+                                                                  children: [
+                                                                    Icon(
+                                                                      Icons
+                                                                          .share,
+                                                                      color: Theme.of(
+                                                                        context,
+                                                                      ).colorScheme.onSurface,
+                                                                      size:
+                                                                          isSmall
+                                                                          ? 18
+                                                                          : 22,
+                                                                    ),
+                                                                    SizedBox(
+                                                                      width:
+                                                                          isSmall
+                                                                          ? 6
+                                                                          : 8,
+                                                                    ),
+                                                                    Text(
+                                                                      LocaleProvider.tr(
+                                                                        'share',
+                                                                      ),
+                                                                      style: TextStyle(
                                                                         color: Theme.of(
                                                                           context,
                                                                         ).colorScheme.onSurface,
-                                                                        size:
+                                                                        fontWeight:
+                                                                            FontWeight.w600,
+                                                                        fontSize:
                                                                             isSmall
-                                                                            ? 20
-                                                                            : 24,
+                                                                            ? 12
+                                                                            : 14,
                                                                       ),
-                                                                      SizedBox(
-                                                                        width:
-                                                                            isSmall
-                                                                            ? 6
-                                                                            : 8,
-                                                                      ),
-                                                                      Text(
-                                                                        LocaleProvider.tr(
-                                                                          'save',
-                                                                        ),
-                                                                        style: TextStyle(
-                                                                          color: Theme.of(
-                                                                            context,
-                                                                          ).colorScheme.onSurface,
-                                                                          fontWeight:
-                                                                              FontWeight.w600,
-                                                                          fontSize:
-                                                                              isSmall
-                                                                              ? 14
-                                                                              : 16,
-                                                                        ),
-                                                                      ),
-                                                                    ],
-                                                                  ),
+                                                                    ),
+                                                                  ],
                                                                 ),
-                                                              );
-                                                            },
-                                                          ),
-
-                                                          // Botón Siguientes
-                                                          ValueListenableBuilder<
-                                                            bool
-                                                          >(
-                                                            valueListenable:
-                                                                playLoadingNotifier,
-                                                            builder: (context, isLoading, _) {
-                                                              return AnimatedTapButton(
-                                                                onTap: isLoading
-                                                                    ? () {}
-                                                                    : () async {
-                                                                        if (!mounted) {
-                                                                          return;
-                                                                        }
-
-                                                                        final safeContext =
-                                                                            context;
-                                                                        _showPlaylistDialog(
-                                                                          safeContext,
-                                                                        );
-                                                                      },
-                                                                child: Container(
-                                                                  decoration: BoxDecoration(
-                                                                    color: Theme.of(context)
-                                                                        .colorScheme
-                                                                        .primary
-                                                                        .withValues(
-                                                                          alpha:
-                                                                              0.08,
-                                                                        ),
-                                                                    borderRadius:
-                                                                        BorderRadius.circular(
-                                                                          26,
-                                                                        ),
-                                                                  ),
-                                                                  padding: EdgeInsets.symmetric(
-                                                                    horizontal:
-                                                                        isSmall
-                                                                        ? 12
-                                                                        : 14,
-                                                                    vertical: 8,
-                                                                  ),
-                                                                  margin: EdgeInsets.only(
-                                                                    right:
-                                                                        isSmall
-                                                                        ? 8
-                                                                        : 12,
-                                                                  ),
-                                                                  child: Row(
-                                                                    children: [
-                                                                      Icon(
-                                                                        Icons
-                                                                            .queue_music,
-                                                                        color: Theme.of(
-                                                                          context,
-                                                                        ).colorScheme.onSurface,
-                                                                        size:
-                                                                            isSmall
-                                                                            ? 20
-                                                                            : 24,
-                                                                      ),
-                                                                      SizedBox(
-                                                                        width:
-                                                                            isSmall
-                                                                            ? 6
-                                                                            : 8,
-                                                                      ),
-                                                                      Text(
-                                                                        LocaleProvider.tr(
-                                                                          'next',
-                                                                        ),
-                                                                        style: TextStyle(
-                                                                          color: Theme.of(
-                                                                            context,
-                                                                          ).colorScheme.onSurface,
-                                                                          fontWeight:
-                                                                              FontWeight.w600,
-                                                                          fontSize:
-                                                                              isSmall
-                                                                              ? 14
-                                                                              : 16,
-                                                                        ),
-                                                                      ),
-                                                                    ],
-                                                                  ),
-                                                                ),
-                                                              );
-                                                            },
-                                                          ),
-
-                                                          // Botón Compartir
-                                                          ValueListenableBuilder<
-                                                            bool
-                                                          >(
-                                                            valueListenable:
-                                                                playLoadingNotifier,
-                                                            builder: (context, isLoading, _) {
-                                                              return AnimatedTapButton(
-                                                                onTap: isLoading
-                                                                    ? () {}
-                                                                    : () async {
-                                                                        final dataPath =
-                                                                            currentMediaItem.extras?['data']
-                                                                                as String?;
-                                                                        if (dataPath !=
-                                                                                null &&
-                                                                            dataPath.isNotEmpty) {
-                                                                          await SharePlus.instance.share(
-                                                                            ShareParams(
-                                                                              text: currentMediaItem.title,
-                                                                              files: [
-                                                                                XFile(
-                                                                                  dataPath,
-                                                                                ),
-                                                                              ],
-                                                                            ),
-                                                                          );
-                                                                        }
-                                                                      },
-                                                                child: Container(
-                                                                  decoration: BoxDecoration(
-                                                                    color: Theme.of(context)
-                                                                        .colorScheme
-                                                                        .primary
-                                                                        .withValues(
-                                                                          alpha:
-                                                                              0.08,
-                                                                        ),
-                                                                    borderRadius:
-                                                                        BorderRadius.circular(
-                                                                          26,
-                                                                        ),
-                                                                  ),
-                                                                  padding: EdgeInsets.symmetric(
-                                                                    horizontal:
-                                                                        isSmall
-                                                                        ? 14
-                                                                        : 20,
-                                                                    vertical: 8,
-                                                                  ),
-                                                                  child: Row(
-                                                                    children: [
-                                                                      Icon(
-                                                                        Icons
-                                                                            .share,
-                                                                        color: Theme.of(
-                                                                          context,
-                                                                        ).colorScheme.onSurface,
-                                                                        size:
-                                                                            isSmall
-                                                                            ? 18
-                                                                            : 22,
-                                                                      ),
-                                                                      SizedBox(
-                                                                        width:
-                                                                            isSmall
-                                                                            ? 6
-                                                                            : 8,
-                                                                      ),
-                                                                      Text(
-                                                                        LocaleProvider.tr(
-                                                                          'share',
-                                                                        ),
-                                                                        style: TextStyle(
-                                                                          color: Theme.of(
-                                                                            context,
-                                                                          ).colorScheme.onSurface,
-                                                                          fontWeight:
-                                                                              FontWeight.w600,
-                                                                          fontSize:
-                                                                              isSmall
-                                                                              ? 14
-                                                                              : 16,
-                                                                        ),
-                                                                      ),
-                                                                    ],
-                                                                  ),
-                                                                ),
-                                                              );
-                                                            },
-                                                          ),
-                                                          const SizedBox(
-                                                            width: 20,
-                                                          ),
-                                                        ],
-                                                      ),
+                                                              ),
+                                                            );
+                                                          },
+                                                        ),
+                                                        const SizedBox(
+                                                          width: 20,
+                                                        ),
+                                                      ],
                                                     ),
                                                   ),
                                                 ),
-                                              );
-                                            },
-                                          ),
-                                          SizedBox(height: height * 0.01),
-                                        ],
-                                        StreamBuilder<PlaybackState>(
-                                          stream: audioHandler?.playbackState,
-                                          builder: (context, playbackSnapshot) {
-                                            final playbackState =
-                                                playbackSnapshot.data;
-                                            final isPlaying =
-                                                playbackState?.playing ?? false;
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                      ],
+                                      Padding(
+                                        padding: EdgeInsets.only(
+                                          bottom: isSmallScreen
+                                              ? height * 0.015
+                                              : height * 0.03,
+                                          left: isSmallScreen
+                                              ? width * 0.005
+                                              : width * 0.013,
+                                          right: isSmallScreen
+                                              ? width * 0.005
+                                              : width * 0.013,
+                                        ),
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.center,
+                                          mainAxisSize: MainAxisSize.max,
+                                          children: [
+                                            SizedBox(height: height * 0.01),
+                                            StreamBuilder<PlaybackState>(
+                                              stream:
+                                                  audioHandler?.playbackState,
+                                              builder: (context, playbackSnapshot) {
+                                                final playbackState =
+                                                    playbackSnapshot.data;
+                                                final isPlaying =
+                                                    playbackState?.playing ??
+                                                    false;
 
-                                            return ValueListenableBuilder<bool>(
-                                              valueListenable:
-                                                  audioHandler
-                                                      .myHandler
-                                                      ?.isQueueTransitioning ??
-                                                  ValueNotifier(false),
-                                              builder: (context, isTransitioning, _) {
-                                                return StreamBuilder<Duration>(
-                                                  stream: audioHandler
-                                                      .myHandler
-                                                      ?.positionStream,
-                                                  initialData: Duration.zero,
-                                                  builder: (context, posSnapshot) {
-                                                    Duration position =
-                                                        posSnapshot.data ??
-                                                        Duration.zero;
-                                                    if (!isTransitioning) {
-                                                      _lastKnownPosition =
-                                                          position;
-                                                    } else if (_lastKnownPosition !=
-                                                        null) {
-                                                      position =
-                                                          _lastKnownPosition!;
-                                                    }
+                                                return ValueListenableBuilder<
+                                                  bool
+                                                >(
+                                                  valueListenable:
+                                                      audioHandler
+                                                          .myHandler
+                                                          ?.isQueueTransitioning ??
+                                                      ValueNotifier(false),
+                                                  builder: (context, isTransitioning, _) {
                                                     return StreamBuilder<
-                                                      Duration?
+                                                      Duration
                                                     >(
                                                       stream: audioHandler
                                                           .myHandler
-                                                          ?.player
-                                                          .durationStream,
-                                                      builder: (context, durationSnapshot) {
-                                                        final fallbackDuration =
-                                                            durationSnapshot
-                                                                .data;
-                                                        final mediaDuration =
-                                                            currentMediaItem
-                                                                .duration;
-                                                        // Si no hay duración, usa 1 segundo como mínimo para el slider
-                                                        final duration =
-                                                            (mediaDuration !=
-                                                                    null &&
-                                                                mediaDuration
-                                                                        .inMilliseconds >
-                                                                    0)
-                                                            ? mediaDuration
-                                                            : (fallbackDuration !=
-                                                                      null &&
-                                                                  fallbackDuration
-                                                                          .inMilliseconds >
-                                                                      0)
-                                                            ? fallbackDuration
-                                                            : const Duration(
-                                                                seconds: 1,
-                                                              );
-                                                        final durationMs =
-                                                            duration.inMilliseconds >
-                                                                0
-                                                            ? duration
-                                                                  .inMilliseconds
-                                                            : 1;
-                                                        return RepaintBoundary(
-                                                          child: ValueListenableBuilder<double?>(
-                                                            valueListenable:
-                                                                _dragValueSecondsNotifier,
-                                                            builder:
-                                                                (
-                                                                  context,
-                                                                  dragValueSeconds,
-                                                                  _,
-                                                                ) {
-                                                                  final sliderValueMs =
-                                                                      (dragValueSeconds !=
-                                                                          null)
-                                                                      ? (dragValueSeconds *
-                                                                                1000)
-                                                                            .clamp(
-                                                                              0,
-                                                                              durationMs.toDouble(),
-                                                                            )
-                                                                      : position
-                                                                            .inMilliseconds
-                                                                            .clamp(
-                                                                              0,
-                                                                              durationMs,
-                                                                            )
-                                                                            .toDouble();
-                                                                  return Column(
-                                                                    children: [
-                                                                      SizedBox(
-                                                                        width:
-                                                                            progressBarWidth,
-                                                                        child: ClipRect(
-                                                                          child:
-                                                                              TweenAnimationBuilder<
-                                                                                double
-                                                                              >(
-                                                                                duration: const Duration(
-                                                                                  milliseconds: 400,
+                                                          ?.positionStream,
+                                                      initialData:
+                                                          Duration.zero,
+                                                      builder: (context, posSnapshot) {
+                                                        Duration position =
+                                                            posSnapshot.data ??
+                                                            Duration.zero;
+                                                        if (!isTransitioning) {
+                                                          _lastKnownPosition =
+                                                              position;
+                                                        } else if (_lastKnownPosition !=
+                                                            null) {
+                                                          position =
+                                                              _lastKnownPosition!;
+                                                        }
+                                                        return StreamBuilder<
+                                                          Duration?
+                                                        >(
+                                                          stream: audioHandler
+                                                              .myHandler
+                                                              ?.player
+                                                              .durationStream,
+                                                          builder:
+                                                              (
+                                                                context,
+                                                                durationSnapshot,
+                                                              ) {
+                                                                final fallbackDuration =
+                                                                    durationSnapshot
+                                                                        .data;
+                                                                final mediaDuration =
+                                                                    currentMediaItem
+                                                                        .duration;
+                                                                // Si no hay duración, usa 1 segundo como mínimo para el slider
+                                                                final duration =
+                                                                    (mediaDuration !=
+                                                                            null &&
+                                                                        mediaDuration.inMilliseconds >
+                                                                            0)
+                                                                    ? mediaDuration
+                                                                    : (fallbackDuration !=
+                                                                              null &&
+                                                                          fallbackDuration.inMilliseconds >
+                                                                              0)
+                                                                    ? fallbackDuration
+                                                                    : const Duration(
+                                                                        seconds:
+                                                                            1,
+                                                                      );
+                                                                final durationMs =
+                                                                    duration.inMilliseconds >
+                                                                        0
+                                                                    ? duration
+                                                                          .inMilliseconds
+                                                                    : 1;
+                                                                return RepaintBoundary(
+                                                                  child: ValueListenableBuilder<double?>(
+                                                                    valueListenable:
+                                                                        _dragValueSecondsNotifier,
+                                                                    builder:
+                                                                        (
+                                                                          context,
+                                                                          dragValueSeconds,
+                                                                          _,
+                                                                        ) {
+                                                                          final sliderValueMs =
+                                                                              (dragValueSeconds !=
+                                                                                  null)
+                                                                              ? (dragValueSeconds *
+                                                                                        1000)
+                                                                                    .clamp(
+                                                                                      0,
+                                                                                      durationMs.toDouble(),
+                                                                                    )
+                                                                              : position.inMilliseconds
+                                                                                    .clamp(
+                                                                                      0,
+                                                                                      durationMs,
+                                                                                    )
+                                                                                    .toDouble();
+                                                                          return Column(
+                                                                            children: [
+                                                                              SizedBox(
+                                                                                width: progressBarWidth,
+                                                                                child: ClipRect(
+                                                                                  child:
+                                                                                      TweenAnimationBuilder<
+                                                                                        double
+                                                                                      >(
+                                                                                        duration: const Duration(
+                                                                                          milliseconds: 400,
+                                                                                        ),
+                                                                                        curve: Curves.easeInOut,
+                                                                                        tween:
+                                                                                            Tween<
+                                                                                              double
+                                                                                            >(
+                                                                                              begin: isPlaying
+                                                                                                  ? 0.0
+                                                                                                  : 0.0,
+                                                                                              end: isPlaying
+                                                                                                  ? 3.0
+                                                                                                  : 0.0,
+                                                                                            ),
+                                                                                        builder:
+                                                                                            (
+                                                                                              context,
+                                                                                              amplitude,
+                                                                                              child,
+                                                                                            ) {
+                                                                                              return SquigglySlider(
+                                                                                                trackHeight: 3.0,
+                                                                                                useLineThumb: true,
+                                                                                                min: 0.0,
+                                                                                                max: durationMs.toDouble(),
+                                                                                                value: sliderValueMs.toDouble(),
+                                                                                                inactiveColor:
+                                                                                                    Theme.of(
+                                                                                                      context,
+                                                                                                    ).colorScheme.primary.withValues(
+                                                                                                      alpha: 0.3,
+                                                                                                    ),
+                                                                                                onChanged:
+                                                                                                    (
+                                                                                                      value,
+                                                                                                    ) {
+                                                                                                      _dragValueSecondsNotifier.value =
+                                                                                                          value /
+                                                                                                          1000.0;
+                                                                                                    },
+                                                                                                onChangeEnd:
+                                                                                                    (
+                                                                                                      value,
+                                                                                                    ) {
+                                                                                                      final now = DateTime.now();
+                                                                                                      final ms = value.toInt();
+                                                                                                      if (now
+                                                                                                              .difference(
+                                                                                                                _lastSeekTime,
+                                                                                                              )
+                                                                                                              .inMilliseconds >
+                                                                                                          _seekThrottleMs) {
+                                                                                                        audioHandler?.seek(
+                                                                                                          Duration(
+                                                                                                            milliseconds: ms,
+                                                                                                          ),
+                                                                                                        );
+                                                                                                        _lastSeekTime = now;
+                                                                                                      } else {
+                                                                                                        _lastSeekMs = ms;
+                                                                                                        Future.delayed(
+                                                                                                          Duration(
+                                                                                                            milliseconds: _seekThrottleMs,
+                                                                                                          ),
+                                                                                                          () {
+                                                                                                            if (_lastSeekMs !=
+                                                                                                                    null &&
+                                                                                                                DateTime.now()
+                                                                                                                        .difference(
+                                                                                                                          _lastSeekTime,
+                                                                                                                        )
+                                                                                                                        .inMilliseconds >=
+                                                                                                                    _seekThrottleMs) {
+                                                                                                              audioHandler?.seek(
+                                                                                                                Duration(
+                                                                                                                  milliseconds: _lastSeekMs!,
+                                                                                                                ),
+                                                                                                              );
+                                                                                                              _lastSeekTime = DateTime.now();
+                                                                                                              _lastSeekMs = null;
+                                                                                                            }
+                                                                                                          },
+                                                                                                        );
+                                                                                                      }
+                                                                                                      _dragValueSecondsNotifier.value = null;
+                                                                                                    },
+                                                                                                squiggleAmplitude: amplitude,
+                                                                                                squiggleWavelength: 6.0,
+                                                                                                squiggleSpeed: 0.05,
+                                                                                              );
+                                                                                            },
+                                                                                      ),
                                                                                 ),
-                                                                                curve: Curves.easeInOut,
-                                                                                tween:
-                                                                                    Tween<
-                                                                                      double
-                                                                                    >(
-                                                                                      begin: isPlaying
-                                                                                          ? 0.0
-                                                                                          : 0.0,
-                                                                                      end: isPlaying
-                                                                                          ? 3.0
-                                                                                          : 0.0,
-                                                                                    ),
-                                                                                builder:
-                                                                                    (
-                                                                                      context,
-                                                                                      amplitude,
-                                                                                      child,
-                                                                                    ) {
-                                                                                      return SquigglySlider(
-                                                                                        trackHeight: 3.0,
-                                                                                        useLineThumb: true,
-                                                                                        min: 0.0,
-                                                                                        max: durationMs.toDouble(),
-                                                                                        value: sliderValueMs.toDouble(),
-                                                                                        inactiveColor:
+                                                                              ),
+                                                                              Padding(
+                                                                                padding: const EdgeInsets.symmetric(
+                                                                                  horizontal: 24,
+                                                                                ),
+                                                                                child: Row(
+                                                                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                                                  children: [
+                                                                                    Text(
+                                                                                      _formatDuration(
+                                                                                        Duration(
+                                                                                          milliseconds: sliderValueMs.toInt(),
+                                                                                        ),
+                                                                                      ),
+                                                                                      style: TextStyle(
+                                                                                        fontSize: is16by9
+                                                                                            ? 15
+                                                                                            : 13,
+                                                                                        color:
                                                                                             Theme.of(
                                                                                               context,
-                                                                                            ).colorScheme.primary.withValues(
-                                                                                              alpha: 0.3,
+                                                                                            ).colorScheme.onSurface.withValues(
+                                                                                              alpha: 0.8,
                                                                                             ),
-                                                                                        onChanged:
-                                                                                            (
-                                                                                              value,
-                                                                                            ) {
-                                                                                              _dragValueSecondsNotifier.value =
-                                                                                                  value /
-                                                                                                  1000.0;
-                                                                                            },
-                                                                                        onChangeEnd:
-                                                                                            (
-                                                                                              value,
-                                                                                            ) {
-                                                                                              final now = DateTime.now();
-                                                                                              final ms = value.toInt();
-                                                                                              if (now
-                                                                                                      .difference(
-                                                                                                        _lastSeekTime,
-                                                                                                      )
-                                                                                                      .inMilliseconds >
-                                                                                                  _seekThrottleMs) {
-                                                                                                audioHandler?.seek(
-                                                                                                  Duration(
-                                                                                                    milliseconds: ms,
-                                                                                                  ),
-                                                                                                );
-                                                                                                _lastSeekTime = now;
-                                                                                              } else {
-                                                                                                _lastSeekMs = ms;
-                                                                                                Future.delayed(
-                                                                                                  Duration(
-                                                                                                    milliseconds: _seekThrottleMs,
-                                                                                                  ),
-                                                                                                  () {
-                                                                                                    if (_lastSeekMs !=
-                                                                                                            null &&
-                                                                                                        DateTime.now()
-                                                                                                                .difference(
-                                                                                                                  _lastSeekTime,
-                                                                                                                )
-                                                                                                                .inMilliseconds >=
-                                                                                                            _seekThrottleMs) {
-                                                                                                      audioHandler?.seek(
-                                                                                                        Duration(
-                                                                                                          milliseconds: _lastSeekMs!,
-                                                                                                        ),
-                                                                                                      );
-                                                                                                      _lastSeekTime = DateTime.now();
-                                                                                                      _lastSeekMs = null;
-                                                                                                    }
-                                                                                                  },
-                                                                                                );
-                                                                                              }
-                                                                                              _dragValueSecondsNotifier.value = null;
-                                                                                            },
-                                                                                        squiggleAmplitude: amplitude,
-                                                                                        squiggleWavelength: 6.0,
-                                                                                        squiggleSpeed: 0.05,
-                                                                                      );
-                                                                                    },
-                                                                              ),
-                                                                        ),
-                                                                      ),
-                                                                      Padding(
-                                                                        padding: const EdgeInsets.symmetric(
-                                                                          horizontal:
-                                                                              24,
-                                                                        ),
-                                                                        child: Row(
-                                                                          mainAxisAlignment:
-                                                                              MainAxisAlignment.spaceBetween,
-                                                                          children: [
-                                                                            Text(
-                                                                              _formatDuration(
-                                                                                Duration(
-                                                                                  milliseconds: sliderValueMs.toInt(),
+                                                                                      ),
+                                                                                    ),
+                                                                                    Text(
+                                                                                      // Si la duración es desconocida, muestra '--:--'
+                                                                                      (mediaDuration ==
+                                                                                                  null ||
+                                                                                              mediaDuration.inMilliseconds <=
+                                                                                                  0)
+                                                                                          ? '--:--'
+                                                                                          : _formatDuration(
+                                                                                              duration,
+                                                                                            ),
+                                                                                      style: TextStyle(
+                                                                                        fontSize: is16by9
+                                                                                            ? 15
+                                                                                            : 13,
+                                                                                        color:
+                                                                                            Theme.of(
+                                                                                              context,
+                                                                                            ).colorScheme.onSurface.withValues(
+                                                                                              alpha: 0.8,
+                                                                                            ),
+                                                                                      ),
+                                                                                    ),
+                                                                                  ],
                                                                                 ),
                                                                               ),
-                                                                              style: TextStyle(
-                                                                                fontSize: is16by9
-                                                                                    ? 15
-                                                                                    : 13,
-                                                                                color:
-                                                                                    Theme.of(
-                                                                                      context,
-                                                                                    ).colorScheme.onSurface.withValues(
-                                                                                      alpha: 0.8,
-                                                                                    ),
-                                                                              ),
-                                                                            ),
-                                                                            Text(
-                                                                              // Si la duración es desconocida, muestra '--:--'
-                                                                              (mediaDuration ==
-                                                                                          null ||
-                                                                                      mediaDuration.inMilliseconds <=
-                                                                                          0)
-                                                                                  ? '--:--'
-                                                                                  : _formatDuration(
-                                                                                      duration,
-                                                                                    ),
-                                                                              style: TextStyle(
-                                                                                fontSize: is16by9
-                                                                                    ? 15
-                                                                                    : 13,
-                                                                                color:
-                                                                                    Theme.of(
-                                                                                      context,
-                                                                                    ).colorScheme.onSurface.withValues(
-                                                                                      alpha: 0.8,
-                                                                                    ),
-                                                                              ),
-                                                                            ),
-                                                                          ],
-                                                                        ),
-                                                                      ),
-                                                                    ],
-                                                                  );
-                                                                },
-                                                          ),
+                                                                            ],
+                                                                          );
+                                                                        },
+                                                                  ),
+                                                                );
+                                                              },
                                                         );
                                                       },
                                                     );
                                                   },
                                                 );
                                               },
-                                            );
-                                          },
-                                        ),
+                                            ),
 
-                                        const SizedBox(height: 6),
-                                        // Controles de reproducción
-                                        StreamBuilder<PlaybackState>(
-                                          stream: audioHandler?.playbackState,
-                                          builder: (context, snapshot) {
-                                            final state = snapshot.data;
-                                            final isPlaying =
-                                                state?.playing ?? false;
-                                            final repeatMode =
-                                                state?.repeatMode ??
-                                                AudioServiceRepeatMode.none;
-                                            // Detect AMOLED theme to adapt control visibility
-                                            final bool isAmoledTheme =
-                                                colorSchemeNotifier.value ==
-                                                AppColorScheme.amoled;
+                                            const SizedBox(height: 6),
+                                            // Controles de reproducción
+                                            StreamBuilder<PlaybackState>(
+                                              stream:
+                                                  audioHandler?.playbackState,
+                                              builder: (context, snapshot) {
+                                                final state = snapshot.data;
+                                                final isPlaying =
+                                                    state?.playing ?? false;
+                                                final repeatMode =
+                                                    state?.repeatMode ??
+                                                    AudioServiceRepeatMode.none;
+                                                // Detect AMOLED theme to adapt control visibility
+                                                final bool isAmoledTheme =
+                                                    colorSchemeNotifier.value ==
+                                                    AppColorScheme.amoled;
 
-                                            IconData repeatIcon;
-                                            Color repeatColor;
-                                            switch (repeatMode) {
-                                              case AudioServiceRepeatMode.one:
-                                                repeatIcon =
-                                                    Icons.repeat_one_rounded;
-                                                repeatColor = Theme.of(
-                                                  context,
-                                                ).colorScheme.primary;
-                                                break;
-                                              case AudioServiceRepeatMode.all:
-                                                repeatIcon =
-                                                    Icons.repeat_rounded;
-                                                repeatColor = Theme.of(
-                                                  context,
-                                                ).colorScheme.primary;
-                                                break;
-                                              default:
-                                                repeatIcon =
-                                                    Icons.repeat_rounded;
-                                                repeatColor =
-                                                    Theme.of(
-                                                          context,
-                                                        ).brightness ==
-                                                        Brightness.light
-                                                    ? Theme.of(context)
-                                                          .colorScheme
-                                                          .onSurface
-                                                          .withValues(
-                                                            alpha: 0.9,
-                                                          )
-                                                    : (isAmoledTheme
-                                                          ? Theme.of(context)
-                                                                .colorScheme
-                                                                .onSurface
-                                                          : Theme.of(context)
-                                                                .colorScheme
-                                                                .onSurface);
-                                            }
+                                                IconData repeatIcon;
+                                                Color repeatColor;
+                                                switch (repeatMode) {
+                                                  case AudioServiceRepeatMode
+                                                      .one:
+                                                    repeatIcon = Icons
+                                                        .repeat_one_rounded;
+                                                    repeatColor = Theme.of(
+                                                      context,
+                                                    ).colorScheme.primary;
+                                                    break;
+                                                  case AudioServiceRepeatMode
+                                                      .all:
+                                                    repeatIcon =
+                                                        Icons.repeat_rounded;
+                                                    repeatColor = Theme.of(
+                                                      context,
+                                                    ).colorScheme.primary;
+                                                    break;
+                                                  default:
+                                                    repeatIcon =
+                                                        Icons.repeat_rounded;
+                                                    repeatColor =
+                                                        Theme.of(
+                                                              context,
+                                                            ).brightness ==
+                                                            Brightness.light
+                                                        ? Theme.of(context)
+                                                              .colorScheme
+                                                              .onSurface
+                                                              .withValues(
+                                                                alpha: 0.9,
+                                                              )
+                                                        : (isAmoledTheme
+                                                              ? Theme.of(
+                                                                      context,
+                                                                    )
+                                                                    .colorScheme
+                                                                    .onSurface
+                                                              : Theme.of(
+                                                                      context,
+                                                                    )
+                                                                    .colorScheme
+                                                                    .onSurface);
+                                                }
 
-                                            return LayoutBuilder(
-                                              builder: (context, constraints) {
-                                                // Cálculo responsivo de tamaños
-                                                final double maxControlsWidth =
-                                                    is16by9
-                                                    ? constraints.maxWidth
-                                                          .clamp(280, 350)
-                                                    : constraints.maxWidth
-                                                          .clamp(340, 480);
+                                                return LayoutBuilder(
+                                                  builder: (context, constraints) {
+                                                    // Cálculo responsivo de tamaños
+                                                    final double
+                                                    maxControlsWidth = is16by9
+                                                        ? constraints.maxWidth
+                                                              .clamp(280, 350)
+                                                        : constraints.maxWidth
+                                                              .clamp(340, 480);
 
-                                                final double iconSize =
-                                                    (maxControlsWidth /
-                                                            400 *
-                                                            38)
-                                                        .clamp(30, 54);
-                                                final double sideIconSize =
-                                                    (maxControlsWidth /
-                                                            400 *
-                                                            56)
-                                                        .clamp(42, 76);
-                                                final double mainIconSize =
-                                                    (maxControlsWidth /
-                                                            400 *
-                                                            76)
-                                                        .clamp(60, 100);
-                                                final double playIconSize =
-                                                    (maxControlsWidth /
-                                                            400 *
-                                                            52)
-                                                        .clamp(40, 80);
+                                                    final double iconSize =
+                                                        (maxControlsWidth /
+                                                                400 *
+                                                                38)
+                                                            .clamp(30, 54);
+                                                    final double sideIconSize =
+                                                        (maxControlsWidth /
+                                                                400 *
+                                                                56)
+                                                            .clamp(42, 76);
+                                                    final double mainIconSize =
+                                                        (maxControlsWidth /
+                                                                400 *
+                                                                76)
+                                                            .clamp(60, 100);
+                                                    final double playIconSize =
+                                                        (maxControlsWidth /
+                                                                400 *
+                                                                52)
+                                                            .clamp(40, 80);
 
-                                                return Center(
-                                                  child: RepaintBoundary(
-                                                    child: Container(
-                                                      alignment:
-                                                          Alignment.center,
-                                                      constraints:
-                                                          BoxConstraints(
-                                                            maxWidth:
-                                                                progressBarWidth,
-                                                          ),
-                                                      child: Row(
-                                                        mainAxisAlignment:
-                                                            MainAxisAlignment
-                                                                .center,
-                                                        mainAxisSize:
-                                                            MainAxisSize.max,
-                                                        children: [
-                                                          // Combinar todos los ValueListenableBuilder en uno solo
-                                                          ValueListenableBuilder<
-                                                            bool
-                                                          >(
-                                                            valueListenable:
-                                                                playLoadingNotifier,
-                                                            builder: (context, isLoading, _) {
-                                                              return ValueListenableBuilder<
+                                                    return Center(
+                                                      child: RepaintBoundary(
+                                                        child: Container(
+                                                          alignment:
+                                                              Alignment.center,
+                                                          constraints:
+                                                              BoxConstraints(
+                                                                maxWidth:
+                                                                    progressBarWidth,
+                                                              ),
+                                                          child: Row(
+                                                            mainAxisAlignment:
+                                                                MainAxisAlignment
+                                                                    .center,
+                                                            mainAxisSize:
+                                                                MainAxisSize
+                                                                    .max,
+                                                            children: [
+                                                              // Combinar todos los ValueListenableBuilder en uno solo
+                                                              ValueListenableBuilder<
                                                                 bool
                                                               >(
                                                                 valueListenable:
-                                                                    audioHandler
-                                                                        .myHandler
-                                                                        ?.isShuffleNotifier ??
-                                                                    ValueNotifier(
-                                                                      false,
-                                                                    ),
+                                                                    playLoadingNotifier,
                                                                 builder:
                                                                     (
                                                                       context,
-                                                                      isShuffle,
+                                                                      isLoading,
                                                                       _,
                                                                     ) {
-                                                                      return Row(
-                                                                        mainAxisAlignment:
-                                                                            MainAxisAlignment.center,
-                                                                        mainAxisSize:
-                                                                            MainAxisSize.max,
-                                                                        children: [
-                                                                          (isAmoledTheme &&
-                                                                                  isShuffle)
-                                                                              ? Container(
-                                                                                  decoration: BoxDecoration(
-                                                                                    color: Colors.white.withValues(
-                                                                                      alpha: 0.12,
-                                                                                    ),
-                                                                                    borderRadius: BorderRadius.circular(
-                                                                                      12,
-                                                                                    ),
-                                                                                  ),
-                                                                                  child: IconButton(
-                                                                                    icon: const Icon(
-                                                                                      Icons.shuffle_rounded,
-                                                                                      weight: 600,
-                                                                                    ),
-                                                                                    color: Colors.white,
-                                                                                    iconSize: iconSize,
-                                                                                    onPressed: () async {
-                                                                                      if (isLoading) {
-                                                                                        return;
-                                                                                      }
-                                                                                      await audioHandler.myHandler?.toggleShuffle(
-                                                                                        !isShuffle,
-                                                                                      );
-                                                                                    },
-                                                                                    tooltip: LocaleProvider.tr(
-                                                                                      'shuffle',
-                                                                                    ),
-                                                                                  ),
-                                                                                )
-                                                                              : IconButton(
-                                                                                  icon: const Icon(
-                                                                                    Icons.shuffle_rounded,
-                                                                                    grade: 200,
-                                                                                  ),
-                                                                                  color: isShuffle
-                                                                                      ? Theme.of(
-                                                                                          context,
-                                                                                        ).colorScheme.primary
-                                                                                      : isAmoledTheme
-                                                                                      ? Theme.of(
-                                                                                          context,
-                                                                                        ).colorScheme.onSurface
-                                                                                      : Theme.of(
-                                                                                              context,
-                                                                                            ).brightness ==
-                                                                                            Brightness.light
-                                                                                      ? Theme.of(
-                                                                                          context,
-                                                                                        ).colorScheme.onSurface.withValues(
-                                                                                          alpha: 0.9,
-                                                                                        )
-                                                                                      : Theme.of(
-                                                                                          context,
-                                                                                        ).colorScheme.onSurface,
-                                                                                  iconSize: iconSize,
-                                                                                  onPressed: () async {
-                                                                                    if (isLoading) {
-                                                                                      return;
-                                                                                    }
-                                                                                    await audioHandler.myHandler?.toggleShuffle(
-                                                                                      !isShuffle,
-                                                                                    );
-                                                                                  },
-                                                                                  tooltip: LocaleProvider.tr(
-                                                                                    'shuffle',
-                                                                                  ),
-                                                                                ),
-                                                                          SizedBox(
-                                                                            width:
-                                                                                iconSize /
-                                                                                6,
-                                                                          ),
-                                                                          IconButton(
-                                                                            icon: const Icon(
-                                                                              Icons.skip_previous_rounded,
-                                                                              grade: 200,
-                                                                              fill: 1,
+                                                                      return ValueListenableBuilder<
+                                                                        bool
+                                                                      >(
+                                                                        valueListenable:
+                                                                            audioHandler.myHandler?.isShuffleNotifier ??
+                                                                            ValueNotifier(
+                                                                              false,
                                                                             ),
-                                                                            color:
-                                                                                Theme.of(
-                                                                                      context,
-                                                                                    ).brightness ==
-                                                                                    Brightness.light
-                                                                                ? Theme.of(
-                                                                                    context,
-                                                                                  ).colorScheme.onSurface.withValues(
-                                                                                    alpha: 0.9,
-                                                                                  )
-                                                                                : Theme.of(
-                                                                                    context,
-                                                                                  ).colorScheme.onSurface,
-                                                                            iconSize:
-                                                                                sideIconSize,
-                                                                            onPressed: () {
-                                                                              if (isLoading) {
-                                                                                return;
-                                                                              }
-                                                                              audioHandler?.skipToPrevious();
-                                                                            },
-                                                                          ),
-                                                                          Padding(
-                                                                            padding: EdgeInsets.symmetric(
-                                                                              horizontal:
-                                                                                  iconSize /
-                                                                                  3,
-                                                                            ),
-                                                                            child: Material(
-                                                                              color: Colors.transparent,
-                                                                              child: InkWell(
-                                                                                customBorder: RoundedRectangleBorder(
-                                                                                  borderRadius: BorderRadius.circular(
-                                                                                    isPlaying
-                                                                                        ? (mainIconSize /
-                                                                                              3)
-                                                                                        : (mainIconSize /
-                                                                                              2),
-                                                                                  ),
-                                                                                ),
-                                                                                splashColor: Colors.transparent,
-                                                                                highlightColor: Colors.transparent,
-                                                                                onTap: () {
-                                                                                  if (isLoading) {
-                                                                                    return;
-                                                                                  }
-                                                                                  isPlaying
-                                                                                      ? audioHandler?.pause()
-                                                                                      : audioHandler?.play();
-                                                                                },
-                                                                                child:
-                                                                                    showBackground &&
-                                                                                        !isLoading
-                                                                                    ? SizedBox(
-                                                                                        width: mainIconSize,
-                                                                                        height: mainIconSize,
-                                                                                        child:
-                                                                                            TweenAnimationBuilder<
-                                                                                              double
-                                                                                            >(
-                                                                                              tween:
-                                                                                                  Tween<
-                                                                                                    double
-                                                                                                  >(
-                                                                                                    end: isPlaying
-                                                                                                        ? (mainIconSize /
-                                                                                                              3)
-                                                                                                        : (mainIconSize /
-                                                                                                              2),
-                                                                                                  ),
-                                                                                              duration: const Duration(
-                                                                                                milliseconds: 250,
-                                                                                              ),
-                                                                                              curve: Curves.easeInOut,
-                                                                                              builder:
-                                                                                                  (
-                                                                                                    context,
-                                                                                                    radius,
-                                                                                                    _,
-                                                                                                  ) {
-                                                                                                    return CustomPaint(
-                                                                                                      painter: _HolePunchPainter(
-                                                                                                        color: Theme.of(
-                                                                                                          context,
-                                                                                                        ).colorScheme.onSurface,
-                                                                                                        radius: radius,
-                                                                                                        icon: isPlaying
-                                                                                                            ? Icons.pause_rounded
-                                                                                                            : Icons.play_arrow_rounded,
-                                                                                                        iconSize: playIconSize,
-                                                                                                      ),
-                                                                                                    );
-                                                                                                  },
+                                                                        builder:
+                                                                            (
+                                                                              context,
+                                                                              isShuffle,
+                                                                              _,
+                                                                            ) {
+                                                                              return Row(
+                                                                                mainAxisAlignment: MainAxisAlignment.center,
+                                                                                mainAxisSize: MainAxisSize.max,
+                                                                                children: [
+                                                                                  (isAmoledTheme &&
+                                                                                          isShuffle)
+                                                                                      ? Container(
+                                                                                          decoration: BoxDecoration(
+                                                                                            color: Colors.white.withValues(
+                                                                                              alpha: 0.12,
                                                                                             ),
-                                                                                      )
-                                                                                    : AnimatedContainer(
-                                                                                        duration: const Duration(
-                                                                                          milliseconds: 250,
-                                                                                        ),
-                                                                                        curve: Curves.easeInOut,
-                                                                                        width: mainIconSize,
-                                                                                        height: mainIconSize,
-                                                                                        decoration: BoxDecoration(
-                                                                                          color:
-                                                                                              Theme.of(
-                                                                                                    context,
-                                                                                                  ).brightness ==
-                                                                                                  Brightness.light
+                                                                                            borderRadius: BorderRadius.circular(
+                                                                                              12,
+                                                                                            ),
+                                                                                          ),
+                                                                                          child: IconButton(
+                                                                                            icon: const Icon(
+                                                                                              Icons.shuffle_rounded,
+                                                                                              weight: 600,
+                                                                                            ),
+                                                                                            color: Colors.white,
+                                                                                            iconSize: iconSize,
+                                                                                            onPressed: () async {
+                                                                                              if (isLoading) {
+                                                                                                return;
+                                                                                              }
+                                                                                              await audioHandler.myHandler?.toggleShuffle(
+                                                                                                !isShuffle,
+                                                                                              );
+                                                                                            },
+                                                                                            tooltip: LocaleProvider.tr(
+                                                                                              'shuffle',
+                                                                                            ),
+                                                                                          ),
+                                                                                        )
+                                                                                      : IconButton(
+                                                                                          icon: const Icon(
+                                                                                            Icons.shuffle_rounded,
+                                                                                            grade: 200,
+                                                                                          ),
+                                                                                          color: isShuffle
+                                                                                              ? Theme.of(
+                                                                                                  context,
+                                                                                                ).colorScheme.primary
+                                                                                              : isAmoledTheme
+                                                                                              ? Theme.of(
+                                                                                                  context,
+                                                                                                ).colorScheme.onSurface
+                                                                                              : Theme.of(
+                                                                                                      context,
+                                                                                                    ).brightness ==
+                                                                                                    Brightness.light
                                                                                               ? Theme.of(
                                                                                                   context,
                                                                                                 ).colorScheme.onSurface.withValues(
@@ -4847,6 +4979,61 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                                                               : Theme.of(
                                                                                                   context,
                                                                                                 ).colorScheme.onSurface,
+                                                                                          iconSize: iconSize,
+                                                                                          onPressed: () async {
+                                                                                            if (isLoading) {
+                                                                                              return;
+                                                                                            }
+                                                                                            await audioHandler.myHandler?.toggleShuffle(
+                                                                                              !isShuffle,
+                                                                                            );
+                                                                                          },
+                                                                                          tooltip: LocaleProvider.tr(
+                                                                                            'shuffle',
+                                                                                          ),
+                                                                                        ),
+                                                                                  SizedBox(
+                                                                                    width:
+                                                                                        iconSize /
+                                                                                        6,
+                                                                                  ),
+                                                                                  IconButton(
+                                                                                    icon: const Icon(
+                                                                                      Icons.skip_previous_rounded,
+                                                                                      grade: 200,
+                                                                                      fill: 1,
+                                                                                    ),
+                                                                                    color:
+                                                                                        Theme.of(
+                                                                                              context,
+                                                                                            ).brightness ==
+                                                                                            Brightness.light
+                                                                                        ? Theme.of(
+                                                                                            context,
+                                                                                          ).colorScheme.onSurface.withValues(
+                                                                                            alpha: 0.9,
+                                                                                          )
+                                                                                        : Theme.of(
+                                                                                            context,
+                                                                                          ).colorScheme.onSurface,
+                                                                                    iconSize: sideIconSize,
+                                                                                    onPressed: () {
+                                                                                      if (isLoading) {
+                                                                                        return;
+                                                                                      }
+                                                                                      audioHandler?.skipToPrevious();
+                                                                                    },
+                                                                                  ),
+                                                                                  Padding(
+                                                                                    padding: EdgeInsets.symmetric(
+                                                                                      horizontal:
+                                                                                          iconSize /
+                                                                                          3,
+                                                                                    ),
+                                                                                    child: Material(
+                                                                                      color: Colors.transparent,
+                                                                                      child: InkWell(
+                                                                                        customBorder: RoundedRectangleBorder(
                                                                                           borderRadius: BorderRadius.circular(
                                                                                             isPlaying
                                                                                                 ? (mainIconSize /
@@ -4855,414 +5042,441 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                                                                       2),
                                                                                           ),
                                                                                         ),
-                                                                                        child: Center(
-                                                                                          child: isLoading
-                                                                                              ? SizedBox(
-                                                                                                  width:
-                                                                                                      playIconSize -
-                                                                                                      10,
-                                                                                                  height:
-                                                                                                      playIconSize -
-                                                                                                      10,
-                                                                                                  child: CircularProgressIndicator(
-                                                                                                    strokeWidth: 5,
-                                                                                                    strokeCap: StrokeCap.round,
-                                                                                                    color:
-                                                                                                        Theme.of(
-                                                                                                              context,
-                                                                                                            ).brightness ==
-                                                                                                            Brightness.light
-                                                                                                        ? Theme.of(
+                                                                                        splashColor: Colors.transparent,
+                                                                                        highlightColor: Colors.transparent,
+                                                                                        onTap: () {
+                                                                                          if (isLoading) {
+                                                                                            return;
+                                                                                          }
+                                                                                          isPlaying
+                                                                                              ? audioHandler?.pause()
+                                                                                              : audioHandler?.play();
+                                                                                        },
+                                                                                        child:
+                                                                                            (showBackground ||
+                                                                                                    showDynamicBg ||
+                                                                                                    isDynamicTheme) &&
+                                                                                                !isLoading
+                                                                                            ? SizedBox(
+                                                                                                width: mainIconSize,
+                                                                                                height: mainIconSize,
+                                                                                                child:
+                                                                                                    TweenAnimationBuilder<
+                                                                                                      double
+                                                                                                    >(
+                                                                                                      tween:
+                                                                                                          Tween<
+                                                                                                            double
+                                                                                                          >(
+                                                                                                            end: isPlaying
+                                                                                                                ? (mainIconSize /
+                                                                                                                      3)
+                                                                                                                : (mainIconSize /
+                                                                                                                      2),
+                                                                                                          ),
+                                                                                                      duration: const Duration(
+                                                                                                        milliseconds: 250,
+                                                                                                      ),
+                                                                                                      curve: Curves.easeInOut,
+                                                                                                      builder:
+                                                                                                          (
                                                                                                             context,
-                                                                                                          ).colorScheme.surface.withValues(
-                                                                                                            alpha: 0.9,
-                                                                                                          )
-                                                                                                        : Theme.of(
+                                                                                                            radius,
+                                                                                                            _,
+                                                                                                          ) {
+                                                                                                            return CustomPaint(
+                                                                                                              painter: _HolePunchPainter(
+                                                                                                                color: Theme.of(
+                                                                                                                  context,
+                                                                                                                ).colorScheme.onSurface,
+                                                                                                                radius: radius,
+                                                                                                                icon: isPlaying
+                                                                                                                    ? Icons.pause_rounded
+                                                                                                                    : Icons.play_arrow_rounded,
+                                                                                                                iconSize: playIconSize,
+                                                                                                              ),
+                                                                                                            );
+                                                                                                          },
+                                                                                                    ),
+                                                                                              )
+                                                                                            : AnimatedContainer(
+                                                                                                duration: const Duration(
+                                                                                                  milliseconds: 250,
+                                                                                                ),
+                                                                                                curve: Curves.easeInOut,
+                                                                                                width: mainIconSize,
+                                                                                                height: mainIconSize,
+                                                                                                decoration: BoxDecoration(
+                                                                                                  color:
+                                                                                                      Theme.of(
                                                                                                             context,
-                                                                                                          ).colorScheme.surface,
-                                                                                                  ),
-                                                                                                )
-                                                                                              : Icon(
-                                                                                                  isPlaying
-                                                                                                      ? Icons.pause_rounded
-                                                                                                      : Icons.play_arrow_rounded,
-                                                                                                  size: playIconSize,
-                                                                                                  grade: 200,
-                                                                                                  fill: 1,
-                                                                                                  color: showBackground
-                                                                                                      ? Colors.black
-                                                                                                      : Theme.of(
-                                                                                                              context,
-                                                                                                            ).brightness ==
-                                                                                                            Brightness.light
+                                                                                                          ).brightness ==
+                                                                                                          Brightness.light
                                                                                                       ? Theme.of(
                                                                                                           context,
-                                                                                                        ).colorScheme.surface.withValues(
+                                                                                                        ).colorScheme.onSurface.withValues(
                                                                                                           alpha: 0.9,
                                                                                                         )
                                                                                                       : Theme.of(
                                                                                                           context,
-                                                                                                        ).colorScheme.surface,
+                                                                                                        ).colorScheme.onSurface,
+                                                                                                  borderRadius: BorderRadius.circular(
+                                                                                                    isPlaying
+                                                                                                        ? (mainIconSize /
+                                                                                                              3)
+                                                                                                        : (mainIconSize /
+                                                                                                              2),
+                                                                                                  ),
                                                                                                 ),
-                                                                                        ),
+                                                                                                child: Center(
+                                                                                                  child: isLoading
+                                                                                                      ? SizedBox(
+                                                                                                          width:
+                                                                                                              playIconSize -
+                                                                                                              10,
+                                                                                                          height:
+                                                                                                              playIconSize -
+                                                                                                              10,
+                                                                                                          child: CircularProgressIndicator(
+                                                                                                            strokeWidth: 5,
+                                                                                                            strokeCap: StrokeCap.round,
+                                                                                                            color:
+                                                                                                                Theme.of(
+                                                                                                                      context,
+                                                                                                                    ).brightness ==
+                                                                                                                    Brightness.light
+                                                                                                                ? Theme.of(
+                                                                                                                    context,
+                                                                                                                  ).colorScheme.surface.withValues(
+                                                                                                                    alpha: 0.9,
+                                                                                                                  )
+                                                                                                                : Theme.of(
+                                                                                                                    context,
+                                                                                                                  ).colorScheme.surface,
+                                                                                                          ),
+                                                                                                        )
+                                                                                                      : Icon(
+                                                                                                          isPlaying
+                                                                                                              ? Icons.pause_rounded
+                                                                                                              : Icons.play_arrow_rounded,
+                                                                                                          size: playIconSize,
+                                                                                                          grade: 200,
+                                                                                                          fill: 1,
+                                                                                                          color:
+                                                                                                              (showBackground ||
+                                                                                                                  showDynamicBg ||
+                                                                                                                  isDynamicTheme)
+                                                                                                              ? Colors.black
+                                                                                                              : Theme.of(
+                                                                                                                      context,
+                                                                                                                    ).brightness ==
+                                                                                                                    Brightness.light
+                                                                                                              ? Theme.of(
+                                                                                                                  context,
+                                                                                                                ).colorScheme.surface.withValues(
+                                                                                                                  alpha: 0.9,
+                                                                                                                )
+                                                                                                              : Theme.of(
+                                                                                                                  context,
+                                                                                                                ).colorScheme.surface,
+                                                                                                        ),
+                                                                                                ),
+                                                                                              ),
                                                                                       ),
-                                                                              ),
-                                                                            ),
-                                                                          ),
-                                                                          IconButton(
-                                                                            icon: const Icon(
-                                                                              Icons.skip_next_rounded,
-                                                                              grade: 200,
-                                                                              fill: 1,
-                                                                            ),
-                                                                            color:
-                                                                                Theme.of(
-                                                                                      context,
-                                                                                    ).brightness ==
-                                                                                    Brightness.light
-                                                                                ? Theme.of(
-                                                                                    context,
-                                                                                  ).colorScheme.onSurface.withValues(
-                                                                                    alpha: 0.9,
-                                                                                  )
-                                                                                : Theme.of(
-                                                                                    context,
-                                                                                  ).colorScheme.onSurface,
-                                                                            iconSize:
-                                                                                sideIconSize,
-                                                                            onPressed: () {
-                                                                              if (isLoading) {
-                                                                                return;
-                                                                              }
-                                                                              audioHandler?.skipToNext();
-                                                                            },
-                                                                          ),
-                                                                          SizedBox(
-                                                                            width:
-                                                                                iconSize /
-                                                                                6,
-                                                                          ),
-                                                                          (isAmoledTheme &&
-                                                                                  repeatMode !=
-                                                                                      AudioServiceRepeatMode.none)
-                                                                              ? Container(
-                                                                                  decoration: BoxDecoration(
-                                                                                    color: Colors.white.withValues(
-                                                                                      alpha: 0.12,
-                                                                                    ),
-                                                                                    borderRadius: BorderRadius.circular(
-                                                                                      12,
                                                                                     ),
                                                                                   ),
-                                                                                  child: IconButton(
-                                                                                    icon: Icon(
-                                                                                      repeatIcon,
+                                                                                  IconButton(
+                                                                                    icon: const Icon(
+                                                                                      Icons.skip_next_rounded,
+                                                                                      grade: 200,
+                                                                                      fill: 1,
                                                                                     ),
-                                                                                    color: Colors.white,
-                                                                                    iconSize: iconSize,
+                                                                                    color:
+                                                                                        Theme.of(
+                                                                                              context,
+                                                                                            ).brightness ==
+                                                                                            Brightness.light
+                                                                                        ? Theme.of(
+                                                                                            context,
+                                                                                          ).colorScheme.onSurface.withValues(
+                                                                                            alpha: 0.9,
+                                                                                          )
+                                                                                        : Theme.of(
+                                                                                            context,
+                                                                                          ).colorScheme.onSurface,
+                                                                                    iconSize: sideIconSize,
                                                                                     onPressed: () {
                                                                                       if (isLoading) {
                                                                                         return;
                                                                                       }
-                                                                                      AudioServiceRepeatMode newMode;
-                                                                                      if (repeatMode ==
-                                                                                          AudioServiceRepeatMode.none) {
-                                                                                        newMode = AudioServiceRepeatMode.all;
-                                                                                      } else if (repeatMode ==
-                                                                                          AudioServiceRepeatMode.all) {
-                                                                                        newMode = AudioServiceRepeatMode.one;
-                                                                                      } else {
-                                                                                        newMode = AudioServiceRepeatMode.none;
-                                                                                      }
-                                                                                      audioHandler?.setRepeatMode(
-                                                                                        newMode,
-                                                                                      );
+                                                                                      audioHandler?.skipToNext();
                                                                                     },
-                                                                                    tooltip: LocaleProvider.tr(
-                                                                                      'repeat',
-                                                                                    ),
                                                                                   ),
-                                                                                )
-                                                                              : IconButton(
-                                                                                  icon: Icon(
-                                                                                    repeatIcon,
-                                                                                    grade: 200,
+                                                                                  SizedBox(
+                                                                                    width:
+                                                                                        iconSize /
+                                                                                        6,
                                                                                   ),
-                                                                                  color: repeatColor,
-                                                                                  iconSize: iconSize,
-                                                                                  onPressed: () {
-                                                                                    if (isLoading) {
-                                                                                      return;
-                                                                                    }
-                                                                                    AudioServiceRepeatMode newMode;
-                                                                                    if (repeatMode ==
-                                                                                        AudioServiceRepeatMode.none) {
-                                                                                      newMode = AudioServiceRepeatMode.all;
-                                                                                    } else if (repeatMode ==
-                                                                                        AudioServiceRepeatMode.all) {
-                                                                                      newMode = AudioServiceRepeatMode.one;
-                                                                                    } else {
-                                                                                      newMode = AudioServiceRepeatMode.none;
-                                                                                    }
-                                                                                    audioHandler?.setRepeatMode(
-                                                                                      newMode,
-                                                                                    );
-                                                                                  },
-                                                                                  tooltip: LocaleProvider.tr(
-                                                                                    'repeat',
-                                                                                  ),
-                                                                                ),
-                                                                        ],
+                                                                                  (isAmoledTheme &&
+                                                                                          repeatMode !=
+                                                                                              AudioServiceRepeatMode.none)
+                                                                                      ? Container(
+                                                                                          decoration: BoxDecoration(
+                                                                                            color: Colors.white.withValues(
+                                                                                              alpha: 0.12,
+                                                                                            ),
+                                                                                            borderRadius: BorderRadius.circular(
+                                                                                              12,
+                                                                                            ),
+                                                                                          ),
+                                                                                          child: IconButton(
+                                                                                            icon: Icon(
+                                                                                              repeatIcon,
+                                                                                            ),
+                                                                                            color: Colors.white,
+                                                                                            iconSize: iconSize,
+                                                                                            onPressed: () {
+                                                                                              if (isLoading) {
+                                                                                                return;
+                                                                                              }
+                                                                                              AudioServiceRepeatMode newMode;
+                                                                                              if (repeatMode ==
+                                                                                                  AudioServiceRepeatMode.none) {
+                                                                                                newMode = AudioServiceRepeatMode.all;
+                                                                                              } else if (repeatMode ==
+                                                                                                  AudioServiceRepeatMode.all) {
+                                                                                                newMode = AudioServiceRepeatMode.one;
+                                                                                              } else {
+                                                                                                newMode = AudioServiceRepeatMode.none;
+                                                                                              }
+                                                                                              audioHandler?.setRepeatMode(
+                                                                                                newMode,
+                                                                                              );
+                                                                                            },
+                                                                                            tooltip: LocaleProvider.tr(
+                                                                                              'repeat',
+                                                                                            ),
+                                                                                          ),
+                                                                                        )
+                                                                                      : IconButton(
+                                                                                          icon: Icon(
+                                                                                            repeatIcon,
+                                                                                            grade: 200,
+                                                                                          ),
+                                                                                          color: repeatColor,
+                                                                                          iconSize: iconSize,
+                                                                                          onPressed: () {
+                                                                                            if (isLoading) {
+                                                                                              return;
+                                                                                            }
+                                                                                            AudioServiceRepeatMode newMode;
+                                                                                            if (repeatMode ==
+                                                                                                AudioServiceRepeatMode.none) {
+                                                                                              newMode = AudioServiceRepeatMode.all;
+                                                                                            } else if (repeatMode ==
+                                                                                                AudioServiceRepeatMode.all) {
+                                                                                              newMode = AudioServiceRepeatMode.one;
+                                                                                            } else {
+                                                                                              newMode = AudioServiceRepeatMode.none;
+                                                                                            }
+                                                                                            audioHandler?.setRepeatMode(
+                                                                                              newMode,
+                                                                                            );
+                                                                                          },
+                                                                                          tooltip: LocaleProvider.tr(
+                                                                                            'repeat',
+                                                                                          ),
+                                                                                        ),
+                                                                                ],
+                                                                              );
+                                                                            },
                                                                       );
                                                                     },
-                                                              );
-                                                            },
+                                                              ),
+                                                            ],
                                                           ),
-                                                        ],
+                                                        ),
                                                       ),
-                                                    ),
-                                                  ),
+                                                    );
+                                                  },
                                                 );
                                               },
-                                            );
-                                          },
-                                        ),
-                                        const Spacer(),
-                                        if (!is16by9 && !isSmallScreen) ...[
-                                          Transform.translate(
-                                            offset: Offset(
-                                              0,
-                                              _isGestureNavigation ? 14 : -4,
                                             ),
-                                            child: SizedBox(
-                                              height: 46,
-                                              child: Stack(
-                                                children: [
-                                                  // ── Dispositivo de salida (izquierda) ──
-                                                  Align(
-                                                    alignment:
-                                                        Alignment.centerLeft,
-                                                    child: Padding(
-                                                      padding:
-                                                          const EdgeInsets.only(
-                                                            left: 20.0,
-                                                          ),
-                                                      child: FutureBuilder<AudioSession>(
-                                                        future: AudioSession
-                                                            .instance,
-                                                        builder: (context, sessionSnap) {
-                                                          if (!sessionSnap
-                                                              .hasData) {
-                                                            return const SizedBox.shrink();
-                                                          }
-                                                          return StreamBuilder<
-                                                            Set<AudioDevice>
-                                                          >(
-                                                            stream: sessionSnap
-                                                                .data!
-                                                                .devicesStream,
-                                                            builder: (context, snapshot) {
-                                                              final devices =
-                                                                  (snapshot.data ??
-                                                                          {})
-                                                                      .where(
-                                                                        (d) => d
-                                                                            .isOutput,
-                                                                      )
-                                                                      .toList();
-
-                                                              AudioDevice? best;
-                                                              best = devices
-                                                                  .where(
-                                                                    (d) =>
-                                                                        d.type ==
-                                                                        AudioDeviceType
-                                                                            .bluetoothA2dp,
-                                                                  )
-                                                                  .firstOrNull;
-                                                              best ??= devices
-                                                                  .where(
-                                                                    (d) =>
-                                                                        d.type ==
-                                                                        AudioDeviceType
-                                                                            .bluetoothSco,
-                                                                  )
-                                                                  .firstOrNull;
-                                                              best ??= devices
-                                                                  .where(
-                                                                    (d) =>
-                                                                        d.type ==
-                                                                            AudioDeviceType.wiredHeadset ||
-                                                                        d.type ==
-                                                                            AudioDeviceType.wiredHeadphones,
-                                                                  )
-                                                                  .firstOrNull;
-                                                              best ??= devices
-                                                                  .where(
-                                                                    (d) =>
-                                                                        d.type ==
-                                                                        AudioDeviceType
-                                                                            .builtInSpeaker,
-                                                                  )
-                                                                  .firstOrNull;
-                                                              best ??= devices
-                                                                  .where(
-                                                                    (d) =>
-                                                                        d.type ==
-                                                                        AudioDeviceType
-                                                                            .builtInEarpiece,
-                                                                  )
-                                                                  .firstOrNull;
-
-                                                              final color =
-                                                                  Theme.of(
-                                                                        context,
-                                                                      )
-                                                                      .colorScheme
-                                                                      .onSurface
-                                                                      .withValues(
-                                                                        alpha:
-                                                                            0.65,
-                                                                      );
-
-                                                              final IconData
-                                                              icon;
-                                                              switch (best
-                                                                  ?.type) {
-                                                                case AudioDeviceType
-                                                                    .bluetoothA2dp:
-                                                                case AudioDeviceType
-                                                                    .bluetoothSco:
-                                                                case AudioDeviceType
-                                                                    .bluetoothLe:
-                                                                  icon = Icons
-                                                                      .bluetooth_audio_rounded;
-                                                                case AudioDeviceType
-                                                                    .wiredHeadset:
-                                                                case AudioDeviceType
-                                                                    .wiredHeadphones:
-                                                                  icon = Icons
-                                                                      .headphones_rounded;
-                                                                case AudioDeviceType
-                                                                    .builtInEarpiece:
-                                                                  icon = Icons
-                                                                      .phone_in_talk_rounded;
-                                                                default:
-                                                                  icon = Icons
-                                                                      .volume_up_rounded;
-                                                              }
-
-                                                              final name =
-                                                                  best?.name
-                                                                      .trim() ??
-                                                                  '';
-
-                                                              return Row(
-                                                                mainAxisSize:
-                                                                    MainAxisSize
-                                                                        .min,
-                                                                children: [
-                                                                  Icon(
-                                                                    icon,
-                                                                    size: 18,
-                                                                    color:
-                                                                        color,
-                                                                  ),
-                                                                  if (name
-                                                                      .isNotEmpty) ...[
-                                                                    const SizedBox(
-                                                                      width: 4,
-                                                                    ),
-                                                                    Text(
-                                                                      name,
-                                                                      style: TextStyle(
-                                                                        fontSize:
-                                                                            11,
-                                                                        color:
-                                                                            color,
-                                                                        fontWeight:
-                                                                            FontWeight.w500,
-                                                                      ),
-                                                                      maxLines:
-                                                                          1,
-                                                                      overflow:
-                                                                          TextOverflow
-                                                                              .ellipsis,
-                                                                    ),
-                                                                  ],
-                                                                ],
-                                                              );
-                                                            },
-                                                          );
-                                                        },
-                                                      ),
-                                                    ),
-                                                  ),
-                                                  // ── Botón lista de reproducción (derecha) ──
-                                                  Align(
-                                                    alignment:
-                                                        Alignment.centerRight,
-                                                    child: Padding(
-                                                      padding:
-                                                          const EdgeInsets.only(
-                                                            right: 20.0,
-                                                          ),
-                                                      child: Builder(
-                                                        builder: (context) {
-                                                          final color =
-                                                              Theme.of(context)
-                                                                  .colorScheme
-                                                                  .onSurface
-                                                                  .withValues(
-                                                                    alpha: 0.65,
-                                                                  );
-                                                          return Material(
-                                                            color: Colors
-                                                                .transparent,
-                                                            child: InkWell(
-                                                              borderRadius:
-                                                                  BorderRadius.circular(
-                                                                    20,
-                                                                  ),
-                                                              onTap: () {
-                                                                _showPlaylistDialog(
-                                                                  context,
-                                                                );
-                                                              },
-                                                              child: Container(
-                                                                width: 44,
-                                                                height: 44,
-                                                                decoration: BoxDecoration(
-                                                                  shape: BoxShape
-                                                                      .circle,
-                                                                  color:
-                                                                      Theme.of(
-                                                                        context,
-                                                                      ).colorScheme.onSurface.withValues(
-                                                                        alpha:
-                                                                            0.06,
-                                                                      ),
+                                            if (!is16by9 && !isSmallScreen) ...[
+                                              Transform.translate(
+                                                offset: Offset(
+                                                  0,
+                                                  _isGestureNavigation
+                                                      ? 36
+                                                      : -4,
+                                                ),
+                                                child: Flexible(
+                                                  child: SizedBox(
+                                                    child: Stack(
+                                                      children: [
+                                                        // ── Dispositivo de salida (izquierda) ──
+                                                        Align(
+                                                          alignment: Alignment
+                                                              .centerLeft,
+                                                          child: Padding(
+                                                            padding:
+                                                                const EdgeInsets.only(
+                                                                  left: 20.0,
                                                                 ),
-                                                                child: Icon(
-                                                                  Icons
-                                                                      .queue_music,
-                                                                  size: 20,
-                                                                  color: color,
-                                                                ),
-                                                              ),
+                                                            child: FutureBuilder<AudioSession>(
+                                                              future:
+                                                                  AudioSession
+                                                                      .instance,
+                                                              builder:
+                                                                  (
+                                                                    context,
+                                                                    sessionSnap,
+                                                                  ) {
+                                                                    if (!sessionSnap
+                                                                        .hasData) {
+                                                                      return const SizedBox.shrink();
+                                                                    }
+                                                                    return StreamBuilder<
+                                                                      Set<
+                                                                        AudioDevice
+                                                                      >
+                                                                    >(
+                                                                      stream: sessionSnap
+                                                                          .data!
+                                                                          .devicesStream,
+                                                                      builder:
+                                                                          (
+                                                                            context,
+                                                                            snapshot,
+                                                                          ) {
+                                                                            final devices =
+                                                                                (snapshot.data ??
+                                                                                        {})
+                                                                                    .where(
+                                                                                      (
+                                                                                        d,
+                                                                                      ) => d.isOutput,
+                                                                                    )
+                                                                                    .toList();
+
+                                                                            AudioDevice?
+                                                                            best;
+                                                                            best = devices
+                                                                                .where(
+                                                                                  (
+                                                                                    d,
+                                                                                  ) =>
+                                                                                      d.type ==
+                                                                                      AudioDeviceType.bluetoothA2dp,
+                                                                                )
+                                                                                .firstOrNull;
+                                                                            best ??= devices
+                                                                                .where(
+                                                                                  (
+                                                                                    d,
+                                                                                  ) =>
+                                                                                      d.type ==
+                                                                                      AudioDeviceType.bluetoothSco,
+                                                                                )
+                                                                                .firstOrNull;
+                                                                            best ??= devices
+                                                                                .where(
+                                                                                  (
+                                                                                    d,
+                                                                                  ) =>
+                                                                                      d.type ==
+                                                                                          AudioDeviceType.wiredHeadset ||
+                                                                                      d.type ==
+                                                                                          AudioDeviceType.wiredHeadphones,
+                                                                                )
+                                                                                .firstOrNull;
+                                                                            best ??= devices
+                                                                                .where(
+                                                                                  (
+                                                                                    d,
+                                                                                  ) =>
+                                                                                      d.type ==
+                                                                                      AudioDeviceType.builtInSpeaker,
+                                                                                )
+                                                                                .firstOrNull;
+                                                                            best ??= devices
+                                                                                .where(
+                                                                                  (
+                                                                                    d,
+                                                                                  ) =>
+                                                                                      d.type ==
+                                                                                      AudioDeviceType.builtInEarpiece,
+                                                                                )
+                                                                                .firstOrNull;
+
+                                                                            final color =
+                                                                                Theme.of(
+                                                                                  context,
+                                                                                ).colorScheme.onSurface.withValues(
+                                                                                  alpha: 0.65,
+                                                                                );
+
+                                                                            final IconData
+                                                                            icon;
+                                                                            switch (best?.type) {
+                                                                              case AudioDeviceType.bluetoothA2dp:
+                                                                              case AudioDeviceType.bluetoothSco:
+                                                                              case AudioDeviceType.bluetoothLe:
+                                                                                icon = Icons.bluetooth_audio_rounded;
+                                                                              case AudioDeviceType.wiredHeadset:
+                                                                              case AudioDeviceType.wiredHeadphones:
+                                                                                icon = Icons.headphones_rounded;
+                                                                              case AudioDeviceType.builtInEarpiece:
+                                                                                icon = Icons.phone_in_talk_rounded;
+                                                                              default:
+                                                                                icon = Icons.volume_up_rounded;
+                                                                            }
+
+                                                                            final name =
+                                                                                best?.name.trim() ??
+                                                                                '';
+
+                                                                            return Row(
+                                                                              mainAxisSize: MainAxisSize.min,
+                                                                              children: [
+                                                                                Icon(
+                                                                                  icon,
+                                                                                  size: 18,
+                                                                                  color: color,
+                                                                                ),
+                                                                                if (name.isNotEmpty) ...[
+                                                                                  const SizedBox(
+                                                                                    width: 4,
+                                                                                  ),
+                                                                                  Text(
+                                                                                    name,
+                                                                                    style: TextStyle(
+                                                                                      fontSize: 11,
+                                                                                      color: color,
+                                                                                      fontWeight: FontWeight.w500,
+                                                                                    ),
+                                                                                    maxLines: 1,
+                                                                                    overflow: TextOverflow.ellipsis,
+                                                                                  ),
+                                                                                ],
+                                                                              ],
+                                                                            );
+                                                                          },
+                                                                    );
+                                                                  },
                                                             ),
-                                                          );
-                                                        },
-                                                      ),
+                                                          ),
+                                                        ),
+                                                      ],
                                                     ),
                                                   ),
-                                                ],
+                                                ),
                                               ),
-                                            ),
-                                          ),
-                                        ],
-                                      ],
-                                    ),
+                                            ],
+                                          ],
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ),
@@ -5549,11 +5763,28 @@ class SleepTimerOptionsSheet extends StatelessWidget {
       effectiveLightness = 0.15;
     }
 
-    final fixedLightness = (effectiveLightness * 0.85).clamp(0.55, 0.85);
+    // Ajustar el brillo: bajamos el rango para que el color sea más "rico"
+    // y no se vea pálido (pastel), permitiendo que la saturación resalte.
+    // Brillo dinámico: Si el color original es muy oscuro, le damos un pequeño boost
+    // para que se note. Si es muy claro, lo oscurecemos para que no se vea pálido.
+    double targetLightness;
+    if (hsl.lightness < 0.2) {
+      // Colores muy oscuros: subirlos un poco menos (0.18 - 0.28)
+      targetLightness = 0.18 + (hsl.lightness * 0.5);
+    } else if (hsl.lightness > 0.5) {
+      // Colores muy claros: bajarlos más (0.3 - 0.4)
+      targetLightness = 0.3 + (hsl.lightness * 0.1);
+    } else {
+      // Colores medios: rango más bajo
+      targetLightness = hsl.lightness.clamp(0.2, 0.4);
+    }
 
+    final fixedLightness = targetLightness.clamp(0.15, 0.36);
+
+    // Saturación extrema mantenida para que el color explote
     final fixedSaturation = isGrayscale
         ? hsl.saturation
-        : hsl.saturation.clamp(0.35, 1.0);
+        : (hsl.saturation * 1.7).clamp(0.8, 1.0);
 
     return hsl
         .withLightness(fixedLightness)
@@ -5563,24 +5794,29 @@ class SleepTimerOptionsSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<bool>(
-      valueListenable: useDynamicColorBackgroundNotifier,
-      builder: (context, useDynamicBg, _) {
-        return ValueListenableBuilder<AppColorScheme>(
-          valueListenable: colorSchemeNotifier,
-          builder: (context, colorScheme, _) {
+    return AnimatedBuilder(
+      animation: Listenable.merge([
+        useDynamicColorBackgroundNotifier,
+        useDynamicColorInDialogsNotifier,
+        colorSchemeNotifier,
+      ]),
+      builder: (context, _) {
+        return Builder(
+          builder: (context) {
+            final useDynamicBg = useDynamicColorBackgroundNotifier.value;
+            final useDynamicDialogs = useDynamicColorInDialogsNotifier.value;
+            final colorScheme = colorSchemeNotifier.value;
             final isAmoled = colorScheme == AppColorScheme.amoled;
             final isDark = Theme.of(context).brightness == Brightness.dark;
-            final showDynamicBg = useDynamicBg && isAmoled && isDark;
+            final showDynamicBg =
+                (useDynamicBg || useDynamicDialogs) && isAmoled && isDark;
 
-            return Container(
-              decoration: BoxDecoration(
-                color: showDynamicBg
-                    ? Colors.black
-                    : Theme.of(context).scaffoldBackgroundColor,
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(28),
-                ),
+            return Material(
+              color: showDynamicBg
+                  ? Colors.black
+                  : Theme.of(context).scaffoldBackgroundColor,
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(28),
               ),
               clipBehavior: Clip.antiAlias,
               child: Stack(
@@ -5594,9 +5830,8 @@ class SleepTimerOptionsSheet extends StatelessWidget {
                             duration: const Duration(milliseconds: 200),
                             curve: Curves.easeInOut,
                             color: normalizePaletteColor(
-                              domColor ??
-                                  Theme.of(context).scaffoldBackgroundColor,
-                            ).withValues(alpha: 0.2),
+                              domColor ?? Colors.black,
+                            ).withValues(alpha: 0.35),
                           ),
                         );
                       },

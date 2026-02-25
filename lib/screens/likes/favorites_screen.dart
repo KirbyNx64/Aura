@@ -461,7 +461,12 @@ class _FavoritesScreenState extends State<FavoritesScreen>
 
   void _handleLongPress(BuildContext context, SongModel song) async {
     final isPinned = await ShortcutsDB().isShortcut(song.data);
+
     if (!context.mounted) return;
+    final isAmoled =
+        Theme.of(context).brightness == Brightness.dark &&
+        Theme.of(context).colorScheme.surface == Colors.black;
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -500,7 +505,12 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                           const SizedBox(height: 4),
                           Text(
                             song.displayArtist,
-                            style: TextStyle(fontSize: 14),
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: isAmoled
+                                  ? Colors.white.withValues(alpha: 0.85)
+                                  : null,
+                            ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -1657,6 +1667,9 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     bool isAmoledTheme, {
     BorderRadius? borderRadius,
   }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isAmoled =
+        isDark && Theme.of(context).colorScheme.surface == Colors.black;
     return ListTile(
       onLongPress: () {
         if (_isSelecting) {
@@ -1739,6 +1752,9 @@ class _FavoritesScreenState extends State<FavoritesScreen>
         _formatArtistWithDuration(song),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
+        style: isAmoled
+            ? TextStyle(color: Colors.white.withValues(alpha: 0.8))
+            : null,
       ),
       trailing: Container(
         width: 40,

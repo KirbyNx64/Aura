@@ -21,6 +21,7 @@ const Map<String, String> appLocalizationsEs = {
   'cancel': 'Cancelar',
   'generating': 'Generando...',
   'share_lyrics': 'Compartir letras',
+  'share_link': 'Compartir enlace',
   'max_lyrics_reached': 'Solo se pueden seleccionar hasta 5 líneas',
   'delete': 'Eliminar',
   'remove': 'Quitar',
@@ -155,6 +156,9 @@ const Map<String, String> appLocalizationsEs = {
   'index_songs_on_startup': 'Indexar archivos de canciones',
   'index_songs_on_startup_desc':
       'Sincroniza automáticamente la base de datos con los archivos del dispositivo',
+  'restore_last_session_on_startup': 'Restaurar última sesión',
+  'restore_last_session_on_startup_desc':
+      'Al abrir la app, restaura la última cola de reproducción y posición',
   'show_lyrics_on_cover': 'Mostrar letra de canciones en carátula',
   'show_lyrics_on_cover_desc':
       'Muestra las letras de las canciones directamente en la carátula del reproductor',
@@ -244,6 +248,8 @@ const Map<String, String> appLocalizationsEs = {
   'use_dynamic_color_background': 'Usar fondo de color dinámico',
   'artwork_quality_description':
       'Selecciona la calidad de las carátulas al reproducir música',
+  'use_dynamic_color_in_dialogs':
+      'Usar color dinámico en secciones (Temporizador, etc)',
   '100_percent_maximum': '100% (Máximo)',
   '80_percent_recommended': '80% (Recomendado)',
   '60_percent_performance': '60% (Rendimiento)',
@@ -592,6 +598,10 @@ const Map<String, String> appLocalizationsEs = {
   'album': 'Álbum',
   'location': 'Ubicación',
   'duration': 'Duración',
+  'video_id_explanation':
+      'Es el identificador único del video en YouTube que se utilizó para descargar esta canción.',
+  'original_title': 'Título original',
+  'original_artist': 'Artista original',
   'close': 'Cerrar',
   'next': 'Siguiente',
   'up_next': 'A continuación:',

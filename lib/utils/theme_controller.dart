@@ -43,10 +43,10 @@ class ThemeController {
     _subscription = null;
   }
 
-  /// Callback cuando cambia el mediaItem
   void _onMediaItemChanged(MediaItem? mediaItem) {
     if (colorSchemeNotifier.value != AppColorScheme.dynamic &&
-        !useDynamicColorBackgroundNotifier.value) {
+        !useDynamicColorBackgroundNotifier.value &&
+        !useDynamicColorInDialogsNotifier.value) {
       return;
     }
     if (mediaItem == null) return;
@@ -158,17 +158,17 @@ class ThemeController {
       final generator = await PaletteGeneratorMaster.fromImageProvider(
         ResizeImage(imageProvider, height: 50, width: 50),
         filters: [
-          // Este filtro solo permite colores con luminosidad entre 0.4 y 0.9
-          (HSLColor hsl) => hsl.lightness > 0.15 && hsl.lightness < 0.7,
-          avoidRedBlackWhitePaletteFilterMaster, // Mantener el filtro por defecto
+          // Permitir colores un poco más oscuros y más claros para capturar tonos más ricos
+          (HSLColor hsl) => hsl.lightness > 0.12 && hsl.lightness < 0.75,
+          avoidRedBlackWhitePaletteFilterMaster,
         ],
       );
 
       final paletteColor =
           generator.dominantColor ??
-          generator.darkVibrantColor ??
-          generator.lightVibrantColor ??
           generator.vibrantColor ??
+          generator.lightVibrantColor ??
+          generator.darkVibrantColor ??
           generator.mutedColor;
 
       if (paletteColor != null) {

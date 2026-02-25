@@ -922,6 +922,10 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     String artistName,
     List<SongModel> songs,
   ) async {
+    final isAmoled =
+        Theme.of(context).brightness == Brightness.dark &&
+        Theme.of(context).colorScheme.surface == Colors.black;
+
     // Obtener información del artista desde el cache
     final artistInfo = await ArtistImagesCacheDB.getCachedArtistImage(
       artistName,
@@ -1023,7 +1027,14 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
-                        Text('${songs.length} ${LocaleProvider.tr('songs')}'),
+                        Text(
+                          '${songs.length} ${LocaleProvider.tr('songs')}',
+                          style: TextStyle(
+                            color: isAmoled
+                                ? Colors.white.withValues(alpha: 0.85)
+                                : null,
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -1311,14 +1322,11 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                     overflow: TextOverflow.ellipsis,
                                     style: TextStyle(
                                       color: isCurrent
-                                          ? (isAmoledTheme
-                                                ? Colors.white.withValues(
-                                                    alpha: 0.7,
-                                                  )
-                                                : Theme.of(context)
-                                                      .colorScheme
-                                                      .primary
-                                                      .withValues(alpha: 0.8))
+                                          ? Theme.of(
+                                              context,
+                                            ).colorScheme.primary
+                                          : isAmoledTheme
+                                          ? Colors.white.withValues(alpha: 0.8)
                                           : null,
                                     ),
                                   ),
@@ -1617,6 +1625,10 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     required bool isCurrent,
     required bool playing,
   }) {
+    final isAmoled =
+        Theme.of(context).brightness == Brightness.dark &&
+        Theme.of(context).colorScheme.surface == Colors.black;
+
     // Usar AnimatedSwitcher para transición suave de la carátula
     Widget finalVisual = AnimatedSwitcher(
       duration: const Duration(milliseconds: 300),
@@ -1726,7 +1738,12 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                               const SizedBox(height: 4),
                               Text(
                                 song.displayArtist,
-                                style: TextStyle(fontSize: 14),
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: isAmoled
+                                      ? Colors.white.withValues(alpha: 0.85)
+                                      : null,
+                                ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -2036,6 +2053,8 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       ? Colors.white
                       : Theme.of(context).colorScheme.primary,
                 )
+              : isAmoledTheme
+              ? TextStyle(color: Colors.white.withValues(alpha: 0.8))
               : null,
         ),
         trailing: const Opacity(opacity: 0, child: Icon(Icons.more_vert)),
@@ -2598,6 +2617,9 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final isFavorite = await FavoritesDB().isFavorite(song.data);
 
     if (!context.mounted) return;
+    final isAmoled =
+        Theme.of(context).brightness == Brightness.dark &&
+        Theme.of(context).colorScheme.surface == Colors.black;
 
     showModalBottomSheet(
       context: context,
@@ -2637,7 +2659,12 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           const SizedBox(height: 4),
                           Text(
                             song.displayArtist,
-                            style: TextStyle(fontSize: 14),
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: isAmoled
+                                  ? Colors.white.withValues(alpha: 0.85)
+                                  : null,
+                            ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -4070,7 +4097,8 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                 await _loadRecents();
                                               },
                                             ),
-                                            if (song.displayArtist.trim()
+                                            if (song.displayArtist
+                                                .trim()
                                                 .trim()
                                                 .isNotEmpty)
                                               ListTile(
@@ -4082,9 +4110,10 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                 ),
                                                 onTap: () {
                                                   Navigator.of(context).pop();
-                                                  final name =
-                                                      song.displayArtist.trim()
-                                                          .trim();
+                                                  final name = song
+                                                      .displayArtist
+                                                      .trim()
+                                                      .trim();
                                                   if (name.isEmpty) {
                                                     return;
                                                   }
@@ -4217,6 +4246,11 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           _formatArtistWithDuration(song),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
+                          style: isAmoledTheme
+                              ? TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.8),
+                                )
+                              : null,
                         ),
                         trailing: Container(
                           width: 40,
@@ -4303,6 +4337,12 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                       song.displayArtist,
                                                       style: TextStyle(
                                                         fontSize: 14,
+                                                        color: isAmoled
+                                                            ? Colors.white
+                                                                  .withValues(
+                                                                    alpha: 0.85,
+                                                                  )
+                                                            : null,
                                                       ),
                                                       maxLines: 1,
                                                       overflow:
@@ -4448,7 +4488,8 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                             await _loadRecents();
                                           },
                                         ),
-                                        if (song.displayArtist.trim()
+                                        if (song.displayArtist
+                                            .trim()
                                             .trim()
                                             .isNotEmpty)
                                           ListTile(
@@ -4460,7 +4501,8 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                             ),
                                             onTap: () {
                                               Navigator.of(context).pop();
-                                              final name = song.displayArtist.trim()
+                                              final name = song.displayArtist
+                                                  .trim()
                                                   .trim();
                                               if (name.isEmpty) {
                                                 return;
@@ -5002,7 +5044,8 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                       );
                                                     },
                                                   ),
-                                                  if (song.displayArtist.trim()
+                                                  if (song.displayArtist
+                                                      .trim()
                                                       .trim()
                                                       .isNotEmpty)
                                                     ListTile(
@@ -5017,9 +5060,10 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                         Navigator.of(
                                                           context,
                                                         ).pop();
-                                                        final name =
-                                                            song.displayArtist.trim()
-                                                                .trim();
+                                                        final name = song
+                                                            .displayArtist
+                                                            .trim()
+                                                            .trim();
                                                         if (name.isEmpty) {
                                                           return;
                                                         }
@@ -5603,7 +5647,8 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                           .value;
                                                 },
                                               ),
-                                              if (song.displayArtist.trim()
+                                              if (song.displayArtist
+                                                  .trim()
                                                   .trim()
                                                   .isNotEmpty)
                                                 ListTile(
@@ -5615,9 +5660,10 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                   ),
                                                   onTap: () {
                                                     Navigator.of(context).pop();
-                                                    final name =
-                                                        song.displayArtist.trim()
-                                                            .trim();
+                                                    final name = song
+                                                        .displayArtist
+                                                        .trim()
+                                                        .trim();
                                                     if (name.isEmpty) {
                                                       return;
                                                     }

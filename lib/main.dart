@@ -17,6 +17,7 @@ import 'package:music/utils/notification_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:hive_ce_flutter/hive_ce_flutter.dart';
 import 'package:music/utils/db/playlist_model.dart';
+import 'package:music/utils/db/download_history_model.dart';
 import 'package:music/utils/audio/synced_lyrics_service.dart';
 import 'package:music/utils/audio/background_audio_handler.dart';
 import 'package:music/utils/db/songs_index_db.dart';
@@ -355,6 +356,7 @@ void main() async {
   TerminateRestart.instance.initialize();
   await Hive.initFlutter();
   Hive.registerAdapter(PlaylistModelAdapter());
+  Hive.registerAdapter(DownloadHistoryModelAdapter());
   await SyncedLyricsService.initialize();
 
   // Inicialización del servicio de notificaciones
@@ -396,6 +398,8 @@ void main() async {
       prefs.getBool('use_artwork_background_overlay') ?? true;
   useDynamicColorBackgroundNotifier.value =
       prefs.getBool('use_dynamic_color_background') ?? false;
+  useDynamicColorInDialogsNotifier.value =
+      prefs.getBool('use_dynamic_color_in_dialogs') ?? false;
 
   // Cargar directorio de descargas
   final downloadDir =
@@ -784,6 +788,8 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
         useArtworkAsBackgroundPlayerNotifier.value = useArtworkPlayer;
         useDynamicColorBackgroundNotifier.value =
             prefs.getBool('use_dynamic_color_background') ?? false;
+        useDynamicColorInDialogsNotifier.value =
+            prefs.getBool('use_dynamic_color_in_dialogs') ?? false;
 
         final lyricsProviderIndex =
             prefs.getInt('lyrics_service_provider') ??

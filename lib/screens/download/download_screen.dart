@@ -177,9 +177,12 @@ class _DownloadScreenState extends State<DownloadScreen>
     setState(() {});
   }
 
-  Future<bool> _getCoverQualitySetting() async {
+  Future<String> _getCoverQualitySetting() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getBool('cover_quality_high') ?? true;
+    final q = prefs.getString('cover_quality');
+    if (q == 'high' || q == 'medium' || q == 'low') return q!;
+    final old = prefs.getBool('cover_quality_high');
+    return old == false ? 'low' : 'high';
   }
 
   // Método para seleccionar stream de audio según calidad (para StreamProvider)
@@ -233,84 +236,58 @@ class _DownloadScreenState extends State<DownloadScreen>
   // Función helper para descargar carátula con configuración de calidad
   Future<Uint8List?> _downloadCoverWithQuality(String videoId) async {
     final coverUrlMax = 'https://img.youtube.com/vi/$videoId/maxresdefault.jpg';
+    final coverUrlSD = 'https://img.youtube.com/vi/$videoId/sddefault.jpg';
     final coverUrlHQ = 'https://img.youtube.com/vi/$videoId/hqdefault.jpg';
 
     Uint8List? bytes;
+    String? usedUrl;
     final client = HttpClient();
     try {
       // Leer configuración de calidad
-      final highQuality = await _getCoverQualitySetting();
+      final coverQuality = await _getCoverQualitySetting();
+      final List<String> urlsToTry = switch (coverQuality) {
+        'high' => [coverUrlMax, coverUrlSD, coverUrlHQ],
+        'medium' => [coverUrlSD, coverUrlHQ],
+        _ => [coverUrlHQ],
+      };
 
-      if (highQuality) {
-        // Calidad alta: prioridad maxresdefault, fallback hqdefault, luego http
-        try {
-          final request = await client.getUrl(Uri.parse(coverUrlMax));
+      // Intento principal con HttpClient
+      try {
+        for (final url in urlsToTry) {
+          final request = await client.getUrl(Uri.parse(url));
           final response = await request.close();
           if (response.statusCode == 200) {
-            bytes = Uint8List.fromList(
-              await consolidateResponseBytes(response),
-            );
-          } else {
-            // Si maxresdefault falla, intentar hqdefault
-            final requestHQ = await client.getUrl(Uri.parse(coverUrlHQ));
-            final responseHQ = await requestHQ.close();
-            if (responseHQ.statusCode == 200) {
-              bytes = Uint8List.fromList(
-                await consolidateResponseBytes(responseHQ),
-              );
-            } else {
-              // Si hqdefault también falla, usar http
-              final httpResponse = await http.get(Uri.parse(coverUrlHQ));
-              if (httpResponse.statusCode == 200) {
-                bytes = httpResponse.bodyBytes;
-              } else {
-                throw Exception('No se pudo descargar ninguna portada');
-              }
-            }
-          }
-        } catch (e) {
-          // Si HttpClient falla, usar http
-          final httpResponse = await http.get(Uri.parse(coverUrlHQ));
-          if (httpResponse.statusCode == 200) {
-            bytes = httpResponse.bodyBytes;
-          } else {
-            throw Exception('No se pudo descargar ninguna portada');
+            bytes = Uint8List.fromList(await consolidateResponseBytes(response));
+            usedUrl = url;
+            break;
           }
         }
-      } else {
-        // Calidad baja: directamente hqdefault, si falla usar http
-        try {
-          final requestHQ = await client.getUrl(Uri.parse(coverUrlHQ));
-          final responseHQ = await requestHQ.close();
-          if (responseHQ.statusCode == 200) {
-            bytes = Uint8List.fromList(
-              await consolidateResponseBytes(responseHQ),
-            );
-          } else {
-            // Si hqdefault falla, usar http
-            final httpResponse = await http.get(Uri.parse(coverUrlHQ));
-            if (httpResponse.statusCode == 200) {
-              bytes = httpResponse.bodyBytes;
-            } else {
-              throw Exception('No se pudo descargar ninguna portada');
-            }
-          }
-        } catch (e) {
-          // Si HttpClient falla, usar http
-          final httpResponse = await http.get(Uri.parse(coverUrlHQ));
+      } catch (_) {
+        // Ignorar y pasar a fallback http
+      }
+
+      // Fallback con http
+      if (bytes == null) {
+        for (final url in urlsToTry) {
+          final httpResponse = await http.get(Uri.parse(url));
           if (httpResponse.statusCode == 200) {
             bytes = httpResponse.bodyBytes;
-          } else {
-            throw Exception('No se pudo descargar ninguna portada');
+            usedUrl = url;
+            break;
           }
         }
+      }
+
+      if (bytes == null) {
+        throw Exception('No se pudo descargar ninguna portada');
       }
 
       // Recortar a cuadrado centrado según la calidad
       final original = img.decodeImage(bytes);
       if (original != null) {
-        if (highQuality) {
-          // Para calidad alta (maxresdefault), recorte normal centrado
+        final isMaxRes = usedUrl?.contains('maxresdefault') == true;
+        if (isMaxRes) {
+          // Para maxresdefault, recorte normal centrado
           final minSide = original.width < original.height
               ? original.width
               : original.height;
@@ -325,7 +302,7 @@ class _DownloadScreenState extends State<DownloadScreen>
           );
           bytes = img.encodeJpg(square);
         } else {
-          // Para calidad baja (hqdefault), recorte especial para eliminar franjas negras
+          // Para sddefault/hqdefault, recorte especial (mismo método para media y baja)
           final width = original.width;
           final height = original.height;
 

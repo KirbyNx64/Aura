@@ -31,6 +31,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   bool _allFilesPermissionGranted = false;
   bool _notificationPermissionGranted = false;
   bool _batteryOptimizationIgnored = false;
+  bool _isRequestingPermission = false;
 
   // Info del dispositivo
   int _androidSdkInt = 0;
@@ -99,43 +100,68 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   }
 
   Future<void> _requestMediaPermission() async {
-    if (Platform.isAndroid && _androidSdkInt >= 33) {
-      await Permission.audio.request();
-    } else {
-      await Permission.storage.request();
+    if (_isRequestingPermission) return;
+    _isRequestingPermission = true;
+    try {
+      if (Platform.isAndroid && _androidSdkInt >= 33) {
+        await Permission.audio.request();
+      } else {
+        await Permission.storage.request();
+      }
+      await _checkPermissions();
+    } finally {
+      _isRequestingPermission = false;
     }
-    await _checkPermissions();
   }
 
   Future<void> _requestAllFilesPermission() async {
-    if (Platform.isAndroid && _androidSdkInt >= 30) {
-      await Permission.manageExternalStorage.request();
+    if (_isRequestingPermission) return;
+    _isRequestingPermission = true;
+    try {
+      if (Platform.isAndroid && _androidSdkInt >= 30) {
+        await Permission.manageExternalStorage.request();
+      }
+      await _checkPermissions();
+    } finally {
+      _isRequestingPermission = false;
     }
-    await _checkPermissions();
   }
 
   Future<void> _requestNotificationPermission() async {
-    await Permission.notification.request();
-    await _checkPermissions();
+    if (_isRequestingPermission) return;
+    _isRequestingPermission = true;
+    try {
+      await Permission.notification.request();
+      await _checkPermissions();
+    } finally {
+      _isRequestingPermission = false;
+    }
   }
 
   Future<void> _requestIgnoreBatteryOptimization() async {
-    if (Platform.isAndroid) {
-      final status = await Permission.ignoreBatteryOptimizations.status;
-      if (!status.isGranted) {
-        final intent = AndroidIntent(
-          action: 'android.settings.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS',
-          data:
-              'package:com.kirby.aura', // Asegúrate de que este es el package name correcto o usa package_info_plus
-          flags: <int>[Flag.FLAG_ACTIVITY_NEW_TASK],
-        );
-        try {
-          await intent.launch();
-        } catch (e) {
-          // Fallback si falla el intent específico
-          await Permission.ignoreBatteryOptimizations.request();
+    if (_isRequestingPermission) return;
+    _isRequestingPermission = true;
+    try {
+      if (Platform.isAndroid) {
+        final status = await Permission.ignoreBatteryOptimizations.status;
+        if (!status.isGranted) {
+          final intent = AndroidIntent(
+            action: 'android.settings.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS',
+            data:
+                'package:com.kirby.aura', // Asegúrate de que este es el package name correcto o usa package_info_plus
+            flags: <int>[Flag.FLAG_ACTIVITY_NEW_TASK],
+          );
+          try {
+            await intent.launch();
+          } catch (e) {
+            // Fallback si falla el intent específico
+            await Permission.ignoreBatteryOptimizations.request();
+          }
         }
       }
+    } finally {
+      _isRequestingPermission = false;
+      _checkPermissions();
     }
   }
 

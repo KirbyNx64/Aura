@@ -581,6 +581,9 @@ class _FoldersScreenState extends State<FoldersScreen>
     final isIgnored = await isSongIgnored(song.data);
 
     if (!context.mounted) return;
+    final isAmoled =
+        Theme.of(context).brightness == Brightness.dark &&
+        Theme.of(context).colorScheme.surface == Colors.black;
 
     showModalBottomSheet(
       context: context,
@@ -627,7 +630,12 @@ class _FoldersScreenState extends State<FoldersScreen>
                               const SizedBox(height: 4),
                               Text(
                                 song.displayArtist,
-                                style: TextStyle(fontSize: 14),
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: isAmoled
+                                      ? Colors.white.withValues(alpha: 0.85)
+                                      : null,
+                                ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -787,6 +795,10 @@ class _FoldersScreenState extends State<FoldersScreen>
     bool isPinned,
     bool isIgnored,
   ) {
+    final isAmoled =
+        Theme.of(context).brightness == Brightness.dark &&
+        Theme.of(context).colorScheme.surface == Colors.black;
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -832,7 +844,12 @@ class _FoldersScreenState extends State<FoldersScreen>
                               const SizedBox(height: 4),
                               Text(
                                 song.displayArtist,
-                                style: TextStyle(fontSize: 14),
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: isAmoled
+                                      ? Colors.white.withValues(alpha: 0.85)
+                                      : null,
+                                ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -2783,6 +2800,13 @@ class _FoldersScreenState extends State<FoldersScreen>
                                   ),
                                   subtitle: Text(
                                     '${playlist.songPaths.length} ${LocaleProvider.tr('songs')}',
+                                    style: isAmoled
+                                        ? TextStyle(
+                                            color: Colors.white.withValues(
+                                              alpha: 0.8,
+                                            ),
+                                          )
+                                        : null,
                                   ),
                                   onTap: () async {
                                     await _loadSongsFromPlaylist(playlist);
@@ -3197,6 +3221,13 @@ class _FoldersScreenState extends State<FoldersScreen>
                                   ),
                                   subtitle: Text(
                                     '${canciones.length} ${LocaleProvider.tr('songs')}',
+                                    style: isAmoled
+                                        ? TextStyle(
+                                            color: Colors.white.withValues(
+                                              alpha: 0.8,
+                                            ),
+                                          )
+                                        : null,
                                   ),
                                   onTap: ignored
                                       ? null
@@ -3846,6 +3877,9 @@ class _FoldersScreenState extends State<FoldersScreen>
   }) {
     final path = song.data;
     final opacity = isIgnored ? 0.4 : 1.0;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isAmoled =
+        isDark && Theme.of(context).colorScheme.surface == Colors.black;
 
     return Opacity(
       opacity: opacity,
@@ -3940,6 +3974,9 @@ class _FoldersScreenState extends State<FoldersScreen>
             _formatArtistWithDuration(song),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
+            style: isAmoled
+                ? TextStyle(color: Colors.white.withValues(alpha: 0.8))
+                : null,
           ),
         ),
         trailing: !_isSelecting
@@ -3988,6 +4025,16 @@ class _FoldersScreenState extends State<FoldersScreen>
 
   Future<void> _handleAddToPlaylistMassive(BuildContext context) async {
     final playlists = await PlaylistsDB().getAllPlaylists();
+
+    if (_allSongsForGrid.isEmpty) {
+      final allIndexedSongs = await SongsIndexDB().getIndexedSongs();
+      if (mounted) {
+        setState(() {
+          _allSongsForGrid = allIndexedSongs;
+        });
+      }
+    }
+
     final TextEditingController controller = TextEditingController();
 
     if (!context.mounted) return;
@@ -4858,6 +4905,16 @@ class _FoldersScreenState extends State<FoldersScreen>
     SongModel song,
   ) async {
     final playlists = await PlaylistsDB().getAllPlaylists();
+
+    if (_allSongsForGrid.isEmpty) {
+      final allIndexedSongs = await SongsIndexDB().getIndexedSongs();
+      if (mounted) {
+        setState(() {
+          _allSongsForGrid = allIndexedSongs;
+        });
+      }
+    }
+
     final TextEditingController controller = TextEditingController();
 
     if (!context.mounted) return;

@@ -9,6 +9,8 @@ import 'package:music/widgets/artwork_list_tile.dart';
 import 'package:music/utils/notifiers.dart';
 import 'package:music/utils/theme_preferences.dart';
 import 'package:music/utils/encoding_utils.dart';
+import 'package:music/utils/db/download_history_hive.dart';
+import 'package:music/utils/db/download_history_model.dart';
 
 import 'package:share_plus/share_plus.dart';
 
@@ -24,6 +26,7 @@ class SongInfoScreen extends StatefulWidget {
 class _SongInfoScreenState extends State<SongInfoScreen> {
   final FlutterAudioToolkit _audioToolkit = FlutterAudioToolkit();
   AudioInfo? _audioInfo;
+  DownloadHistoryModel? _downloadHistory;
   bool _isLoading = true;
   String? _errorMessage;
 
@@ -62,9 +65,12 @@ class _SongInfoScreenState extends State<SongInfoScreen> {
 
     try {
       final info = await _audioToolkit.getAudioInfo(filePath);
+      final history = await DownloadHistoryHive.getDownloadByPath(filePath);
+
       if (mounted) {
         setState(() {
           _audioInfo = info;
+          _downloadHistory = history;
           _isLoading = false;
         });
       }
@@ -202,8 +208,9 @@ class _SongInfoScreenState extends State<SongInfoScreen> {
                         const SizedBox(height: 8),
                         Text(
                           _displayText(
-                              widget.mediaItem.artist,
-                              LocaleProvider.tr('unknown_artist')),
+                            widget.mediaItem.artist,
+                            LocaleProvider.tr('unknown_artist'),
+                          ),
                           style: Theme.of(context).textTheme.titleMedium
                               ?.copyWith(color: colorScheme.primary),
                           textAlign: TextAlign.center,
@@ -211,8 +218,9 @@ class _SongInfoScreenState extends State<SongInfoScreen> {
                         const SizedBox(height: 4),
                         Text(
                           _displayText(
-                              widget.mediaItem.album,
-                              LocaleProvider.tr('unknown_album')),
+                            widget.mediaItem.album,
+                            LocaleProvider.tr('unknown_album'),
+                          ),
                           style: Theme.of(context).textTheme.bodyMedium
                               ?.copyWith(color: colorScheme.onSurfaceVariant),
                           textAlign: TextAlign.center,
@@ -319,6 +327,183 @@ class _SongInfoScreenState extends State<SongInfoScreen> {
                             width: width, // Full width
                             color: iconColor,
                           ),
+                          if (_downloadHistory != null &&
+                              _downloadHistory!.videoId.isNotEmpty)
+                            _buildPropertyCard(
+                              context,
+                              icon: Icons.link,
+                              label: 'Video ID',
+                              value: _downloadHistory!.videoId,
+                              width: width,
+                              color: iconColor,
+                              trailing: IconButton(
+                                constraints: const BoxConstraints(
+                                  minWidth: 36,
+                                  minHeight: 36,
+                                ),
+                                padding: EdgeInsets.zero,
+                                icon: Container(
+                                  width: 36,
+                                  height: 36,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: isAmoled
+                                        ? Colors.white.withAlpha(20)
+                                        : isDark
+                                        ? Theme.of(context)
+                                              .colorScheme
+                                              .secondary
+                                              .withValues(alpha: 0.06)
+                                        : Theme.of(context)
+                                              .colorScheme
+                                              .secondary
+                                              .withValues(alpha: 0.07),
+                                  ),
+                                  child: Icon(
+                                    Icons.help_outline,
+                                    size: 20,
+                                    color: colorScheme.primary,
+                                  ),
+                                ),
+                                onPressed: () {
+                                  showDialog(
+                                    context: context,
+                                    builder: (context) {
+                                      final isAmoled =
+                                          colorSchemeNotifier.value ==
+                                          AppColorScheme.amoled;
+                                      final isDark =
+                                          Theme.of(context).brightness ==
+                                          Brightness.dark;
+
+                                      return AlertDialog(
+                                        backgroundColor: isAmoled && isDark
+                                            ? Colors.black
+                                            : Theme.of(
+                                                context,
+                                              ).colorScheme.surface,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            28,
+                                          ),
+                                          side: isAmoled && isDark
+                                              ? const BorderSide(
+                                                  color: Colors.white24,
+                                                  width: 1,
+                                                )
+                                              : BorderSide.none,
+                                        ),
+                                        contentPadding:
+                                            const EdgeInsets.fromLTRB(
+                                              0,
+                                              24,
+                                              0,
+                                              8,
+                                            ),
+                                        content: Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(
+                                              Icons.help_rounded,
+                                              size: 32,
+                                              color: Theme.of(
+                                                context,
+                                              ).colorScheme.onSurface,
+                                            ),
+                                            const SizedBox(height: 16),
+                                            Text(
+                                              'Video ID',
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .titleLarge
+                                                  ?.copyWith(
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                            ),
+                                            const SizedBox(height: 16),
+                                            Padding(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 24,
+                                                  ),
+                                              child: Text(
+                                                LocaleProvider.tr(
+                                                  'video_id_explanation',
+                                                ),
+                                                style: TextStyle(
+                                                  fontSize: 14,
+                                                  color: Theme.of(context)
+                                                      .colorScheme
+                                                      .onSurface
+                                                      .withValues(alpha: 0.7),
+                                                ),
+                                                textAlign: TextAlign.center,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 24),
+                                            Padding(
+                                              padding: const EdgeInsets.only(
+                                                right: 24,
+                                                bottom: 8,
+                                              ),
+                                              child: Align(
+                                                alignment:
+                                                    Alignment.centerRight,
+                                                child: TextButton(
+                                                  onPressed: () => Navigator.of(
+                                                    context,
+                                                  ).pop(),
+                                                  child: Text(
+                                                    LocaleProvider.tr('close'),
+                                                    style: TextStyle(
+                                                      color: Theme.of(
+                                                        context,
+                                                      ).colorScheme.primary,
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                    },
+                                  );
+                                },
+                              ),
+                            ),
+                          if (_downloadHistory != null &&
+                              _downloadHistory!.title.isNotEmpty &&
+                              fixUtf8Mojibake(_downloadHistory!.title).trim() !=
+                                  fixUtf8Mojibake(
+                                    widget.mediaItem.title,
+                                  ).trim())
+                            _buildPropertyCard(
+                              context,
+                              icon: Icons.history,
+                              label: LocaleProvider.tr('original_title'),
+                              value: fixUtf8Mojibake(_downloadHistory!.title),
+                              width: width,
+                              color: iconColor,
+                            ),
+                          if (_downloadHistory != null &&
+                              _downloadHistory!.artist.isNotEmpty &&
+                              fixUtf8Mojibake(
+                                    _downloadHistory!.artist,
+                                  ).trim() !=
+                                  fixUtf8Mojibake(
+                                    widget.mediaItem.artist ?? '',
+                                  ).trim())
+                            _buildPropertyCard(
+                              context,
+                              icon: Icons.person_outline,
+                              label: LocaleProvider.tr('original_artist'),
+                              value: fixUtf8Mojibake(_downloadHistory!.artist),
+                              width: width,
+                              color: iconColor,
+                            ),
                         ],
                       );
                     },
@@ -410,6 +595,7 @@ class _SongInfoScreenState extends State<SongInfoScreen> {
     required String value,
     required double width,
     required Color color,
+    Widget? trailing,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -465,6 +651,7 @@ class _SongInfoScreenState extends State<SongInfoScreen> {
               ],
             ),
           ),
+          if (trailing != null) ...[const SizedBox(width: 8), trailing],
         ],
       ),
     );

@@ -404,6 +404,8 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       'playback_repeat_mode'; // 0 none, 1 one, 2 all
   static const String _kPrefShuffleEnabled = 'playback_shuffle_enabled';
   static const String _kPrefWasPlaying = 'playback_was_playing';
+  static const String _kPrefRestoreLastSessionOnStartup =
+      'restore_last_session_on_startup';
 
   // Control para evitar pausar automáticamente cuando el usuario selecciona una canción
   bool _userInitiatedPlayback = false;
@@ -641,7 +643,13 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       _initRetryCount = 0;
       // Intentar restaurar sesión previa si no hay cola actual
       if (!_restoredSession && _mediaQueue.isEmpty) {
-        unawaited(_attemptRestoreFromPrefs());
+        final restoreEnabled =
+            _prefs?.getBool(_kPrefRestoreLastSessionOnStartup) ?? true;
+        if (restoreEnabled) {
+          unawaited(_attemptRestoreFromPrefs());
+        } else {
+          _restoredSession = true;
+        }
       }
     } catch (e) {
       // Si hay error en la inicialización, intentar reinicializar

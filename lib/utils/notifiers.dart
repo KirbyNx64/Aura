@@ -33,9 +33,9 @@ final ValueNotifier<String> audioQualityNotifier = ValueNotifier<String>(
   'high',
 ); // 'high', 'medium', 'low'
 
-final ValueNotifier<bool> coverQualityNotifier = ValueNotifier<bool>(
-  true,
-); // true: alta, false: baja
+final ValueNotifier<String> coverQualityNotifier = ValueNotifier<String>(
+  'high',
+); // 'high', 'medium', 'low'
 
 final ValueNotifier<bool> playLoadingNotifier = ValueNotifier(false);
 
@@ -70,6 +70,10 @@ final ValueNotifier<bool> useArtworkAsBackgroundOverlayNotifier =
 
 // Notifier para usar color dinámico como fondo
 final ValueNotifier<bool> useDynamicColorBackgroundNotifier =
+    ValueNotifier<bool>(false);
+
+// Notifier para usar color dinámico en los diálogos/bottom sheets (SleepTimer, AddToPlaylist, etc)
+final ValueNotifier<bool> useDynamicColorInDialogsNotifier =
     ValueNotifier<bool>(false);
 
 // Notifier para enfocar la búsqueda YT al cambiar de tab desde la barra de home

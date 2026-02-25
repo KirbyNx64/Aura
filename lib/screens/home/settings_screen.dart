@@ -20,6 +20,7 @@ import 'package:music/utils/db/dislikes_db.dart';
 import 'package:music/utils/db/artwork_db.dart';
 import 'package:music/utils/db/songs_index_db.dart';
 import 'package:music/utils/db/artists_db.dart';
+import 'package:music/utils/db/download_history_hive.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:music/utils/notifiers.dart';
@@ -49,7 +50,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String _currentLanguage = 'es';
   String? _downloadDirectory;
   bool _downloadTypeExplode = false; // true: Explode, false: Directo
-  bool _coverQualityHigh = true; // true: Alto, false: Bajo
+  String _coverQuality = 'high'; // 'high', 'medium', 'low'
   String _audioQuality = 'high'; // 'high', 'medium', 'low'
   AppColorScheme _currentColorScheme = AppColorScheme.system;
   int _artworkQuality = 410; // 80% por defecto
@@ -91,10 +92,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final usePlayer = prefs.getBool('use_artwork_background_player') ?? true;
     final useOverlay = prefs.getBool('use_artwork_background_overlay') ?? true;
     final useDynamic = prefs.getBool('use_dynamic_color_background') ?? false;
+    final useDynamicDialogs =
+        prefs.getBool('use_dynamic_color_in_dialogs') ?? false;
 
     useArtworkAsBackgroundPlayerNotifier.value = usePlayer;
     useArtworkAsBackgroundOverlayNotifier.value = useOverlay;
     useDynamicColorBackgroundNotifier.value = useDynamic;
+    useDynamicColorInDialogsNotifier.value = useDynamicDialogs;
   }
 
   Future<void> _setArtworkBackgroundPlayer(bool value) async {
@@ -129,6 +133,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
     await prefs.setBool('use_dynamic_color_background', value);
     useDynamicColorBackgroundNotifier.value = value;
+    setState(() {});
+  }
+
+  Future<void> _setDynamicColorInDialogs(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('use_dynamic_color_in_dialogs', value);
+    useDynamicColorInDialogsNotifier.value = value;
     setState(() {});
   }
 
@@ -195,6 +206,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     title: TranslatedText('use_dynamic_color_background'),
                     value: value,
                     onChanged: (v) => _setDynamicColorBackground(v),
+                  );
+                },
+              ),
+              ValueListenableBuilder<bool>(
+                valueListenable: useDynamicColorInDialogsNotifier,
+                builder: (context, value, _) {
+                  return SwitchListTile(
+                    title: TranslatedText('use_dynamic_color_in_dialogs'),
+                    value: value,
+                    onChanged: (v) => _setDynamicColorInDialogs(v),
                   );
                 },
               ),
@@ -1371,22 +1392,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _loadCoverQuality() async {
     final prefs = await SharedPreferences.getInstance();
-    final quality = prefs.getBool('cover_quality_high') ?? true;
+    String quality =
+        prefs.getString('cover_quality') ??
+        (prefs.getBool('cover_quality_high') == false ? 'low' : 'high');
+
+    if (quality != 'high' && quality != 'medium' && quality != 'low') {
+      quality = 'high';
+    }
+
+    // Migración: persistir en el nuevo key si venimos del booleano anterior
+    await prefs.setString('cover_quality', quality);
     setState(() {
-      _coverQualityHigh = quality;
+      _coverQuality = quality;
     });
     // Actualizar el notifier global
     coverQualityNotifier.value = quality;
   }
 
-  Future<void> _setCoverQuality(bool highQuality) async {
+  Future<void> _setCoverQuality(String quality) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('cover_quality_high', highQuality);
+    await prefs.setString('cover_quality', quality);
     setState(() {
-      _coverQualityHigh = highQuality;
+      _coverQuality = quality;
     });
     // Actualizar el notifier global
-    coverQualityNotifier.value = highQuality;
+    coverQualityNotifier.value = quality;
   }
 
   Future<void> _loadAudioQuality() async {
@@ -1651,14 +1681,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     _buildCoverQualityOption(
                       context: context,
                       title: LocaleProvider.tr('high_quality'),
-                      value: true,
-                      isSelected: _coverQualityHigh,
+                      value: 'high',
+                      isSelected: _coverQuality == 'high',
+                    ),
+                    _buildCoverQualityOption(
+                      context: context,
+                      title: LocaleProvider.tr('medium_quality'),
+                      value: 'medium',
+                      isSelected: _coverQuality == 'medium',
                     ),
                     _buildCoverQualityOption(
                       context: context,
                       title: LocaleProvider.tr('low_quality'),
-                      value: false,
-                      isSelected: !_coverQualityHigh,
+                      value: 'low',
+                      isSelected: _coverQuality == 'low',
                     ),
                     const SizedBox(height: 16),
                     Padding(
@@ -1690,7 +1726,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget _buildCoverQualityOption({
     required BuildContext context,
     required String title,
-    required bool value,
+    required String value,
     required bool isSelected,
   }) {
     final primaryColor = Theme.of(context).colorScheme.primary;
@@ -2958,6 +2994,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
             const SizedBox(height: 4),
+
             Card(
               color: cardColor,
               margin: EdgeInsets.zero,
@@ -4096,6 +4133,85 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               child: Column(
                 children: [
+                  FutureBuilder<SharedPreferences>(
+                    future: SharedPreferences.getInstance(),
+                    builder: (context, snapshot) {
+                      if (!snapshot.hasData) return SizedBox.shrink();
+                      final prefs = snapshot.data!;
+                      final value =
+                          prefs.getBool('restore_last_session_on_startup') ??
+                          true;
+                      return SwitchListTile(
+                        value: value,
+                        onChanged: (v) async {
+                          await prefs.setBool(
+                            'restore_last_session_on_startup',
+                            v,
+                          );
+                          setState(() {});
+                        },
+                        title: Text(
+                          LocaleProvider.tr('restore_last_session_on_startup'),
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Theme.of(context).colorScheme.onSurface,
+                          ),
+                        ),
+                        subtitle: Text(
+                          LocaleProvider.tr(
+                            'restore_last_session_on_startup_desc',
+                          ),
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onSurface.withValues(alpha: 0.9),
+                          ),
+                        ),
+                        secondary: Icon(
+                          Icons.restore,
+                          color: Theme.of(context).colorScheme.onSurface,
+                        ),
+                        shape: const RoundedRectangleBorder(
+                          borderRadius: BorderRadius.all(Radius.circular(4)),
+                        ),
+                        thumbIcon: WidgetStateProperty.resolveWith<Icon?>((
+                          Set<WidgetState> states,
+                        ) {
+                          final iconColor = isAmoled && isDark
+                              ? Colors.white
+                              : null;
+                          if (states.contains(WidgetState.selected)) {
+                            return Icon(
+                              Icons.check,
+                              size: 20,
+                              color: iconColor,
+                            );
+                          } else {
+                            return const Icon(Icons.close, size: 20);
+                          }
+                        }),
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 4),
+            Card(
+              color: cardColor,
+              margin: EdgeInsets.zero,
+              elevation: 0,
+              shape: const RoundedRectangleBorder(
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(4),
+                  topRight: Radius.circular(4),
+                  bottomLeft: Radius.circular(4),
+                  bottomRight: Radius.circular(4),
+                ),
+              ),
+              child: Column(
+                children: [
                   ListTile(
                     leading: Icon(
                       Icons.equalizer_rounded,
@@ -4640,9 +4756,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _exportBackup() async {
-    final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
     try {
       // Obtener datos de las bases de datos
       final favorites = await FavoritesDB().getFavorites();
@@ -4661,6 +4774,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
       final dislikesBox = await DislikesDB().box;
       final dislikes = dislikesBox.values.toList();
       final shortcuts = await ShortcutsDB().getShortcuts();
+      final downloadHistory = await DownloadHistoryHive.getAllDownloads();
+      final lyricsBox = await SyncedLyricsService.box;
+      final syncedLyrics = lyricsBox.values
+          .map(
+            (l) => {
+              'id': l.id,
+              'synced': l.synced,
+              'plainLyrics': l.plainLyrics,
+            },
+          )
+          .toList();
 
       // Obtener carpetas y canciones ignoradas/fijadas de SharedPreferences
       final prefs = await SharedPreferences.getInstance();
@@ -4679,6 +4803,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
         'ignored_folders': ignoredFolders,
         'ignored_songs': ignoredSongs,
         'pinned_songs': pinnedSongs,
+        'download_history': downloadHistory
+            .map(
+              (d) => {
+                'path': d.path,
+                'artist': d.artist,
+                'title': d.title,
+                'duration': d.duration,
+                'videoId': d.videoId,
+              },
+            )
+            .toList(),
+        'synced_lyrics': syncedLyrics,
       };
       final jsonStr = JsonEncoder.withIndent('  ').convert(backup);
       // Seleccionar carpeta y guardar
@@ -4689,40 +4825,163 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (!mounted) return;
       showDialog(
         context: context,
-        builder: (context) => AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-            side: isAmoled && isDark
-                ? const BorderSide(color: Colors.white, width: 1)
-                : BorderSide.none,
-          ),
-          title: Text(LocaleProvider.tr('success')),
-          content: Text(LocaleProvider.tr('backup_exported')),
-        ),
+        builder: (BuildContext context) {
+          return ValueListenableBuilder<AppColorScheme>(
+            valueListenable: colorSchemeNotifier,
+            builder: (context, colorScheme, child) {
+              final isAmoled = colorScheme == AppColorScheme.amoled;
+              final isDark = Theme.of(context).brightness == Brightness.dark;
+              final primaryColor = Theme.of(context).colorScheme.primary;
+
+              return AlertDialog(
+                backgroundColor: isAmoled && isDark
+                    ? Colors.black
+                    : Theme.of(context).colorScheme.surface,
+                surfaceTintColor: Colors.transparent,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(28),
+                  side: isAmoled && isDark
+                      ? const BorderSide(color: Colors.white24, width: 1)
+                      : BorderSide.none,
+                ),
+                contentPadding: const EdgeInsets.fromLTRB(0, 24, 0, 8),
+                content: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: 400,
+                    maxHeight: MediaQuery.of(context).size.height * 0.8,
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.check_circle_rounded,
+                        size: 32,
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
+                      const SizedBox(height: 16),
+                      _buildDialogTitle(context, 'success', fontSize: 22),
+                      const SizedBox(height: 16),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 24),
+                        child: TranslatedText(
+                          'backup_exported',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onSurface.withAlpha(180),
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      Padding(
+                        padding: const EdgeInsets.only(right: 24, bottom: 8),
+                        child: Align(
+                          alignment: Alignment.centerRight,
+                          child: TextButton(
+                            onPressed: () => Navigator.of(context).pop(),
+                            child: TranslatedText(
+                              'ok',
+                              style: TextStyle(
+                                color: primaryColor,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          );
+        },
       );
     } catch (e) {
       if (mounted) {
         showDialog(
           context: context,
-          builder: (context) => AlertDialog(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-              side: isAmoled && isDark
-                  ? const BorderSide(color: Colors.white, width: 1)
-                  : BorderSide.none,
-            ),
-            title: Text(LocaleProvider.tr('error')),
-            content: Text('${LocaleProvider.tr('error')}: $e'),
-          ),
+          builder: (BuildContext context) {
+            return ValueListenableBuilder<AppColorScheme>(
+              valueListenable: colorSchemeNotifier,
+              builder: (context, colorScheme, child) {
+                final isAmoled = colorScheme == AppColorScheme.amoled;
+                final isDark = Theme.of(context).brightness == Brightness.dark;
+                final primaryColor = Theme.of(context).colorScheme.primary;
+
+                return AlertDialog(
+                  backgroundColor: isAmoled && isDark
+                      ? Colors.black
+                      : Theme.of(context).colorScheme.surface,
+                  surfaceTintColor: Colors.transparent,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(28),
+                    side: isAmoled && isDark
+                        ? const BorderSide(color: Colors.white24, width: 1)
+                        : BorderSide.none,
+                  ),
+                  contentPadding: const EdgeInsets.fromLTRB(0, 24, 0, 8),
+                  content: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth: 400,
+                      maxHeight: MediaQuery.of(context).size.height * 0.8,
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.warning_rounded,
+                          size: 32,
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                        const SizedBox(height: 16),
+                        _buildDialogTitle(context, 'error', fontSize: 22),
+                        const SizedBox(height: 16),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 24),
+                          child: Text(
+                            '${LocaleProvider.tr('error')}: $e',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSurface.withAlpha(180),
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        Padding(
+                          padding: const EdgeInsets.only(right: 24, bottom: 8),
+                          child: Align(
+                            alignment: Alignment.centerRight,
+                            child: TextButton(
+                              onPressed: () => Navigator.of(context).pop(),
+                              child: TranslatedText(
+                                'ok',
+                                style: TextStyle(
+                                  color: primaryColor,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            );
+          },
         );
       }
     }
   }
 
   Future<void> _importBackup() async {
-    final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
     try {
       final typeGroup = XTypeGroup(label: 'json', extensions: ['json']);
       final filePath = await openFile(acceptedTypeGroups: [typeGroup]);
@@ -4734,26 +4993,86 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (!mounted) return;
       final confirmed = await showDialog<bool>(
         context: context,
-        builder: (context) => AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-            side: isAmoled && isDark
-                ? const BorderSide(color: Colors.white, width: 1)
-                : BorderSide.none,
-          ),
-          title: Text(LocaleProvider.tr('import_backup')),
-          content: Text(LocaleProvider.tr('import_confirm')),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: Text(LocaleProvider.tr('cancel')),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: Text(LocaleProvider.tr('import')),
-            ),
-          ],
-        ),
+        builder: (BuildContext context) {
+          return ValueListenableBuilder<AppColorScheme>(
+            valueListenable: colorSchemeNotifier,
+            builder: (context, colorScheme, child) {
+              final isAmoled = colorScheme == AppColorScheme.amoled;
+              final isDark = Theme.of(context).brightness == Brightness.dark;
+              final primaryColor = Theme.of(context).colorScheme.primary;
+
+              return AlertDialog(
+                backgroundColor: isAmoled && isDark
+                    ? Colors.black
+                    : Theme.of(context).colorScheme.surface,
+                surfaceTintColor: Colors.transparent,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(28),
+                  side: isAmoled && isDark
+                      ? const BorderSide(color: Colors.white24, width: 1)
+                      : BorderSide.none,
+                ),
+                contentPadding: const EdgeInsets.fromLTRB(0, 24, 0, 8),
+                content: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: 400,
+                    maxHeight: MediaQuery.of(context).size.height * 0.8,
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.warning_rounded,
+                        size: 32,
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                      const SizedBox(height: 16),
+                      _buildDialogTitle(context, 'import_backup', fontSize: 22),
+                      const SizedBox(height: 16),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 24),
+                        child: TranslatedText(
+                          'import_confirm',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onSurface.withAlpha(180),
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      _buildDestructiveOption(
+                        context: context,
+                        title: LocaleProvider.tr('import'),
+                        icon: Icons.upload_file_rounded,
+                        onTap: () => Navigator.of(context).pop(true),
+                      ),
+                      const SizedBox(height: 16),
+                      Padding(
+                        padding: const EdgeInsets.only(right: 24, bottom: 8),
+                        child: Align(
+                          alignment: Alignment.centerRight,
+                          child: TextButton(
+                            onPressed: () => Navigator.of(context).pop(false),
+                            child: TranslatedText(
+                              'cancel',
+                              style: TextStyle(
+                                color: primaryColor,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          );
+        },
       );
       if (confirmed != true) return;
 
@@ -4772,6 +5091,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       final boxDis = await DislikesDB().box;
       await boxDis.clear();
       await ShortcutsDB().clearAll();
+      await DownloadHistoryHive.clearAll();
+      await SyncedLyricsService.clearLyrics();
       // Restaurar favoritos
       if (data['favorites'] is List) {
         for (final path in data['favorites']) {
@@ -4823,6 +5144,47 @@ class _SettingsScreenState extends State<SettingsScreen> {
           await ShortcutsDB().addShortcut(path.toString());
         }
       }
+      // Restaurar historial de descargas
+      if (data['download_history'] is List) {
+        for (final item in data['download_history']) {
+          if (item is Map) {
+            final path = item['path']?.toString() ?? '';
+            if (path.isEmpty) continue;
+            final artist = item['artist']?.toString() ?? '';
+            final title = item['title']?.toString() ?? '';
+            final rawDuration = item['duration'];
+            final duration = rawDuration is int
+                ? rawDuration
+                : int.tryParse(rawDuration?.toString() ?? '') ?? 0;
+            final videoId = item['videoId']?.toString() ?? '';
+            await DownloadHistoryHive.addDownload(
+              path: path,
+              artist: artist,
+              title: title,
+              duration: duration,
+              videoId: videoId,
+            );
+          }
+        }
+      }
+      // Restaurar letras sincronizadas
+      if (data['synced_lyrics'] is List) {
+        final lyricsBox = await SyncedLyricsService.box;
+        for (final item in data['synced_lyrics']) {
+          if (item is Map) {
+            final id = item['id']?.toString();
+            if (id == null || id.isEmpty) continue;
+            final synced = item['synced']?.toString();
+            final plainLyrics = item['plainLyrics']?.toString();
+            final lyricsData = LyricsData(
+              id: id,
+              synced: synced,
+              plainLyrics: plainLyrics,
+            );
+            await lyricsBox.put(id, lyricsData);
+          }
+        }
+      }
 
       // Restaurar carpetas ignoradas, canciones ignoradas y fijadas en SharedPreferences
       final prefs = await SharedPreferences.getInstance();
@@ -4857,47 +5219,172 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
       showDialog(
         context: context,
-        builder: (context) => AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-            side: isAmoled && isDark
-                ? const BorderSide(color: Colors.white, width: 1)
-                : BorderSide.none,
-          ),
-          title: Text(LocaleProvider.tr('success')),
-          content: Text(LocaleProvider.tr('backup_imported')),
-          actions: [
-            TextButton(
-              onPressed: () async {
-                Navigator.of(context).pop();
-                // Marcamos como configurado para evitar el onboarding tras el reinicio
-                final prefs = await SharedPreferences.getInstance();
-                await prefs.setBool('first_run', false);
-                // Aumentamos el retraso para mayor fiabilidad en el reinicio
-                await Future.delayed(const Duration(milliseconds: 800));
-                await TerminateRestart.instance.restartApp(
-                  options: const TerminateRestartOptions(terminate: true),
-                );
-              },
-              child: Text(LocaleProvider.tr('ok')),
-            ),
-          ],
-        ),
+        builder: (BuildContext context) {
+          return ValueListenableBuilder<AppColorScheme>(
+            valueListenable: colorSchemeNotifier,
+            builder: (context, colorScheme, child) {
+              final isAmoled = colorScheme == AppColorScheme.amoled;
+              final isDark = Theme.of(context).brightness == Brightness.dark;
+              final primaryColor = Theme.of(context).colorScheme.primary;
+
+              return AlertDialog(
+                backgroundColor: isAmoled && isDark
+                    ? Colors.black
+                    : Theme.of(context).colorScheme.surface,
+                surfaceTintColor: Colors.transparent,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(28),
+                  side: isAmoled && isDark
+                      ? const BorderSide(color: Colors.white24, width: 1)
+                      : BorderSide.none,
+                ),
+                contentPadding: const EdgeInsets.fromLTRB(0, 24, 0, 8),
+                content: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: 400,
+                    maxHeight: MediaQuery.of(context).size.height * 0.8,
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.check_circle_rounded,
+                        size: 32,
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
+                      const SizedBox(height: 16),
+                      _buildDialogTitle(context, 'success', fontSize: 22),
+                      const SizedBox(height: 16),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 24),
+                        child: TranslatedText(
+                          'backup_imported',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onSurface.withAlpha(180),
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      Padding(
+                        padding: const EdgeInsets.only(right: 24, bottom: 8),
+                        child: Align(
+                          alignment: Alignment.centerRight,
+                          child: TextButton(
+                            onPressed: () async {
+                              Navigator.of(context).pop();
+                              // Marcamos como configurado para evitar el onboarding tras el reinicio
+                              final prefs =
+                                  await SharedPreferences.getInstance();
+                              await prefs.setBool('first_run', false);
+                              // Aumentamos el retraso para mayor fiabilidad en el reinicio
+                              await Future.delayed(
+                                const Duration(milliseconds: 800),
+                              );
+                              await TerminateRestart.instance.restartApp(
+                                options: const TerminateRestartOptions(
+                                  terminate: true,
+                                ),
+                              );
+                            },
+                            child: TranslatedText(
+                              'ok',
+                              style: TextStyle(
+                                color: primaryColor,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          );
+        },
       );
     } catch (e) {
       if (mounted) {
         showDialog(
           context: context,
-          builder: (context) => AlertDialog(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-              side: isAmoled && isDark
-                  ? const BorderSide(color: Colors.white, width: 1)
-                  : BorderSide.none,
-            ),
-            title: Text(LocaleProvider.tr('error')),
-            content: Text('${LocaleProvider.tr('error')}: $e'),
-          ),
+          builder: (BuildContext context) {
+            return ValueListenableBuilder<AppColorScheme>(
+              valueListenable: colorSchemeNotifier,
+              builder: (context, colorScheme, child) {
+                final isAmoled = colorScheme == AppColorScheme.amoled;
+                final isDark = Theme.of(context).brightness == Brightness.dark;
+                final primaryColor = Theme.of(context).colorScheme.primary;
+
+                return AlertDialog(
+                  backgroundColor: isAmoled && isDark
+                      ? Colors.black
+                      : Theme.of(context).colorScheme.surface,
+                  surfaceTintColor: Colors.transparent,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(28),
+                    side: isAmoled && isDark
+                        ? const BorderSide(color: Colors.white24, width: 1)
+                        : BorderSide.none,
+                  ),
+                  contentPadding: const EdgeInsets.fromLTRB(0, 24, 0, 8),
+                  content: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth: 400,
+                      maxHeight: MediaQuery.of(context).size.height * 0.8,
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.warning_rounded,
+                          size: 32,
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                        const SizedBox(height: 16),
+                        _buildDialogTitle(context, 'error', fontSize: 22),
+                        const SizedBox(height: 16),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 24),
+                          child: Text(
+                            '${LocaleProvider.tr('error')}: $e',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSurface.withAlpha(180),
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        Padding(
+                          padding: const EdgeInsets.only(right: 24, bottom: 8),
+                          child: Align(
+                            alignment: Alignment.centerRight,
+                            child: TextButton(
+                              onPressed: () => Navigator.of(context).pop(),
+                              child: TranslatedText(
+                                'ok',
+                                style: TextStyle(
+                                  color: primaryColor,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            );
+          },
         );
       }
     }

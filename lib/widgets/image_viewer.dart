@@ -80,6 +80,8 @@ class _ImageViewerState extends State<ImageViewer>
     // Intentar cargar maxresdefault primero
     final coverUrlMax =
         'https://img.youtube.com/vi/${widget.videoId}/maxresdefault.jpg';
+    final coverUrlSD =
+        'https://img.youtube.com/vi/${widget.videoId}/sddefault.jpg';
     final coverUrlHQ =
         'https://img.youtube.com/vi/${widget.videoId}/hqdefault.jpg';
 
@@ -98,7 +100,21 @@ class _ImageViewerState extends State<ImageViewer>
         return;
       }
 
-      // Si maxresdefault no existe, usar hqdefault
+      // Si maxresdefault no existe, intentar sddefault
+      final responseSD = await Future.any([
+        _checkImageExists(coverUrlSD),
+        Future.delayed(const Duration(seconds: 2), () => false),
+      ]);
+
+      if (responseSD && mounted) {
+        setState(() {
+          _highQualityImageUrl = coverUrlSD;
+          _isLoadingHighQuality = false;
+        });
+        return;
+      }
+
+      // Si sddefault tampoco existe, usar hqdefault
       if (mounted) {
         setState(() {
           _highQualityImageUrl = coverUrlHQ;
@@ -193,104 +209,80 @@ class _ImageViewerState extends State<ImageViewer>
         builder: (context, colorScheme, child) {
           final isAmoled = colorScheme == AppColorScheme.amoled;
           final isDark = Theme.of(context).brightness == Brightness.dark;
+          final primaryColor = Theme.of(context).colorScheme.primary;
+          final isError =
+              title.toLowerCase() == LocaleProvider.tr('error').toLowerCase();
 
           return AlertDialog(
-            title: Center(
-              child: Text(
-                title,
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
-              ),
+            backgroundColor: isAmoled && isDark
+                ? Colors.black
+                : Theme.of(context).colorScheme.surface,
+            surfaceTintColor: Colors.transparent,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(28),
+              side: isAmoled && isDark
+                  ? const BorderSide(color: Colors.white24, width: 1)
+                  : BorderSide.none,
             ),
-            content: SizedBox(
-              width: 400,
+            contentPadding: const EdgeInsets.fromLTRB(0, 24, 0, 8),
+            content: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: 400,
+                maxHeight: MediaQuery.of(context).size.height * 0.8,
+              ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  SizedBox(height: 18),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 4),
-                      child: Text(
-                        message,
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Theme.of(context).colorScheme.onSurface,
-                        ),
-                        textAlign: TextAlign.left,
-                        maxLines: 3,
-                        overflow: TextOverflow.ellipsis,
+                  Icon(
+                    isError
+                        ? Icons.warning_rounded
+                        : Icons.check_circle_rounded,
+                    size: 32,
+                    color: isError
+                        ? Theme.of(context).colorScheme.error
+                        : Theme.of(context).colorScheme.onSurface,
+                  ),
+                  const SizedBox(height: 16),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: Text(
+                      title,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w600,
+                        color: Theme.of(context).colorScheme.onSurface,
                       ),
                     ),
                   ),
-                  SizedBox(height: 20),
-                  // Tarjeta de aceptar
-                  InkWell(
-                    onTap: () => Navigator.of(context).pop(),
-                    borderRadius: BorderRadius.circular(16),
-                    child: Container(
-                      width: double.infinity,
-                      padding: EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: isAmoled && isDark
-                            ? Colors.white.withValues(
-                                alpha: 0.2,
-                              ) // Color personalizado para amoled
-                            : Theme.of(context).colorScheme.primaryContainer,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: isAmoled && isDark
-                              ? Colors.white.withValues(
-                                  alpha: 0.4,
-                                ) // Borde personalizado para amoled
-                              : Theme.of(
-                                  context,
-                                ).colorScheme.primary.withValues(alpha: 0.3),
-                          width: 2,
-                        ),
+                  const SizedBox(height: 16),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: Text(
+                      message,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withAlpha(180),
                       ),
-                      child: Row(
-                        children: [
-                          Container(
-                            padding: EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(12),
-                              color: isAmoled && isDark
-                                  ? Colors.white.withValues(
-                                      alpha: 0.2,
-                                    ) // Fondo del ícono para amoled
-                                  : Theme.of(context).colorScheme.primary
-                                        .withValues(alpha: 0.1),
-                            ),
-                            child: Icon(
-                              Icons.check_circle,
-                              size: 30,
-                              color: isAmoled && isDark
-                                  ? Colors
-                                        .white // Ícono blanco para amoled
-                                  : Theme.of(context).colorScheme.primary,
-                            ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Padding(
+                    padding: const EdgeInsets.only(right: 24, bottom: 8),
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        child: Text(
+                          LocaleProvider.tr('ok'),
+                          style: TextStyle(
+                            color: primaryColor,
+                            fontWeight: FontWeight.bold,
                           ),
-                          SizedBox(width: 8),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  LocaleProvider.tr('ok'),
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600,
-                                    color: isAmoled && isDark
-                                        ? Colors
-                                              .white // Texto blanco para amoled
-                                        : Theme.of(context).colorScheme.primary,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
                     ),
                   ),

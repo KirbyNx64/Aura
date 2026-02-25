@@ -20,6 +20,7 @@ const Map<String, String> appLocalizationsEn = {
   'cancel': 'Cancel',
   'generating': 'Generating...',
   'share_lyrics': 'Share lyrics',
+  'share_link': 'Share link',
   'max_lyrics_reached': 'Only up to 5 lines can be selected',
   'delete': 'Delete',
   'remove': 'Remove',
@@ -151,6 +152,9 @@ const Map<String, String> appLocalizationsEn = {
   'index_songs_on_startup': 'Index song files',
   'index_songs_on_startup_desc':
       'Automatically sync the database with device files',
+  'restore_last_session_on_startup': 'Restore last session',
+  'restore_last_session_on_startup_desc':
+      'When opening the app, restore the last playback queue and position',
   'show_lyrics_on_cover': 'Show lyrics on cover',
   'show_lyrics_on_cover_desc':
       'Display song lyrics directly on the player cover',
@@ -236,6 +240,8 @@ const Map<String, String> appLocalizationsEn = {
   'use_artwork_as_background_desc_select':
       'Select where to use the song art as background',
   'use_dynamic_color_background': 'Use dynamic color background',
+  'use_dynamic_color_in_dialogs':
+      'Use dynamic color in sections (Sleep Timer, etc)',
   '100_percent_maximum': '100% (Maximum)',
   '80_percent_recommended': '80% (Recommended)',
   '60_percent_performance': '60% (Performance)',
@@ -573,6 +579,10 @@ const Map<String, String> appLocalizationsEn = {
   'album': 'Album',
   'location': 'Location',
   'duration': 'Duration',
+  'video_id_explanation':
+      'This is the unique YouTube video identifier used to download this song.',
+  'original_title': 'Original title',
+  'original_artist': 'Original artist',
   'close': 'Close',
   'next': 'Next',
   'up_next': 'Up next:',

@@ -8,7 +8,7 @@ part of 'synced_lyrics_service.dart';
 
 class LyricsDataAdapter extends TypeAdapter<LyricsData> {
   @override
-  final int typeId = 0;
+  final typeId = 0;
 
   @override
   LyricsData read(BinaryReader reader) {

@@ -153,15 +153,38 @@ class _CurrentLyricsScreenState extends State<CurrentLyricsScreen> {
 
   static Color normalizePaletteColor(Color color) {
     final hsl = HSLColor.fromColor(color);
+    // Si la saturación original es muy baja (gris/blanco/negro), mantenerla baja
+    // para evitar colorear artificialmente imágenes en escala de grises.
     final isGrayscale = hsl.saturation < 0.15;
+
+    // Si es muy oscuro (negro), forzar un poco de luminosidad para que se vea
     double effectiveLightness = hsl.lightness;
     if (effectiveLightness < 0.15) {
       effectiveLightness = 0.15;
     }
-    final fixedLightness = (effectiveLightness * 0.85).clamp(0.55, 0.85);
+
+    // Ajustar el brillo: bajamos el rango para que el color sea más "rico"
+    // y no se vea pálido (pastel), permitiendo que la saturación resalte.
+    // Brillo dinámico: Si el color original es muy oscuro, le damos un pequeño boost
+    // para que se note. Si es muy claro, lo oscurecemos para que no se vea pálido.
+    double targetLightness;
+    if (hsl.lightness < 0.2) {
+      // Colores muy oscuros: subirlos un poco menos (0.18 - 0.28)
+      targetLightness = 0.18 + (hsl.lightness * 0.5);
+    } else if (hsl.lightness > 0.5) {
+      // Colores muy claros: bajarlos más (0.3 - 0.4)
+      targetLightness = 0.3 + (hsl.lightness * 0.1);
+    } else {
+      // Colores medios: rango más bajo
+      targetLightness = hsl.lightness.clamp(0.2, 0.4);
+    }
+
+    final fixedLightness = targetLightness.clamp(0.15, 0.36);
+
+    // Saturación extrema mantenida para que el color explote
     final fixedSaturation = isGrayscale
         ? hsl.saturation
-        : hsl.saturation.clamp(0.35, 1.0);
+        : (hsl.saturation * 1.7).clamp(0.8, 1.0);
 
     return hsl
         .withLightness(fixedLightness)
@@ -252,14 +275,17 @@ class _CurrentLyricsScreenState extends State<CurrentLyricsScreen> {
       body: AnimatedBuilder(
         animation: Listenable.merge([
           useDynamicColorBackgroundNotifier,
+          useDynamicColorInDialogsNotifier,
           colorSchemeNotifier,
         ]),
         builder: (context, _) {
           final useDynamicBg = useDynamicColorBackgroundNotifier.value;
+          final useDynamicDialogs = useDynamicColorInDialogsNotifier.value;
           final colorScheme = colorSchemeNotifier.value;
           final isAmoled = colorScheme == AppColorScheme.amoled;
           final isDark = Theme.of(context).brightness == Brightness.dark;
-          final showDynamicBg = useDynamicBg && isAmoled && isDark;
+          final showDynamicBg =
+              (useDynamicBg || useDynamicDialogs) && isAmoled && isDark;
 
           return Container(
             decoration: BoxDecoration(
@@ -278,9 +304,8 @@ class _CurrentLyricsScreenState extends State<CurrentLyricsScreen> {
                           duration: const Duration(milliseconds: 200),
                           curve: Curves.easeInOut,
                           color: normalizePaletteColor(
-                            domColor ??
-                                Theme.of(context).scaffoldBackgroundColor,
-                          ).withValues(alpha: 0.2),
+                            domColor ?? Colors.black,
+                          ).withValues(alpha: 0.35),
                         ),
                       );
                     },
@@ -338,11 +363,11 @@ class _CurrentLyricsScreenState extends State<CurrentLyricsScreen> {
                                         style: TextStyle(
                                           fontSize:
                                               14, // Consistent with LyricsModal
-                                          color: Theme.of(context)
-                                              .textTheme
-                                              .bodyMedium
-                                              ?.color
-                                              ?.withValues(alpha: 1),
+                                          color: isAmoled
+                                              ? Colors.white.withValues(
+                                                  alpha: 0.85,
+                                                )
+                                              : null,
                                         ),
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
@@ -1411,7 +1436,7 @@ class _LyricShareWidget extends StatelessWidget {
         );
         // Creamos el fondo oscuro (negro + 20% del color normalizado) para que sea idéntico a la pantalla
         final bgColor = Color.alphaBlend(
-          normalizedColor.withValues(alpha: 0.2),
+          normalizedColor.withValues(alpha: 0.4),
           Colors.black,
         );
 

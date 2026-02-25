@@ -20,6 +20,7 @@ import 'package:music/services/download_history_service.dart';
 import 'package:music/models/download_record.dart';
 import 'package:path/path.dart' as path;
 import 'package:music/utils/db/songs_index_db.dart';
+import 'package:music/utils/db/download_history_hive.dart';
 
 // Top-level function para usar con compute
 Uint8List? decodeAndCropImage(Uint8List bytes) {
@@ -247,10 +248,10 @@ class DownloadManager {
 
       // Descargar portada
       final prefs = await SharedPreferences.getInstance();
-      final highQuality = prefs.getBool('cover_quality_high') ?? true;
+      final coverQuality = _getCoverQualityPref(prefs);
       final coverBytes = await _downloadCover(
         video.id.toString(),
-        highQuality: highQuality,
+        quality: coverQuality,
       );
 
       onInfoUpdate?.call(video.title, video.author, coverBytes);
@@ -384,10 +385,10 @@ class DownloadManager {
 
     // Descargar portada
     final prefs = await SharedPreferences.getInstance();
-    final highQuality = prefs.getBool('cover_quality_high') ?? true;
+    final coverQuality = _getCoverQualityPref(prefs);
     final coverBytes = await _downloadCover(
       video.id.toString(),
-      highQuality: highQuality,
+      quality: coverQuality,
     );
 
     onInfoUpdate?.call(video.title, video.author, coverBytes);
@@ -577,7 +578,10 @@ class DownloadManager {
 
     try {
       // Escribir metadatos con audiotags
-      final cleanedAuthor = author.replaceFirst(RegExp(r' - Topic$', caseSensitive: false), '');
+      final cleanedAuthor = author.replaceFirst(
+        RegExp(r' - Topic$', caseSensitive: false),
+        '',
+      );
 
       try {
         final tag = Tag(
@@ -619,6 +623,16 @@ class DownloadManager {
             status: 'completed',
           );
           await DownloadHistoryService().insertDownload(downloadRecord);
+
+          // Guardar también en Hive
+          await DownloadHistoryHive.addDownload(
+            path: m4aPath,
+            artist: cleanedAuthor,
+            title: songTitle ?? '',
+            duration: duration.inSeconds,
+            videoId: videoId,
+          );
+
           // Actualizar el notifier para mostrar el badge
           hasNewDownloadsNotifier.value = true;
         } catch (e) {
@@ -737,93 +751,68 @@ class DownloadManager {
     return await Future.sync(() => func());
   }
 
+  String _getCoverQualityPref(SharedPreferences prefs) {
+    final q = prefs.getString('cover_quality');
+    if (q == 'high' || q == 'medium' || q == 'low') return q!;
+    final old = prefs.getBool('cover_quality_high');
+    return old == false ? 'low' : 'high';
+  }
+
   Future<Uint8List?> _downloadCover(
     String videoId, {
-    bool highQuality = true,
+    required String quality, // 'high', 'medium', 'low'
   }) async {
     final coverUrlMax = 'https://img.youtube.com/vi/$videoId/maxresdefault.jpg';
+    final coverUrlSD = 'https://img.youtube.com/vi/$videoId/sddefault.jpg';
     final coverUrlHQ = 'https://img.youtube.com/vi/$videoId/hqdefault.jpg';
 
     Uint8List? bytes;
+    String? usedUrl;
     final client = HttpClient();
     try {
-      if (highQuality) {
-        // Calidad alta: prioridad maxresdefault, fallback hqdefault, luego http
-        try {
-          final request = await client.getUrl(Uri.parse(coverUrlMax));
+      final List<String> urlsToTry = switch (quality) {
+        'high' => [coverUrlMax, coverUrlSD, coverUrlHQ],
+        'medium' => [coverUrlSD, coverUrlHQ],
+        _ => [coverUrlHQ],
+      };
+
+      // Intento principal con HttpClient (más rápido / streaming)
+      try {
+        for (final url in urlsToTry) {
+          final request = await client.getUrl(Uri.parse(url));
           final response = await request.close();
           if (response.statusCode == 200) {
-            bytes = Uint8List.fromList(
-              await _consolidateResponseBytes(response),
-            );
-          } else {
-            // Si maxresdefault falla, intentar hqdefault
-            final requestHQ = await client.getUrl(Uri.parse(coverUrlHQ));
-            final responseHQ = await requestHQ.close();
-            if (responseHQ.statusCode == 200) {
-              bytes = Uint8List.fromList(
-                await _consolidateResponseBytes(responseHQ),
-              );
-            } else {
-              // Si hqdefault también falla, usar http
-              final httpResponse = await http.get(Uri.parse(coverUrlHQ));
-              if (httpResponse.statusCode == 200) {
-                bytes = httpResponse.bodyBytes;
-              } else {
-                throw Exception('No se pudo descargar ninguna portada');
-              }
-            }
-          }
-        } catch (e) {
-          // Si HttpClient falla, usar http
-          final httpResponse = await http.get(Uri.parse(coverUrlHQ));
-          if (httpResponse.statusCode == 200) {
-            bytes = httpResponse.bodyBytes;
-          } else {
-            throw Exception('No se pudo descargar ninguna portada');
+            bytes = Uint8List.fromList(await _consolidateResponseBytes(response));
+            usedUrl = url;
+            break;
           }
         }
-      } else {
-        // Calidad baja: directamente hqdefault, si falla usar http
-        try {
-          final requestHQ = await client.getUrl(Uri.parse(coverUrlHQ));
-          final responseHQ = await requestHQ.close();
-          if (responseHQ.statusCode == 200) {
-            bytes = Uint8List.fromList(
-              await _consolidateResponseBytes(responseHQ),
-            );
-          } else {
-            // Si hqdefault falla, usar http
-            final httpResponse = await http.get(Uri.parse(coverUrlHQ));
-            if (httpResponse.statusCode == 200) {
-              bytes = httpResponse.bodyBytes;
-            } else {
-              throw Exception('No se pudo descargar ninguna portada');
-            }
-          }
-        } catch (e) {
-          // Si HttpClient falla, usar http
-          final httpResponse = await http.get(Uri.parse(coverUrlHQ));
+      } catch (_) {
+        // Ignorar y pasar a fallback http
+      }
+
+      // Fallback con package:http si HttpClient falló
+      if (bytes == null) {
+        for (final url in urlsToTry) {
+          final httpResponse = await http.get(Uri.parse(url));
           if (httpResponse.statusCode == 200) {
             bytes = httpResponse.bodyBytes;
-          } else {
-            throw Exception('No se pudo descargar ninguna portada');
+            usedUrl = url;
+            break;
           }
         }
       }
+
+      if (bytes == null) {
+        throw Exception('No se pudo descargar ninguna portada');
+      }
+
       // Recortar a cuadrado centrado según la calidad
-      if (highQuality) {
-        // Para calidad alta (maxresdefault), recorte normal centrado
-        final croppedBytes = await compute(decodeAndCropImage, bytes);
-        if (croppedBytes != null) {
-          bytes = croppedBytes;
-        }
-      } else {
-        // Para calidad baja (hqdefault), recorte especial para eliminar franjas negras
-        final croppedBytes = await compute(decodeAndCropImageHQ, bytes);
-        if (croppedBytes != null) {
-          bytes = croppedBytes;
-        }
+      final isMaxRes = usedUrl?.contains('maxresdefault') == true;
+      final cropFn = isMaxRes ? decodeAndCropImage : decodeAndCropImageHQ;
+      final croppedBytes = await compute(cropFn, bytes);
+      if (croppedBytes != null) {
+        bytes = croppedBytes;
       }
     } finally {
       client.close();

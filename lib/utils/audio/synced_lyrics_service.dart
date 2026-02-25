@@ -5,6 +5,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import '../notifiers.dart';
 import 'simpmusic_lyrics_service.dart';
 import '../connectivity_helper.dart';
+import '../db/download_history_hive.dart';
 
 part 'synced_lyrics_service.g.dart';
 
@@ -105,18 +106,46 @@ class SyncedLyricsService {
     int? durInSec,
     bool forceReload = false,
   }) async {
-    // Si el proveedor seleccionado es SimpMusic, usar su servicio
-    if (lyricsServiceProviderNotifier.value ==
-        LyricsServiceProvider.simpmusic) {
-      return await SimpMusicLyricsService.getLyricsWithResult(
+    final isSimpProvider =
+        lyricsServiceProviderNotifier.value == LyricsServiceProvider.simpmusic;
+
+    // 1. Prioridad: Buscar si tenemos un videoId (en extras o en el historial de Hive)
+    var videoId = song.extras?['videoId'];
+    if (videoId == null || videoId.toString().isEmpty) {
+      final historyItem = await DownloadHistoryHive.getDownloadByPath(song.id);
+      if (historyItem != null) {
+        videoId = historyItem.videoId;
+      }
+    }
+
+    final hasVideoId = videoId != null && videoId.toString().isNotEmpty;
+
+    // 2. Si hay videoId O el proveedor es SimpMusic, intentar con SimpMusicService
+    if (hasVideoId || isSimpProvider) {
+      // print(
+      //  'SyncedLyrics: Usando SimpMusic (Prioridad por VideoID: $hasVideoId, Proveedor: $isSimpProvider)',
+      // );
+      final simpResult = await SimpMusicLyricsService.getLyricsWithResult(
         song,
         forceReload: forceReload,
       );
+
+      if (simpResult.type == LyricsResultType.found) {
+        return simpResult;
+      }
+
+      // Si el proveedor ERA SimpMusic y no encontró nada por ID ni búsqueda, retornamos el error
+      if (isSimpProvider) {
+        return simpResult;
+      }
+
+      // print(
+      //  'SyncedLyrics: SimpMusic no encontró letras por VideoID. Continuando con LRCLIB...',
+      // );
     }
 
+    // 3. Fallback/Original: Buscar en caché local y luego en LRCLIB
     final lyricsBox = await box;
-
-    // Buscar en la base local primero (solo si no se fuerza la recarga)
     if (!forceReload) {
       final existingLyrics = lyricsBox.get(song.id);
       if (existingLyrics != null) {
@@ -124,75 +153,72 @@ class SyncedLyricsService {
       }
     }
 
-    // Verificar conectividad antes de intentar cualquier operación de red
-    final hasConnection =
-        await ConnectivityHelper.hasInternetConnectionWithTimeout(
-          timeout: const Duration(seconds: 3),
-        );
+    // Continuar con LRCLIB como antes...
+    if (lyricsServiceProviderNotifier.value == LyricsServiceProvider.lrclib) {
+      // Verificar conectividad antes de intentar LRCLIB
+      final hasConnection =
+          await ConnectivityHelper.hasInternetConnectionWithTimeout(
+            timeout: const Duration(seconds: 3),
+          );
 
-    if (!hasConnection) {
-      return LyricsResult(type: LyricsResultType.noConnection);
-    }
-
-    // Verificar si la API está disponible antes de intentar cargar
-    final isApiAvailable = await _isApiAvailable();
-    if (!isApiAvailable) {
-      return LyricsResult(type: LyricsResultType.apiUnavailable);
-    }
-
-    // Si la API está disponible, intentar cargar las letras
-    final dur = song.duration?.inSeconds ?? durInSec ?? 0;
-    final url =
-        '$_apiBaseUrl$_apiEndpoint?artist_name=${Uri.encodeComponent(song.artist ?? "")}'
-        '&track_name=${Uri.encodeComponent(song.title)}'
-        '&duration=$dur';
-
-    try {
-      // Verificar conectividad una vez más antes de la petición final
-      final finalConnectionCheck =
-          await ConnectivityHelper.hasInternetConnection();
-      if (!finalConnectionCheck) {
+      if (!hasConnection) {
         return LyricsResult(type: LyricsResultType.noConnection);
       }
 
-      final dio = Dio();
-      dio.options.connectTimeout = const Duration(seconds: 10);
-      dio.options.receiveTimeout = const Duration(seconds: 10);
-
-      final response = await dio.get(
-        url,
-        options: Options(
-          headers: {'User-Agent': userAgent},
-          validateStatus: (status) => status != null && status < 500,
-        ),
-      );
-
-      if (response.statusCode == 200 && response.data != null) {
-        final data = response.data;
-        if (data is Map<String, dynamic> &&
-            (data["syncedLyrics"] != null || data["plainLyrics"] != null)) {
-          final lyricsData = LyricsData(
-            id: song.id,
-            synced: data["syncedLyrics"],
-            plainLyrics: data["plainLyrics"],
-          );
-          await lyricsBox.put(song.id, lyricsData);
-          return LyricsResult(type: LyricsResultType.found, data: lyricsData);
-        }
-      } else if (response.statusCode == 404) {
-        // API está funcionando pero no encontró la letra
-        return LyricsResult(type: LyricsResultType.notFound);
-      }
-    } on DioException catch (e) {
-      // Si es un error de conectividad, marcar como API no disponible
-      if (e.type == DioExceptionType.connectionTimeout ||
-          e.type == DioExceptionType.receiveTimeout ||
-          e.type == DioExceptionType.connectionError) {
+      // Verificar si la API de LRCLIB está disponible
+      final isApiAvailable = await _isApiAvailable();
+      if (!isApiAvailable) {
         return LyricsResult(type: LyricsResultType.apiUnavailable);
       }
-    } catch (e) {
-      // Error inesperado
+
+      // Si la API está disponible, intentar cargar las letras
+      final dur = song.duration?.inSeconds ?? durInSec ?? 0;
+      final url =
+          '$_apiBaseUrl$_apiEndpoint?artist_name=${Uri.encodeComponent(song.artist ?? "")}'
+          '&track_name=${Uri.encodeComponent(song.title)}'
+          '&duration=$dur';
+
+      try {
+        // Verificar conectividad una vez más antes de la petición final
+        final finalConnectionCheck =
+            await ConnectivityHelper.hasInternetConnection();
+        if (!finalConnectionCheck) {
+          return LyricsResult(type: LyricsResultType.noConnection);
+        }
+
+        final dio = Dio();
+        dio.options.connectTimeout = const Duration(seconds: 10);
+        dio.options.receiveTimeout = const Duration(seconds: 10);
+
+        final response = await dio.get(
+          url,
+          options: Options(
+            headers: {'User-Agent': userAgent},
+            validateStatus: (status) => status != null && status < 500,
+          ),
+        );
+
+        if (response.statusCode == 200 && response.data != null) {
+          final data = response.data;
+          if (data is Map<String, dynamic> &&
+              (data["syncedLyrics"] != null || data["plainLyrics"] != null)) {
+            final lyricsData = LyricsData(
+              id: song.id,
+              synced: data["syncedLyrics"],
+              plainLyrics: data["plainLyrics"],
+            );
+            final lyricsBox = await box;
+            await lyricsBox.put(song.id, lyricsData);
+            return LyricsResult(type: LyricsResultType.found, data: lyricsData);
+          }
+        } else if (response.statusCode == 404) {
+          return LyricsResult(type: LyricsResultType.notFound);
+        }
+      } catch (e) {
+        // Error inesperado
+      }
     }
+
     return LyricsResult(type: LyricsResultType.notFound);
   }
 

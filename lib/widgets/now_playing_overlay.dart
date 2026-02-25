@@ -531,12 +531,20 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> {
                                                             overflow:
                                                                 TextOverflow
                                                                     .ellipsis,
-                                                            style:
-                                                                Theme.of(
-                                                                      context,
-                                                                    )
-                                                                    .textTheme
-                                                                    .bodyMedium,
+                                                            style: isAmoled
+                                                                ? TextStyle(
+                                                                    color: Colors
+                                                                        .white
+                                                                        .withValues(
+                                                                          alpha:
+                                                                              0.80,
+                                                                        ),
+                                                                  )
+                                                                : Theme.of(
+                                                                        context,
+                                                                      )
+                                                                      .textTheme
+                                                                      .bodyMedium,
                                                           ),
                                                         ),
                                                         Icon(
