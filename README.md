@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/icon.png" alt="Aura Music Icon" width="120" />
+  <img src="assets/icon_old.png" alt="Aura Music Icon" width="120" />
 </p>
 
 # Aura Music

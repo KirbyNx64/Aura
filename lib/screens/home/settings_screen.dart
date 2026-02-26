@@ -4755,55 +4755,273 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  Future<Map<String, bool>?> _showBackupSelectionDialog(
+    bool isExport, {
+    Map<String, dynamic>? importData,
+  }) async {
+    final options = {
+      'favorites': true,
+      'recents': true,
+      'mostPlayed': true,
+      'playlists': true,
+      'dislikes': true,
+      'shortcuts': true,
+      'download_history': true,
+      'synced_lyrics': true,
+      'preferences': true,
+    };
+
+    if (importData != null) {
+      options['favorites'] =
+          importData['favorites'] != null &&
+          (importData['favorites'] as List).isNotEmpty;
+      options['recents'] =
+          importData['recents'] != null &&
+          (importData['recents'] as List).isNotEmpty;
+      options['mostPlayed'] =
+          importData['mostPlayed'] != null &&
+          (importData['mostPlayed'] as List).isNotEmpty;
+      options['playlists'] =
+          importData['playlists'] != null &&
+          (importData['playlists'] as List).isNotEmpty;
+      options['dislikes'] =
+          importData['dislikes'] != null &&
+          (importData['dislikes'] as List).isNotEmpty;
+      options['shortcuts'] =
+          importData['shortcuts'] != null &&
+          (importData['shortcuts'] as List).isNotEmpty;
+      options['download_history'] =
+          importData['download_history'] != null &&
+          (importData['download_history'] as List).isNotEmpty;
+      options['synced_lyrics'] =
+          importData['synced_lyrics'] != null &&
+          (importData['synced_lyrics'] as List).isNotEmpty;
+      options['preferences'] =
+          (importData['ignored_folders'] != null &&
+              (importData['ignored_folders'] as List).isNotEmpty) ||
+          (importData['ignored_songs'] != null &&
+              (importData['ignored_songs'] as List).isNotEmpty) ||
+          (importData['pinned_songs'] != null &&
+              (importData['pinned_songs'] as List).isNotEmpty);
+    }
+
+    return showDialog<Map<String, bool>>(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
+            final isDark = Theme.of(context).brightness == Brightness.dark;
+
+            Widget buildItem(String key, String title, IconData icon) {
+              // if it's import mode and it's missing in data, we disable the checkbox and uncheck it
+              final bool actuallyAvailable =
+                  isExport ||
+                  (importData != null &&
+                      (() {
+                        if (key == 'preferences') {
+                          return (importData['ignored_folders']?.isNotEmpty ==
+                                  true ||
+                              importData['ignored_songs']?.isNotEmpty == true ||
+                              importData['pinned_songs']?.isNotEmpty == true);
+                        }
+                        return importData[key] != null &&
+                            (importData[key] as List).isNotEmpty;
+                      }()));
+
+              if (!isExport && !actuallyAvailable) {
+                // Return empty widget to hide it completely or optionally show a disabled one. Here we completely hide options that don't exist in json.
+                return const SizedBox.shrink();
+              }
+
+              return CheckboxListTile(
+                title: Text(title, style: const TextStyle(fontSize: 14)),
+                value: options[key],
+                onChanged: actuallyAvailable
+                    ? (val) {
+                        setState(() {
+                          options[key] = val ?? false;
+                        });
+                      }
+                    : null,
+                secondary: Icon(
+                  icon,
+                  size: 20,
+                  color: actuallyAvailable ? null : Colors.grey,
+                ),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                dense: true,
+              );
+            }
+
+            return AlertDialog(
+              backgroundColor: isAmoled && isDark
+                  ? Colors.black
+                  : Theme.of(context).colorScheme.surface,
+              surfaceTintColor: Colors.transparent,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(28),
+                side: isAmoled && isDark
+                    ? const BorderSide(color: Colors.white24, width: 1)
+                    : BorderSide.none,
+              ),
+              title: _buildDialogTitle(
+                context,
+                isExport ? 'export_backup' : 'import_backup',
+                fontSize: 20,
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16.0,
+                        vertical: 8.0,
+                      ),
+                      child: TranslatedText(
+                        isExport
+                            ? 'select_items_to_export'
+                            : 'select_items_to_import',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onSurface.withValues(alpha: 0.7),
+                        ),
+                      ),
+                    ),
+                    buildItem(
+                      'playlists',
+                      LocaleProvider.tr('playlists'),
+                      Icons.queue_music_rounded,
+                    ),
+                    buildItem(
+                      'favorites',
+                      LocaleProvider.tr('favorites'),
+                      Icons.favorite_rounded,
+                    ),
+                    buildItem(
+                      'recents',
+                      LocaleProvider.tr('recent_songs'),
+                      Icons.history_rounded,
+                    ),
+                    buildItem(
+                      'mostPlayed',
+                      LocaleProvider.tr('most_played_songs'),
+                      Icons.play_arrow_rounded,
+                    ),
+                    buildItem(
+                      'shortcuts',
+                      LocaleProvider.tr('quick_access'),
+                      Icons.shortcut_rounded,
+                    ),
+                    buildItem(
+                      'dislikes',
+                      LocaleProvider.tr('dislikes'),
+                      Icons.thumb_down_rounded,
+                    ),
+                    buildItem(
+                      'download_history',
+                      LocaleProvider.tr('downloaded_data'),
+                      Icons.download_rounded,
+                    ),
+                    buildItem(
+                      'synced_lyrics',
+                      LocaleProvider.tr('lyrics'),
+                      Icons.lyrics_rounded,
+                    ),
+                    buildItem(
+                      'preferences',
+                      LocaleProvider.tr('ignore_files'),
+                      Icons.settings_rounded,
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: TranslatedText(
+                    'cancel',
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.primary,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () {
+                    // Solo validar que haya algo seleccionado si no estamos ocultando todo por estar vacío
+                    if (!options.values.any((e) => e)) return;
+                    Navigator.pop(context, options);
+                  },
+                  child: TranslatedText(
+                    isExport ? 'export_backup' : 'import',
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.primary,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   Future<void> _exportBackup() async {
+    final options = await _showBackupSelectionDialog(true);
+    if (options == null) return;
+
     try {
-      // Obtener datos de las bases de datos
-      final favorites = await FavoritesDB().getFavorites();
-      final recents = await RecentsDB().getRecents();
-      final mostPlayed = await MostPlayedDB().getMostPlayed(limit: 10000);
-      final playlistsRaw = await PlaylistsDB().getAllPlaylists();
-      final playlists = <Map<String, dynamic>>[];
-      for (final pl in playlistsRaw) {
-        final songs = await PlaylistsDB().getSongsFromPlaylist(pl.id);
-        playlists.add({
-          'id': pl.id,
-          'name': pl.name,
-          'songs': songs.map((s) => s.data).toList(),
-        });
+      final backup = <String, dynamic>{};
+
+      if (options['favorites'] == true) {
+        final favorites = await FavoritesDB().getFavorites();
+        backup['favorites'] = favorites.map((s) => s.data).toList();
       }
-      final dislikesBox = await DislikesDB().box;
-      final dislikes = dislikesBox.values.toList();
-      final shortcuts = await ShortcutsDB().getShortcuts();
-      final downloadHistory = await DownloadHistoryHive.getAllDownloads();
-      final lyricsBox = await SyncedLyricsService.box;
-      final syncedLyrics = lyricsBox.values
-          .map(
-            (l) => {
-              'id': l.id,
-              'synced': l.synced,
-              'plainLyrics': l.plainLyrics,
-            },
-          )
-          .toList();
 
-      // Obtener carpetas y canciones ignoradas/fijadas de SharedPreferences
-      final prefs = await SharedPreferences.getInstance();
-      final ignoredFolders = prefs.getStringList('ignored_folders') ?? [];
-      final ignoredSongs = prefs.getStringList('ignored_songs') ?? [];
-      final pinnedSongs = prefs.getStringList('pinned_songs') ?? [];
+      if (options['recents'] == true) {
+        final recents = await RecentsDB().getRecents();
+        backup['recents'] = recents.map((s) => s.data).toList();
+      }
 
-      // Serializar a JSON
-      final backup = {
-        'favorites': favorites.map((s) => s.data).toList(),
-        'recents': recents.map((s) => s.data).toList(),
-        'mostPlayed': mostPlayed.map((s) => s.data).toList(),
-        'playlists': playlists,
-        'dislikes': dislikes,
-        'shortcuts': shortcuts,
-        'ignored_folders': ignoredFolders,
-        'ignored_songs': ignoredSongs,
-        'pinned_songs': pinnedSongs,
-        'download_history': downloadHistory
+      if (options['mostPlayed'] == true) {
+        final mostPlayed = await MostPlayedDB().getMostPlayed(limit: 10000);
+        backup['mostPlayed'] = mostPlayed.map((s) => s.data).toList();
+      }
+
+      if (options['playlists'] == true) {
+        final playlistsRaw = await PlaylistsDB().getAllPlaylists();
+        final playlists = <Map<String, dynamic>>[];
+        for (final pl in playlistsRaw) {
+          final songs = await PlaylistsDB().getSongsFromPlaylist(pl.id);
+          playlists.add({
+            'id': pl.id,
+            'name': pl.name,
+            'songs': songs.map((s) => s.data).toList(),
+          });
+        }
+        backup['playlists'] = playlists;
+      }
+
+      if (options['dislikes'] == true) {
+        final dislikesBox = await DislikesDB().box;
+        backup['dislikes'] = dislikesBox.values.toList();
+      }
+
+      if (options['shortcuts'] == true) {
+        final shortcuts = await ShortcutsDB().getShortcuts();
+        backup['shortcuts'] = shortcuts;
+      }
+
+      if (options['download_history'] == true) {
+        final downloadHistory = await DownloadHistoryHive.getAllDownloads();
+        backup['download_history'] = downloadHistory
             .map(
               (d) => {
                 'path': d.path,
@@ -4813,9 +5031,34 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 'videoId': d.videoId,
               },
             )
-            .toList(),
-        'synced_lyrics': syncedLyrics,
-      };
+            .toList();
+      }
+
+      if (options['synced_lyrics'] == true) {
+        final lyricsBox = await SyncedLyricsService.box;
+        backup['synced_lyrics'] = lyricsBox.values
+            .map(
+              (l) => {
+                'id': l.id,
+                'synced': l.synced,
+                'plainLyrics': l.plainLyrics,
+              },
+            )
+            .toList();
+      }
+
+      if (options['preferences'] == true) {
+        final prefs = await SharedPreferences.getInstance();
+        backup['ignored_folders'] =
+            prefs.getStringList('ignored_folders') ?? [];
+        backup['ignored_songs'] = prefs.getStringList('ignored_songs') ?? [];
+        backup['pinned_songs'] = prefs.getStringList('pinned_songs') ?? [];
+      } else {
+        backup['ignored_folders'] = [];
+        backup['ignored_songs'] = [];
+        backup['pinned_songs'] = [];
+      }
+
       final jsonStr = JsonEncoder.withIndent('  ').convert(backup);
       // Seleccionar carpeta y guardar
       final dir = await getDirectoryPath();
@@ -4989,6 +5232,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
       final file = File(filePath.path);
       final jsonStr = await file.readAsString();
       final data = jsonDecode(jsonStr);
+
+      final options = await _showBackupSelectionDialog(false, importData: data);
+      if (options == null) return;
+
       // Confirmar reemplazo
       if (!mounted) return;
       final confirmed = await showDialog<bool>(
@@ -5079,133 +5326,149 @@ class _SettingsScreenState extends State<SettingsScreen> {
       // Detener el reproductor antes de importar por seguridad
       await audioHandler?.stop();
 
-      // Limpiar bases de datos
-      final boxFav = await FavoritesDB().box;
-      await boxFav.clear();
-      final boxRec = await RecentsDB().box;
-      await boxRec.clear();
-      final boxMost = await MostPlayedDB().box;
-      await boxMost.clear();
-      final boxPl = await PlaylistsDB().box;
-      await boxPl.clear();
-      final boxDis = await DislikesDB().box;
-      await boxDis.clear();
-      await ShortcutsDB().clearAll();
-      await DownloadHistoryHive.clearAll();
-      await SyncedLyricsService.clearLyrics();
-      // Restaurar favoritos
-      if (data['favorites'] is List) {
-        for (final path in data['favorites']) {
-          if (!boxFav.values.contains(path)) {
-            await boxFav.add(path);
-          }
-        }
-      }
-      // Restaurar recientes
-      if (data['recents'] is List) {
-        for (final path in data['recents']) {
-          await boxRec.put(path, DateTime.now().millisecondsSinceEpoch);
-        }
-      }
-      // Restaurar más escuchadas
-      final mostPlayedBox = await MostPlayedDB().box;
-      if (data['mostPlayed'] is List) {
-        for (final path in data['mostPlayed']) {
-          await mostPlayedBox.put(path, {'play_count': 1});
-        }
-      }
-      // Restaurar playlists
-      if (data['playlists'] is List) {
-        for (final pl in data['playlists']) {
-          final id =
-              pl['id']?.toString() ??
-              DateTime.now().millisecondsSinceEpoch.toString();
-          final name = pl['name'] as String;
-          final songPaths = (pl['songs'] as List)
-              .map((e) => e.toString())
-              .toList();
-          final playlist = hive_model.PlaylistModel(
-            id: id,
-            name: name,
-            songPaths: songPaths,
-          );
-          await boxPl.put(id, playlist);
-        }
-      }
-      // Restaurar dislikes
-      if (data['dislikes'] is List) {
-        for (final path in data['dislikes']) {
-          await DislikesDB().addDislikePath(path.toString());
-        }
-      }
-      // Restaurar shortcuts
-      if (data['shortcuts'] is List) {
-        for (final path in data['shortcuts']) {
-          await ShortcutsDB().addShortcut(path.toString());
-        }
-      }
-      // Restaurar historial de descargas
-      if (data['download_history'] is List) {
-        for (final item in data['download_history']) {
-          if (item is Map) {
-            final path = item['path']?.toString() ?? '';
-            if (path.isEmpty) continue;
-            final artist = item['artist']?.toString() ?? '';
-            final title = item['title']?.toString() ?? '';
-            final rawDuration = item['duration'];
-            final duration = rawDuration is int
-                ? rawDuration
-                : int.tryParse(rawDuration?.toString() ?? '') ?? 0;
-            final videoId = item['videoId']?.toString() ?? '';
-            await DownloadHistoryHive.addDownload(
-              path: path,
-              artist: artist,
-              title: title,
-              duration: duration,
-              videoId: videoId,
-            );
-          }
-        }
-      }
-      // Restaurar letras sincronizadas
-      if (data['synced_lyrics'] is List) {
-        final lyricsBox = await SyncedLyricsService.box;
-        for (final item in data['synced_lyrics']) {
-          if (item is Map) {
-            final id = item['id']?.toString();
-            if (id == null || id.isEmpty) continue;
-            final synced = item['synced']?.toString();
-            final plainLyrics = item['plainLyrics']?.toString();
-            final lyricsData = LyricsData(
-              id: id,
-              synced: synced,
-              plainLyrics: plainLyrics,
-            );
-            await lyricsBox.put(id, lyricsData);
+      // Limpiar bases de datos y restaurar según opciones
+      if (options['favorites'] == true) {
+        final boxFav = await FavoritesDB().box;
+        await boxFav.clear();
+        if (data['favorites'] is List) {
+          for (final path in data['favorites']) {
+            if (!boxFav.values.contains(path)) {
+              await boxFav.add(path);
+            }
           }
         }
       }
 
-      // Restaurar carpetas ignoradas, canciones ignoradas y fijadas en SharedPreferences
-      final prefs = await SharedPreferences.getInstance();
-      if (data['ignored_folders'] is List) {
-        await prefs.setStringList(
-          'ignored_folders',
-          List<String>.from(data['ignored_folders']),
-        );
+      if (options['recents'] == true) {
+        final boxRec = await RecentsDB().box;
+        await boxRec.clear();
+        if (data['recents'] is List) {
+          for (final path in data['recents']) {
+            await boxRec.put(path, DateTime.now().millisecondsSinceEpoch);
+          }
+        }
       }
-      if (data['ignored_songs'] is List) {
-        await prefs.setStringList(
-          'ignored_songs',
-          List<String>.from(data['ignored_songs']),
-        );
+
+      if (options['mostPlayed'] == true) {
+        final boxMost = await MostPlayedDB().box;
+        await boxMost.clear();
+        if (data['mostPlayed'] is List) {
+          for (final path in data['mostPlayed']) {
+            await boxMost.put(path, {'play_count': 1});
+          }
+        }
       }
-      if (data['pinned_songs'] is List) {
-        await prefs.setStringList(
-          'pinned_songs',
-          List<String>.from(data['pinned_songs']),
-        );
+
+      if (options['playlists'] == true) {
+        final boxPl = await PlaylistsDB().box;
+        await boxPl.clear();
+        if (data['playlists'] is List) {
+          for (final pl in data['playlists']) {
+            final id =
+                pl['id']?.toString() ??
+                DateTime.now().millisecondsSinceEpoch.toString();
+            final name = pl['name'] as String;
+            final songPaths = (pl['songs'] as List)
+                .map((e) => e.toString())
+                .toList();
+            final playlist = hive_model.PlaylistModel(
+              id: id,
+              name: name,
+              songPaths: songPaths,
+            );
+            await boxPl.put(id, playlist);
+          }
+        }
       }
+
+      if (options['dislikes'] == true) {
+        final boxDis = await DislikesDB().box;
+        await boxDis.clear();
+        if (data['dislikes'] is List) {
+          for (final path in data['dislikes']) {
+            await DislikesDB().addDislikePath(path.toString());
+          }
+        }
+      }
+
+      if (options['shortcuts'] == true) {
+        await ShortcutsDB().clearAll();
+        if (data['shortcuts'] is List) {
+          for (final path in data['shortcuts']) {
+            await ShortcutsDB().addShortcut(path.toString());
+          }
+        }
+      }
+
+      if (options['download_history'] == true) {
+        await DownloadHistoryHive.clearAll();
+        if (data['download_history'] is List) {
+          for (final item in data['download_history']) {
+            if (item is Map) {
+              final path = item['path']?.toString() ?? '';
+              if (path.isEmpty) continue;
+              final artist = item['artist']?.toString() ?? '';
+              final title = item['title']?.toString() ?? '';
+              final rawDuration = item['duration'];
+              final duration = rawDuration is int
+                  ? rawDuration
+                  : int.tryParse(rawDuration?.toString() ?? '') ?? 0;
+              final videoId = item['videoId']?.toString() ?? '';
+              await DownloadHistoryHive.addDownload(
+                path: path,
+                artist: artist,
+                title: title,
+                duration: duration,
+                videoId: videoId,
+              );
+            }
+          }
+        }
+      }
+
+      if (options['synced_lyrics'] == true) {
+        await SyncedLyricsService.clearLyrics();
+        if (data['synced_lyrics'] is List) {
+          final lyricsBox = await SyncedLyricsService.box;
+          for (final item in data['synced_lyrics']) {
+            if (item is Map) {
+              final id = item['id']?.toString();
+              if (id == null || id.isEmpty) continue;
+              final synced = item['synced']?.toString();
+              final plainLyrics = item['plainLyrics']?.toString();
+              final lyricsData = LyricsData(
+                id: id,
+                synced: synced,
+                plainLyrics: plainLyrics,
+              );
+              await lyricsBox.put(id, lyricsData);
+            }
+          }
+        }
+      }
+
+      if (options['preferences'] == true) {
+        final prefs = await SharedPreferences.getInstance();
+        if (data['ignored_folders'] is List) {
+          await prefs.setStringList(
+            'ignored_folders',
+            List<String>.from(data['ignored_folders']),
+          );
+        }
+        if (data['ignored_songs'] is List) {
+          await prefs.setStringList(
+            'ignored_songs',
+            List<String>.from(data['ignored_songs']),
+          );
+        }
+        if (data['pinned_songs'] is List) {
+          await prefs.setStringList(
+            'pinned_songs',
+            List<String>.from(data['pinned_songs']),
+          );
+        }
+      }
+
       if (!mounted) return;
 
       // Activar notifiers para recargar datos sin reiniciar la app

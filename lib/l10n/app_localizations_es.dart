@@ -76,6 +76,7 @@ const Map<String, String> appLocalizationsEs = {
 
   // Downloads
   'downloads': 'Descargas',
+  'downloaded_data': 'Datos descargado (canciones)',
   'download_history': 'Historial de descargas',
   'no_downloads': 'No hay descargas recientes',
   'delete_download': 'Eliminar descarga',
@@ -292,7 +293,7 @@ const Map<String, String> appLocalizationsEs = {
   'backup': 'Respaldo',
   'export_backup': 'Exportar respaldo',
   'export_backup_desc':
-      'Exporta tus listas de me gusta, listas de reproducción, recientes y canciones más escuchadas a un archivo JSON',
+      'Exporta tus listas de me gusta, listas de reproducción, recientes, accesos directos y más a un archivo JSON',
   'import_backup': 'Importar respaldo',
   'import_backup_desc':
       'Importa un respaldo y reemplaza todos los datos actuales',
@@ -300,6 +301,8 @@ const Map<String, String> appLocalizationsEs = {
   'backup_imported': '¡Respaldo importado exitosamente!',
   'import_confirm':
       'Esto borrará todos los datos actuales y los reemplazará con el respaldo. ¿Continuar?',
+  'select_items_to_export': 'Selecciona qué datos incluir en el respaldo:',
+  'select_items_to_import': 'Selecciona qué datos importar del respaldo:',
   'import': 'Importar',
   'restart_app': 'Cerrar aplicación',
 
@@ -544,10 +547,13 @@ const Map<String, String> appLocalizationsEs = {
   'recent_playlists': 'Listas de reproducción recientes',
   'no_recent_playlists': 'No hay listas de reproducción recientes.',
   'quick_pick_songs': 'selección rápida',
+  'most_played_songs': 'Canciones más reproducidas',
+  'ignored_files': 'Archivos ignorados',
   'quick_access_songs': 'acceso directos',
   'artists': 'Artistas',
   'recent_songs_title': 'canciones recientes',
   'favorites_title': 'me gusta',
+  'dislikes': 'No me gusta',
   'confirm_remove_from_playlist':
       '¿Estás seguro de que deseas eliminar esta canción de la lista de reproducción?',
   'recent_songs': 'Canciones recientes',
@@ -789,6 +795,9 @@ const Map<String, String> appLocalizationsEs = {
   'view_on_github': 'Repositorio del codigo fuente',
   'report_issues': 'Reportar errores',
   'contact_telegram': 'Contactar por Telegram',
+  'donate_ko_fi': 'Donar en Ko-fi',
+  'donate_ko_fi_desc':
+      'Ayúdame a comprar más limones, porque el café ni me gusta',
   'dependencies': 'Dependencias',
   'view_dependencies': 'Ver dependencias de la aplicación',
   'view_artist': 'Ver artista',

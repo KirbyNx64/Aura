@@ -1192,7 +1192,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
                               _buildSafeNetworkImage(
                                 _artist!['thumbUrl'],
                                 width: double.infinity,
-                                height: 200,
+                                height: 220,
                                 fit: BoxFit.cover,
                                 alignment: Alignment.topCenter,
                                 fallback: Container(
@@ -1238,241 +1238,244 @@ class _ArtistScreenState extends State<ArtistScreen> {
                           ),
                         ),
                         Padding(
-                          padding: const EdgeInsets.only(
-                            left: 15,
-                            top: 10,
-                            bottom: 10,
-                          ),
+                          padding: const EdgeInsets.only(top: 10, bottom: 10),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.start,
-                                children: [
-                                  Flexible(
-                                    child: Text(
-                                      _artist!['name']?.toString() ??
-                                          widget.artistName,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .headlineSmall
-                                          ?.copyWith(
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 34,
-                                          ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
+                              Padding(
+                                padding: const EdgeInsets.only(left: 16),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.start,
+                                  children: [
+                                    Flexible(
+                                      child: Text(
+                                        _artist!['name']?.toString() ??
+                                            widget.artistName,
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .headlineSmall
+                                            ?.copyWith(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 34,
+                                            ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
                                     ),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
                               const SizedBox(height: 8),
                               SingleChildScrollView(
                                 scrollDirection: Axis.horizontal,
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    if (_artist!['subscribers'] != null &&
-                                        _artist!['subscribers']
-                                            .toString()
-                                            .isNotEmpty) ...[
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 12,
-                                          vertical: 6,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: isAmoled && isDark
-                                              ? Colors.white.withValues(
-                                                  alpha: 0.1,
-                                                )
-                                              : Theme.of(context)
-                                                    .colorScheme
-                                                    .surfaceContainerHighest
-                                                    .withValues(alpha: 0.5),
-                                          borderRadius: BorderRadius.circular(
-                                            20,
+                                child: Padding(
+                                  padding: const EdgeInsets.only(left: 16),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.start,
+                                    children: [
+                                      if (_artist!['subscribers'] != null &&
+                                          _artist!['subscribers']
+                                              .toString()
+                                              .isNotEmpty) ...[
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 12,
+                                            vertical: 6,
                                           ),
-                                          border: Border.all(
-                                            color:
-                                                (isAmoled && isDark
-                                                        ? Colors.white
-                                                        : Theme.of(context)
-                                                              .colorScheme
-                                                              .onSurface)
-                                                    .withValues(alpha: 0.1),
-                                          ),
-                                        ),
-                                        child: Row(
-                                          children: [
-                                            Icon(
-                                              Icons.people_alt_outlined,
-                                              size: 16,
-                                              color: isAmoled && isDark
-                                                  ? Colors.white.withValues(
-                                                      alpha: 0.7,
-                                                    )
-                                                  : Theme.of(
-                                                      context,
-                                                    ).colorScheme.secondary,
+                                          decoration: BoxDecoration(
+                                            color: isAmoled && isDark
+                                                ? Colors.white.withValues(
+                                                    alpha: 0.1,
+                                                  )
+                                                : Theme.of(context)
+                                                      .colorScheme
+                                                      .surfaceContainerHighest
+                                                      .withValues(alpha: 0.5),
+                                            borderRadius: BorderRadius.circular(
+                                              20,
                                             ),
-                                            const SizedBox(width: 8),
-                                            Text(
-                                              _formatArtistSubtitle(
-                                                    _artist!['subscribers'],
-                                                  ) ??
-                                                  '',
-                                              style: TextStyle(
-                                                fontSize: 13,
-                                                fontWeight: FontWeight.w500,
+                                            border: Border.all(
+                                              color:
+                                                  (isAmoled && isDark
+                                                          ? Colors.white
+                                                          : Theme.of(context)
+                                                                .colorScheme
+                                                                .onSurface)
+                                                      .withValues(alpha: 0.1),
+                                            ),
+                                          ),
+                                          child: Row(
+                                            children: [
+                                              Icon(
+                                                Icons.people_alt_outlined,
+                                                size: 16,
                                                 color: isAmoled && isDark
                                                     ? Colors.white.withValues(
-                                                        alpha: 0.9,
+                                                        alpha: 0.7,
                                                       )
                                                     : Theme.of(
                                                         context,
-                                                      ).colorScheme.onSurface,
+                                                      ).colorScheme.secondary,
                                               ),
+                                              const SizedBox(width: 8),
+                                              Text(
+                                                _formatArtistSubtitle(
+                                                      _artist!['subscribers'],
+                                                    ) ??
+                                                    '',
+                                                style: TextStyle(
+                                                  fontSize: 13,
+                                                  fontWeight: FontWeight.w500,
+                                                  color: isAmoled && isDark
+                                                      ? Colors.white.withValues(
+                                                          alpha: 0.9,
+                                                        )
+                                                      : Theme.of(
+                                                          context,
+                                                        ).colorScheme.onSurface,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        const SizedBox(width: 12),
+                                      ],
+                                      if (_artist!['monthlyListeners'] !=
+                                              null &&
+                                          _artist!['monthlyListeners']
+                                              .toString()
+                                              .isNotEmpty) ...[
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 12,
+                                            vertical: 6,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: isAmoled && isDark
+                                                ? Colors.white.withValues(
+                                                    alpha: 0.1,
+                                                  )
+                                                : Theme.of(context)
+                                                      .colorScheme
+                                                      .surfaceContainerHighest
+                                                      .withValues(alpha: 0.5),
+                                            borderRadius: BorderRadius.circular(
+                                              20,
                                             ),
-                                          ],
+                                            border: Border.all(
+                                              color:
+                                                  (isAmoled && isDark
+                                                          ? Colors.white
+                                                          : Theme.of(context)
+                                                                .colorScheme
+                                                                .onSurface)
+                                                      .withValues(alpha: 0.1),
+                                            ),
+                                          ),
+                                          child: Row(
+                                            children: [
+                                              Icon(
+                                                Icons.headset_outlined,
+                                                size: 16,
+                                                color: isAmoled && isDark
+                                                    ? Colors.white.withValues(
+                                                        alpha: 0.7,
+                                                      )
+                                                    : Theme.of(
+                                                        context,
+                                                      ).colorScheme.secondary,
+                                              ),
+                                              const SizedBox(width: 8),
+                                              Text(
+                                                _formatArtistSubtitle(
+                                                      _artist!['monthlyListeners'],
+                                                    ) ??
+                                                    '',
+                                                style: TextStyle(
+                                                  fontSize: 13,
+                                                  fontWeight: FontWeight.w500,
+                                                  color: isAmoled && isDark
+                                                      ? Colors.white.withValues(
+                                                          alpha: 0.9,
+                                                        )
+                                                      : Theme.of(
+                                                          context,
+                                                        ).colorScheme.onSurface,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        const SizedBox(width: 12),
+                                      ],
+                                      // Botón de búsqueda externa (YT Music)
+                                      InkWell(
+                                        onTap: () async {
+                                          final artistName =
+                                              _artist?['name']?.toString() ??
+                                              widget.artistName;
+                                          await _showArtistSearchOptions(
+                                            artistName,
+                                          );
+                                        },
+                                        borderRadius: BorderRadius.circular(20),
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 12,
+                                            vertical: 6,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: isAmoled && isDark
+                                                ? Colors.white.withValues(
+                                                    alpha: 0.1,
+                                                  )
+                                                : Theme.of(context)
+                                                      .colorScheme
+                                                      .surfaceContainerHighest
+                                                      .withValues(alpha: 0.5),
+                                            borderRadius: BorderRadius.circular(
+                                              20,
+                                            ),
+                                            border: Border.all(
+                                              color:
+                                                  (isAmoled && isDark
+                                                          ? Colors.white
+                                                          : Theme.of(context)
+                                                                .colorScheme
+                                                                .onSurface)
+                                                      .withValues(alpha: 0.1),
+                                            ),
+                                          ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Image.asset(
+                                                'assets/icon/Youtube_Music_icon.png',
+                                                width: 18,
+                                                height: 18,
+                                              ),
+                                              const SizedBox(width: 8),
+                                              Text(
+                                                'YouTube Music',
+                                                style: TextStyle(
+                                                  fontSize: 13,
+                                                  fontWeight: FontWeight.w500,
+                                                  color: isAmoled && isDark
+                                                      ? Colors.white.withValues(
+                                                          alpha: 0.9,
+                                                        )
+                                                      : Theme.of(
+                                                          context,
+                                                        ).colorScheme.onSurface,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
                                         ),
                                       ),
-                                      const SizedBox(width: 12),
                                     ],
-                                    if (_artist!['monthlyListeners'] != null &&
-                                        _artist!['monthlyListeners']
-                                            .toString()
-                                            .isNotEmpty) ...[
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 12,
-                                          vertical: 6,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: isAmoled && isDark
-                                              ? Colors.white.withValues(
-                                                  alpha: 0.1,
-                                                )
-                                              : Theme.of(context)
-                                                    .colorScheme
-                                                    .surfaceContainerHighest
-                                                    .withValues(alpha: 0.5),
-                                          borderRadius: BorderRadius.circular(
-                                            20,
-                                          ),
-                                          border: Border.all(
-                                            color:
-                                                (isAmoled && isDark
-                                                        ? Colors.white
-                                                        : Theme.of(context)
-                                                              .colorScheme
-                                                              .onSurface)
-                                                    .withValues(alpha: 0.1),
-                                          ),
-                                        ),
-                                        child: Row(
-                                          children: [
-                                            Icon(
-                                              Icons.headset_outlined,
-                                              size: 16,
-                                              color: isAmoled && isDark
-                                                  ? Colors.white.withValues(
-                                                      alpha: 0.7,
-                                                    )
-                                                  : Theme.of(
-                                                      context,
-                                                    ).colorScheme.secondary,
-                                            ),
-                                            const SizedBox(width: 8),
-                                            Text(
-                                              _formatArtistSubtitle(
-                                                    _artist!['monthlyListeners'],
-                                                  ) ??
-                                                  '',
-                                              style: TextStyle(
-                                                fontSize: 13,
-                                                fontWeight: FontWeight.w500,
-                                                color: isAmoled && isDark
-                                                    ? Colors.white.withValues(
-                                                        alpha: 0.9,
-                                                      )
-                                                    : Theme.of(
-                                                        context,
-                                                      ).colorScheme.onSurface,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      const SizedBox(width: 12),
-                                    ],
-                                    // Botón de búsqueda externa (YT Music)
-                                    InkWell(
-                                      onTap: () async {
-                                        final artistName =
-                                            _artist?['name']?.toString() ??
-                                            widget.artistName;
-                                        await _showArtistSearchOptions(
-                                          artistName,
-                                        );
-                                      },
-                                      borderRadius: BorderRadius.circular(20),
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 12,
-                                          vertical: 6,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: isAmoled && isDark
-                                              ? Colors.white.withValues(
-                                                  alpha: 0.1,
-                                                )
-                                              : Theme.of(context)
-                                                    .colorScheme
-                                                    .surfaceContainerHighest
-                                                    .withValues(alpha: 0.5),
-                                          borderRadius: BorderRadius.circular(
-                                            20,
-                                          ),
-                                          border: Border.all(
-                                            color:
-                                                (isAmoled && isDark
-                                                        ? Colors.white
-                                                        : Theme.of(context)
-                                                              .colorScheme
-                                                              .onSurface)
-                                                    .withValues(alpha: 0.1),
-                                          ),
-                                        ),
-                                        child: Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Image.asset(
-                                              'assets/icon/Youtube_Music_icon.png',
-                                              width: 18,
-                                              height: 18,
-                                            ),
-                                            const SizedBox(width: 8),
-                                            Text(
-                                              'YouTube Music',
-                                              style: TextStyle(
-                                                fontSize: 13,
-                                                fontWeight: FontWeight.w500,
-                                                color: isAmoled && isDark
-                                                    ? Colors.white.withValues(
-                                                        alpha: 0.9,
-                                                      )
-                                                    : Theme.of(
-                                                        context,
-                                                      ).colorScheme.onSurface,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  ],
+                                  ),
                                 ),
                               ),
                             ],

@@ -347,6 +347,48 @@ class AboutScreen extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 4),
+                // Ko-fi Card
+                Card(
+                  color: isAmoled && isDark
+                      ? Colors.white.withAlpha(20)
+                      : isDark
+                      ? Theme.of(
+                          context,
+                        ).colorScheme.secondary.withValues(alpha: 0.06)
+                      : Theme.of(
+                          context,
+                        ).colorScheme.secondary.withValues(alpha: 0.07),
+                  margin: EdgeInsets.zero,
+                  elevation: 0,
+                  shape: const RoundedRectangleBorder(
+                    borderRadius: BorderRadius.all(Radius.circular(4)),
+                  ),
+                  child: ListTile(
+                    shape: const RoundedRectangleBorder(
+                      borderRadius: BorderRadius.all(Radius.circular(4)),
+                    ),
+                    onTap: () => _launchUrl('https://ko-fi.com/kirbyestelar'),
+                    leading: Icon(
+                      Icons.volunteer_activism_outlined,
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+                    title: Text(
+                      LocaleProvider.tr('donate_ko_fi'),
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    subtitle: Text(
+                      LocaleProvider.tr('donate_ko_fi_desc'),
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withValues(alpha: 0.9),
+                      ),
+                    ),
+                    trailing: const Icon(Icons.open_in_new_rounded, size: 18),
+                  ),
+                ),
+                const SizedBox(height: 4),
                 // GitHub Card
                 Card(
                   color: isAmoled && isDark
@@ -465,7 +507,7 @@ class AboutScreen extends StatelessWidget {
                       ),
                     ),
                     subtitle: Text(
-                      '3.41.1 • stable • Dart 3.11.0 • Compiled with Ubuntu 25.10 6.17.0-14-generic',
+                      '3.41.2 • stable • Dart 3.11.0 • Compiled with Ubuntu 25.10 6.17.0-14-generic',
                       style: TextStyle(
                         fontSize: 13,
                         color: Theme.of(

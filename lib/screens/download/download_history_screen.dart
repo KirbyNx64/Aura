@@ -611,12 +611,32 @@ class _DownloadHistoryScreenState extends State<DownloadHistoryScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(
-                    Icons.download_done_outlined,
-                    size: 48,
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.onSurface.withValues(alpha: 0.6),
+                  Container(
+                    width: 80,
+                    height: 80,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: isDark
+                          ? Theme.of(
+                              context,
+                            ).colorScheme.secondary.withValues(alpha: 0.04)
+                          : Theme.of(
+                              context,
+                            ).colorScheme.secondary.withValues(alpha: 0.05),
+                    ),
+                    child: Icon(
+                      Icons.download_done_rounded,
+                      weight: 600,
+                      size: 50,
+                      color: Theme.of(context).brightness == Brightness.light
+                          ? Theme.of(
+                              context,
+                            ).colorScheme.onSurface.withValues(alpha: 0.7)
+                          : Theme.of(
+                              context,
+                            ).colorScheme.onSurface.withValues(alpha: 0.7),
+                    ),
                   ),
                   const SizedBox(height: 16),
                   Text(

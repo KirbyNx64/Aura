@@ -73,6 +73,7 @@ const Map<String, String> appLocalizationsEn = {
   // Downloads
   'downloads': 'Downloads',
   'download_history': 'Download History',
+  'downloaded_data': 'Downloaded data (songs)',
   'no_downloads': 'No recent downloads',
   'delete_download': 'Delete download',
   'delete_download_confirm': 'Are you sure you want to delete',
@@ -281,15 +282,18 @@ const Map<String, String> appLocalizationsEn = {
   'are_you_sure': 'Are you sure?',
   // Backup
   'backup': 'Backup',
+  'dislikes': 'Dislikes',
   'export_backup': 'Export backup',
   'export_backup_desc':
-      'Export your favorites, playlists, recents and most played to a JSON file',
+      'Export your favorites, playlists, recents, shortcuts and more to a JSON file',
   'import_backup': 'Import backup',
   'import_backup_desc': 'Import a backup and replace all current data',
   'backup_exported': 'Backup exported successfully!',
   'backup_imported': 'Backup imported successfully!',
   'import_confirm':
       'This will erase all current data and replace it with the backup. Continue?',
+  'select_items_to_export': 'Select the data to include in the backup:',
+  'select_items_to_import': 'Select the data to import from the backup:',
   'import': 'Import',
   'restart_app': 'Close app',
 
@@ -539,6 +543,8 @@ const Map<String, String> appLocalizationsEn = {
   'recent_playlists': 'Recent playlists',
   'no_recent_playlists': 'No recent playlists.',
   'quick_pick_songs': 'quick pick',
+  'most_played_songs': 'Most played',
+  'ignored_files': 'Ignored files',
   'quick_access_songs': 'quick access',
   'artists': 'Artists',
   'recent_songs_title': 'recent songs',
@@ -754,6 +760,9 @@ const Map<String, String> appLocalizationsEn = {
   'view_on_github': 'Source code repository',
   'report_issues': 'Report issues',
   'contact_telegram': 'Contact on Telegram',
+  'donate_ko_fi': 'Donate on Ko-fi',
+  'donate_ko_fi_desc':
+      'Help me buy more lemons, because I don\'t even like coffee',
   'dependencies': 'Dependencies',
   'view_dependencies': 'View app dependencies',
   'view_artist': 'View artist',
