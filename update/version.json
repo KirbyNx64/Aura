@@ -1,9 +1,9 @@
 {
-  "version": "1.8.5",
+  "version": "1.8.6",
   "apk_urls": {
-    "arm64-v8a": "https://github.com/KirbyNx64/Aura/releases/download/v1.8.5/AuraMusic-v1.8.5-arm64-v8a.apk",
-    "armeabi-v7a": "https://github.com/KirbyNx64/Aura/releases/download/v1.8.5/AuraMusic-v1.8.5-armeabi-v7a.apk",
-    "x86_64": "https://github.com/KirbyNx64/Aura/releases/download/v1.8.5/AuraMusic-v1.8.5-x86_64.apk"
+    "arm64-v8a": "https://github.com/KirbyNx64/Aura/releases/download/v1.8.6/AuraMusic-v1.8.6-arm64-v8a.apk",
+    "armeabi-v7a": "https://github.com/KirbyNx64/Aura/releases/download/v1.8.6/AuraMusic-v1.8.6-armeabi-v7a.apk",
+    "x86_64": "https://github.com/KirbyNx64/Aura/releases/download/v1.8.6/AuraMusic-v1.8.6-x86_64.apk"
   },
-  "changelog": "• Ahora se muestra el dispositivo de salida de audio directamente en el reproductor.\n\n• Se añadió un nuevo servicio de búsqueda de letras de canciones, permitiendo elegir entre el servicio anterior o el nuevo.\n\n• Ahora puedes generar imágenes con la letra de las canciones y compartirlas en otras aplicaciones.\n\n• Se mejoró el sistema de respaldo de datos del usuario.\n\n• Se aplicaron pequeñas mejoras visuales y se corrigieron errores menores."
+  "changelog": "• Se aplicaron mejoras visuales generales en toda la aplicación, refinando la interfaz y logrando una experiencia más agradable.\n\n• Se optimizó la estabilidad y el rendimiento general de la app, además de corregir errores menores."
 }
