@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:android_nav_setting/android_nav_setting.dart';
 import 'package:music/widgets/title_marquee.dart';
 import 'package:music/main.dart';
-import 'package:music/widgets/artwork_cached.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:music/widgets/slider.dart';
 // import 'package:http/http.dart' as http;
@@ -193,8 +192,46 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     }
   }
 
+  Uri? _displayArtUriFor(MediaItem mediaItem) {
+    final raw = mediaItem.extras?['displayArtUri']?.toString().trim();
+    if (raw != null && raw.isNotEmpty) {
+      final parsed = Uri.tryParse(raw);
+      if (parsed != null) return parsed;
+    }
+    return mediaItem.artUri;
+  }
+
+  void _debugArtworkSource(MediaItem mediaItem) {
+    final displayUri = _displayArtUriFor(mediaItem);
+    final songPath = mediaItem.extras?['data'] as String?;
+    final cachedUri = songPath != null ? _getCachedArtwork(songPath) : null;
+
+    String source;
+    if (displayUri != null) {
+      final scheme = displayUri.scheme.toLowerCase();
+      if (scheme == 'file' || scheme == 'content' || scheme.isEmpty) {
+        source = 'artUri_local';
+      } else if (scheme == 'http' || scheme == 'https') {
+        source = 'artUri_remote';
+      } else {
+        source = 'artUri_$scheme';
+      }
+    } else if (cachedUri != null) {
+      source = 'cache_local';
+    } else {
+      source = 'none';
+    }
+
+    // ignore: avoid_print
+    print(
+      '[artwork-source] title="${mediaItem.title}" id="${mediaItem.id}" '
+      'source=$source displayUri="${displayUri?.toString() ?? 'null'}" '
+      'cachedUri="${cachedUri?.toString() ?? 'null'}"',
+    );
+  }
+
   Widget buildArtwork(MediaItem mediaItem, double size) {
-    final artUri = mediaItem.artUri;
+    final artUri = _displayArtUriFor(mediaItem);
 
     // Prioridad 1: Si hay artUri, usarlo directamente
     if (artUri != null) {
@@ -209,6 +246,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
             width: size,
             height: size,
             fit: BoxFit.cover,
+            alignment: Alignment.center,
             errorBuilder: (context, error, stackTrace) => _defaultArtwork(size),
           ),
         );
@@ -223,6 +261,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
             width: size,
             height: size,
             fit: BoxFit.cover,
+            alignment: Alignment.center,
             errorBuilder: (context, error, stackTrace) => _defaultArtwork(size),
             loadingBuilder: (context, child, loadingProgress) =>
                 loadingProgress == null
@@ -231,7 +270,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                     width: size,
                     height: size,
                     alignment: Alignment.center,
-                    child: LoadingIndicator(),
+                    child: CircularProgressIndicator(strokeWidth: 3),
                   ),
             // Optimización: Cache de imagen
             cacheWidth: (size * MediaQuery.of(context).devicePixelRatio)
@@ -257,6 +296,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
             width: size,
             height: size,
             fit: BoxFit.cover,
+            alignment: Alignment.center,
             errorBuilder: (context, error, stackTrace) => _defaultArtwork(size),
           ),
         );
@@ -288,7 +328,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
   }
 
   Widget _buildModalArtwork(MediaItem mediaItem) {
-    final artUri = mediaItem.artUri;
+    final artUri = _displayArtUriFor(mediaItem);
     if (artUri != null) {
       final scheme = artUri.scheme.toLowerCase();
 
@@ -873,15 +913,26 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
 
       // Verificar si la carátula está disponible inmediatamente
       if (newMediaItem != null) {
+        _debugArtworkSource(newMediaItem);
         final songId = newMediaItem.extras?['songId'] as int?;
         final songPath = newMediaItem.extras?['data'] as String?;
-        final hasArtUri = newMediaItem.artUri != null;
+        final isStreaming = newMediaItem.extras?['isStreaming'] == true;
+        final artUri = newMediaItem.artUri;
+        final hasArtUri = artUri != null;
+        final artScheme = artUri?.scheme.toLowerCase();
+        final hasLocalArtUri =
+            artScheme == 'file' || artScheme == 'content' || artScheme == '';
         final hasCachedArtwork = songPath != null
             ? _getCachedArtwork(songPath) != null
             : false;
 
-        // Solo mostrar loading si no hay carátula disponible en ningún lugar
-        _artworkLoadingNotifier.value = !hasArtUri && !hasCachedArtwork;
+        // En streaming, mostrar loading hasta tener carátula local (file/content).
+        // En local, mantener el comportamiento previo.
+        if (isStreaming) {
+          _artworkLoadingNotifier.value = !hasLocalArtUri;
+        } else {
+          _artworkLoadingNotifier.value = !hasArtUri && !hasCachedArtwork;
+        }
 
         // Precargar carátula en background si no está disponible
         if (!hasArtUri &&
@@ -897,8 +948,14 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
       // Precargar la siguiente carátula en el caché de Flutter (Nivel 3)
       _precacheNextInQueue();
     } else if (newMediaItem?.artUri != null && _artworkLoadingNotifier.value) {
-      // La carátula acaba de llegar para la canción actual
-      _artworkLoadingNotifier.value = false;
+      // La carátula acaba de llegar para la canción actual.
+      final isStreaming = newMediaItem?.extras?['isStreaming'] == true;
+      final artScheme = newMediaItem?.artUri?.scheme.toLowerCase();
+      final hasLocalArtUri =
+          artScheme == 'file' || artScheme == 'content' || artScheme == '';
+      if (!isStreaming || hasLocalArtUri) {
+        _artworkLoadingNotifier.value = false;
+      }
     }
   }
 
@@ -1554,49 +1611,43 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                 },
               ),
               */
-                                  ListTile(
-                                    leading: const Icon(Icons.share),
-                                    title: Text(
-                                      LocaleProvider.tr('share_audio_file'),
-                                    ),
-                                    onTap: () async {
-                                      Navigator.of(context).pop();
-                                      final dataPath =
-                                          mediaItem.extras?['data'] as String?;
-                                      if (dataPath != null &&
-                                          dataPath.isNotEmpty) {
+                                  if (!(mediaItem.extras?['isStreaming'] ==
+                                      true))
+                                    ListTile(
+                                      leading: const Icon(Icons.share),
+                                      title: Text(
+                                        LocaleProvider.tr('share_audio_file'),
+                                      ),
+                                      onTap: () async {
+                                        final dataPath =
+                                            mediaItem.extras?['data']
+                                                as String?;
+                                        final hasLocalFilePath =
+                                            dataPath != null &&
+                                            dataPath.isNotEmpty &&
+                                            !dataPath.startsWith('http://') &&
+                                            !dataPath.startsWith('https://') &&
+                                            File(dataPath).existsSync();
+                                        if (!hasLocalFilePath) return;
+
+                                        Navigator.of(context).pop();
+                                        await Future<void>.delayed(
+                                          const Duration(milliseconds: 220),
+                                        );
                                         await SharePlus.instance.share(
                                           ShareParams(
                                             text: mediaItem.title,
                                             files: [XFile(dataPath)],
                                           ),
                                         );
-                                      }
-                                    },
-                                  ),
+                                      },
+                                    ),
                                   FutureBuilder<String?>(
-                                    future: () async {
-                                      var videoId = mediaItem.extras?['videoId']
-                                          ?.toString();
-
-                                      if (videoId == null ||
-                                          videoId.trim().isEmpty) {
-                                        final historyItem =
-                                            await DownloadHistoryHive.getDownloadByPath(
-                                              mediaItem.id,
-                                            );
-                                        videoId = historyItem?.videoId;
-                                      }
-
-                                      final normalized = videoId?.trim();
-                                      return (normalized == null ||
-                                              normalized.isEmpty)
-                                          ? null
-                                          : normalized;
-                                    }(),
+                                    future: _resolveShareUrl(mediaItem),
                                     builder: (context, snapshot) {
-                                      final videoId = snapshot.data;
-                                      if (videoId == null || videoId.isEmpty) {
+                                      final shareUrl = snapshot.data;
+                                      if (shareUrl == null ||
+                                          shareUrl.isEmpty) {
                                         return const SizedBox.shrink();
                                       }
 
@@ -1607,11 +1658,11 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                         ),
                                         onTap: () async {
                                           Navigator.of(context).pop();
-
-                                          final url =
-                                              'https://music.youtube.com/watch?v=$videoId';
+                                          await Future<void>.delayed(
+                                            const Duration(milliseconds: 220),
+                                          );
                                           await SharePlus.instance.share(
-                                            ShareParams(text: url),
+                                            ShareParams(text: shareUrl),
                                           );
                                         },
                                       );
@@ -1678,6 +1729,29 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
         );
       },
     );
+  }
+
+  Future<String?> _resolveShareUrl(MediaItem mediaItem) async {
+    var videoId = mediaItem.extras?['videoId']?.toString();
+
+    if (videoId == null || videoId.trim().isEmpty) {
+      final historyItem = await DownloadHistoryHive.getDownloadByPath(
+        mediaItem.id,
+      );
+      videoId = historyItem?.videoId;
+    }
+
+    final normalized = videoId?.trim();
+    if (normalized != null && normalized.isNotEmpty) {
+      return 'https://music.youtube.com/watch?v=$normalized';
+    }
+
+    final streamUrl = mediaItem.extras?['streamUrl']?.toString().trim();
+    if (streamUrl != null && streamUrl.isNotEmpty) {
+      return streamUrl;
+    }
+
+    return null;
   }
 
   Future<void> _addToFavorites(SongModel song) async {
@@ -2438,7 +2512,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
       return _cachedAmoledBackground;
     }
 
-    final artUri = mediaItem.artUri;
+    final artUri = _displayArtUriFor(mediaItem);
     ImageProvider? imageProvider;
 
     // Prioridad 1: Si hay artUri, usarlo directamente
@@ -2605,6 +2679,8 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
 
         // Solo procesar si es una canción nueva
         if (mediaItem != null && mediaItem.id != _lastMediaItemId) {
+          // Resetear progreso visual para evitar arrastrar la posición de la cola anterior.
+          _lastKnownPosition = Duration.zero;
           _lastMediaItemId = mediaItem.id;
 
           // Ocultar letras si estaban mostradas
@@ -2636,11 +2712,14 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
             if (_currentSongDataPath != path ||
                 _isCurrentFavorite != fav ||
                 _isCurrentDisliked != dislike) {
-              setState(() {
-                _currentSongDataPath = path;
-                _isCurrentFavorite = fav;
-                _isCurrentDisliked = dislike;
-                _likeButtonKey = GlobalKey<LikeButtonState>();
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (!mounted) return;
+                setState(() {
+                  _currentSongDataPath = path;
+                  _isCurrentFavorite = fav;
+                  _isCurrentDisliked = dislike;
+                  _likeButtonKey = GlobalKey<LikeButtonState>();
+                });
               });
             }
           }());
@@ -3285,182 +3364,168 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                         child: ValueListenableBuilder<bool>(
                                                           valueListenable:
                                                               _artworkLoadingNotifier,
-                                                          builder:
-                                                              (
-                                                                context,
-                                                                isArtworkLoading,
-                                                                child,
-                                                              ) {
-                                                                return FutureBuilder<
-                                                                  bool
+                                                          builder: (context, _, child) {
+                                                            return FutureBuilder<
+                                                              bool
+                                                            >(
+                                                              future: SharedPreferences.getInstance().then(
+                                                                (prefs) =>
+                                                                    prefs.getBool(
+                                                                      'show_lyrics_on_cover',
+                                                                    ) ??
+                                                                    false,
+                                                              ),
+                                                              builder: (context, snapshot) {
+                                                                final showLyricsOnCover =
+                                                                    snapshot
+                                                                        .data ??
+                                                                    false;
+
+                                                                return ValueListenableBuilder<
+                                                                  double
                                                                 >(
-                                                                  future: SharedPreferences.getInstance().then(
-                                                                    (prefs) =>
-                                                                        prefs.getBool(
-                                                                          'show_lyrics_on_cover',
-                                                                        ) ??
-                                                                        false,
-                                                                  ),
+                                                                  valueListenable:
+                                                                      widget
+                                                                          .panelPositionNotifier ??
+                                                                      const AlwaysStoppedAnimation(
+                                                                        1.0,
+                                                                      ),
                                                                   builder:
                                                                       (
                                                                         context,
-                                                                        snapshot,
+                                                                        position,
+                                                                        child,
                                                                       ) {
-                                                                        final showLyricsOnCover =
-                                                                            snapshot.data ??
-                                                                            false;
-
-                                                                        return ValueListenableBuilder<
-                                                                          double
-                                                                        >(
-                                                                          valueListenable:
-                                                                              widget.panelPositionNotifier ??
-                                                                              const AlwaysStoppedAnimation(
-                                                                                1.0,
-                                                                              ),
-                                                                          builder:
-                                                                              (
-                                                                                context,
-                                                                                position,
-                                                                                child,
-                                                                              ) {
-                                                                                // La carátula aparece un poco antes que los botones (0.4 vs 0.7)
-                                                                                return Opacity(
-                                                                                  opacity:
-                                                                                      ((position -
-                                                                                                  0.35) /
-                                                                                              0.55)
-                                                                                          .clamp(
-                                                                                            0.0,
-                                                                                            1.0,
-                                                                                          ),
-                                                                                  child: child,
-                                                                                );
-                                                                              },
-                                                                          child: Stack(
-                                                                            children: [
-                                                                              AnimatedSwitcher(
-                                                                                duration: const Duration(
-                                                                                  milliseconds: 75,
-                                                                                ),
-                                                                                child: ArtworkCached(
-                                                                                  key: ValueKey(
-                                                                                    'player_art_${(currentMediaItem.extras?['songId'] ?? currentMediaItem.id).toString()}',
+                                                                        // La carátula aparece un poco antes que los botones (0.4 vs 0.7)
+                                                                        return Opacity(
+                                                                          opacity:
+                                                                              ((position -
+                                                                                          0.35) /
+                                                                                      0.55)
+                                                                                  .clamp(
+                                                                                    0.0,
+                                                                                    1.0,
                                                                                   ),
-                                                                                  artUri: currentMediaItem.artUri,
-                                                                                  size: artworkSize,
-                                                                                  borderRadius: BorderRadius.circular(
-                                                                                    artworkSize *
-                                                                                        0.04,
-                                                                                  ),
-                                                                                  showPlaceholderIcon: !_showLyrics,
-                                                                                  songPath:
-                                                                                      currentMediaItem.extras?['data']
-                                                                                          as String?,
-                                                                                  songId:
-                                                                                      currentMediaItem.extras?['songId']
-                                                                                          as int?,
-                                                                                ),
-                                                                              ),
-                                                                              // Indicadores de doble toque solo cuando las letras se muestran en modal y se ha hecho doble toque
-                                                                              if (!showLyricsOnCover &&
-                                                                                  _showDoubleTapIndicators)
-                                                                                Positioned.fill(
-                                                                                  child: Container(
-                                                                                    decoration: BoxDecoration(
-                                                                                      borderRadius: BorderRadius.circular(
-                                                                                        artworkSize *
-                                                                                            0.06,
-                                                                                      ),
-                                                                                    ),
-                                                                                    child: Stack(
-                                                                                      children: [
-                                                                                        // Indicador izquierdo (retroceder) - solo si se tocó el lado izquierdo
-                                                                                        if (_showLeftIndicator)
-                                                                                          Positioned(
-                                                                                            left: 20,
-                                                                                            top: 0,
-                                                                                            bottom: 0,
-                                                                                            child: AnimatedBuilder(
-                                                                                              animation: _fadeAnimation,
-                                                                                              builder:
-                                                                                                  (
-                                                                                                    context,
-                                                                                                    child,
-                                                                                                  ) {
-                                                                                                    return Opacity(
-                                                                                                      opacity: _fadeAnimation.value,
-                                                                                                      child: Center(
-                                                                                                        child: Container(
-                                                                                                          width: 50,
-                                                                                                          height: 50,
-                                                                                                          decoration: BoxDecoration(
-                                                                                                            color: Colors.black.withValues(
-                                                                                                              alpha: 0.5,
-                                                                                                            ),
-                                                                                                            shape: BoxShape.circle,
-                                                                                                          ),
-                                                                                                          child: Center(
-                                                                                                            child: Icon(
-                                                                                                              Icons.replay_10,
-                                                                                                              color: Colors.white,
-                                                                                                              size: 28,
-                                                                                                            ),
-                                                                                                          ),
-                                                                                                        ),
-                                                                                                      ),
-                                                                                                    );
-                                                                                                  },
-                                                                                            ),
-                                                                                          ),
-                                                                                        // Indicador derecho (avanzar) - solo si se tocó el lado derecho
-                                                                                        if (_showRightIndicator)
-                                                                                          Positioned(
-                                                                                            right: 20,
-                                                                                            top: 0,
-                                                                                            bottom: 0,
-                                                                                            child: AnimatedBuilder(
-                                                                                              animation: _fadeAnimation,
-                                                                                              builder:
-                                                                                                  (
-                                                                                                    context,
-                                                                                                    child,
-                                                                                                  ) {
-                                                                                                    return Opacity(
-                                                                                                      opacity: _fadeAnimation.value,
-                                                                                                      child: Center(
-                                                                                                        child: Container(
-                                                                                                          width: 50,
-                                                                                                          height: 50,
-                                                                                                          decoration: BoxDecoration(
-                                                                                                            color: Colors.black.withValues(
-                                                                                                              alpha: 0.5,
-                                                                                                            ),
-                                                                                                            shape: BoxShape.circle,
-                                                                                                          ),
-                                                                                                          child: Center(
-                                                                                                            child: Icon(
-                                                                                                              Icons.forward_10,
-                                                                                                              color: Colors.white,
-                                                                                                              size: 28,
-                                                                                                            ),
-                                                                                                          ),
-                                                                                                        ),
-                                                                                                      ),
-                                                                                                    );
-                                                                                                  },
-                                                                                            ),
-                                                                                          ),
-                                                                                      ],
-                                                                                    ),
-                                                                                  ),
-                                                                                ),
-                                                                            ],
-                                                                          ),
+                                                                          child:
+                                                                              child,
                                                                         );
                                                                       },
+                                                                  child: Stack(
+                                                                    children: [
+                                                                      AnimatedSwitcher(
+                                                                        duration: const Duration(
+                                                                          milliseconds:
+                                                                              75,
+                                                                        ),
+                                                                        child: KeyedSubtree(
+                                                                          key: ValueKey(
+                                                                            'player_art_${(currentMediaItem.extras?['songId'] ?? currentMediaItem.id).toString()}',
+                                                                          ),
+                                                                          child: buildArtwork(
+                                                                            currentMediaItem,
+                                                                            artworkSize,
+                                                                          ),
+                                                                        ),
+                                                                      ),
+                                                                      // Indicadores de doble toque solo cuando las letras se muestran en modal y se ha hecho doble toque
+                                                                      if (!showLyricsOnCover &&
+                                                                          _showDoubleTapIndicators)
+                                                                        Positioned.fill(
+                                                                          child: Container(
+                                                                            decoration: BoxDecoration(
+                                                                              borderRadius: BorderRadius.circular(
+                                                                                artworkSize *
+                                                                                    0.06,
+                                                                              ),
+                                                                            ),
+                                                                            child: Stack(
+                                                                              children: [
+                                                                                // Indicador izquierdo (retroceder) - solo si se tocó el lado izquierdo
+                                                                                if (_showLeftIndicator)
+                                                                                  Positioned(
+                                                                                    left: 20,
+                                                                                    top: 0,
+                                                                                    bottom: 0,
+                                                                                    child: AnimatedBuilder(
+                                                                                      animation: _fadeAnimation,
+                                                                                      builder:
+                                                                                          (
+                                                                                            context,
+                                                                                            child,
+                                                                                          ) {
+                                                                                            return Opacity(
+                                                                                              opacity: _fadeAnimation.value,
+                                                                                              child: Center(
+                                                                                                child: Container(
+                                                                                                  width: 50,
+                                                                                                  height: 50,
+                                                                                                  decoration: BoxDecoration(
+                                                                                                    color: Colors.black.withValues(
+                                                                                                      alpha: 0.5,
+                                                                                                    ),
+                                                                                                    shape: BoxShape.circle,
+                                                                                                  ),
+                                                                                                  child: Center(
+                                                                                                    child: Icon(
+                                                                                                      Icons.replay_10,
+                                                                                                      color: Colors.white,
+                                                                                                      size: 28,
+                                                                                                    ),
+                                                                                                  ),
+                                                                                                ),
+                                                                                              ),
+                                                                                            );
+                                                                                          },
+                                                                                    ),
+                                                                                  ),
+                                                                                // Indicador derecho (avanzar) - solo si se tocó el lado derecho
+                                                                                if (_showRightIndicator)
+                                                                                  Positioned(
+                                                                                    right: 20,
+                                                                                    top: 0,
+                                                                                    bottom: 0,
+                                                                                    child: AnimatedBuilder(
+                                                                                      animation: _fadeAnimation,
+                                                                                      builder:
+                                                                                          (
+                                                                                            context,
+                                                                                            child,
+                                                                                          ) {
+                                                                                            return Opacity(
+                                                                                              opacity: _fadeAnimation.value,
+                                                                                              child: Center(
+                                                                                                child: Container(
+                                                                                                  width: 50,
+                                                                                                  height: 50,
+                                                                                                  decoration: BoxDecoration(
+                                                                                                    color: Colors.black.withValues(
+                                                                                                      alpha: 0.5,
+                                                                                                    ),
+                                                                                                    shape: BoxShape.circle,
+                                                                                                  ),
+                                                                                                  child: Center(
+                                                                                                    child: Icon(
+                                                                                                      Icons.forward_10,
+                                                                                                      color: Colors.white,
+                                                                                                      size: 28,
+                                                                                                    ),
+                                                                                                  ),
+                                                                                                ),
+                                                                                              ),
+                                                                                            );
+                                                                                          },
+                                                                                    ),
+                                                                                  ),
+                                                                              ],
+                                                                            ),
+                                                                          ),
+                                                                        ),
+                                                                    ],
+                                                                  ),
                                                                 );
                                                               },
+                                                            );
+                                                          },
                                                         ),
                                                       ),
                                                     );
@@ -4555,8 +4620,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                           >(
                                                             stream: audioHandler
                                                                 .myHandler
-                                                                ?.player
-                                                                .durationStream,
+                                                                ?.durationStream,
                                                             builder:
                                                                 (
                                                                   context,
@@ -4590,6 +4654,18 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                                       ? duration
                                                                             .inMilliseconds
                                                                       : 1;
+                                                                  final isStreamingItem =
+                                                                      currentMediaItem
+                                                                          .extras?['isStreaming'] ==
+                                                                      true;
+                                                                  final bufferedPositionMs =
+                                                                      (playbackState?.bufferedPosition.inMilliseconds ??
+                                                                              0)
+                                                                          .clamp(
+                                                                            0,
+                                                                            durationMs,
+                                                                          )
+                                                                          .toDouble();
                                                                   return RepaintBoundary(
                                                                     child: ValueListenableBuilder<double?>(
                                                                       valueListenable:
@@ -4651,6 +4727,15 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                                                                   min: 0.0,
                                                                                                   max: durationMs.toDouble(),
                                                                                                   value: sliderValueMs.toDouble(),
+                                                                                                  secondaryTrackValue: isStreamingItem
+                                                                                                      ? bufferedPositionMs
+                                                                                                      : null,
+                                                                                                  secondaryActiveColor:
+                                                                                                      Theme.of(
+                                                                                                        context,
+                                                                                                      ).colorScheme.primary.withValues(
+                                                                                                        alpha: 0.55,
+                                                                                                      ),
                                                                                                   inactiveColor:
                                                                                                       Theme.of(
                                                                                                         context,
@@ -4915,6 +5000,10 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                                         isLoading,
                                                                         _,
                                                                       ) {
+                                                                        // Mostrar loading siempre que el flujo de reproducción
+                                                                        // lo marque, incluso si la canción anterior sigue en play.
+                                                                        final isBusy =
+                                                                            isLoading;
                                                                         return ValueListenableBuilder<
                                                                           bool
                                                                         >(
@@ -4952,7 +5041,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                                                               color: Colors.white,
                                                                                               iconSize: iconSize,
                                                                                               onPressed: () async {
-                                                                                                if (isLoading) {
+                                                                                                if (isBusy) {
                                                                                                   return;
                                                                                                 }
                                                                                                 await audioHandler.myHandler?.toggleShuffle(
@@ -4991,7 +5080,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                                                                   ).colorScheme.onSurface,
                                                                                             iconSize: iconSize,
                                                                                             onPressed: () async {
-                                                                                              if (isLoading) {
+                                                                                              if (isBusy) {
                                                                                                 return;
                                                                                               }
                                                                                               await audioHandler.myHandler?.toggleShuffle(
@@ -5028,7 +5117,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                                                             ).colorScheme.onSurface,
                                                                                       iconSize: sideIconSize,
                                                                                       onPressed: () {
-                                                                                        if (isLoading) {
+                                                                                        if (isBusy) {
                                                                                           return;
                                                                                         }
                                                                                         audioHandler?.skipToPrevious();
@@ -5055,7 +5144,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                                                           splashColor: Colors.transparent,
                                                                                           highlightColor: Colors.transparent,
                                                                                           onTap: () {
-                                                                                            if (isLoading) {
+                                                                                            if (isBusy) {
                                                                                               return;
                                                                                             }
                                                                                             isPlaying
@@ -5066,7 +5155,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                                                               (showBackground ||
                                                                                                       showDynamicBg ||
                                                                                                       isDynamicTheme) &&
-                                                                                                  !isLoading
+                                                                                                  !isBusy
                                                                                               ? SizedBox(
                                                                                                   width: mainIconSize,
                                                                                                   height: mainIconSize,
@@ -5139,7 +5228,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                                                                     ),
                                                                                                   ),
                                                                                                   child: Center(
-                                                                                                    child: isLoading
+                                                                                                    child: isBusy
                                                                                                         ? SizedBox(
                                                                                                             width:
                                                                                                                 playIconSize -
@@ -5216,7 +5305,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                                                             ).colorScheme.onSurface,
                                                                                       iconSize: sideIconSize,
                                                                                       onPressed: () {
-                                                                                        if (isLoading) {
+                                                                                        if (isBusy) {
                                                                                           return;
                                                                                         }
                                                                                         audioHandler?.skipToNext();
@@ -5246,7 +5335,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                                                               color: Colors.white,
                                                                                               iconSize: iconSize,
                                                                                               onPressed: () {
-                                                                                                if (isLoading) {
+                                                                                                if (isBusy) {
                                                                                                   return;
                                                                                                 }
                                                                                                 AudioServiceRepeatMode newMode;
@@ -5276,7 +5365,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                                                             color: repeatColor,
                                                                                             iconSize: iconSize,
                                                                                             onPressed: () {
-                                                                                              if (isLoading) {
+                                                                                              if (isBusy) {
                                                                                                 return;
                                                                                               }
                                                                                               AudioServiceRepeatMode newMode;
@@ -6347,6 +6436,15 @@ class _StaticBlurImageState extends State<_StaticBlurImage> {
   ui.Image? _blurredImage;
   bool _isLoading = false;
 
+  Rect _centerSquareRect(ui.Image image) {
+    final imageW = image.width.toDouble();
+    final imageH = image.height.toDouble();
+    final side = imageW < imageH ? imageW : imageH;
+    final left = (imageW - side) / 2;
+    final top = (imageH - side) / 2;
+    return Rect.fromLTWH(left, top, side, side);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -6409,14 +6507,22 @@ class _StaticBlurImageState extends State<_StaticBlurImage> {
         paint..imageFilter = blurFilter,
       );
 
-      // Dibujar la imagen escalada
-      final srcRect = Rect.fromLTWH(
-        0,
-        0,
-        image.width.toDouble(),
-        image.height.toDouble(),
+      // Recorte 1:1 centrado (4:4) y luego ajuste cover al fondo.
+      final baseSrcRect = _centerSquareRect(image);
+      final outputRect = Rect.fromLTWH(0, 0, widget.width, widget.height);
+      final fittedSizes = applyBoxFit(
+        BoxFit.cover,
+        baseSrcRect.size,
+        outputRect.size,
       );
-      final dstRect = Rect.fromLTWH(0, 0, widget.width, widget.height);
+      final srcRect = Alignment.center.inscribe(
+        fittedSizes.source,
+        baseSrcRect,
+      );
+      final dstRect = Alignment.center.inscribe(
+        fittedSizes.destination,
+        outputRect,
+      );
       canvas.drawImageRect(
         image,
         srcRect,

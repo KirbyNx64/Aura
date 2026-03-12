@@ -3,6 +3,7 @@ import 'package:music/utils/db/stream_cache_db.dart';
 
 class StreamService {
   static final Map<String, String?> _urlCache = {};
+  static final Map<String, Future<String?>> _inFlightRequests = {};
   static StreamCacheDB? _cacheDB;
 
   /// Inicializa la base de datos de cache
@@ -13,61 +14,83 @@ class StreamService {
   /// Obtiene la mejor URL de audio con cache persistente
   static Future<String?> getBestAudioUrl(String videoId) async {
     await _initCache();
-    
-    // Primero intentar obtener del cache persistente
-    final cachedStream = await _cacheDB!.getValidatedStream(videoId);
-    if (cachedStream != null) {
-      // print('🎵 [STREAM_SERVICE] Usando stream de la DB para videoId: $videoId');
-      // print('🎵 [STREAM_SERVICE] URL: ${cachedStream.streamUrl}');
-      // print('🎵 [STREAM_SERVICE] Creado: ${cachedStream.createdAt}');
+    final normalizedVideoId = videoId.trim();
+    if (normalizedVideoId.isEmpty) return null;
+
+    // Cache en memoria (fast path)
+    final memoryCached = _urlCache[normalizedVideoId];
+    if (memoryCached != null && memoryCached.isNotEmpty) {
+      return memoryCached;
+    }
+
+    // Deduplicar solicitudes concurrentes por videoId
+    final pending = _inFlightRequests[normalizedVideoId];
+    if (pending != null) {
+      return await pending;
+    }
+
+    final request = _resolveBestAudioUrl(normalizedVideoId);
+    _inFlightRequests[normalizedVideoId] = request;
+    try {
+      return await request;
+    } finally {
+      _inFlightRequests.remove(normalizedVideoId);
+    }
+  }
+
+  static Future<String?> _resolveBestAudioUrl(String videoId) async {
+    // En cola "Up next" priorizamos latencia: usar cache persistente sin HEAD.
+    // Si el stream expiró antes de tiempo, fallará al reproducir y se regenerará.
+    final cachedStream = await _cacheDB!.getStream(videoId);
+    if (cachedStream != null &&
+        cachedStream.streamUrl.isNotEmpty &&
+        !cachedStream.isExpired) {
+      _urlCache[videoId] = cachedStream.streamUrl;
       return cachedStream.streamUrl;
     }
 
-    // print('🔄 [STREAM_SERVICE] Generando nuevo stream para videoId: $videoId');
-    // Si no está en cache o es inválido, obtener nuevo stream
+    // Si no está en cache o expiró, generar uno nuevo
     final streamInfo = await _getBestAudioStreamInfo(videoId);
-    if (streamInfo != null) {
-      // print('✅ [STREAM_SERVICE] Nuevo stream generado exitosamente');
-      // print('✅ [STREAM_SERVICE] URL: ${streamInfo['url']}');
-      // print('✅ [STREAM_SERVICE] Codec: ${streamInfo['codec']}');
-      // print('✅ [STREAM_SERVICE] Bitrate: ${streamInfo['bitrate']} bps');
-      
-      // Guardar en cache persistente
-      await _cacheDB!.saveStream(
-        videoId: videoId,
-        streamUrl: streamInfo['url']!,
-        itag: streamInfo['itag'],
-        codec: streamInfo['codec'],
-        bitrate: streamInfo['bitrate'],
-        size: streamInfo['size'],
-        duration: streamInfo['duration'],
-        loudnessDb: streamInfo['loudnessDb'],
-      );
-      
-      // print('💾 [STREAM_SERVICE] Stream guardado en la base de datos');
-      
-      // También actualizar cache en memoria para acceso rápido
-      _urlCache[videoId] = streamInfo['url'];
-      
-      return streamInfo['url'];
-    }
+    if (streamInfo == null) return null;
 
-    // print('❌ [STREAM_SERVICE] No se pudo generar stream para videoId: $videoId');
-    return null;
+    final streamUrl = streamInfo['url'];
+    if (streamUrl == null || streamUrl.isEmpty) return null;
+
+    // Guardar en cache persistente
+    await _cacheDB!.saveStream(
+      videoId: videoId,
+      streamUrl: streamUrl,
+      itag: streamInfo['itag'],
+      codec: streamInfo['codec'],
+      bitrate: streamInfo['bitrate'],
+      size: streamInfo['size'],
+      duration: streamInfo['duration'],
+      loudnessDb: streamInfo['loudnessDb'],
+    );
+
+    _urlCache[videoId] = streamUrl;
+    return streamUrl;
   }
 
   /// Obtiene información completa del mejor stream de audio
-  static Future<Map<String, dynamic>?> _getBestAudioStreamInfo(String videoId) async {
+  static Future<Map<String, dynamic>?> _getBestAudioStreamInfo(
+    String videoId,
+  ) async {
     final yt = YoutubeExplode();
     try {
       final manifest = await yt.videos.streamsClient.getManifest(videoId);
-      final audio = manifest.audioOnly
-        .where((s) => s.codec.mimeType == 'audio/mp4' || s.codec.toString().contains('mp4a'))
-        .toList()
-        ..sort((a, b) => b.bitrate.compareTo(a.bitrate));
-      
+      final audio =
+          manifest.audioOnly
+              .where(
+                (s) =>
+                    s.codec.mimeType == 'audio/mp4' ||
+                    s.codec.toString().contains('mp4a'),
+              )
+              .toList()
+            ..sort((a, b) => b.bitrate.compareTo(a.bitrate));
+
       if (audio.isEmpty) return null;
-      
+
       final bestAudio = audio.first;
       return {
         'url': bestAudio.url.toString(),
@@ -76,7 +99,8 @@ class StreamService {
         'bitrate': bestAudio.bitrate.bitsPerSecond,
         'size': bestAudio.size.totalBytes,
         'duration': bestAudio.duration,
-        'loudnessDb': 0.0, // YouTube no proporciona esta información directamente
+        'loudnessDb':
+            0.0, // YouTube no proporciona esta información directamente
       };
     } catch (_) {
       return null;
@@ -84,7 +108,6 @@ class StreamService {
       yt.close();
     }
   }
-
 
   /// Limpia el cache de streams expirados
   static Future<int> cleanExpiredStreams() async {
@@ -110,4 +133,4 @@ class StreamService {
     await _cacheDB?.close();
     _cacheDB = null;
   }
-} 
+}

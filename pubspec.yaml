@@ -71,6 +71,7 @@ dependencies:
   progress_indicator_m3e: ^0.1.1
   m3e_design: ^0.2.1
   terminate_restart: ^1.0.11
+  dart_ytmusic_api: ^1.3.6
 
 dev_dependencies:
   flutter_test:

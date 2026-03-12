@@ -134,8 +134,19 @@ class _CurrentPlaylistScreenState extends State<CurrentPlaylistScreen>
         .toColor();
   }
 
+  Uri? _displayArtUriFor(MediaItem mediaItem) {
+    if (mediaItem.extras?['isStreaming'] == true) {
+      final raw = mediaItem.extras?['displayArtUri']?.toString().trim();
+      if (raw != null && raw.isNotEmpty) {
+        final parsed = Uri.tryParse(raw);
+        if (parsed != null) return parsed;
+      }
+    }
+    return mediaItem.artUri;
+  }
+
   Widget _buildCurrentSongArtwork(MediaItem mediaItem) {
-    final artUri = mediaItem.artUri;
+    final artUri = _displayArtUriFor(mediaItem);
     if (artUri != null) {
       final scheme = artUri.scheme.toLowerCase();
 
@@ -147,6 +158,7 @@ class _CurrentPlaylistScreenState extends State<CurrentPlaylistScreen>
             width: 50,
             height: 50,
             fit: BoxFit.cover,
+            alignment: Alignment.center,
             errorBuilder: (context, error, stackTrace) {
               return _buildFallbackIcon();
             },
@@ -162,8 +174,8 @@ class _CurrentPlaylistScreenState extends State<CurrentPlaylistScreen>
           width: 50,
           height: 50,
           fit: BoxFit.cover,
+          alignment: Alignment.center,
           cacheWidth: 200,
-          cacheHeight: 200,
           errorBuilder: (context, error, stackTrace) {
             return _buildFallbackIcon();
           },
@@ -184,6 +196,7 @@ class _CurrentPlaylistScreenState extends State<CurrentPlaylistScreen>
           width: 50,
           height: 50,
           fit: BoxFit.cover,
+          alignment: Alignment.center,
           errorBuilder: (context, error, stackTrace) {
             return _buildFallbackIcon();
           },
@@ -203,6 +216,7 @@ class _CurrentPlaylistScreenState extends State<CurrentPlaylistScreen>
               width: 50,
               height: 50,
               fit: BoxFit.cover,
+              alignment: Alignment.center,
               errorBuilder: (context, error, stackTrace) {
                 return _buildFallbackIcon();
               },
@@ -282,441 +296,547 @@ class _CurrentPlaylistScreenState extends State<CurrentPlaylistScreen>
                     },
                   ),
                 SafeArea(
-                  child: Column(
-                    children: [
-                      // Current Song Info and Search Bar (from original header)
-                      Listener(
-                        behavior: HitTestBehavior.translucent,
-                        onPointerDown: (_) {
-                          // Force panel dragging mode when touching header
-                          widget.panelController?.setScrollingEnabled(false);
-                        },
-                        onPointerUp: (_) {
-                          // Re-enable scrolling mode when releasing, but scheduled to allow fling calculation
-                          Future.delayed(const Duration(milliseconds: 300), () {
-                            if (mounted) {
-                              widget.panelController?.setScrollingEnabled(true);
-                            }
-                          });
-                        },
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 0,
-                          ),
-                          child: Column(
+                  child: StreamBuilder<MediaItem?>(
+                    stream: audioHandler?.mediaItem,
+                    initialData: widget.currentMediaItem,
+                    builder: (context, mediaItemSnapshot) {
+                      final liveCurrentMediaItem =
+                          mediaItemSnapshot.data ?? widget.currentMediaItem;
+                      return StreamBuilder<PlaybackState>(
+                        stream: audioHandler?.playbackState,
+                        initialData: audioHandler?.playbackState.value,
+                        builder: (context, playbackSnapshot) {
+                          final int? liveQueueIndex =
+                              playbackSnapshot.data?.queueIndex;
+                          return Column(
                             children: [
-                              // Información de la canción actual
-                              if (widget.currentMediaItem != null)
-                                Padding(
-                                  padding: const EdgeInsets.only(bottom: 12.0),
-                                  child: Row(
+                              // Current Song Info and Search Bar (from original header)
+                              Listener(
+                                behavior: HitTestBehavior.translucent,
+                                onPointerDown: (_) {
+                                  // Force panel dragging mode when touching header
+                                  widget.panelController?.setScrollingEnabled(
+                                    false,
+                                  );
+                                },
+                                onPointerUp: (_) {
+                                  // Re-enable scrolling mode when releasing, but scheduled to allow fling calculation
+                                  Future.delayed(
+                                    const Duration(milliseconds: 300),
+                                    () {
+                                      if (mounted) {
+                                        widget.panelController
+                                            ?.setScrollingEnabled(true);
+                                      }
+                                    },
+                                  );
+                                },
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 0,
+                                  ),
+                                  child: Column(
                                     children: [
-                                      // Carátula de la canción actual
-                                      ClipRRect(
-                                        borderRadius: BorderRadius.circular(8),
-                                        child: SizedBox(
-                                          width: 54,
-                                          height: 54,
-                                          child: _buildCurrentSongArtwork(
-                                            widget.currentMediaItem!,
+                                      // Información de la canción actual
+                                      if (liveCurrentMediaItem != null)
+                                        Padding(
+                                          padding: const EdgeInsets.only(
+                                            bottom: 12.0,
+                                          ),
+                                          child: Row(
+                                            children: [
+                                              // Carátula de la canción actual
+                                              ClipRRect(
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
+                                                child: SizedBox(
+                                                  width: 54,
+                                                  height: 54,
+                                                  child:
+                                                      _buildCurrentSongArtwork(
+                                                        liveCurrentMediaItem,
+                                                      ),
+                                                ),
+                                              ),
+                                              const SizedBox(width: 12),
+                                              // Título y artista de la canción actual
+                                              Expanded(
+                                                child: Column(
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.start,
+                                                  mainAxisSize:
+                                                      MainAxisSize.min,
+                                                  children: [
+                                                    TitleMarquee(
+                                                      text: liveCurrentMediaItem
+                                                          .title,
+                                                      maxWidth:
+                                                          MediaQuery.of(
+                                                            context,
+                                                          ).size.width -
+                                                          150,
+                                                      style: const TextStyle(
+                                                        fontSize: 16,
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                      ),
+                                                    ),
+
+                                                    Text(
+                                                      liveCurrentMediaItem
+                                                              .artist ??
+                                                          LocaleProvider.tr(
+                                                            'unknown_artist',
+                                                          ),
+                                                      style: TextStyle(
+                                                        fontSize: 13,
+                                                        color: isAmoled
+                                                            ? Colors.white
+                                                                  .withValues(
+                                                                    alpha: 0.85,
+                                                                  )
+                                                            : null,
+                                                      ),
+                                                      maxLines: 1,
+                                                      overflow:
+                                                          TextOverflow.ellipsis,
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                              const SizedBox(width: 12),
+                                              // Botón de play/pause
+                                              StreamBuilder<PlaybackState>(
+                                                stream:
+                                                    audioHandler?.playbackState,
+                                                builder: (context, snapshot) {
+                                                  final playing =
+                                                      snapshot.data?.playing ??
+                                                      false;
+                                                  return InkWell(
+                                                    onTap: () {
+                                                      if (playing) {
+                                                        audioHandler?.pause();
+                                                      } else {
+                                                        audioHandler?.play();
+                                                      }
+                                                    },
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          20,
+                                                        ),
+                                                    child: Container(
+                                                      padding:
+                                                          const EdgeInsets.all(
+                                                            8,
+                                                          ),
+                                                      child: Icon(
+                                                        playing
+                                                            ? Icons
+                                                                  .pause_rounded
+                                                            : Icons
+                                                                  .play_arrow_rounded,
+                                                        size: 32,
+                                                        color: Theme.of(
+                                                          context,
+                                                        ).colorScheme.onSurface,
+                                                      ),
+                                                    ),
+                                                  );
+                                                },
+                                              ),
+                                            ],
                                           ),
                                         ),
-                                      ),
-                                      const SizedBox(width: 12),
-                                      // Título y artista de la canción actual
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            TitleMarquee(
-                                              text: widget
-                                                  .currentMediaItem!
-                                                  .title,
-                                              maxWidth:
-                                                  MediaQuery.of(
-                                                    context,
-                                                  ).size.width -
-                                                  150,
-                                              style: const TextStyle(
-                                                fontSize: 16,
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                            ),
 
-                                            Text(
-                                              widget.currentMediaItem!.artist ??
-                                                  LocaleProvider.tr(
-                                                    'unknown_artist',
-                                                  ),
-                                              style: TextStyle(
-                                                fontSize: 13,
+                                      // Barra de búsqueda con el mismo estilo de favorites
+                                      Builder(
+                                        builder: (context) {
+                                          final colorScheme =
+                                              colorSchemeNotifier.value;
+                                          final isAmoled =
+                                              colorScheme ==
+                                              AppColorScheme.amoled;
+                                          final isDark =
+                                              Theme.of(context).brightness ==
+                                              Brightness.dark;
+                                          final barColor = isAmoled
+                                              ? Colors.white.withAlpha(20)
+                                              : isDark
+                                              ? Theme.of(context)
+                                                    .colorScheme
+                                                    .secondary
+                                                    .withValues(alpha: 0.06)
+                                              : Theme.of(context)
+                                                    .colorScheme
+                                                    .secondary
+                                                    .withValues(alpha: 0.07);
+
+                                          return TextField(
+                                            controller: _searchController,
+                                            focusNode: _searchFocusNode,
+                                            cursorColor: Theme.of(
+                                              context,
+                                            ).colorScheme.primary,
+                                            decoration: InputDecoration(
+                                              hintText: LocaleProvider.tr(
+                                                'search_by_title_or_artist',
+                                              ),
+                                              hintStyle: TextStyle(
                                                 color: isAmoled
-                                                    ? Colors.white.withValues(
-                                                        alpha: 0.85,
+                                                    ? Colors.white.withAlpha(
+                                                        160,
                                                       )
-                                                    : null,
+                                                    : Theme.of(context)
+                                                          .colorScheme
+                                                          .onSurfaceVariant,
+                                                fontSize: 15,
                                               ),
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
+                                              prefixIcon: const Icon(
+                                                Icons.search,
+                                              ),
+                                              suffixIcon:
+                                                  _searchQuery.isNotEmpty
+                                                  ? IconButton(
+                                                      icon: const Icon(
+                                                        Icons.close,
+                                                      ),
+                                                      onPressed: () {
+                                                        _searchController
+                                                            .clear();
+                                                        setState(
+                                                          () =>
+                                                              _searchQuery = '',
+                                                        );
+                                                      },
+                                                    )
+                                                  : null,
+                                              filled: true,
+                                              fillColor: barColor,
+                                              border: OutlineInputBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(28),
+                                                borderSide: BorderSide.none,
+                                              ),
+                                              enabledBorder: OutlineInputBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(28),
+                                                borderSide: BorderSide.none,
+                                              ),
+                                              focusedBorder: OutlineInputBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(28),
+                                                borderSide: BorderSide.none,
+                                              ),
+                                              contentPadding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 20,
+                                                    vertical: 12,
+                                                  ),
                                             ),
-                                          ],
-                                        ),
-                                      ),
-                                      const SizedBox(width: 12),
-                                      // Botón de play/pause
-                                      StreamBuilder<PlaybackState>(
-                                        stream: audioHandler?.playbackState,
-                                        builder: (context, snapshot) {
-                                          final playing =
-                                              snapshot.data?.playing ?? false;
-                                          return InkWell(
-                                            onTap: () {
-                                              if (playing) {
-                                                audioHandler?.pause();
-                                              } else {
-                                                audioHandler?.play();
-                                              }
+                                            onChanged: (value) {
+                                              setState(
+                                                () => _searchQuery = value
+                                                    .toLowerCase(),
+                                              );
                                             },
-                                            borderRadius: BorderRadius.circular(
-                                              20,
-                                            ),
-                                            child: Container(
-                                              padding: const EdgeInsets.all(8),
-                                              child: Icon(
-                                                playing
-                                                    ? Icons.pause_rounded
-                                                    : Icons.play_arrow_rounded,
-                                                size: 32,
-                                                color: Theme.of(
-                                                  context,
-                                                ).colorScheme.onSurface,
-                                              ),
-                                            ),
                                           );
                                         },
                                       ),
                                     ],
                                   ),
                                 ),
-
-                              // Barra de búsqueda con el mismo estilo de favorites
-                              Builder(
-                                builder: (context) {
-                                  final colorScheme = colorSchemeNotifier.value;
-                                  final isAmoled =
-                                      colorScheme == AppColorScheme.amoled;
-                                  final isDark =
-                                      Theme.of(context).brightness ==
-                                      Brightness.dark;
-                                  final barColor = isAmoled
-                                      ? Colors.white.withAlpha(20)
-                                      : isDark
-                                      ? Theme.of(context).colorScheme.secondary
-                                            .withValues(alpha: 0.06)
-                                      : Theme.of(context).colorScheme.secondary
-                                            .withValues(alpha: 0.07);
-
-                                  return TextField(
-                                    controller: _searchController,
-                                    focusNode: _searchFocusNode,
-                                    cursorColor: Theme.of(
-                                      context,
-                                    ).colorScheme.primary,
-                                    decoration: InputDecoration(
-                                      hintText: LocaleProvider.tr(
-                                        'search_by_title_or_artist',
-                                      ),
-                                      hintStyle: TextStyle(
-                                        color: isAmoled
-                                            ? Colors.white.withAlpha(160)
-                                            : Theme.of(
-                                                context,
-                                              ).colorScheme.onSurfaceVariant,
-                                        fontSize: 15,
-                                      ),
-                                      prefixIcon: const Icon(Icons.search),
-                                      suffixIcon: _searchQuery.isNotEmpty
-                                          ? IconButton(
-                                              icon: const Icon(Icons.close),
-                                              onPressed: () {
-                                                _searchController.clear();
-                                                setState(
-                                                  () => _searchQuery = '',
-                                                );
-                                              },
-                                            )
-                                          : null,
-                                      filled: true,
-                                      fillColor: barColor,
-                                      border: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(28),
-                                        borderSide: BorderSide.none,
-                                      ),
-                                      enabledBorder: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(28),
-                                        borderSide: BorderSide.none,
-                                      ),
-                                      focusedBorder: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(28),
-                                        borderSide: BorderSide.none,
-                                      ),
-                                      contentPadding:
-                                          const EdgeInsets.symmetric(
-                                            horizontal: 20,
-                                            vertical: 12,
-                                          ),
-                                    ),
-                                    onChanged: (value) {
-                                      setState(
-                                        () =>
-                                            _searchQuery = value.toLowerCase(),
-                                      );
-                                    },
-                                  );
-                                },
                               ),
-                            ],
-                          ),
-                        ),
-                      ),
 
-                      const SizedBox(height: 8),
+                              const SizedBox(height: 8),
 
-                      Expanded(
-                        child: RepaintBoundary(
-                          // Aislar el ListView para que el scroll no provoque repaints
-                          // del overlay AMOLED ni del header (reduce lag con tema dinámico)
-                          child: Listener(
-                            behavior: HitTestBehavior.translucent,
-                            onPointerDown: (_) {
-                              // Explicitly enable scrolling mode when touching the list area
-                              widget.panelController?.setScrollingEnabled(true);
-                            },
-                            child: Builder(
-                              builder: (context) {
-                                // Pre-cálculos para evitar trabajo por-item durante el scroll
-                                final isAmoledTheme =
-                                    colorSchemeNotifier.value ==
-                                    AppColorScheme.amoled;
-                                final isDark =
-                                    Theme.of(context).brightness ==
-                                    Brightness.dark;
-                                final primaryColor = Theme.of(
-                                  context,
-                                ).colorScheme.primary;
-                                final cardColor = isAmoledTheme
-                                    ? Colors.white.withAlpha(20)
-                                    : isDark
-                                    ? Theme.of(context).colorScheme.secondary
-                                          .withValues(alpha: 0.06)
-                                    : Theme.of(context).colorScheme.secondary
-                                          .withValues(alpha: 0.07);
-                                final currentCardColor = isAmoledTheme
-                                    ? cardColor
-                                    : primaryColor.withAlpha(isDark ? 40 : 25);
-                                final textColor = isAmoledTheme
-                                    ? Colors.white
-                                    : primaryColor;
+                              Expanded(
+                                child: RepaintBoundary(
+                                  // Aislar el ListView para que el scroll no provoque repaints
+                                  // del overlay AMOLED ni del header (reduce lag con tema dinámico)
+                                  child: Listener(
+                                    behavior: HitTestBehavior.translucent,
+                                    onPointerDown: (_) {
+                                      // Explicitly enable scrolling mode when touching the list area
+                                      widget.panelController
+                                          ?.setScrollingEnabled(true);
+                                    },
+                                    child: Builder(
+                                      builder: (context) {
+                                        // Pre-cálculos para evitar trabajo por-item durante el scroll
+                                        final isAmoledTheme =
+                                            colorSchemeNotifier.value ==
+                                            AppColorScheme.amoled;
+                                        final isDark =
+                                            Theme.of(context).brightness ==
+                                            Brightness.dark;
+                                        final primaryColor = Theme.of(
+                                          context,
+                                        ).colorScheme.primary;
+                                        final cardColor = isAmoledTheme
+                                            ? Colors.white.withAlpha(20)
+                                            : isDark
+                                            ? Theme.of(context)
+                                                  .colorScheme
+                                                  .secondary
+                                                  .withValues(alpha: 0.06)
+                                            : Theme.of(context)
+                                                  .colorScheme
+                                                  .secondary
+                                                  .withValues(alpha: 0.07);
+                                        final currentCardColor = isAmoledTheme
+                                            ? cardColor
+                                            : primaryColor.withAlpha(
+                                                isDark ? 40 : 25,
+                                              );
+                                        final textColor = isAmoledTheme
+                                            ? Colors.white
+                                            : primaryColor;
 
-                                // Mapa id->índice real para evitar indexOf(O(n)) en cada item
-                                final indexMap = <String, int>{};
-                                for (var i = 0; i < widget.queue.length; i++) {
-                                  indexMap[widget.queue[i].id] = i;
-                                }
+                                        // Mapa id->índice real para evitar indexOf(O(n)) en cada item
+                                        final indexMap = <String, int>{};
+                                        for (
+                                          var i = 0;
+                                          i < widget.queue.length;
+                                          i++
+                                        ) {
+                                          indexMap[widget.queue[i].id] = i;
+                                        }
 
-                                // Filtrar la cola según la búsqueda
-                                final filteredQueue = _searchQuery.isEmpty
-                                    ? widget.queue
-                                    : widget.queue.where((item) {
-                                        final title = item.title.toLowerCase();
-                                        final artist = (item.artist ?? '')
-                                            .toLowerCase();
-                                        return title.contains(_searchQuery) ||
-                                            artist.contains(_searchQuery);
-                                      }).toList();
-
-                                return ListView.builder(
-                                  controller: _scrollController,
-                                  physics:
-                                      const AlwaysScrollableScrollPhysics(),
-                                  cacheExtent: 200,
-                                  addAutomaticKeepAlives: false,
-                                  addRepaintBoundaries: true,
-                                  padding: EdgeInsets.only(
-                                    top: 8,
-                                    bottom: MediaQuery.of(
-                                      context,
-                                    ).padding.bottom,
-                                  ),
-                                  itemCount: filteredQueue.length,
-                                  itemBuilder: (context, index) {
-                                    final item = filteredQueue[index];
-                                    final isCurrent =
-                                        item.id == widget.currentMediaItem?.id;
-                                    // Índice real en O(1)
-                                    final realIndex =
-                                        indexMap[item.id] ?? index;
-                                    final songId = item.extras?['songId'] ?? 0;
-                                    final songPath = item.extras?['data'] ?? '';
-
-                                    // Agregar padding adicional al primer y último elemento para evitar recorte
-                                    // Ya no es tan necesario como en el modal, pero ayuda visualmente
-                                    // final isFirstItem = index == 0;
-                                    // final isLastItem = index == filteredQueue.length - 1;
-
-                                    // (colores ya memoizados arriba)
-
-                                    // Calcular borderRadius según posición
-                                    final bool isFirst = index == 0;
-                                    final bool isLast =
-                                        index ==
-                                        filteredQueue.length -
-                                            1; // Usando filteredQueue.length aquí porque es lo que se muestra
-                                    final bool isOnly =
-                                        filteredQueue.length == 1;
-
-                                    BorderRadius borderRadius;
-                                    if (isOnly) {
-                                      borderRadius = BorderRadius.circular(16);
-                                    } else if (isFirst) {
-                                      borderRadius = const BorderRadius.only(
-                                        topLeft: Radius.circular(16),
-                                        topRight: Radius.circular(16),
-                                        bottomLeft: Radius.circular(4),
-                                        bottomRight: Radius.circular(4),
-                                      );
-                                    } else if (isLast) {
-                                      borderRadius = const BorderRadius.only(
-                                        topLeft: Radius.circular(4),
-                                        topRight: Radius.circular(4),
-                                        bottomLeft: Radius.circular(16),
-                                        bottomRight: Radius.circular(16),
-                                      );
-                                    } else {
-                                      borderRadius = BorderRadius.circular(4);
-                                    }
-
-                                    return Padding(
-                                      key: ValueKey(
-                                        item.id,
-                                      ), // Key única para evitar intercambio de carátulas
-                                      padding: EdgeInsets.only(
-                                        left: 16,
-                                        right: 16,
-                                        top: isFirst ? 4.0 : 0.0,
-                                        bottom: isLast ? 20.0 : 4.0,
-                                      ),
-                                      child: Card(
-                                        color: isCurrent
-                                            ? currentCardColor
-                                            : cardColor,
-                                        margin: EdgeInsets.zero,
-                                        elevation: 0,
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: borderRadius,
-                                        ),
-                                        // Evita un ClipRRect extra (menos costo por item)
-                                        clipBehavior: Clip.antiAlias,
-                                        child: ListTile(
-                                          leading: RepaintBoundary(
-                                            child: ArtworkListTile(
-                                              songId: songId,
-                                              songPath: songPath,
-                                              artUri: item.artUri,
-                                              size: 48,
-                                              borderRadius:
-                                                  BorderRadius.circular(8),
-                                            ),
-                                          ),
-                                          title: Row(
-                                            children: [
-                                              if (isCurrent)
-                                                StreamBuilder<PlaybackState>(
-                                                  stream: audioHandler
-                                                      ?.playbackState,
-                                                  builder: (context, snapshot) {
-                                                    final playing =
-                                                        snapshot
-                                                            .data
-                                                            ?.playing ??
-                                                        false;
-                                                    return Padding(
-                                                      padding:
-                                                          const EdgeInsets.only(
-                                                            right: 8.0,
-                                                          ),
-                                                      child:
-                                                          MiniMusicVisualizer(
-                                                            color: textColor,
-                                                            width: 4,
-                                                            height: 15,
-                                                            radius: 4,
-                                                            animate: playing,
-                                                          ),
+                                        // Filtrar la cola según la búsqueda
+                                        final filteredQueue =
+                                            _searchQuery.isEmpty
+                                            ? widget.queue
+                                            : widget.queue.where((item) {
+                                                final title = item.title
+                                                    .toLowerCase();
+                                                final artist =
+                                                    (item.artist ?? '')
+                                                        .toLowerCase();
+                                                return title.contains(
+                                                      _searchQuery,
+                                                    ) ||
+                                                    artist.contains(
+                                                      _searchQuery,
                                                     );
+                                              }).toList();
+
+                                        return ListView.builder(
+                                          controller: _scrollController,
+                                          physics:
+                                              const AlwaysScrollableScrollPhysics(),
+                                          cacheExtent: 200,
+                                          addAutomaticKeepAlives: false,
+                                          addRepaintBoundaries: true,
+                                          padding: EdgeInsets.only(
+                                            top: 8,
+                                            bottom: MediaQuery.of(
+                                              context,
+                                            ).padding.bottom,
+                                          ),
+                                          itemCount: filteredQueue.length,
+                                          itemBuilder: (context, index) {
+                                            final item = filteredQueue[index];
+                                            // Índice real en O(1)
+                                            final realIndex =
+                                                indexMap[item.id] ?? index;
+                                            final isCurrent =
+                                                item.id ==
+                                                    liveCurrentMediaItem?.id ||
+                                                realIndex == liveQueueIndex;
+                                            final songId =
+                                                item.extras?['songId'] ?? 0;
+                                            final songPath =
+                                                item.extras?['data'] ?? '';
+
+                                            // Agregar padding adicional al primer y último elemento para evitar recorte
+                                            // Ya no es tan necesario como en el modal, pero ayuda visualmente
+                                            // final isFirstItem = index == 0;
+                                            // final isLastItem = index == filteredQueue.length - 1;
+
+                                            // (colores ya memoizados arriba)
+
+                                            // Calcular borderRadius según posición
+                                            final bool isFirst = index == 0;
+                                            final bool isLast =
+                                                index ==
+                                                filteredQueue.length -
+                                                    1; // Usando filteredQueue.length aquí porque es lo que se muestra
+                                            final bool isOnly =
+                                                filteredQueue.length == 1;
+
+                                            BorderRadius borderRadius;
+                                            if (isOnly) {
+                                              borderRadius =
+                                                  BorderRadius.circular(16);
+                                            } else if (isFirst) {
+                                              borderRadius =
+                                                  const BorderRadius.only(
+                                                    topLeft: Radius.circular(
+                                                      16,
+                                                    ),
+                                                    topRight: Radius.circular(
+                                                      16,
+                                                    ),
+                                                    bottomLeft: Radius.circular(
+                                                      4,
+                                                    ),
+                                                    bottomRight:
+                                                        Radius.circular(4),
+                                                  );
+                                            } else if (isLast) {
+                                              borderRadius =
+                                                  const BorderRadius.only(
+                                                    topLeft: Radius.circular(4),
+                                                    topRight: Radius.circular(
+                                                      4,
+                                                    ),
+                                                    bottomLeft: Radius.circular(
+                                                      16,
+                                                    ),
+                                                    bottomRight:
+                                                        Radius.circular(16),
+                                                  );
+                                            } else {
+                                              borderRadius =
+                                                  BorderRadius.circular(4);
+                                            }
+
+                                            return Padding(
+                                              key: ValueKey(
+                                                item.id,
+                                              ), // Key única para evitar intercambio de carátulas
+                                              padding: EdgeInsets.only(
+                                                left: 16,
+                                                right: 16,
+                                                top: isFirst ? 4.0 : 0.0,
+                                                bottom: isLast ? 20.0 : 4.0,
+                                              ),
+                                              child: Card(
+                                                color: isCurrent
+                                                    ? currentCardColor
+                                                    : cardColor,
+                                                margin: EdgeInsets.zero,
+                                                elevation: 0,
+                                                shape: RoundedRectangleBorder(
+                                                  borderRadius: borderRadius,
+                                                ),
+                                                // Evita un ClipRRect extra (menos costo por item)
+                                                clipBehavior: Clip.antiAlias,
+                                                child: ListTile(
+                                                  leading: RepaintBoundary(
+                                                    child: ArtworkListTile(
+                                                      songId: songId,
+                                                      songPath: songPath,
+                                                      artUri: item.artUri,
+                                                      size: 48,
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            8,
+                                                          ),
+                                                    ),
+                                                  ),
+                                                  title: Row(
+                                                    children: [
+                                                      if (isCurrent)
+                                                        StreamBuilder<
+                                                          PlaybackState
+                                                        >(
+                                                          stream: audioHandler
+                                                              ?.playbackState,
+                                                          builder: (context, snapshot) {
+                                                            final playing =
+                                                                snapshot
+                                                                    .data
+                                                                    ?.playing ??
+                                                                false;
+                                                            return Padding(
+                                                              padding:
+                                                                  const EdgeInsets.only(
+                                                                    right: 8.0,
+                                                                  ),
+                                                              child:
+                                                                  MiniMusicVisualizer(
+                                                                    color:
+                                                                        textColor,
+                                                                    width: 4,
+                                                                    height: 15,
+                                                                    radius: 4,
+                                                                    animate:
+                                                                        playing,
+                                                                  ),
+                                                            );
+                                                          },
+                                                        ),
+                                                      Expanded(
+                                                        child: Text(
+                                                          item.title,
+                                                          maxLines: 1,
+                                                          overflow: TextOverflow
+                                                              .ellipsis,
+                                                          style: TextStyle(
+                                                            fontWeight:
+                                                                isCurrent
+                                                                ? FontWeight
+                                                                      .bold
+                                                                : Theme.of(
+                                                                        context,
+                                                                      )
+                                                                      .textTheme
+                                                                      .titleMedium
+                                                                      ?.fontWeight,
+                                                            color: isCurrent
+                                                                ? textColor
+                                                                : null,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                  subtitle: Text(
+                                                    item.artist ??
+                                                        LocaleProvider.tr(
+                                                          'unknown_artist',
+                                                        ),
+                                                    maxLines: 1,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                    style: TextStyle(
+                                                      color: isCurrent
+                                                          ? textColor
+                                                          : isAmoledTheme
+                                                          ? Colors.white
+                                                                .withValues(
+                                                                  alpha: 0.8,
+                                                                )
+                                                          : null,
+                                                    ),
+                                                  ),
+                                                  tileColor: Colors.transparent,
+                                                  splashColor: primaryColor
+                                                      .withValues(alpha: 0.1),
+                                                  onTap: () {
+                                                    audioHandler
+                                                        ?.skipToQueueItem(
+                                                          realIndex,
+                                                        );
                                                   },
                                                 ),
-                                              Expanded(
-                                                child: Text(
-                                                  item.title,
-                                                  maxLines: 1,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                  style: TextStyle(
-                                                    fontWeight: isCurrent
-                                                        ? FontWeight.bold
-                                                        : Theme.of(context)
-                                                              .textTheme
-                                                              .titleMedium
-                                                              ?.fontWeight,
-                                                    color: isCurrent
-                                                        ? textColor
-                                                        : null,
-                                                  ),
-                                                ),
                                               ),
-                                            ],
-                                          ),
-                                          subtitle: Text(
-                                            item.artist ??
-                                                LocaleProvider.tr(
-                                                  'unknown_artist',
-                                                ),
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: TextStyle(
-                                              color: isCurrent
-                                                  ? textColor
-                                                  : isAmoledTheme
-                                                  ? Colors.white.withValues(
-                                                      alpha: 0.8,
-                                                    )
-                                                  : null,
-                                            ),
-                                          ),
-                                          tileColor: Colors.transparent,
-                                          splashColor: primaryColor.withValues(
-                                            alpha: 0.1,
-                                          ),
-                                          onTap: () {
-                                            audioHandler?.skipToQueueItem(
-                                              realIndex,
                                             );
                                           },
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                );
-                              },
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          );
+                        },
+                      );
+                    },
                   ),
                 ),
               ],

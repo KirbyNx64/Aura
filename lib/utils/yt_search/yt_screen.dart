@@ -30,6 +30,8 @@ import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import 'package:buttons_tabbar/buttons_tabbar.dart';
 import 'package:material_loading_indicator/loading_indicator.dart';
 import 'package:open_settings_plus/open_settings_plus.dart';
+import 'package:path_provider/path_provider.dart';
+import 'dart:io';
 
 // Top-level function para usar con compute
 Uint8List? decodeAndCropImage(Uint8List bytes) {
@@ -909,33 +911,15 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
             shape: RoundedRectangleBorder(borderRadius: topBorderRadius),
             child: InkWell(
               borderRadius: topBorderRadius,
-              onTap: () {
-                showModalBottomSheet(
-                  context: context,
-                  shape: const RoundedRectangleBorder(
-                    borderRadius: BorderRadius.vertical(
-                      top: Radius.circular(20),
-                    ),
+              onTap: () async {
+                await _playInMainPlayer(
+                  YtMusicResult(
+                    title: _urlVideoResult!.title,
+                    artist: _urlVideoResult!.author,
+                    videoId: _urlVideoResult!.id.toString(),
+                    thumbUrl:
+                        'https://img.youtube.com/vi/${_urlVideoResult!.id}/maxresdefault.jpg',
                   ),
-                  builder: (context) {
-                    return SafeArea(
-                      child: Padding(
-                        padding: const EdgeInsets.all(24),
-                        child: YtPreviewPlayer(
-                          results: [
-                            YtMusicResult(
-                              title: _urlVideoResult!.title,
-                              artist: _urlVideoResult!.author,
-                              videoId: _urlVideoResult!.id.toString(),
-                              thumbUrl:
-                                  'https://img.youtube.com/vi/${_urlVideoResult!.id}/maxresdefault.jpg',
-                            ),
-                          ],
-                          currentIndex: 0,
-                        ),
-                      ),
-                    );
-                  },
                 );
               },
               child: Padding(
@@ -1217,25 +1201,9 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                           ),
                           child: InkWell(
                             borderRadius: borderRadius,
-                            onTap: () {
-                              showModalBottomSheet(
-                                context: context,
-                                shape: const RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.vertical(
-                                    top: Radius.circular(20),
-                                  ),
-                                ),
-                                builder: (context) {
-                                  return SafeArea(
-                                    child: Padding(
-                                      padding: const EdgeInsets.all(24),
-                                      child: YtPreviewPlayer(
-                                        results: _urlPlaylistVideos,
-                                        currentIndex: index,
-                                      ),
-                                    ),
-                                  );
-                                },
+                            onTap: () async {
+                              await _playInMainPlayer(
+                                _urlPlaylistVideos[index],
                               );
                             },
                             child: ListTile(
@@ -2907,39 +2875,15 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                     isVideo: false,
                                                   );
                                                 },
-                                                onTap: () {
+                                                onTap: () async {
                                                   if (_isSelectionMode) {
                                                     _toggleSelection(
                                                       idx,
                                                       isVideo: false,
                                                     );
                                                   } else {
-                                                    showModalBottomSheet(
-                                                      context: context,
-                                                      shape: const RoundedRectangleBorder(
-                                                        borderRadius:
-                                                            BorderRadius.vertical(
-                                                              top:
-                                                                  Radius.circular(
-                                                                    16,
-                                                                  ),
-                                                            ),
-                                                      ),
-                                                      builder: (context) {
-                                                        return SafeArea(
-                                                          child: Padding(
-                                                            padding:
-                                                                const EdgeInsets.all(
-                                                                  24,
-                                                                ),
-                                                            child: YtPreviewPlayer(
-                                                              results:
-                                                                  _songResults,
-                                                              currentIndex: idx,
-                                                            ),
-                                                          ),
-                                                        );
-                                                      },
+                                                    await _playInMainPlayer(
+                                                      _songResults[idx],
                                                     );
                                                   }
                                                 },
@@ -3230,39 +3174,15 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                     isVideo: true,
                                                   );
                                                 },
-                                                onTap: () {
+                                                onTap: () async {
                                                   if (_isSelectionMode) {
                                                     _toggleSelection(
                                                       idx,
                                                       isVideo: true,
                                                     );
                                                   } else {
-                                                    showModalBottomSheet(
-                                                      context: context,
-                                                      shape: const RoundedRectangleBorder(
-                                                        borderRadius:
-                                                            BorderRadius.vertical(
-                                                              top:
-                                                                  Radius.circular(
-                                                                    20,
-                                                                  ),
-                                                            ),
-                                                      ),
-                                                      builder: (context) {
-                                                        return SafeArea(
-                                                          child: Padding(
-                                                            padding:
-                                                                const EdgeInsets.all(
-                                                                  24,
-                                                                ),
-                                                            child: YtPreviewPlayer(
-                                                              results:
-                                                                  _videoResults,
-                                                              currentIndex: idx,
-                                                            ),
-                                                          ),
-                                                        );
-                                                      },
+                                                    await _playInMainPlayer(
+                                                      _videoResults[idx],
                                                     );
                                                   }
                                                 },
@@ -3903,7 +3823,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                         }
                                                       });
                                                     },
-                                                    onTap: () {
+                                                    onTap: () async {
                                                       if (_isSelectionMode) {
                                                         if (videoId == null) {
                                                           return;
@@ -3928,40 +3848,15 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                           }
                                                         });
                                                       } else {
-                                                        showModalBottomSheet(
-                                                          context: context,
-                                                          shape: const RoundedRectangleBorder(
-                                                            borderRadius:
-                                                                BorderRadius.vertical(
-                                                                  top:
-                                                                      Radius.circular(
-                                                                        20,
-                                                                      ),
-                                                                ),
-                                                          ),
-                                                          builder: (context) {
-                                                            return SafeArea(
-                                                              child: Padding(
-                                                                padding:
-                                                                    const EdgeInsets.all(
-                                                                      24,
-                                                                    ),
-                                                                child: YtPreviewPlayer(
-                                                                  results:
-                                                                      _albumSongs,
-                                                                  currentIndex:
-                                                                      idx,
-                                                                  fallbackThumbUrl:
-                                                                      _currentAlbum?['thumbUrl'],
-                                                                  fallbackArtist:
-                                                                      _currentAlbum?['artist'] ??
-                                                                      LocaleProvider.tr(
-                                                                        'artist_unknown',
-                                                                      ),
-                                                                ),
+                                                        await _playInMainPlayer(
+                                                          _albumSongs[idx],
+                                                          fallbackThumbUrl:
+                                                              _currentAlbum?['thumbUrl'],
+                                                          fallbackArtist:
+                                                              _currentAlbum?['artist'] ??
+                                                              LocaleProvider.tr(
+                                                                'artist_unknown',
                                                               ),
-                                                            );
-                                                          },
                                                         );
                                                       }
                                                     },
@@ -4413,7 +4308,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                         }
                                                       });
                                                     },
-                                                    onTap: () {
+                                                    onTap: () async {
                                                       if (_isSelectionMode) {
                                                         if (videoId == null) {
                                                           return;
@@ -4438,39 +4333,14 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                           }
                                                         });
                                                       } else {
-                                                        showModalBottomSheet(
-                                                          context: context,
-                                                          shape: const RoundedRectangleBorder(
-                                                            borderRadius:
-                                                                BorderRadius.vertical(
-                                                                  top:
-                                                                      Radius.circular(
-                                                                        20,
-                                                                      ),
-                                                                ),
-                                                          ),
-                                                          builder: (context) {
-                                                            return SafeArea(
-                                                              child: Padding(
-                                                                padding:
-                                                                    const EdgeInsets.all(
-                                                                      24,
-                                                                    ),
-                                                                child: YtPreviewPlayer(
-                                                                  results:
-                                                                      _playlistSongs,
-                                                                  currentIndex:
-                                                                      idx,
-                                                                  fallbackThumbUrl:
-                                                                      _currentPlaylist?['thumbUrl'],
-                                                                  fallbackArtist:
-                                                                      LocaleProvider.tr(
-                                                                        'artist_unknown',
-                                                                      ),
-                                                                ),
+                                                        await _playInMainPlayer(
+                                                          _playlistSongs[idx],
+                                                          fallbackThumbUrl:
+                                                              _currentPlaylist?['thumbUrl'],
+                                                          fallbackArtist:
+                                                              LocaleProvider.tr(
+                                                                'artist_unknown',
                                                               ),
-                                                            );
-                                                          },
                                                         );
                                                       }
                                                     },
@@ -5486,40 +5356,15 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                           isVideo: false,
                                                         );
                                                       },
-                                                      onTap: () {
+                                                      onTap: () async {
                                                         if (_isSelectionMode) {
                                                           _toggleSelection(
                                                             index,
                                                             isVideo: false,
                                                           );
                                                         } else {
-                                                          showModalBottomSheet(
-                                                            context: context,
-                                                            shape: const RoundedRectangleBorder(
-                                                              borderRadius:
-                                                                  BorderRadius.vertical(
-                                                                    top:
-                                                                        Radius.circular(
-                                                                          20,
-                                                                        ),
-                                                                  ),
-                                                            ),
-                                                            builder: (context) {
-                                                              return SafeArea(
-                                                                child: Padding(
-                                                                  padding:
-                                                                      const EdgeInsets.all(
-                                                                        24,
-                                                                      ),
-                                                                  child: YtPreviewPlayer(
-                                                                    results:
-                                                                        _songResults,
-                                                                    currentIndex:
-                                                                        index,
-                                                                  ),
-                                                                ),
-                                                              );
-                                                            },
+                                                          await _playInMainPlayer(
+                                                            _songResults[index],
                                                           );
                                                         }
                                                       },
@@ -5861,40 +5706,15 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                           isVideo: true,
                                                         );
                                                       },
-                                                      onTap: () {
+                                                      onTap: () async {
                                                         if (_isSelectionMode) {
                                                           _toggleSelection(
                                                             index,
                                                             isVideo: true,
                                                           );
                                                         } else {
-                                                          showModalBottomSheet(
-                                                            context: context,
-                                                            shape: const RoundedRectangleBorder(
-                                                              borderRadius:
-                                                                  BorderRadius.vertical(
-                                                                    top:
-                                                                        Radius.circular(
-                                                                          20,
-                                                                        ),
-                                                                  ),
-                                                            ),
-                                                            builder: (context) {
-                                                              return SafeArea(
-                                                                child: Padding(
-                                                                  padding:
-                                                                      const EdgeInsets.all(
-                                                                        24,
-                                                                      ),
-                                                                  child: YtPreviewPlayer(
-                                                                    results:
-                                                                        _videoResults,
-                                                                    currentIndex:
-                                                                        index,
-                                                                  ),
-                                                                ),
-                                                              );
-                                                            },
+                                                          await _playInMainPlayer(
+                                                            _videoResults[index],
                                                           );
                                                         }
                                                       },
@@ -6671,6 +6491,233 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
       ),
       floatingActionButton: null,
     );
+  }
+
+  Future<void> _playInMainPlayer(
+    YtMusicResult item, {
+    String? fallbackThumbUrl,
+    String? fallbackArtist,
+  }) async {
+    final videoId = item.videoId?.trim();
+    if (videoId == null || videoId.isEmpty) {
+      _showMessage('Error', 'No se pudo obtener el ID del video');
+      return;
+    }
+
+    if (playLoadingNotifier.value) return;
+    playLoadingNotifier.value = true;
+    openPlayerPanelNotifier.value = true;
+    var loadingReleased = false;
+    void releaseLoading() {
+      if (loadingReleased) return;
+      loadingReleased = true;
+      playLoadingNotifier.value = false;
+    }
+
+    StreamSubscription<PlaybackState>? playbackWatchSub;
+    final loadingGuard = Timer(const Duration(seconds: 8), releaseLoading);
+
+    try {
+      final List<ConnectivityResult> connectivity = await Connectivity()
+          .checkConnectivity();
+      if (connectivity.contains(ConnectivityResult.none)) {
+        _showMessage('Error', LocaleProvider.tr('no_internet_retry'));
+        return;
+      }
+
+      if (!audioServiceReady.value || audioHandler == null) {
+        await initializeAudioServiceSafely();
+      }
+      final handler = audioHandler;
+      if (handler == null) {
+        throw Exception('AudioService no disponible');
+      }
+
+      playbackWatchSub = handler.playbackState.listen((playbackState) {
+        if (loadingReleased) return;
+        final currentMedia = handler.mediaItem.value;
+        final currentVideoId = currentMedia?.extras?['videoId']
+            ?.toString()
+            .trim();
+        if (playbackState.playing && currentVideoId == videoId) {
+          releaseLoading();
+        }
+      });
+
+      final artworkFuture = _buildPlayerArtworkUri(
+        videoId,
+        preferredThumbUrl: item.thumbUrl,
+        fallbackThumbUrl: fallbackThumbUrl,
+      );
+
+      final streamUrl = await StreamService.getBestAudioUrl(
+        videoId,
+      ).timeout(const Duration(seconds: 10));
+      if (streamUrl == null || streamUrl.isEmpty) {
+        throw Exception('No se pudo generar el stream de audio');
+      }
+
+      final artist = item.artist?.trim();
+      final fallbackArtistTrimmed = fallbackArtist?.trim();
+      final artworkUri = await artworkFuture.timeout(
+        const Duration(seconds: 6),
+        onTimeout: () => _buildPlayerArtworkFallbackUrl(
+          videoId,
+          preferredThumbUrl: item.thumbUrl,
+          fallbackThumbUrl: fallbackThumbUrl,
+        ),
+      );
+      final finalArtworkUri = artworkUri.trim().isNotEmpty
+          ? artworkUri
+          : _buildPlayerArtworkFallbackUrl(
+              videoId,
+              preferredThumbUrl: item.thumbUrl,
+              fallbackThumbUrl: fallbackThumbUrl,
+            );
+
+      await handler
+          .customAction('playYtStream', {
+            'streamUrl': streamUrl,
+            'videoId': videoId,
+            'mediaId': 'yt:$videoId',
+            'title': (item.title?.trim().isNotEmpty ?? false)
+                ? item.title!.trim()
+                : LocaleProvider.tr('title_unknown'),
+            'artist': (artist != null && artist.isNotEmpty)
+                ? artist
+                : ((fallbackArtistTrimmed != null &&
+                          fallbackArtistTrimmed.isNotEmpty)
+                      ? fallbackArtistTrimmed
+                      : LocaleProvider.tr('artist_unknown')),
+            'artUri': finalArtworkUri,
+            'radioMode': true,
+            'autoPlay': true,
+          })
+          .timeout(const Duration(seconds: 12));
+    } catch (_) {
+      final currentMedia = audioHandler?.mediaItem.value;
+      final currentVideoId = currentMedia?.extras?['videoId']
+          ?.toString()
+          .trim();
+      final isPlaying = audioHandler?.playbackState.value.playing ?? false;
+      final isSameStream = currentVideoId == videoId;
+
+      // Evitar falso error si la reproducción ya arrancó correctamente.
+      if (!(isPlaying && isSameStream)) {
+        _showMessage('Error', 'Error al reproducir la canción en streaming');
+      }
+    } finally {
+      await playbackWatchSub?.cancel();
+      loadingGuard.cancel();
+      releaseLoading();
+    }
+  }
+
+  String _buildPlayerArtworkFallbackUrl(
+    String videoId, {
+    String? preferredThumbUrl,
+    String? fallbackThumbUrl,
+  }) {
+    final normalizedPreferred = preferredThumbUrl?.trim();
+    final normalizedFallback = fallbackThumbUrl?.trim();
+
+    // Usar miniatura oficial en alta calidad para el reproductor principal.
+    // hqdefault (480x360) está disponible de forma consistente.
+    if (videoId.isNotEmpty) {
+      return 'https://i.ytimg.com/vi/$videoId/hqdefault.jpg';
+    }
+
+    if (normalizedPreferred != null && normalizedPreferred.isNotEmpty) {
+      return normalizedPreferred;
+    }
+
+    if (normalizedFallback != null && normalizedFallback.isNotEmpty) {
+      return normalizedFallback;
+    }
+
+    return '';
+  }
+
+  String _getCoverQualityPref(SharedPreferences prefs) {
+    final q = prefs.getString('cover_quality');
+    if (q == 'high' || q == 'medium' || q == 'low') return q!;
+    final old = prefs.getBool('cover_quality_high');
+    return old == false ? 'low' : 'high';
+  }
+
+  Future<String> _buildPlayerArtworkUri(
+    String videoId, {
+    String? preferredThumbUrl,
+    String? fallbackThumbUrl,
+  }) async {
+    final fallbackUri = _buildPlayerArtworkFallbackUrl(
+      videoId,
+      preferredThumbUrl: preferredThumbUrl,
+      fallbackThumbUrl: fallbackThumbUrl,
+    );
+
+    if (videoId.trim().isEmpty) {
+      return fallbackUri;
+    }
+
+    try {
+      final tempDir = await getTemporaryDirectory();
+      final coverFile = File('${tempDir.path}/yt_stream_cover_$videoId.jpg');
+      if (await coverFile.exists() && await coverFile.length() > 500) {
+        return Uri.file(coverFile.path).toString();
+      }
+
+      final prefs = await SharedPreferences.getInstance();
+      final quality = _getCoverQualityPref(prefs);
+
+      final coverUrlMax =
+          'https://img.youtube.com/vi/$videoId/maxresdefault.jpg';
+      final coverUrlSD = 'https://img.youtube.com/vi/$videoId/sddefault.jpg';
+      final coverUrlHQ = 'https://img.youtube.com/vi/$videoId/hqdefault.jpg';
+
+      final List<String> urlsToTry = switch (quality) {
+        'high' => [coverUrlMax, coverUrlSD, coverUrlHQ],
+        'medium' => [coverUrlSD, coverUrlHQ],
+        _ => [coverUrlHQ],
+      };
+
+      Uint8List? bytes;
+
+      for (final url in urlsToTry) {
+        try {
+          final response = await http
+              .get(Uri.parse(url), headers: headers)
+              .timeout(const Duration(seconds: 4));
+          if (response.statusCode == 200 && response.bodyBytes.isNotEmpty) {
+            bytes = response.bodyBytes;
+            break;
+          }
+        } catch (_) {}
+      }
+
+      if (bytes == null && fallbackUri.isNotEmpty) {
+        try {
+          final fallbackResponse = await http
+              .get(Uri.parse(fallbackUri), headers: headers)
+              .timeout(const Duration(seconds: 4));
+          if (fallbackResponse.statusCode == 200 &&
+              fallbackResponse.bodyBytes.isNotEmpty) {
+            bytes = fallbackResponse.bodyBytes;
+          }
+        } catch (_) {}
+      }
+
+      if (bytes == null) {
+        return fallbackUri;
+      }
+
+      // No recortar físicamente la imagen de streaming para evitar latencia.
+      // El recorte visual se hace en el Player con BoxFit.cover (centrado).
+      await coverFile.writeAsBytes(bytes, flush: true);
+      return Uri.file(coverFile.path).toString();
+    } catch (_) {
+      return fallbackUri;
+    }
   }
 
   // Función para mostrar mensajes con diseño elegante

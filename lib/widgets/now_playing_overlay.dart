@@ -10,7 +10,6 @@ import 'package:music/main.dart'
         overlayVisibleNotifier,
         AudioHandlerSafeCast;
 // import 'package:music/widgets/hero_cached.dart';
-import 'package:music/widgets/artwork_cached.dart';
 import 'package:music/utils/audio/background_audio_handler.dart';
 import 'marquee.dart';
 import 'package:music/utils/notifiers.dart';
@@ -92,6 +91,7 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> {
   MediaItem? _lastKnownMediaItem;
   Timer? _temporaryItemTimer;
   Timer? _playingDebounce;
+  StreamSubscription<PlaybackState>? _playbackStateSub;
   final ValueNotifier<bool> _isPlayingNotifier = ValueNotifier<bool>(false);
 
   // Cache del widget de fondo AMOLED para evitar reconstrucciones
@@ -105,9 +105,8 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> {
   @override
   void initState() {
     super.initState();
-
     // Escuchar cambios en el estado de reproducción con debounce mínimo
-    audioHandler?.playbackState.listen((state) {
+    _playbackStateSub = audioHandler?.playbackState.listen((state) {
       _playingDebounce?.cancel();
       _playingDebounce = Timer(const Duration(milliseconds: 25), () {
         // Reducido de 100ms a 25ms
@@ -117,7 +116,7 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> {
       });
 
       // Actualización inmediata para estados críticos
-      if (state.playing != _isPlayingNotifier.value) {
+      if (mounted && state.playing != _isPlayingNotifier.value) {
         _isPlayingNotifier.value = state.playing;
       }
     });
@@ -127,8 +126,140 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> {
   void dispose() {
     _temporaryItemTimer?.cancel();
     _playingDebounce?.cancel();
+    _playbackStateSub?.cancel();
     _isPlayingNotifier.dispose();
     super.dispose();
+  }
+
+  String? _songPathFromMediaItem(MediaItem item) {
+    final raw = item.extras?['data'];
+    if (raw == null) return null;
+    if (raw is String) {
+      return raw.trim().isEmpty ? null : raw;
+    }
+    final value = raw.toString().trim();
+    return value.isEmpty ? null : value;
+  }
+
+  int? _songIdFromMediaItem(MediaItem item) {
+    final raw = item.extras?['songId'];
+    if (raw is int) return raw;
+    if (raw is num) return raw.toInt();
+    if (raw is String) return int.tryParse(raw.trim());
+    return null;
+  }
+
+  Uri? _displayArtUriFor(MediaItem item) {
+    final raw = item.extras?['displayArtUri']?.toString().trim();
+    if (raw != null && raw.isNotEmpty) {
+      final parsed = Uri.tryParse(raw);
+      if (parsed != null) return parsed;
+    }
+    return item.artUri;
+  }
+
+  Widget _buildOverlayArtworkPlaceholder(BuildContext context) {
+    return Container(
+      width: 50,
+      height: 50,
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainer,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Icon(
+        Icons.music_note,
+        size: 24,
+        color: Theme.of(context).colorScheme.onSurface,
+      ),
+    );
+  }
+
+  Widget _buildOverlayArtwork(BuildContext context, MediaItem mediaItem) {
+    final artUri = _displayArtUriFor(mediaItem);
+    if (artUri != null) {
+      final scheme = artUri.scheme.toLowerCase();
+
+      if (scheme == 'file' || scheme == 'content') {
+        try {
+          return Image.file(
+            File(artUri.toFilePath()),
+            width: 50,
+            height: 50,
+            fit: BoxFit.cover,
+            alignment: Alignment.center,
+            errorBuilder: (context, error, stackTrace) {
+              return _buildOverlayArtworkPlaceholder(context);
+            },
+          );
+        } catch (_) {
+          return _buildOverlayArtworkPlaceholder(context);
+        }
+      }
+
+      if (scheme == 'http' || scheme == 'https') {
+        return Image.network(
+          artUri.toString(),
+          width: 50,
+          height: 50,
+          fit: BoxFit.cover,
+          alignment: Alignment.center,
+          cacheWidth: 200,
+          errorBuilder: (context, error, stackTrace) {
+            return _buildOverlayArtworkPlaceholder(context);
+          },
+        );
+      }
+    }
+
+    final songPath = _songPathFromMediaItem(mediaItem);
+    final songId = _songIdFromMediaItem(mediaItem);
+
+    if (songPath != null) {
+      final cachedArtwork = artworkCache[songPath];
+      if (cachedArtwork != null) {
+        try {
+          return Image.file(
+            File(cachedArtwork.toFilePath()),
+            width: 50,
+            height: 50,
+            fit: BoxFit.cover,
+            alignment: Alignment.center,
+            errorBuilder: (context, error, stackTrace) {
+              return _buildOverlayArtworkPlaceholder(context);
+            },
+          );
+        } catch (_) {
+          // continuar con fallback async
+        }
+      }
+    }
+
+    if (songId != null && songPath != null) {
+      return FutureBuilder<Uri?>(
+        future: getOrCacheArtwork(songId, songPath),
+        builder: (context, snapshot) {
+          if (snapshot.hasData && snapshot.data != null) {
+            try {
+              return Image.file(
+                File(snapshot.data!.toFilePath()),
+                width: 50,
+                height: 50,
+                fit: BoxFit.cover,
+                alignment: Alignment.center,
+                errorBuilder: (context, error, stackTrace) {
+                  return _buildOverlayArtworkPlaceholder(context);
+                },
+              );
+            } catch (_) {
+              return _buildOverlayArtworkPlaceholder(context);
+            }
+          }
+          return _buildOverlayArtworkPlaceholder(context);
+        },
+      );
+    }
+
+    return _buildOverlayArtworkPlaceholder(context);
   }
 
   // Construye el fondo con la carátula para el tema AMOLED
@@ -141,7 +272,7 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> {
       return _cachedAmoledBackground;
     }
 
-    final artUri = mediaItem.artUri;
+    final artUri = _displayArtUriFor(mediaItem);
     ImageProvider? imageProvider;
 
     // Prioridad 1: Si hay artUri, usarlo directamente
@@ -404,7 +535,9 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> {
                                                               currentSong.id)
                                                           .toString();
                                                   final artUri =
-                                                      currentSong.artUri;
+                                                      _displayArtUriFor(
+                                                        currentSong,
+                                                      );
 
                                                   // Key único que incluye el estado de loading para evitar duplicados
                                                   final switcherKey =
@@ -447,24 +580,21 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> {
                                                               ),
                                                             ),
                                                           )
-                                                        : ArtworkCached(
+                                                        : KeyedSubtree(
                                                             key: ValueKey(
                                                               'overlay_art_${songIdKey}_${artUri?.toString() ?? 'null'}',
                                                             ),
-                                                            artUri: artUri,
-                                                            size: 50,
-                                                            borderRadius:
-                                                                BorderRadius.circular(
-                                                                  8,
-                                                                ),
-                                                            songPath:
-                                                                currentSong
-                                                                        .extras?['data']
-                                                                    as String?,
-                                                            songId:
-                                                                currentSong
-                                                                        .extras?['songId']
-                                                                    as int?,
+                                                            child: ClipRRect(
+                                                              borderRadius:
+                                                                  BorderRadius.circular(
+                                                                    8,
+                                                                  ),
+                                                              child:
+                                                                  _buildOverlayArtwork(
+                                                                    context,
+                                                                    currentSong,
+                                                                  ),
+                                                            ),
                                                           ),
                                                   );
                                                 },
@@ -838,90 +968,92 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> {
                                                     final position =
                                                         posSnapshot.data ??
                                                         Duration.zero;
-                                                    final hasDuration =
-                                                        duration != null &&
-                                                        duration.inMilliseconds >
-                                                            0;
+                                                    final resolvedDuration =
+                                                        (duration != null &&
+                                                            duration.inMilliseconds >
+                                                                0)
+                                                        ? duration
+                                                        : (audioHandler
+                                                                  .myHandler
+                                                                  ?.player
+                                                                  .duration ??
+                                                              const Duration(
+                                                                seconds: 1,
+                                                              ));
+                                                    final total =
+                                                        resolvedDuration
+                                                                .inMilliseconds >
+                                                            0
+                                                        ? resolvedDuration
+                                                              .inMilliseconds
+                                                        : 1;
+                                                    final current = position
+                                                        .inMilliseconds
+                                                        .clamp(0, total);
+                                                    final progress = total > 0
+                                                        ? current / total
+                                                        : 0.0;
 
-                                                    return StreamBuilder<
-                                                      Duration?
-                                                    >(
-                                                      stream: audioHandler
-                                                          .myHandler
-                                                          ?.player
-                                                          .durationStream,
-                                                      builder: (context, durationSnapshot) {
-                                                        final fallbackDuration =
-                                                            durationSnapshot
-                                                                .data;
-                                                        final total =
-                                                            hasDuration
-                                                            ? duration
-                                                                  .inMilliseconds
-                                                            : (fallbackDuration
-                                                                      ?.inMilliseconds ??
-                                                                  1);
-                                                        final current = position
-                                                            .inMilliseconds
-                                                            .clamp(0, total);
-
-                                                        return Column(
-                                                          children: [
-                                                            Container(
-                                                              decoration: BoxDecoration(
-                                                                borderRadius:
-                                                                    BorderRadius.circular(
-                                                                      8,
-                                                                    ),
-                                                                border: Border.all(
-                                                                  color:
-                                                                      Theme.of(
+                                                    return Column(
+                                                      children: [
+                                                        Container(
+                                                          decoration: BoxDecoration(
+                                                            borderRadius:
+                                                                BorderRadius.circular(
+                                                                  8,
+                                                                ),
+                                                            border: Border.all(
+                                                              color:
+                                                                  Theme.of(
                                                                         context,
-                                                                      ).colorScheme.outline.withValues(
+                                                                      )
+                                                                      .colorScheme
+                                                                      .outline
+                                                                      .withValues(
                                                                         alpha:
                                                                             0.1,
                                                                       ),
-                                                                  width: 0.5,
+                                                              width: 0.5,
+                                                            ),
+                                                          ),
+                                                          child: ClipRRect(
+                                                            borderRadius:
+                                                                BorderRadius.circular(
+                                                                  8,
                                                                 ),
+                                                            child: LinearProgressIndicator(
+                                                              // ignore: deprecated_member_use
+                                                              year2023: false,
+                                                              key: ValueKey(
+                                                                total,
                                                               ),
-                                                              child: ClipRRect(
-                                                                borderRadius:
-                                                                    BorderRadius.circular(
-                                                                      8,
-                                                                    ),
-                                                                child: LinearProgressIndicator(
-                                                                  // ignore: deprecated_member_use
-                                                                  year2023:
-                                                                      false,
-                                                                  key: ValueKey(
-                                                                    total,
+                                                              value: progress
+                                                                  .toDouble(),
+                                                              minHeight: 4,
+                                                              borderRadius:
+                                                                  BorderRadius.circular(
+                                                                    8,
                                                                   ),
-                                                                  value:
-                                                                      total > 0
-                                                                      ? current /
-                                                                            total
-                                                                      : 0,
-                                                                  minHeight: 4,
-                                                                  borderRadius:
-                                                                      BorderRadius.circular(
-                                                                        8,
-                                                                      ),
-                                                                  backgroundColor:
-                                                                      Theme.of(
+                                                              backgroundColor:
+                                                                  Theme.of(
                                                                         context,
-                                                                      ).colorScheme.primary.withValues(
+                                                                      )
+                                                                      .colorScheme
+                                                                      .primary
+                                                                      .withValues(
                                                                         alpha:
                                                                             0.3,
                                                                       ),
-                                                                  color: Theme.of(
-                                                                    context,
-                                                                  ).colorScheme.primary,
-                                                                ),
-                                                              ),
+                                                              color:
+                                                                  Theme.of(
+                                                                        context,
+                                                                      )
+                                                                      .colorScheme
+                                                                      .primary,
                                                             ),
-                                                          ],
-                                                        );
-                                                      },
+                                                          ),
+                                                        ),
+                                                      ],
                                                     );
                                                   },
                                                 );

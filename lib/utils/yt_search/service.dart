@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:dio/dio.dart';
+import 'package:dart_ytmusic_api/dart_ytmusic_api.dart' as ytm_api;
 
 import '../../l10n/locale_provider.dart';
 
@@ -28,6 +29,14 @@ final Map<String, dynamic> ytServiceContext = {
     'user': {},
   },
 };
+
+// Nuevo proveedor para "Up Next" (solicitado para pruebas).
+final ytm_api.YTMusic _ytMusicApi = ytm_api.YTMusic();
+Future<void>? _ytMusicInitFuture;
+bool _ytMusicInitialized = false;
+
+// Toggle temporal: false = usa dart_ytmusic_api, true = proveedor legacy.
+const bool useLegacyWatchRadioProvider = false;
 
 class YtMusicResult {
   final String? title;
@@ -868,6 +877,370 @@ Future<Response> sendRequest(
     }
     rethrow;
   }
+}
+
+Future<Map<String, dynamic>> getWatchRadioTracks({
+  required String videoId,
+  int limit = 24,
+  String? playlistId,
+  String? additionalParamsNext,
+}) async {
+  if (useLegacyWatchRadioProvider) {
+    return _getWatchRadioTracksLegacy(
+      videoId: videoId,
+      limit: limit,
+      playlistId: playlistId,
+      additionalParamsNext: additionalParamsNext,
+    );
+  }
+
+  return _getWatchRadioTracksViaDartYtMusicApi(videoId: videoId, limit: limit);
+}
+
+Future<void> _ensureYtMusicApiInitialized() async {
+  if (_ytMusicInitialized) return;
+  _ytMusicInitFuture ??= () async {
+    final locale = languageNotifier.value;
+    final hl = locale.startsWith('es') ? 'es' : 'en';
+    await _ytMusicApi.initialize(hl: hl);
+    _ytMusicInitialized = true;
+  }();
+
+  try {
+    await _ytMusicInitFuture;
+  } catch (_) {
+    _ytMusicInitFuture = null;
+    rethrow;
+  }
+}
+
+Future<Map<String, dynamic>> _getWatchRadioTracksViaDartYtMusicApi({
+  required String videoId,
+  int limit = 24,
+}) async {
+  final normalizedVideoId = videoId.trim();
+  if (normalizedVideoId.isEmpty) {
+    return {
+      'tracks': <Map<String, dynamic>>[],
+      'additionalParamsForNext': null,
+    };
+  }
+
+  try {
+    await _ensureYtMusicApiInitialized();
+    final upNexts = await _ytMusicApi.getUpNexts(normalizedVideoId);
+    final tracks = <Map<String, dynamic>>[];
+    final seenVideoIds = <String>{normalizedVideoId};
+
+    for (final item in upNexts) {
+      final nextVideoId = item.videoId.trim();
+      if (nextVideoId.isEmpty || !seenVideoIds.add(nextVideoId)) continue;
+
+      final artistName = item.artists.name.trim();
+      final thumbUrl = item.thumbnails.isNotEmpty
+          ? _cleanThumbnailUrl(item.thumbnails.last.url, highQuality: true)
+          : null;
+
+      tracks.add({
+        'videoId': nextVideoId,
+        'title': item.title.trim().isEmpty
+            ? LocaleProvider.tr('title_unknown')
+            : item.title.trim(),
+        'artist': artistName.isEmpty ? null : artistName,
+        'thumbUrl': thumbUrl,
+        'durationMs': item.duration > 0 ? item.duration * 1000 : null,
+      });
+
+      if (tracks.length >= limit) break;
+    }
+
+    return {
+      'tracks': tracks,
+      // getUpNexts no expone token de continuación.
+      'additionalParamsForNext': null,
+      'provider': 'dart_ytmusic_api',
+    };
+  } catch (_) {
+    return {
+      'tracks': <Map<String, dynamic>>[],
+      'additionalParamsForNext': null,
+      'provider': 'dart_ytmusic_api',
+    };
+  }
+}
+
+Future<Map<String, dynamic>> _getWatchRadioTracksLegacy({
+  required String videoId,
+  int limit = 24,
+  String? playlistId,
+  String? additionalParamsNext,
+}) async {
+  final normalizedVideoId = videoId.trim();
+  if (normalizedVideoId.isEmpty) {
+    return {
+      'tracks': <Map<String, dynamic>>[],
+      'additionalParamsForNext': null,
+    };
+  }
+
+  final normalizedPlaylistId = (playlistId ?? 'RDAMVM$normalizedVideoId')
+      .trim()
+      .replaceFirst(RegExp(r'^VL'), '');
+
+  final data = <String, dynamic>{
+    ...ytServiceContext,
+    'enablePersistentPlaylistPanel': true,
+    'isAudioOnly': true,
+    'tunerSettingValue': 'AUTOMIX_SETTING_NORMAL',
+    'videoId': normalizedVideoId,
+    'playlistId': normalizedPlaylistId,
+    'params': 'wAEB',
+  };
+
+  final tracks = <Map<String, dynamic>>[];
+  final seenVideoIds = <String>{};
+  final visitedParams = <String>{};
+  String? pendingParams = additionalParamsNext?.trim();
+  String? nextParams;
+
+  // Si venimos con continuation explícita, hacemos una sola página
+  // para mantener la operación ligera.
+  final bool singlePage = pendingParams != null && pendingParams.isNotEmpty;
+  int safety = 0;
+
+  while (tracks.length < limit && safety < 6) {
+    final currentParams = (pendingParams != null && pendingParams.isNotEmpty)
+        ? pendingParams
+        : '';
+    if (currentParams.isNotEmpty && !visitedParams.add(currentParams)) {
+      break;
+    }
+
+    final response = (await sendRequest(
+      'next',
+      data,
+      additionalParams: currentParams,
+    )).data;
+
+    final panel = _extractWatchPlaylistPanel(response);
+    if (panel == null) {
+      break;
+    }
+
+    final parsedTracks = _parsePlaylistPanelTracks(panel);
+    for (final track in parsedTracks) {
+      final id = track['videoId']?.toString().trim();
+      if (id == null || id.isEmpty) continue;
+      if (!seenVideoIds.add(id)) continue;
+      tracks.add(track);
+      if (tracks.length >= limit) break;
+    }
+
+    final continuationToken = _extractPlaylistPanelContinuationToken(panel);
+    if (continuationToken == null || continuationToken.isEmpty) {
+      nextParams = null;
+      break;
+    }
+
+    nextParams = _buildContinuationParams(continuationToken);
+    if (tracks.length >= limit || singlePage) {
+      break;
+    }
+
+    pendingParams = nextParams;
+    safety++;
+  }
+
+  return {
+    'tracks': tracks.take(limit).toList(),
+    'additionalParamsForNext': nextParams,
+    'provider': 'legacy_next_api',
+  };
+}
+
+Map<String, dynamic>? _extractWatchPlaylistPanel(dynamic response) {
+  final continuationPanel = nav(response, [
+    'continuationContents',
+    'playlistPanelContinuation',
+  ]);
+  if (continuationPanel is Map<String, dynamic>) {
+    return continuationPanel;
+  }
+  if (continuationPanel is Map) {
+    return Map<String, dynamic>.from(continuationPanel);
+  }
+
+  final panel = nav(response, [
+    'contents',
+    'singleColumnMusicWatchNextResultsRenderer',
+    'tabbedRenderer',
+    'watchNextTabbedResultsRenderer',
+    'tabs',
+    0,
+    'tabRenderer',
+    'content',
+    'musicQueueRenderer',
+    'content',
+    'playlistPanelRenderer',
+  ]);
+
+  if (panel is Map<String, dynamic>) {
+    return panel;
+  }
+  if (panel is Map) {
+    return Map<String, dynamic>.from(panel);
+  }
+  return null;
+}
+
+List<Map<String, dynamic>> _parsePlaylistPanelTracks(
+  Map<String, dynamic> panel,
+) {
+  dynamic rawItems = panel['contents'];
+  rawItems ??= panel['items'];
+  if (rawItems is! List) return const [];
+
+  final results = <Map<String, dynamic>>[];
+  for (final item in rawItems) {
+    final parsed = _parsePlaylistPanelTrack(item);
+    if (parsed != null) {
+      results.add(parsed);
+    }
+  }
+  return results;
+}
+
+Map<String, dynamic>? _parsePlaylistPanelTrack(dynamic rawItem) {
+  if (rawItem is! Map) return null;
+
+  dynamic renderer = rawItem['playlistPanelVideoRenderer'];
+  if (renderer == null && rawItem['playlistPanelVideoWrapperRenderer'] is Map) {
+    final wrapper = rawItem['playlistPanelVideoWrapperRenderer'] as Map;
+    final primary = wrapper['primaryRenderer'];
+    if (primary is Map) {
+      renderer = primary['playlistPanelVideoRenderer'] ?? primary;
+    }
+  }
+
+  if (renderer is! Map) return null;
+  if (renderer['unplayableText'] != null) return null;
+
+  final videoId = renderer['videoId']?.toString().trim();
+  if (videoId == null || videoId.isEmpty) return null;
+
+  final titleRaw = nav(renderer, ['title', 'runs', 0, 'text'])?.toString();
+  final title = (titleRaw == null || titleRaw.trim().isEmpty)
+      ? LocaleProvider.tr('title_unknown')
+      : titleRaw.trim();
+
+  final artist = _extractWatchTrackArtist(
+    nav(renderer, ['longBylineText', 'runs']),
+  );
+
+  dynamic thumbnails = nav(renderer, ['thumbnail', 'thumbnails']);
+  thumbnails ??= nav(renderer, [
+    'thumbnail',
+    'musicThumbnailRenderer',
+    'thumbnail',
+    'thumbnails',
+  ]);
+  String? thumbUrl;
+  if (thumbnails is List && thumbnails.isNotEmpty) {
+    final rawUrl = thumbnails.last['url']?.toString().trim();
+    if (rawUrl != null && rawUrl.isNotEmpty) {
+      thumbUrl = _cleanThumbnailUrl(rawUrl, highQuality: true);
+    }
+  }
+
+  final durationMs = _parseDurationTextMs(
+    nav(renderer, ['lengthText', 'runs', 0, 'text'])?.toString(),
+  );
+
+  return {
+    'videoId': videoId,
+    'title': title,
+    'artist': artist,
+    'thumbUrl': thumbUrl,
+    'durationMs': durationMs,
+  };
+}
+
+String? _extractWatchTrackArtist(dynamic runs) {
+  if (runs is! List || runs.isEmpty) return null;
+
+  String? fallback;
+  for (final run in runs) {
+    if (run is! Map) continue;
+    final text = run['text']?.toString().trim();
+    if (text == null ||
+        text.isEmpty ||
+        text == '•' ||
+        text == '·' ||
+        text == '-') {
+      continue;
+    }
+
+    fallback ??= text;
+    if (run['navigationEndpoint'] is Map) {
+      final browseId = nav(run, [
+        'navigationEndpoint',
+        'browseEndpoint',
+        'browseId',
+      ])?.toString();
+      if (browseId != null && browseId.isNotEmpty) {
+        return text;
+      }
+    }
+  }
+  return fallback;
+}
+
+String? _extractPlaylistPanelContinuationToken(Map<String, dynamic> panel) {
+  final token =
+      nav(panel, [
+        'continuations',
+        0,
+        'nextRadioContinuationData',
+        'continuation',
+      ]) ??
+      nav(panel, [
+        'continuations',
+        0,
+        'nextContinuationData',
+        'continuation',
+      ]) ??
+      nav(panel, [
+        'continuations',
+        0,
+        'reloadContinuationData',
+        'continuation',
+      ]);
+  final normalized = token?.toString().trim();
+  if (normalized == null || normalized.isEmpty) return null;
+  return normalized;
+}
+
+String _buildContinuationParams(String continuationToken) {
+  final encoded = Uri.encodeQueryComponent(continuationToken);
+  return '&ctoken=$encoded&continuation=$encoded';
+}
+
+int? _parseDurationTextMs(String? text) {
+  final value = text?.trim();
+  if (value == null || value.isEmpty) return null;
+
+  final parts = value.split(':');
+  if (parts.isEmpty || parts.length > 3) return null;
+
+  int totalSeconds = 0;
+  for (final part in parts) {
+    final parsed = int.tryParse(part.trim());
+    if (parsed == null) return null;
+    totalSeconds = totalSeconds * 60 + parsed;
+  }
+
+  if (totalSeconds <= 0) return null;
+  return totalSeconds * 1000;
 }
 
 // Función para parsear canciones específicamente

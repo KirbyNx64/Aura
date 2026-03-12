@@ -13,6 +13,7 @@ class ArtworkCached extends StatefulWidget {
   final double size;
   final BorderRadius borderRadius;
   final bool showPlaceholderIcon;
+  final double imageScale;
   final String? songPath; // Para verificar caché cuando artUri es null
   final int? songId; // Para cargar carátula si no está en caché
 
@@ -22,6 +23,7 @@ class ArtworkCached extends StatefulWidget {
     required this.size,
     required this.borderRadius,
     this.showPlaceholderIcon = true,
+    this.imageScale = 1.0,
     this.songPath,
     this.songId,
   });
@@ -33,9 +35,8 @@ class ArtworkCached extends StatefulWidget {
 class _ArtworkCachedState extends State<ArtworkCached> {
   Uri? _displayedArtUri;
   Uri? _previousArtUri;
-  Timer? _loadTimer;
-  Timer? _cacheCheckTimer;
   bool _isLoading = false;
+  int _loadEpoch = 0;
 
   @override
   void initState() {
@@ -66,46 +67,10 @@ class _ArtworkCachedState extends State<ArtworkCached> {
     // Si no hay nada disponible, intentar cargar de forma asíncrona
     _isLoading = true;
     if (widget.songPath != null && widget.songId != null) {
-      // Cargar inmediatamente sin delay
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _loadArtworkAsync();
-        // También verificar caché periódicamente mientras carga
-        _startCacheCheckTimer();
-      });
+      unawaited(_loadArtworkAsync());
     } else {
       _isLoading = false;
     }
-  }
-
-  void _startCacheCheckTimer() {
-    _cacheCheckTimer?.cancel();
-    int attempts = 0;
-    const maxAttempts = 10; // Verificar hasta 10 veces (2 segundos)
-    
-    _cacheCheckTimer = Timer.periodic(const Duration(milliseconds: 200), (timer) {
-      if (!mounted || _displayedArtUri != null || attempts >= maxAttempts) {
-        timer.cancel();
-        _cacheCheckTimer = null;
-        return;
-      }
-
-      attempts++;
-      
-      // Verificar si la carátula apareció en el caché
-      if (widget.songPath != null) {
-        final cache = artworkCache;
-        final cachedArtwork = cache[widget.songPath!];
-        if (cachedArtwork != null && cachedArtwork != _displayedArtUri) {
-          // Carátula encontrada en caché!
-          _previousArtUri = _displayedArtUri;
-          _displayedArtUri = cachedArtwork;
-          _isLoading = false;
-          timer.cancel();
-          _cacheCheckTimer = null;
-          setState(() {});
-        }
-      }
-    });
   }
 
   @override
@@ -113,7 +78,8 @@ class _ArtworkCachedState extends State<ArtworkCached> {
     super.didUpdateWidget(oldWidget);
 
     // Si cambió la canción (songPath o songId)
-    final songChanged = widget.songPath != oldWidget.songPath ||
+    final songChanged =
+        widget.songPath != oldWidget.songPath ||
         widget.songId != oldWidget.songId;
 
     // Si cambió el artUri o la canción
@@ -123,7 +89,7 @@ class _ArtworkCachedState extends State<ArtworkCached> {
   }
 
   void _updateDisplayedArtwork() {
-    _loadTimer?.cancel();
+    _loadEpoch++;
 
     // Guardar la carátula anterior antes de cambiar
     final oldDisplayedUri = _displayedArtUri;
@@ -160,14 +126,7 @@ class _ArtworkCachedState extends State<ArtworkCached> {
 
       // Intentar cargar desde caché o cargar de forma asíncrona
       if (widget.songPath != null && widget.songId != null) {
-        // Cargar inmediatamente sin delay
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) {
-            _loadArtworkAsync();
-            // También verificar caché periódicamente mientras carga
-            _startCacheCheckTimer();
-          }
-        });
+        unawaited(_loadArtworkAsync());
       } else {
         // Si no hay datos para cargar, mantener la anterior
         _isLoading = false;
@@ -177,13 +136,7 @@ class _ArtworkCachedState extends State<ArtworkCached> {
       if (widget.songPath != null && widget.songId != null) {
         _isLoading = true;
         if (mounted) setState(() {});
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) {
-            _loadArtworkAsync();
-            // También verificar caché periódicamente mientras carga
-            _startCacheCheckTimer();
-          }
-        });
+        unawaited(_loadArtworkAsync());
       } else {
         _isLoading = false;
         _displayedArtUri = null;
@@ -198,6 +151,7 @@ class _ArtworkCachedState extends State<ArtworkCached> {
       if (mounted) setState(() {});
       return;
     }
+    final int requestEpoch = ++_loadEpoch;
 
     // Guardar valores actuales para verificar después de operaciones asíncronas
     final currentSongPath = widget.songPath;
@@ -213,7 +167,9 @@ class _ArtworkCachedState extends State<ArtworkCached> {
         try {
           final file = File(cachedArtwork.toFilePath());
           if (await file.exists() && await file.length() > 0) {
-            if (mounted && widget.songPath == currentSongPath) {
+            if (mounted &&
+                widget.songPath == currentSongPath &&
+                requestEpoch == _loadEpoch) {
               _previousArtUri = _displayedArtUri;
               _displayedArtUri = cachedArtwork;
               _isLoading = false;
@@ -234,7 +190,7 @@ class _ArtworkCachedState extends State<ArtworkCached> {
 
       if (artUri != null && mounted) {
         // Verificar que aún es la misma canción
-        if (widget.songPath == currentSongPath) {
+        if (widget.songPath == currentSongPath && requestEpoch == _loadEpoch) {
           try {
             final file = File(artUri.toFilePath());
             if (await file.exists() && await file.length() > 0) {
@@ -251,7 +207,10 @@ class _ArtworkCachedState extends State<ArtworkCached> {
       }
 
       // No se pudo cargar la carátula
-      if (mounted && widget.songPath == currentSongPath && widget.artUri == null) {
+      if (mounted &&
+          widget.songPath == currentSongPath &&
+          requestEpoch == _loadEpoch &&
+          widget.artUri == null) {
         _isLoading = false;
         // Solo mostrar placeholder si realmente no hay nada que mostrar
         if (_displayedArtUri == null && _previousArtUri == null) {
@@ -261,6 +220,7 @@ class _ArtworkCachedState extends State<ArtworkCached> {
     } catch (e) {
       // Error silencioso - mantener estado actual
       if (mounted && widget.songPath == currentSongPath) {
+        if (requestEpoch != _loadEpoch) return;
         _isLoading = false;
         // Solo actualizar si realmente no hay nada que mostrar
         if (_displayedArtUri == null && _previousArtUri == null) {
@@ -272,60 +232,108 @@ class _ArtworkCachedState extends State<ArtworkCached> {
 
   @override
   void dispose() {
-    _loadTimer?.cancel();
-    _cacheCheckTimer?.cancel();
+    _loadEpoch++;
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final scale = widget.imageScale < 1.0 ? 1.0 : widget.imageScale;
     return ClipRRect(
       borderRadius: widget.borderRadius,
-      child: _buildContent(context),
+      child: ClipRect(
+        child: Transform.scale(
+          scale: scale,
+          alignment: Alignment.center,
+          child: _buildContent(context),
+        ),
+      ),
     );
+  }
+
+  Widget _buildImageFromUri(
+    Uri uri, {
+    required Widget fallback,
+    bool useFrameBuilder = false,
+  }) {
+    final scheme = uri.scheme.toLowerCase();
+    final isNetwork = scheme == 'http' || scheme == 'https';
+    final isFile = scheme.isEmpty || scheme == 'file';
+    final dpr = MediaQuery.of(context).devicePixelRatio;
+    final decodeSize = (widget.size * dpr).round().clamp(64, 1024);
+
+    if (isNetwork) {
+      return Image.network(
+        uri.toString(),
+        width: widget.size,
+        height: widget.size,
+        fit: BoxFit.cover,
+        alignment: Alignment.center,
+        cacheWidth: decodeSize,
+        cacheHeight: decodeSize,
+        filterQuality: FilterQuality.low,
+        frameBuilder: useFrameBuilder
+            ? (context, child, frame, wasSynchronouslyLoaded) {
+                if (wasSynchronouslyLoaded) return child;
+                return AnimatedOpacity(
+                  opacity: frame == null ? 0.0 : 1.0,
+                  duration: const Duration(milliseconds: 0),
+                  child: child,
+                );
+              }
+            : null,
+        errorBuilder: (context, error, stackTrace) => fallback,
+      );
+    }
+
+    if (isFile) {
+      try {
+        return Image.file(
+          File(uri.toFilePath()),
+          width: widget.size,
+          height: widget.size,
+          fit: BoxFit.cover,
+          alignment: Alignment.center,
+          cacheWidth: decodeSize,
+          cacheHeight: decodeSize,
+          filterQuality: FilterQuality.low,
+          frameBuilder: useFrameBuilder
+              ? (context, child, frame, wasSynchronouslyLoaded) {
+                  if (wasSynchronouslyLoaded) return child;
+                  return AnimatedOpacity(
+                    opacity: frame == null ? 0.0 : 1.0,
+                    duration: const Duration(milliseconds: 0),
+                    child: child,
+                  );
+                }
+              : null,
+          errorBuilder: (context, error, stackTrace) => fallback,
+        );
+      } catch (_) {
+        return fallback;
+      }
+    }
+
+    return fallback;
   }
 
   Widget _buildContent(BuildContext context) {
     // Si hay carátula para mostrar, mostrarla
     if (_displayedArtUri != null) {
-      return Image.file(
-        File(_displayedArtUri!.toFilePath()),
-        width: widget.size,
-        height: widget.size,
-        fit: BoxFit.cover,
-        frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
-          // Si la imagen se cargó sincrónicamente, mostrarla inmediatamente
-          if (wasSynchronouslyLoaded) {
-            return child;
+      final placeholder = _buildPlaceholder(context);
+      final uri = _displayedArtUri!;
+      final fallback = () {
+        if (widget.songPath != null) {
+          final cache = artworkCache;
+          final cachedArtwork = cache[widget.songPath!];
+          if (cachedArtwork != null && cachedArtwork != _displayedArtUri) {
+            return _buildImageFromUri(cachedArtwork, fallback: placeholder);
           }
-          // Si está cargando, mostrar con fade-in suave
-          return AnimatedOpacity(
-            opacity: frame == null ? 0.0 : 1.0,
-            duration: const Duration(milliseconds: 0),
-            child: child,
-          );
-        },
-        errorBuilder: (context, error, stackTrace) {
-          // Si hay error, intentar cargar desde caché nuevamente o mostrar placeholder
-          if (widget.songPath != null) {
-            final cache = artworkCache;
-            final cachedArtwork = cache[widget.songPath!];
-            if (cachedArtwork != null && cachedArtwork != _displayedArtUri) {
-              // Intentar con otra carátula del caché
-              return Image.file(
-                File(cachedArtwork.toFilePath()),
-                width: widget.size,
-                height: widget.size,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) {
-                  return _buildPlaceholder(context);
-                },
-              );
-            }
-          }
-          return _buildPlaceholder(context);
-        },
-      );
+        }
+        return placeholder;
+      }();
+
+      return _buildImageFromUri(uri, fallback: fallback, useFrameBuilder: true);
     }
 
     // Si está cargando, intentar mostrar desde caché mientras carga
@@ -335,37 +343,24 @@ class _ArtworkCachedState extends State<ArtworkCached> {
         final cache = artworkCache;
         final cachedArtwork = cache[widget.songPath!];
         if (cachedArtwork != null) {
-          return Image.file(
-            File(cachedArtwork.toFilePath()),
-            width: widget.size,
-            height: widget.size,
-            fit: BoxFit.cover,
-            errorBuilder: (context, error, stackTrace) {
-              return _buildPlaceholder(context);
-            },
+          return _buildImageFromUri(
+            cachedArtwork,
+            fallback: _buildPlaceholder(context),
           );
         }
       }
 
       // Si hay carátula anterior, mantenerla mientras carga
       if (_previousArtUri != null) {
-        return Image.file(
-          File(_previousArtUri!.toFilePath()),
-          width: widget.size,
-          height: widget.size,
-          fit: BoxFit.cover,
-          errorBuilder: (context, error, stackTrace) {
-            return _buildPlaceholder(context);
-          },
+        return _buildImageFromUri(
+          _previousArtUri!,
+          fallback: _buildPlaceholder(context),
         );
       }
 
       // Aún no sabemos si tiene carátula y no hay nada que mostrar:
       // mostrar completamente transparente, sin fondo ni ícono.
-      return SizedBox(
-        width: widget.size,
-        height: widget.size,
-      );
+      return SizedBox(width: widget.size, height: widget.size);
     }
 
     // Si no hay carátula disponible, mostrar placeholder
@@ -379,10 +374,9 @@ class _ArtworkCachedState extends State<ArtworkCached> {
       height: widget.size,
       decoration: BoxDecoration(
         color: isSystem
-            ? Theme.of(context)
-                .colorScheme
-                .secondaryContainer
-                .withValues(alpha: 0.5)
+            ? Theme.of(
+                context,
+              ).colorScheme.secondaryContainer.withValues(alpha: 0.5)
             : Theme.of(context).colorScheme.surfaceContainer,
         borderRadius: widget.borderRadius,
       ),

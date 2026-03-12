@@ -32,50 +32,98 @@ class ArtworkListTile extends StatefulWidget {
 class _ArtworkListTileState extends State<ArtworkListTile> {
   Uri? _artUri;
 
+  bool _isRemoteUri(Uri uri) => uri.isScheme('http') || uri.isScheme('https');
+
+  bool _isLocalFileUri(Uri uri) {
+    final scheme = uri.scheme.toLowerCase();
+    return scheme.isEmpty || scheme == 'file';
+  }
+
+  bool _isValidCachedFile(Uri uri) {
+    if (!_isLocalFileUri(uri)) return false;
+    try {
+      final file = File(uri.toFilePath());
+      return file.existsSync() && file.lengthSync() > 0;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  void _setArtUriIfChanged(Uri? nextUri) {
+    if (_artUri == nextUri) return;
+    if (!mounted) return;
+    setState(() => _artUri = nextUri);
+  }
+
   @override
   void initState() {
     super.initState();
-    // Intento de carga síncrona desde caché para evitar el parpadeo inicial
-    final cachedArtwork = artworkCache[widget.songPath];
-    if (cachedArtwork != null) {
-      _artUri = cachedArtwork;
-    } else if (widget.artUri != null &&
-        (widget.artUri!.isScheme('http') || widget.artUri!.isScheme('https'))) {
+    // Prioridad 1: usar artUri explícito del item (local o remoto).
+    if (widget.artUri != null) {
       _artUri = widget.artUri;
-    } else {
-      _loadArtwork();
+      return;
     }
+
+    // Prioridad 2: usar caché local solo si el archivo sigue siendo válido.
+    final cachedArtwork = artworkCache[widget.songPath];
+    if (cachedArtwork != null && _isValidCachedFile(cachedArtwork)) {
+      _artUri = cachedArtwork;
+      return;
+    }
+
+    _loadArtwork();
   }
 
   @override
   void didUpdateWidget(ArtworkListTile oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.songId != widget.songId ||
-        oldWidget.songPath != widget.songPath) {
+    final songChanged =
+        oldWidget.songId != widget.songId ||
+        oldWidget.songPath != widget.songPath;
+    final artUriChanged = oldWidget.artUri != widget.artUri;
+
+    // Si llega una carátula nueva desde la cola (ej: primera canción), reflejarla al instante.
+    if (artUriChanged && widget.artUri != null) {
+      _setArtUriIfChanged(widget.artUri);
+      return;
+    }
+
+    if (songChanged || artUriChanged) {
+      if (songChanged) {
+        _artUri = null;
+      }
       _loadArtwork();
     }
   }
 
   Future<void> _loadArtwork() async {
-    // Si hay artUri remota, no busques local
-    if (widget.artUri != null &&
-        (widget.artUri!.isScheme('http') || widget.artUri!.isScheme('https'))) {
-      if (mounted) setState(() => _artUri = widget.artUri);
+    // Si hay artUri en el MediaItem, úsala directamente.
+    if (widget.artUri != null) {
+      _setArtUriIfChanged(widget.artUri);
+      return;
+    }
+
+    if (widget.songId <= 0 || widget.songPath.isEmpty) {
+      _setArtUriIfChanged(null);
       return;
     }
 
     // Verificar si está en caché primero
     final cache = artworkCache;
     final cachedArtwork = cache[widget.songPath];
-    if (cachedArtwork != null) {
-      if (mounted) setState(() => _artUri = cachedArtwork);
+    if (cachedArtwork != null && _isValidCachedFile(cachedArtwork)) {
+      _setArtUriIfChanged(cachedArtwork);
       return;
     }
 
     // Si no está en caché, cargar desde la base de datos
     final uri = await getOrCacheArtwork(widget.songId, widget.songPath);
-    if (mounted) {
-      setState(() => _artUri = uri);
+    if (!mounted) return;
+
+    if (uri != null && _isValidCachedFile(uri)) {
+      _setArtUriIfChanged(uri);
+    } else {
+      _setArtUriIfChanged(null);
     }
   }
 
@@ -120,21 +168,20 @@ class _ArtworkListTileState extends State<ArtworkListTile> {
     // IMPORTANT: for listas, decodificar al tamaño real evita jank en scroll.
     final dpr = MediaQuery.of(context).devicePixelRatio;
     final int cacheW = max(1, (w * dpr).round());
-    final int cacheH = max(1, (h * dpr).round());
 
-    if (widget.artUri != null &&
-        (widget.artUri!.isScheme('http') || widget.artUri!.isScheme('https'))) {
+    final effectiveArtUri = widget.artUri ?? _artUri;
+    if (effectiveArtUri != null && _isRemoteUri(effectiveArtUri)) {
       return ClipRRect(
         borderRadius: widget.borderRadius,
         child: Image.network(
-          widget.artUri.toString(),
+          effectiveArtUri.toString(),
           width: w,
           height: h,
           fit: BoxFit.cover,
+          alignment: Alignment.center,
           gaplessPlayback: true,
           // Decodificar cerca del tamaño final reduce trabajo en scroll.
           cacheWidth: cacheW,
-          cacheHeight: cacheH,
           filterQuality: FilterQuality.low,
           errorBuilder: (context, error, stackTrace) {
             return _buildFallbackIcon(w, h);
@@ -142,27 +189,35 @@ class _ArtworkListTileState extends State<ArtworkListTile> {
         ),
       );
     }
-    if (_artUri != null) {
+    if (effectiveArtUri != null && _isLocalFileUri(effectiveArtUri)) {
       return ClipRRect(
         borderRadius: widget.borderRadius,
-        child: Image.file(
-          File(_artUri!.toFilePath()),
-          width: w,
-          height: h,
-          fit: BoxFit.cover,
-          gaplessPlayback: true,
-          // Decodificar cerca del tamaño final reduce trabajo en scroll.
-          cacheWidth: cacheW,
-          cacheHeight: cacheH,
-          filterQuality: FilterQuality.low,
-          errorBuilder: (context, error, stackTrace) {
-            return _buildFallbackIcon(w, h);
+        child: Builder(
+          builder: (context) {
+            try {
+              return Image.file(
+                File(effectiveArtUri.toFilePath()),
+                width: w,
+                height: h,
+                fit: BoxFit.cover,
+                alignment: Alignment.center,
+                gaplessPlayback: true,
+                // Decodificar cerca del tamaño final reduce trabajo en scroll.
+                cacheWidth: cacheW,
+                filterQuality: FilterQuality.low,
+                errorBuilder: (context, error, stackTrace) {
+                  return _buildFallbackIcon(w, h);
+                },
+              );
+            } catch (_) {
+              return _buildFallbackIcon(w, h);
+            }
           },
         ),
       );
-    } else {
-      return _buildFallbackIcon(w, h);
     }
+
+    return _buildFallbackIcon(w, h);
   }
 
   Widget _buildFallbackIcon(double w, double h) {
