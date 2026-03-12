@@ -6575,6 +6575,9 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
               fallbackThumbUrl: fallbackThumbUrl,
             );
 
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('last_queue_source', 'YouTube Music');
+
       await handler
           .customAction('playYtStream', {
             'streamUrl': streamUrl,
@@ -6595,17 +6598,8 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
           })
           .timeout(const Duration(seconds: 12));
     } catch (_) {
-      final currentMedia = audioHandler?.mediaItem.value;
-      final currentVideoId = currentMedia?.extras?['videoId']
-          ?.toString()
-          .trim();
-      final isPlaying = audioHandler?.playbackState.value.playing ?? false;
-      final isSameStream = currentVideoId == videoId;
-
-      // Evitar falso error si la reproducción ya arrancó correctamente.
-      if (!(isPlaying && isSameStream)) {
-        _showMessage('Error', 'Error al reproducir la canción en streaming');
-      }
+      // Error silencioso por solicitud del usuario:
+      // no mostrar popup aunque exista fallo transitorio en el arranque.
     } finally {
       await playbackWatchSub?.cancel();
       loadingGuard.cancel();

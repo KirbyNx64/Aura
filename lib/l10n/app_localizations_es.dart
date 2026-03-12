@@ -334,6 +334,9 @@ const Map<String, String> appLocalizationsEs = {
 
   // Favorites screen
   'favorites': 'Me gusta',
+  'streaming_songs': 'Canciones streaming',
+  'show_streaming_songs': 'Ver canciones streaming',
+  'show_local_songs': 'Ver canciones locales',
   'select_all': 'Seleccionar todos',
   'add': 'Añadir',
   'add_from_recents': 'Añadir de recientes',
@@ -342,6 +345,9 @@ const Map<String, String> appLocalizationsEs = {
   'search_folders_and_songs': 'Buscar...',
   'folders_and_songs_info': 'Carpetas y canciones guardadas en el dispositivo.',
   'no_songs': 'No hay canciones',
+  'no_streaming_songs': 'No hay canciones streaming',
+  'no_playlists_streaming_songs':
+      'No hay listas de reproducción con canciones streaming',
   'remove_from_favorites': 'Eliminar de me gusta',
   'unknown_artist': 'Desconocido',
   'last_added': 'Último añadido',
@@ -427,6 +433,7 @@ const Map<String, String> appLocalizationsEs = {
   'paste_link': 'Pegar enlace',
   'back_to_search': 'Volver a búsqueda',
   'play': 'Reproducir',
+  'start_radio': 'Iniciar radio',
   'download_started': 'Descarga iniciada',
   'large_playlist_detected': 'Lista de reproducción muy grande detectada',
   'fetching_playlist_info':

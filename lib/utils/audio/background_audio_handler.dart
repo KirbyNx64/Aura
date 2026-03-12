@@ -7,7 +7,6 @@ import 'dart:async';
 import 'dart:collection';
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter/foundation.dart';
-import 'package:image/image.dart' as img;
 import 'album_art_cache_manager.dart';
 import 'package:music/utils/db/songs_index_db.dart';
 import 'package:music/utils/db/mostplayer_db.dart';
@@ -400,6 +399,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   Timer? _songChangeResumeTimer;
 
   static const Duration _songChangeDelay = Duration(milliseconds: 800);
+  static const Duration _streamingSkipSeekTimeout = Duration(milliseconds: 220);
 
   // Claves de SharedPreferences
   static const String _kPrefQueuePaths = 'playback_queue_paths';
@@ -420,13 +420,29 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   String? _streamRadioSeedVideoId;
   String? _streamRadioContinuationParams;
   bool _streamRadioAppendInProgress = false;
+  bool _isStreamingAdvancePending = false;
   final Set<String> _streamQueuedVideoIds = <String>{};
   final Map<String, Future<Uri?>> _streamArtworkPreloadTasks = {};
   final LinkedHashMap<String, Uri> _streamArtworkFileCache = LinkedHashMap();
+  final Set<String> _pendingStreamUrlPrefetchIds = <String>{};
+  Timer? _streamingArtworkDebounceTimer;
+  Timer? _streamRadioQueueDebounceTimer;
+  Timer? _streamUrlPrefetchDebounceTimer;
   int _streamSessionVersion = 0;
   static const int _streamRadioPrefetchThreshold = 2;
   static const int _streamRadioBatchSize = 20;
   static const int _streamRadioResolveConcurrency = 4;
+  static const int _streamRadioUrlPrefetchCount = 5;
+  static const int _streamRadioUrlPrefetchConcurrency = 3;
+  static const Duration _streamingArtworkDebounceDelay = Duration(
+    milliseconds: 140,
+  );
+  static const Duration _streamRadioQueueDebounceDelay = Duration(
+    milliseconds: 170,
+  );
+  static const Duration _streamUrlPrefetchDebounceDelay = Duration(
+    milliseconds: 160,
+  );
   static const int _streamArtworkPrefetchCount = 0;
   static const int _streamArtworkCacheMaxEntries = 120;
 
@@ -604,7 +620,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
           _updateCurrentMediaItem(index);
           if (_streamRadioEnabled &&
               _isStreamingMediaItem(_mediaQueue[index])) {
-            unawaited(_ensureStreamingRadioQueue());
+            _scheduleStreamingRadioQueueEnsure();
           }
         }
       });
@@ -714,6 +730,13 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     // Cancelar timer de cambio de canción
     _songChangeResumeTimer?.cancel();
     _songChangeResumeTimer = null;
+    _streamingArtworkDebounceTimer?.cancel();
+    _streamingArtworkDebounceTimer = null;
+    _streamRadioQueueDebounceTimer?.cancel();
+    _streamRadioQueueDebounceTimer = null;
+    _streamUrlPrefetchDebounceTimer?.cancel();
+    _streamUrlPrefetchDebounceTimer = null;
+    _pendingStreamUrlPrefetchIds.clear();
 
     _currentIndexSubscription = null;
     _playbackEventSubscription = null;
@@ -871,6 +894,18 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     return await FavoritesDB().isFavorite(songId);
   }
 
+  String _favoritePathForMediaItem(MediaItem item) {
+    final dataPath = item.extras?['data']?.toString().trim();
+    if (dataPath != null && dataPath.isNotEmpty) {
+      return dataPath;
+    }
+    final videoId = item.extras?['videoId']?.toString().trim();
+    if (videoId != null && videoId.isNotEmpty) {
+      return 'yt:$videoId';
+    }
+    return item.id.trim();
+  }
+
   /// Transform a just_audio event into an audio_service state.
   /// Sigue exactamente el patrón de la documentación oficial de audio_service
   PlaybackState _transformPlaybackEvent(PlaybackEvent event) {
@@ -943,8 +978,9 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
     var currentMediaItem = _mediaQueue[index];
     final songPath = currentMediaItem.extras?['data'] as String?;
-    if (songPath != null) {
-      FavoritesDB().isFavorite(songPath).then((isFav) {
+    final favoritePath = _favoritePathForMediaItem(currentMediaItem);
+    if (favoritePath.isNotEmpty) {
+      FavoritesDB().isFavorite(favoritePath).then((isFav) {
         if (isFav) {
           _favoriteIds.add(currentMediaItem.id);
         } else {
@@ -959,13 +995,15 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
     if (_isStreamingMediaItem(currentMediaItem)) {
       mediaItem.add(currentMediaItem);
-      unawaited(
-        _updateCurrentStreamingArtwork(
-          index: index,
-          currentMediaItem: currentMediaItem,
-          currentSongId: currentSongId,
-        ),
-      );
+      final artScheme = currentMediaItem.artUri?.scheme.toLowerCase();
+      final hasLocalArtUri =
+          artScheme == 'file' || artScheme == 'content' || artScheme == '';
+      if (hasLocalArtUri) {
+        _streamingArtworkDebounceTimer?.cancel();
+        _streamingArtworkDebounceTimer = null;
+      } else {
+        _scheduleStreamingArtworkUpdate(currentSongId: currentSongId);
+      }
       return;
     }
 
@@ -1754,6 +1792,240 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     }
   }
 
+  Future<void> playStreamingQueue({
+    required List<Map<String, dynamic>> rawItems,
+    int initialIndex = 0,
+    bool autoPlay = true,
+  }) async {
+    if (!_isInitialized) {
+      await _init();
+    }
+    if (rawItems.isEmpty) return;
+
+    _loadVersion++;
+    _initializing = true;
+    initializingNotifier.value = true;
+    isQueueTransitioning.value = true;
+
+    try {
+      final resolvedMediaItems = <MediaItem>[];
+      final resolvedSources = <AudioSource>[];
+      int? selectedResolvedIndex;
+
+      for (int i = 0; i < rawItems.length; i++) {
+        final raw = rawItems[i];
+        final videoId = raw['videoId']?.toString().trim();
+        if (videoId == null || videoId.isEmpty) continue;
+
+        final streamUrlRaw = raw['streamUrl']?.toString().trim();
+        final streamUrl = (streamUrlRaw != null && streamUrlRaw.isNotEmpty)
+            ? streamUrlRaw
+            : await StreamService.getBestAudioUrl(videoId);
+        if (streamUrl == null || streamUrl.isEmpty) continue;
+
+        final title = raw['title']?.toString().trim();
+        final artist = raw['artist']?.toString().trim();
+        final artUriRaw = raw['artUri']?.toString().trim();
+        final resolvedDisplayArtUri = _resolveStreamingDisplayArtUri(
+          preferred: raw['displayArtUri']?.toString(),
+          artUri: (artUriRaw != null && artUriRaw.isNotEmpty)
+              ? Uri.tryParse(artUriRaw)
+              : null,
+          videoId: videoId,
+        );
+
+        final mediaItem = MediaItem(
+          id: 'yt:$videoId',
+          title: (title != null && title.isNotEmpty) ? title : 'Unknown title',
+          artist: (artist != null && artist.isNotEmpty) ? artist : null,
+          artUri: Uri.tryParse(resolvedDisplayArtUri ?? ''),
+          extras: {
+            'videoId': videoId,
+            'isStreaming': true,
+            'radioMode': false,
+            'streamUrl': streamUrl,
+            'displayArtUri': resolvedDisplayArtUri,
+          },
+        );
+
+        final queueIndex = resolvedMediaItems.length;
+        resolvedMediaItems.add(
+          mediaItem.copyWith(
+            extras: {...?mediaItem.extras, 'queueIndex': queueIndex},
+          ),
+        );
+        resolvedSources.add(AudioSource.uri(Uri.parse(streamUrl)));
+        if (i == initialIndex) {
+          selectedResolvedIndex = queueIndex;
+        }
+      }
+
+      if (resolvedMediaItems.isEmpty || resolvedSources.isEmpty) return;
+
+      int targetIndex = selectedResolvedIndex ?? 0;
+      if (targetIndex < 0 || targetIndex >= resolvedMediaItems.length) {
+        targetIndex = 0;
+      }
+
+      _resetStreamingSessionState(clearQueuedVideos: true);
+      _streamRadioEnabled = false;
+      _streamRadioSeedVideoId = null;
+      _streamRadioContinuationParams = null;
+
+      _pendingArtworkOperations.clear();
+      cancelAllArtworkLoads();
+      _preloadDebounceTimer?.cancel();
+      _isPreloadingNext = false;
+      _resetTracking();
+
+      _currentSongList.clear();
+      _originalSongList = null;
+
+      isShuffleNotifier.value = false;
+      try {
+        await _player.setShuffleModeEnabled(false);
+      } catch (_) {}
+
+      _mediaQueue
+        ..clear()
+        ..addAll(resolvedMediaItems);
+      queue.add(List<MediaItem>.from(_mediaQueue));
+      mediaItem.add(_mediaQueue[targetIndex]);
+      unawaited(
+        _updateCurrentStreamingArtwork(
+          index: targetIndex,
+          currentMediaItem: _mediaQueue[targetIndex],
+          currentSongId: _mediaQueue[targetIndex].id,
+        ),
+      );
+
+      // ignore: deprecated_member_use
+      _concat = ConcatenatingAudioSource(children: resolvedSources);
+
+      await _player
+          .setAudioSource(
+            _concat!,
+            initialIndex: targetIndex,
+            initialPosition: Duration.zero,
+          )
+          .timeout(
+            const Duration(seconds: 18),
+            onTimeout: () {
+              throw Exception('Timeout al cargar cola de streaming');
+            },
+          );
+
+      playbackState.add(
+        playbackState.value.copyWith(
+          queueIndex: targetIndex,
+          updatePosition: Duration.zero,
+        ),
+      );
+
+      unawaited(() async {
+        try {
+          await _prefs?.setStringList(_kPrefQueuePaths, const []);
+          await _prefs?.setInt(_kPrefQueueIndex, targetIndex);
+          await _prefs?.setInt(_kPrefSongPositionSec, 0);
+        } catch (_) {}
+      }());
+
+      _initializing = false;
+      initializingNotifier.value = false;
+      isQueueTransitioning.value = false;
+
+      if (autoPlay) {
+        await play();
+      }
+    } finally {
+      if (_initializing) {
+        _initializing = false;
+        initializingNotifier.value = false;
+        isQueueTransitioning.value = false;
+      }
+    }
+  }
+
+  Future<void> addStreamingItemToQueueEnd({
+    required String videoId,
+    String? title,
+    String? artist,
+    String? artUri,
+    String? streamUrl,
+  }) async {
+    final normalizedVideoId = videoId.trim();
+    if (normalizedVideoId.isEmpty) return;
+    if (!_isInitialized) {
+      await _init();
+    }
+
+    final resolvedStreamUrlRaw = streamUrl?.trim();
+    final resolvedStreamUrl =
+        (resolvedStreamUrlRaw != null && resolvedStreamUrlRaw.isNotEmpty)
+        ? resolvedStreamUrlRaw
+        : await StreamService.getBestAudioUrl(normalizedVideoId);
+    if (resolvedStreamUrl == null || resolvedStreamUrl.isEmpty) return;
+
+    final resolvedDisplayArtUri = _resolveStreamingDisplayArtUri(
+      preferred: artUri,
+      artUri: (artUri != null && artUri.trim().isNotEmpty)
+          ? Uri.tryParse(artUri.trim())
+          : null,
+      videoId: normalizedVideoId,
+    );
+
+    final queueIndex = _mediaQueue.length;
+    final streamItem = MediaItem(
+      id: 'yt:$normalizedVideoId',
+      title: (title != null && title.trim().isNotEmpty)
+          ? title.trim()
+          : 'Unknown title',
+      artist: (artist != null && artist.trim().isNotEmpty)
+          ? artist.trim()
+          : null,
+      artUri: Uri.tryParse(resolvedDisplayArtUri ?? ''),
+      extras: {
+        'videoId': normalizedVideoId,
+        'isStreaming': true,
+        'radioMode': false,
+        'streamUrl': resolvedStreamUrl,
+        'displayArtUri': resolvedDisplayArtUri,
+        'queueIndex': queueIndex,
+      },
+    );
+
+    // Si no hay cola actual, crear una cola de un solo elemento sin autoplay.
+    if (_concat == null || _mediaQueue.isEmpty) {
+      await playSingleStream(
+        streamUrl: resolvedStreamUrl,
+        item: streamItem,
+        autoPlay: false,
+      );
+      return;
+    }
+
+    // Append directo para evitar reconstruir cola.
+    try {
+      // ignore: deprecated_member_use
+      await _concat!.addAll([AudioSource.uri(Uri.parse(resolvedStreamUrl))]);
+      _mediaQueue.add(streamItem);
+      queue.add(List<MediaItem>.from(_mediaQueue));
+      unawaited(() async {
+        try {
+          final paths = _mediaQueue.map((m) => m.id).toList();
+          await _prefs?.setStringList(_kPrefQueuePaths, paths);
+        } catch (_) {}
+      }());
+    } catch (_) {
+      // Fallback: si falla append, reproducir como sesión streaming independiente.
+      await playSingleStream(
+        streamUrl: resolvedStreamUrl,
+        item: streamItem,
+        autoPlay: false,
+      );
+    }
+  }
+
   bool _isStreamingMediaItem(MediaItem item) {
     if (item.extras?['isStreaming'] == true) return true;
     return item.id.startsWith('yt:') || item.id.startsWith('yt_stream_');
@@ -1807,11 +2079,80 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     _streamRadioSeedVideoId = null;
     _streamRadioContinuationParams = null;
     _streamRadioAppendInProgress = false;
+    _streamingArtworkDebounceTimer?.cancel();
+    _streamingArtworkDebounceTimer = null;
+    _streamRadioQueueDebounceTimer?.cancel();
+    _streamRadioQueueDebounceTimer = null;
+    _streamUrlPrefetchDebounceTimer?.cancel();
+    _streamUrlPrefetchDebounceTimer = null;
+    _pendingStreamUrlPrefetchIds.clear();
     _streamArtworkPreloadTasks.clear();
     if (clearQueuedVideos) {
       _streamQueuedVideoIds.clear();
       _streamArtworkFileCache.clear();
     }
+  }
+
+  void _scheduleStreamingArtworkUpdate({required String currentSongId}) {
+    _streamingArtworkDebounceTimer?.cancel();
+    _streamingArtworkDebounceTimer = Timer(_streamingArtworkDebounceDelay, () {
+      if (!mounted) return;
+      final liveIndex = _player.currentIndex;
+      if (liveIndex == null ||
+          liveIndex < 0 ||
+          liveIndex >= _mediaQueue.length) {
+        return;
+      }
+      final liveItem = _mediaQueue[liveIndex];
+      if (liveItem.id != currentSongId) return;
+      unawaited(
+        _updateCurrentStreamingArtwork(
+          index: liveIndex,
+          currentMediaItem: liveItem,
+          currentSongId: currentSongId,
+        ),
+      );
+    });
+  }
+
+  void _scheduleStreamingRadioQueueEnsure({bool force = false}) {
+    if (force) {
+      _streamRadioQueueDebounceTimer?.cancel();
+      _streamRadioQueueDebounceTimer = null;
+      unawaited(_ensureStreamingRadioQueue(force: true));
+      return;
+    }
+
+    _streamRadioQueueDebounceTimer?.cancel();
+    _streamRadioQueueDebounceTimer = Timer(_streamRadioQueueDebounceDelay, () {
+      if (!mounted || !_streamRadioEnabled) return;
+      unawaited(_ensureStreamingRadioQueue());
+    });
+  }
+
+  void _debounceStreamUrlPrefetch(List<String> videoIds) {
+    for (final rawId in videoIds) {
+      final videoId = rawId.trim();
+      if (videoId.isEmpty) continue;
+      _pendingStreamUrlPrefetchIds.add(videoId);
+    }
+    if (_pendingStreamUrlPrefetchIds.isEmpty) return;
+
+    _streamUrlPrefetchDebounceTimer?.cancel();
+    _streamUrlPrefetchDebounceTimer = Timer(
+      _streamUrlPrefetchDebounceDelay,
+      () {
+        if (!mounted || _pendingStreamUrlPrefetchIds.isEmpty) return;
+        final ids = _pendingStreamUrlPrefetchIds.toList(growable: false);
+        _pendingStreamUrlPrefetchIds.clear();
+        unawaited(
+          StreamService.prefetchBestAudioUrls(
+            ids,
+            maxConcurrent: _streamRadioUrlPrefetchConcurrency,
+          ),
+        );
+      },
+    );
   }
 
   void _preloadNextStreamingArtworks(int currentIndex) {
@@ -1911,17 +2252,8 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
       final legacyFile = File('${tempDir.path}/yt_stream_art_$videoId.jpg');
       if (await legacyFile.exists() && await legacyFile.length() > 0) {
-        final bytes = await legacyFile.readAsBytes();
-        final decoded = img.decodeImage(bytes);
-        if (decoded != null) {
-          final square = _buildStreamingSquareCrop(
-            image: decoded,
-            imageUrl: remoteUri.toString(),
-          );
-          await v3File.writeAsBytes(
-            img.encodeJpg(square, quality: 88),
-            flush: false,
-          );
+        await legacyFile.copy(v3File.path);
+        if (await v3File.length() > 0) {
           final uri = Uri.file(v3File.path);
           _streamArtworkFileCache[videoId] = uri;
           return uri;
@@ -1951,45 +2283,6 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     }
   }
 
-  img.Image _buildStreamingSquareCrop({
-    required img.Image image,
-    required String imageUrl,
-  }) {
-    final w = image.width;
-    final h = image.height;
-    if (w <= 0 || h <= 0) return image;
-
-    final ratio = w / h;
-    final isHqLike =
-        imageUrl.contains('hqdefault') || imageUrl.contains('sddefault');
-
-    // Forzar recorte físico: para horizontales aplicamos recorte vertical tipo preview.
-    if (isHqLike || ratio > 1.1) {
-      final contentHeight = (h * 0.75).round();
-      final offsetY = (h - contentHeight) ~/ 2;
-      final side = w < contentHeight ? w : contentHeight;
-      final offsetX = (w - side) ~/ 2;
-      return img.copyCrop(
-        image,
-        x: offsetX,
-        y: offsetY,
-        width: side,
-        height: side,
-      );
-    }
-
-    final side = w < h ? w : h;
-    final offsetX = (w - side) ~/ 2;
-    final offsetY = (h - side) ~/ 2;
-    return img.copyCrop(
-      image,
-      x: offsetX,
-      y: offsetY,
-      width: side,
-      height: side,
-    );
-  }
-
   Future<Uri?> _downloadStreamingArtworkToFile(
     String videoId,
     Uri remoteUri,
@@ -2009,24 +2302,10 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       final bytes = await consolidateHttpClientResponseBytes(response);
       if (bytes.isEmpty) return null;
 
-      List<int> outputBytes = bytes;
-      try {
-        final decoded = img.decodeImage(bytes);
-        if (decoded != null) {
-          final square = _buildStreamingSquareCrop(
-            image: decoded,
-            imageUrl: remoteUri.toString(),
-          );
-          outputBytes = img.encodeJpg(square, quality: 88);
-        }
-      } catch (_) {
-        outputBytes = bytes;
-      }
-
       final tempDir = await getTemporaryDirectory();
-      // v3 invalida archivos previos no recortados que Android pudo cachear.
+      // v3 mantiene nombre estable para invalidar cache viejo del sistema.
       final file = File('${tempDir.path}/yt_stream_art_v3_$videoId.jpg');
-      await file.writeAsBytes(outputBytes, flush: true);
+      await file.writeAsBytes(bytes, flush: true);
       return Uri.file(file.path);
     } catch (_) {
       return null;
@@ -2090,6 +2369,180 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       'item': item,
       'source': AudioSource.uri(Uri.parse(streamUrl)),
     };
+  }
+
+  MediaItem? _buildPendingStreamingMediaItem(Map<String, dynamic> rawTrack) {
+    final videoId = rawTrack['videoId']?.toString().trim();
+    if (videoId == null || videoId.isEmpty) return null;
+
+    final rawDuration = rawTrack['durationMs'];
+    int? durationMs;
+    if (rawDuration is int) {
+      durationMs = rawDuration;
+    } else if (rawDuration is String) {
+      durationMs = int.tryParse(rawDuration);
+    }
+
+    final title = rawTrack['title']?.toString().trim();
+    final artist = rawTrack['artist']?.toString().trim();
+    final artUriRaw = rawTrack['thumbUrl']?.toString().trim();
+    final resolvedDisplayArtUri = _resolveStreamingDisplayArtUri(
+      preferred: artUriRaw,
+      artUri: (artUriRaw != null && artUriRaw.isNotEmpty)
+          ? Uri.tryParse(artUriRaw)
+          : null,
+      videoId: videoId,
+    );
+
+    return MediaItem(
+      id: 'yt:$videoId',
+      title: (title != null && title.isNotEmpty) ? title : 'Unknown title',
+      artist: (artist != null && artist.isNotEmpty) ? artist : null,
+      duration: (durationMs != null && durationMs > 0)
+          ? Duration(milliseconds: durationMs)
+          : null,
+      artUri: Uri.tryParse(resolvedDisplayArtUri ?? ''),
+      extras: {
+        'videoId': videoId,
+        'isStreaming': true,
+        'radioMode': true,
+        'pendingStream': true,
+        'displayArtUri': resolvedDisplayArtUri,
+      },
+    );
+  }
+
+  Future<void> _startStreamingAdvanceFromQueueEnd({
+    required int currentIndex,
+  }) async {
+    final int safeIndex = currentIndex.clamp(
+      0,
+      _mediaQueue.isEmpty ? 0 : _mediaQueue.length - 1,
+    );
+    final fallbackItem = (safeIndex >= 0 && safeIndex < _mediaQueue.length)
+        ? _mediaQueue[safeIndex]
+        : null;
+    final int sessionVersion = _streamSessionVersion;
+
+    try {
+      if (_mediaQueue.isEmpty || !_isStreamingMediaItem(_mediaQueue.first)) {
+        return;
+      }
+
+      final currentItem = _mediaQueue[safeIndex];
+      final currentVideoId = currentItem.extras?['videoId']?.toString().trim();
+      final seedVideoId = (currentVideoId != null && currentVideoId.isNotEmpty)
+          ? currentVideoId
+          : _streamRadioSeedVideoId;
+      if (seedVideoId == null || seedVideoId.isEmpty) return;
+
+      final continuationForRequest =
+          (_streamRadioSeedVideoId == null ||
+              _streamRadioSeedVideoId == seedVideoId)
+          ? _streamRadioContinuationParams
+          : null;
+      _streamRadioSeedVideoId = seedVideoId;
+      if (continuationForRequest == null) {
+        _streamRadioContinuationParams = null;
+      }
+
+      _streamRadioAppendInProgress = true;
+      final radioPayload = await yt_service.getWatchRadioTracks(
+        videoId: seedVideoId,
+        limit: 8,
+        additionalParamsNext: continuationForRequest,
+      );
+      if (sessionVersion != _streamSessionVersion) return;
+
+      final nextParams = radioPayload['additionalParamsForNext']
+          ?.toString()
+          .trim();
+      if (nextParams != null && nextParams.isNotEmpty) {
+        _streamRadioContinuationParams = nextParams;
+      }
+
+      final rawTracks = radioPayload['tracks'];
+      if (rawTracks is! List || rawTracks.isEmpty) return;
+
+      Map<String, dynamic>? selectedTrack;
+      for (final rawTrack in rawTracks) {
+        if (rawTrack is! Map) continue;
+        final videoId = rawTrack['videoId']?.toString().trim();
+        if (videoId == null || videoId.isEmpty) continue;
+        if (_streamQueuedVideoIds.contains(videoId)) continue;
+        selectedTrack = Map<String, dynamic>.from(rawTrack);
+        break;
+      }
+      if (selectedTrack == null) return;
+
+      final pendingItem = _buildPendingStreamingMediaItem(selectedTrack);
+      if (pendingItem != null) {
+        mediaItem.add(pendingItem);
+        playbackState.add(
+          playbackState.value.copyWith(
+            processingState: AudioProcessingState.loading,
+          ),
+        );
+      }
+
+      final resolved = await _resolveStreamingRadioTrack(
+        rawTrack: selectedTrack,
+        sessionVersion: sessionVersion,
+      ).timeout(const Duration(seconds: 6), onTimeout: () => null);
+      if (sessionVersion != _streamSessionVersion || resolved == null) return;
+
+      final videoId = resolved['videoId'] as String?;
+      final item = resolved['item'] as MediaItem?;
+      final source = resolved['source'] as AudioSource?;
+      if (videoId == null ||
+          videoId.isEmpty ||
+          item == null ||
+          source == null ||
+          !_streamQueuedVideoIds.add(videoId)) {
+        return;
+      }
+
+      await _appendResolvedStreamingTracks(
+        items: [item],
+        sources: [source],
+        sessionVersion: sessionVersion,
+      );
+      if (sessionVersion != _streamSessionVersion) return;
+
+      final beforeIndex = _player.currentIndex ?? 0;
+      await _player.seekToNext().timeout(
+        const Duration(milliseconds: 900),
+        onTimeout: () {},
+      );
+
+      // Si por timing no avanzó al siguiente índice, saltar directo al agregado.
+      if ((_player.currentIndex ?? -1) == beforeIndex) {
+        final appendedIndex = _mediaQueue.indexWhere(
+          (queueItem) => queueItem.id == item.id,
+        );
+        if (appendedIndex >= 0) {
+          await _player
+              .seek(Duration.zero, index: appendedIndex)
+              .timeout(const Duration(milliseconds: 900), onTimeout: () {});
+        }
+      }
+
+      _updateSleepTimer();
+      if (!_player.playing) {
+        await _player.play();
+      }
+
+      // Rellenar más "up next" en background.
+      _scheduleStreamingRadioQueueEnsure();
+    } catch (_) {
+      // Si falla, restaurar el item actual para no dejar título/artista "fantasma".
+      if (fallbackItem != null) {
+        mediaItem.add(fallbackItem);
+      }
+    } finally {
+      _streamRadioAppendInProgress = false;
+      _isStreamingAdvancePending = false;
+    }
   }
 
   Future<void> _ensureStreamingRadioQueue({bool force = false}) async {
@@ -2163,6 +2616,17 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         candidates.add(Map<String, dynamic>.from(rawTrack));
       }
       if (candidates.isEmpty) return;
+
+      final prefetchVideoIds = <String>[];
+      for (final candidate in candidates) {
+        if (prefetchVideoIds.length >= _streamRadioUrlPrefetchCount) break;
+        final videoId = candidate['videoId']?.toString().trim();
+        if (videoId == null || videoId.isEmpty) continue;
+        prefetchVideoIds.add(videoId);
+      }
+      if (prefetchVideoIds.isNotEmpty) {
+        _debounceStreamUrlPrefetch(prefetchVideoIds);
+      }
 
       final pendingResolvers = <Future<Map<String, dynamic>?>>{};
       final resolvedCandidates = <Map<String, dynamic>>[];
@@ -2563,19 +3027,22 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   void _handleSongChangePause() {
     // Cancelar timer anterior si existe
     _songChangeResumeTimer?.cancel();
+    _songChangeResumeTimer = null;
+
+    final isStreamingQueue =
+        _mediaQueue.isNotEmpty && _isStreamingMediaItem(_mediaQueue.first);
+
+    // En streaming no forzamos pausa+delay para evitar sensación de lentitud
+    // al pasar a la siguiente canción.
+    if (isStreamingQueue) return;
 
     // Si está reproduciéndose, pausar momentáneamente para un cambio suave
     if (_player.playing) {
       _player.pause();
     }
 
-    final delay =
-        (_mediaQueue.isNotEmpty && _isStreamingMediaItem(_mediaQueue.first))
-        ? const Duration(milliseconds: 220)
-        : _songChangeDelay;
-
     // Configurar timer para reanudar después del delay
-    _songChangeResumeTimer = Timer(delay, () {
+    _songChangeResumeTimer = Timer(_songChangeDelay, () {
       // Siempre reanudar/iniciar la reproducción después de un skip manual
       // (cumpliendo con la solicitud del usuario de que inicie la canción aunque esté en pausa)
       if (!_player.playing) {
@@ -2583,6 +3050,94 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       }
       _songChangeResumeTimer = null; // Limpiar referencia al timer
     });
+  }
+
+  Future<bool> _performSkipNext() async {
+    if (_initializing ||
+        _isSkipping ||
+        _isStreamingAdvancePending ||
+        _mediaQueue.isEmpty) {
+      return false;
+    }
+
+    final int? beforeIndex = _player.currentIndex;
+    var moved = false;
+    _isSkipping = true;
+    try {
+      _handleSongChangePause();
+      _pendingArtworkOperations.clear();
+      cancelAllArtworkLoads();
+
+      final int currentIndex = (_player.currentIndex ?? 0).clamp(
+        0,
+        _mediaQueue.length - 1,
+      );
+      final bool isStreamingQueue =
+          _streamRadioEnabled &&
+          _mediaQueue.isNotEmpty &&
+          _isStreamingMediaItem(_mediaQueue.first);
+      final int remaining = (_mediaQueue.length - 1) - currentIndex;
+
+      if (isStreamingQueue && remaining <= 0) {
+        // mostrar metadata nueva ya y resolver stream en background.
+        _isStreamingAdvancePending = true;
+        unawaited(
+          _startStreamingAdvanceFromQueueEnd(currentIndex: currentIndex),
+        );
+        moved = true;
+        return moved;
+      } else if (isStreamingQueue &&
+          remaining <= _streamRadioPrefetchThreshold) {
+        _scheduleStreamingRadioQueueEnsure();
+      }
+
+      final seekTimeout = isStreamingQueue
+          ? _streamingSkipSeekTimeout
+          : const Duration(milliseconds: 650);
+      await _player.seekToNext().timeout(seekTimeout, onTimeout: () {});
+      _updateSleepTimer();
+      moved = (_player.currentIndex ?? -1) != (beforeIndex ?? -1);
+    } catch (_) {
+      // Error silencioso para mantener responsive el skip.
+      moved = false;
+    } finally {
+      _isSkipping = false;
+    }
+    return moved;
+  }
+
+  Future<void> _performSkipPrevious() async {
+    if (_initializing || _isSkipping || _mediaQueue.isEmpty) return;
+
+    _isSkipping = true;
+    try {
+      _handleSongChangePause();
+      _pendingArtworkOperations.clear();
+      cancelAllArtworkLoads();
+
+      final bool isStreamingQueue =
+          _mediaQueue.isNotEmpty && _isStreamingMediaItem(_mediaQueue.first);
+      if (isStreamingQueue) {
+        await _player.seekToPrevious().timeout(
+          _streamingSkipSeekTimeout,
+          onTimeout: () {},
+        );
+      } else if (_player.position.inMilliseconds > 5000) {
+        await _player
+            .seek(Duration.zero)
+            .timeout(const Duration(milliseconds: 500), onTimeout: () {});
+      } else {
+        await _player.seekToPrevious().timeout(
+          const Duration(milliseconds: 650),
+          onTimeout: () {},
+        );
+      }
+      _updateSleepTimer();
+    } catch (_) {
+      // Error silencioso para mantener responsive el skip.
+    } finally {
+      _isSkipping = false;
+    }
   }
 
   @override
@@ -2594,47 +3149,28 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       initializingNotifier.value = false;
     }
 
-    if (_initializing || _isSkipping) return;
+    final isStreamingQueue =
+        _mediaQueue.isNotEmpty && _isStreamingMediaItem(_mediaQueue.first);
 
-    _isSkipping = true;
+    if (_initializing || _isStreamingAdvancePending) return;
 
-    try {
-      // Pausar automáticamente durante el cambio de canción
-      _handleSongChangePause();
-
-      // Cancelar operaciones pendientes antes de cambiar
-      _pendingArtworkOperations.clear();
-      cancelAllArtworkLoads();
-
-      final int currentIndex = (_player.currentIndex ?? 0).clamp(
-        0,
-        _mediaQueue.isEmpty ? 0 : _mediaQueue.length - 1,
-      );
-      final bool isStreamingQueue =
-          _streamRadioEnabled &&
-          _mediaQueue.isNotEmpty &&
-          _isStreamingMediaItem(_mediaQueue.first);
-      final int remaining = (_mediaQueue.length - 1) - currentIndex;
-
-      // Solo bloquear el skip si estamos exactamente al final y no hay
-      // siguiente disponible; en cualquier otro caso, precargar en background.
-      if (isStreamingQueue && remaining <= 0) {
-        await _ensureStreamingRadioQueue(force: true);
-      } else if (isStreamingQueue &&
-          remaining <= _streamRadioPrefetchThreshold) {
-        unawaited(_ensureStreamingRadioQueue());
+    // En streaming, si llega otro tap durante un skip en curso,
+    // intenta avanzar inmediatamente sin encolar acciones.
+    if (_isSkipping) {
+      if (isStreamingQueue) {
+        unawaited(() async {
+          try {
+            await _player.seekToNext().timeout(
+              _streamingSkipSeekTimeout,
+              onTimeout: () {},
+            );
+            _updateSleepTimer();
+          } catch (_) {}
+        }());
       }
-
-      // Timeout corto para no bloquear taps consecutivos en streaming.
-      await _player.seekToNext().timeout(const Duration(milliseconds: 900));
-      _updateSleepTimer();
-
-      // La nueva carátula se cargará automáticamente por el currentIndexStream listener
-    } catch (e) {
-      // print('⚠️ Error en skipToNext: $e');
-    } finally {
-      _isSkipping = false;
+      return;
     }
+    await _performSkipNext();
   }
 
   @override
@@ -2645,30 +3181,28 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       initializingNotifier.value = false;
     }
 
-    if (_initializing || _isSkipping) return;
+    final isStreamingQueue =
+        _mediaQueue.isNotEmpty && _isStreamingMediaItem(_mediaQueue.first);
 
-    _isSkipping = true;
-    try {
-      // Pausar automáticamente durante el cambio de canción
-      _handleSongChangePause();
+    if (_initializing || _isStreamingAdvancePending) return;
 
-      // Cancelar operaciones pendientes antes de cambiar
-      _pendingArtworkOperations.clear();
-      cancelAllArtworkLoads();
-
-      if (_player.position.inMilliseconds > 5000) {
-        await _player.seek(Duration.zero).timeout(const Duration(seconds: 2));
-      } else {
-        await _player.seekToPrevious().timeout(const Duration(seconds: 2));
+    // En streaming, si llega otro tap durante un skip en curso,
+    // intenta retroceder inmediatamente sin encolar acciones.
+    if (_isSkipping) {
+      if (isStreamingQueue) {
+        unawaited(() async {
+          try {
+            await _player.seekToPrevious().timeout(
+              _streamingSkipSeekTimeout,
+              onTimeout: () {},
+            );
+            _updateSleepTimer();
+          } catch (_) {}
+        }());
       }
-      _updateSleepTimer();
-
-      // La nueva carátula se cargará automáticamente por el currentIndexStream listener
-    } catch (e) {
-      // print('⚠️ Error en skipToPrevious: $e');
-    } finally {
-      _isSkipping = false;
+      return;
     }
+    await _performSkipPrevious();
   }
 
   @override
@@ -3359,26 +3893,73 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       }
       return {'ok': false, 'reason': 'missing_stream_url'};
     }
+    if (name == "playYtStreamQueue" ||
+        extras?['action'] == 'playYtStreamQueue') {
+      final dynamic rawItems = extras?['items'];
+      if (rawItems is! List || rawItems.isEmpty) {
+        return {'ok': false, 'reason': 'missing_items'};
+      }
+      final parsedItems = <Map<String, dynamic>>[];
+      for (final entry in rawItems) {
+        if (entry is Map) {
+          parsedItems.add(Map<String, dynamic>.from(entry));
+        }
+      }
+      if (parsedItems.isEmpty) {
+        return {'ok': false, 'reason': 'invalid_items'};
+      }
+      final rawInitialIndex = extras?['initialIndex'];
+      int initialIndex = 0;
+      if (rawInitialIndex is int) {
+        initialIndex = rawInitialIndex;
+      } else if (rawInitialIndex is String) {
+        initialIndex = int.tryParse(rawInitialIndex) ?? 0;
+      }
+      await playStreamingQueue(
+        rawItems: parsedItems,
+        initialIndex: initialIndex,
+        autoPlay: extras?['autoPlay'] != false,
+      );
+      return {'ok': true};
+    }
+    if (name == "addYtStreamToQueue" ||
+        extras?['action'] == 'addYtStreamToQueue') {
+      final videoId = extras?['videoId']?.toString().trim();
+      if (videoId == null || videoId.isEmpty) {
+        return {'ok': false, 'reason': 'missing_video_id'};
+      }
+      await addStreamingItemToQueueEnd(
+        videoId: videoId,
+        title: extras?['title']?.toString(),
+        artist: extras?['artist']?.toString(),
+        artUri: extras?['artUri']?.toString(),
+        streamUrl: extras?['streamUrl']?.toString(),
+      );
+      return {'ok': true};
+    }
     if (name == "favorite" || extras?['action'] == 'favorite') {
       final item = mediaItem.value;
-      final songPath =
-          item?.extras?['data']?.toString().trim().isNotEmpty == true
-          ? item!.extras!['data'].toString().trim()
-          : item?.id;
-      if (songPath != null &&
-          songPath.isNotEmpty &&
-          !songPath.startsWith('yt:')) {
-        final isFav = _favoriteIds.contains(item?.id);
+      if (item == null) return {'ok': false};
+      final songPath = _favoritePathForMediaItem(item);
+      if (songPath.isNotEmpty) {
+        final isFav = _favoriteIds.contains(item.id);
         if (isFav) {
           await FavoritesDB().removeFavorite(songPath);
-          if (item?.id != null) {
-            _favoriteIds.remove(item!.id);
-          }
+          _favoriteIds.remove(item.id);
         } else {
-          await FavoritesDB().addFavoritePath(songPath);
-          if (item?.id != null) {
-            _favoriteIds.add(item!.id);
-          }
+          final displayArtUri = item.extras?['displayArtUri']
+              ?.toString()
+              .trim();
+          await FavoritesDB().addFavoritePath(
+            songPath,
+            title: item.title,
+            artist: item.artist,
+            videoId: item.extras?['videoId']?.toString().trim(),
+            artUri: (displayArtUri != null && displayArtUri.isNotEmpty)
+                ? displayArtUri
+                : item.artUri?.toString(),
+          );
+          _favoriteIds.add(item.id);
         }
         playbackState.add(_transformPlaybackEvent(_player.playbackEvent));
         favoritesShouldReload.value = !favoritesShouldReload.value;

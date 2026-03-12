@@ -325,6 +325,9 @@ const Map<String, String> appLocalizationsEn = {
 
   // Favorites screen
   'favorites': 'Favorites',
+  'streaming_songs': 'Streaming songs',
+  'show_streaming_songs': 'Show streaming songs',
+  'show_local_songs': 'Show local songs',
   'select_all': 'Select all',
   'add': 'Add',
   'add_from_recents': 'Add from recents',
@@ -333,6 +336,7 @@ const Map<String, String> appLocalizationsEn = {
   'search_folders_and_songs': 'Search...',
   'folders_and_songs_info': 'Folders and songs saved on the device.',
   'no_songs': 'No songs',
+  'no_streaming_songs': 'No streaming songs',
   'remove_from_favorites': 'Remove from favorites',
   'unknown_artist': 'Unknown',
   'last_added': 'Last added',
@@ -425,6 +429,7 @@ const Map<String, String> appLocalizationsEn = {
   'youtube_link': 'YouTube Link',
   'in_queue': 'In queue...',
   'paste_link': 'Paste link',
+  'start_radio': 'Start radio',
   'large_playlist_detected': 'Large playlist detected',
   'fetching_playlist_info':
       'Fetching playlist information... (Not downloading yet)',

@@ -8,6 +8,7 @@ class DislikesDB {
   DislikesDB._internal();
 
   Box<String>? _box;
+  Box<Map>? _metaBox;
 
   Future<Box<String>> get box async {
     if (_box != null) return _box!;
@@ -15,17 +16,42 @@ class DislikesDB {
     return _box!;
   }
 
-  Future<void> addDislike(SongModel song) async {
-    final b = await box;
-    if (!b.values.contains(song.data)) {
-      await b.add(song.data);
-    }
+  Future<Box<Map>> get metaBox async {
+    if (_metaBox != null) return _metaBox!;
+    _metaBox = await Hive.openBox<Map>('dislikes_meta');
+    return _metaBox!;
   }
 
-  Future<void> addDislikePath(String path) async {
+  Future<void> addDislike(SongModel song) async {
+    await addDislikePath(song.data, title: song.title, artist: song.artist);
+  }
+
+  Future<void> addDislikePath(
+    String path, {
+    String? title,
+    String? artist,
+    String? videoId,
+    String? artUri,
+  }) async {
     final b = await box;
     if (!b.values.contains(path)) {
       await b.add(path);
+    }
+    final mb = await metaBox;
+    final existingRaw = mb.get(path);
+    final existing = existingRaw == null
+        ? <String, dynamic>{}
+        : Map<String, dynamic>.from(existingRaw);
+    final next = <String, dynamic>{
+      ...existing,
+      if (title != null && title.trim().isNotEmpty) 'title': title.trim(),
+      if (artist != null && artist.trim().isNotEmpty) 'artist': artist.trim(),
+      if (videoId != null && videoId.trim().isNotEmpty)
+        'videoId': videoId.trim(),
+      if (artUri != null && artUri.trim().isNotEmpty) 'artUri': artUri.trim(),
+    };
+    if (next.isNotEmpty) {
+      await mb.put(path, next);
     }
   }
 
@@ -35,6 +61,15 @@ class DislikesDB {
     if (key != null) {
       await b.delete(key);
     }
+    final mb = await metaBox;
+    await mb.delete(path);
+  }
+
+  Future<Map<String, dynamic>?> getDislikeMeta(String path) async {
+    final mb = await metaBox;
+    final raw = mb.get(path);
+    if (raw == null) return null;
+    return Map<String, dynamic>.from(raw);
   }
 
   Future<List<SongModel>> getDislikes() async {

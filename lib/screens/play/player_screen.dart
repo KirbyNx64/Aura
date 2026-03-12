@@ -31,6 +31,7 @@ import 'package:music/utils/gesture_preferences.dart';
 import 'package:music/screens/artist/artist_screen.dart';
 
 import 'package:music/screens/home/equalizer_screen.dart';
+import 'package:music/utils/simple_yt_download.dart';
 import 'package:like_button/like_button.dart';
 import 'package:material_loading_indicator/loading_indicator.dart';
 import 'package:music/utils/db/playlist_model.dart' as hive_model;
@@ -120,6 +121,11 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
   GlobalKey<LikeButtonState> _likeButtonKey = GlobalKey<LikeButtonState>();
   String? _lastArtworkSongId;
   VoidCallback? _gestureListener;
+  Timer? _streamingArtworkDebounceTimer;
+  String? _pendingStreamingArtworkSongKey;
+  static const Duration _streamingArtworkDebounceDelay = Duration(
+    milliseconds: 140,
+  );
 
   // Control de indicadores de doble toque
   bool _showDoubleTapIndicators = false;
@@ -201,33 +207,34 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     return mediaItem.artUri;
   }
 
-  void _debugArtworkSource(MediaItem mediaItem) {
-    final displayUri = _displayArtUriFor(mediaItem);
-    final songPath = mediaItem.extras?['data'] as String?;
-    final cachedUri = songPath != null ? _getCachedArtwork(songPath) : null;
-
-    String source;
-    if (displayUri != null) {
-      final scheme = displayUri.scheme.toLowerCase();
-      if (scheme == 'file' || scheme == 'content' || scheme.isEmpty) {
-        source = 'artUri_local';
-      } else if (scheme == 'http' || scheme == 'https') {
-        source = 'artUri_remote';
-      } else {
-        source = 'artUri_$scheme';
+  void _setStreamingArtworkLoadingDebounced({
+    required bool hasLocalArtUri,
+    required String? songKey,
+  }) {
+    if (hasLocalArtUri) {
+      _streamingArtworkDebounceTimer?.cancel();
+      _streamingArtworkDebounceTimer = null;
+      _pendingStreamingArtworkSongKey = null;
+      if (_artworkLoadingNotifier.value) {
+        _artworkLoadingNotifier.value = false;
       }
-    } else if (cachedUri != null) {
-      source = 'cache_local';
-    } else {
-      source = 'none';
+      return;
     }
 
-    // ignore: avoid_print
-    print(
-      '[artwork-source] title="${mediaItem.title}" id="${mediaItem.id}" '
-      'source=$source displayUri="${displayUri?.toString() ?? 'null'}" '
-      'cachedUri="${cachedUri?.toString() ?? 'null'}"',
-    );
+    _pendingStreamingArtworkSongKey = songKey;
+    _streamingArtworkDebounceTimer?.cancel();
+    _streamingArtworkDebounceTimer = Timer(_streamingArtworkDebounceDelay, () {
+      if (!mounted) return;
+
+      final currentMediaItem = audioHandler?.mediaItem.value;
+      final currentSongKey =
+          currentMediaItem?.extras?['songId']?.toString() ??
+          currentMediaItem?.id;
+      if (songKey != null && currentSongKey != songKey) return;
+      if (_pendingStreamingArtworkSongKey != songKey) return;
+
+      _artworkLoadingNotifier.value = true;
+    });
   }
 
   Widget buildArtwork(MediaItem mediaItem, double size) {
@@ -790,16 +797,19 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     // Recalcular el estado de favorito de la canción actual
     final currentMediaItem = audioHandler?.mediaItem.valueOrNull;
     if (currentMediaItem != null) {
-      final path = currentMediaItem.extras?['data'] as String?;
-      if (path != null && path.isNotEmpty) {
-        FavoritesDB().isFavorite(path).then((isFav) {
-          if (mounted && _currentSongDataPath == path) {
-            setState(() {
-              _isCurrentFavorite = isFav;
-            });
-          }
+      final path = _favoritePathForMediaItem(currentMediaItem).trim();
+      if (path.isEmpty) return;
+      FavoritesDB().isFavorite(path).then((isFav) {
+        if (!mounted) return;
+        final currentPath = _favoritePathForMediaItem(
+          audioHandler?.mediaItem.valueOrNull ?? currentMediaItem,
+        ).trim();
+        if (currentPath != path) return;
+        setState(() {
+          _currentSongDataPath = path;
+          _isCurrentFavorite = isFav;
         });
-      }
+      });
     }
   }
 
@@ -807,24 +817,28 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
   void _onDislikesChanged() {
     final currentMediaItem = audioHandler?.mediaItem.valueOrNull;
     if (currentMediaItem != null) {
-      final path = currentMediaItem.extras?['data'] as String?;
-      if (path != null && path.isNotEmpty) {
-        DislikesDB().isDisliked(path).then((isDislinked) {
-          if (mounted && _currentSongDataPath == path) {
-            setState(() {
-              _isCurrentDisliked = isDislinked;
-            });
-          }
+      final path = _favoritePathForMediaItem(currentMediaItem).trim();
+      if (path.isEmpty) return;
+      DislikesDB().isDisliked(path).then((isDislinked) {
+        if (!mounted) return;
+        final currentPath = _favoritePathForMediaItem(
+          audioHandler?.mediaItem.valueOrNull ?? currentMediaItem,
+        ).trim();
+        if (currentPath != path) return;
+        setState(() {
+          _currentSongDataPath = path;
+          _isCurrentDisliked = isDislinked;
         });
-      }
+      });
     }
   }
 
   Future<void> _toggleDislike() async {
     final currentMediaItem = audioHandler?.mediaItem.valueOrNull;
     if (currentMediaItem == null) return;
-    final path = currentMediaItem.extras?['data'] as String?;
-    if (path == null || path.isEmpty) return;
+    final path = _favoritePathForMediaItem(currentMediaItem).trim();
+    if (path.isEmpty) return;
+    final isStreaming = currentMediaItem.extras?['isStreaming'] == true;
 
     if (_isCurrentDisliked) {
       await DislikesDB().removeDislike(path);
@@ -844,6 +858,30 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
             _isCurrentFavorite = false;
           });
         }
+      }
+
+      if (isStreaming) {
+        final videoId = currentMediaItem.extras?['videoId']?.toString().trim();
+        final displayArtUri = currentMediaItem.extras?['displayArtUri']
+            ?.toString()
+            .trim();
+        final artUri = (displayArtUri != null && displayArtUri.isNotEmpty)
+            ? displayArtUri
+            : currentMediaItem.artUri?.toString();
+        await DislikesDB().addDislikePath(
+          path,
+          title: currentMediaItem.title,
+          artist: currentMediaItem.artist,
+          videoId: videoId,
+          artUri: artUri,
+        );
+        dislikesShouldReload.value = !dislikesShouldReload.value;
+        if (mounted) {
+          setState(() {
+            _isCurrentDisliked = true;
+          });
+        }
+        return;
       }
 
       final allSongs = await _audioQuery.querySongs();
@@ -905,15 +943,14 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
 
   /// Maneja el cambio de carátula cuando cambia la canción
   void _handleArtworkChange(MediaItem? newMediaItem) {
-    final newSongId =
+    final newSongKey =
         newMediaItem?.extras?['songId']?.toString() ?? newMediaItem?.id;
 
-    if (_lastArtworkSongId != newSongId) {
-      _lastArtworkSongId = newSongId;
+    if (_lastArtworkSongId != newSongKey) {
+      _lastArtworkSongId = newSongKey;
 
       // Verificar si la carátula está disponible inmediatamente
       if (newMediaItem != null) {
-        _debugArtworkSource(newMediaItem);
         final songId = newMediaItem.extras?['songId'] as int?;
         final songPath = newMediaItem.extras?['data'] as String?;
         final isStreaming = newMediaItem.extras?['isStreaming'] == true;
@@ -929,8 +966,14 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
         // En streaming, mostrar loading hasta tener carátula local (file/content).
         // En local, mantener el comportamiento previo.
         if (isStreaming) {
-          _artworkLoadingNotifier.value = !hasLocalArtUri;
+          _setStreamingArtworkLoadingDebounced(
+            hasLocalArtUri: hasLocalArtUri,
+            songKey: newSongKey,
+          );
         } else {
+          _streamingArtworkDebounceTimer?.cancel();
+          _streamingArtworkDebounceTimer = null;
+          _pendingStreamingArtworkSongKey = null;
           _artworkLoadingNotifier.value = !hasArtUri && !hasCachedArtwork;
         }
 
@@ -942,6 +985,9 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
           _preloadArtworkInBackground(songId, songPath);
         }
       } else {
+        _streamingArtworkDebounceTimer?.cancel();
+        _streamingArtworkDebounceTimer = null;
+        _pendingStreamingArtworkSongKey = null;
         _artworkLoadingNotifier.value = false;
       }
 
@@ -953,7 +999,12 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
       final artScheme = newMediaItem?.artUri?.scheme.toLowerCase();
       final hasLocalArtUri =
           artScheme == 'file' || artScheme == 'content' || artScheme == '';
-      if (!isStreaming || hasLocalArtUri) {
+      if (isStreaming && hasLocalArtUri) {
+        _streamingArtworkDebounceTimer?.cancel();
+        _streamingArtworkDebounceTimer = null;
+        _pendingStreamingArtworkSongKey = null;
+        _artworkLoadingNotifier.value = false;
+      } else if (!isStreaming) {
         _artworkLoadingNotifier.value = false;
       }
     }
@@ -1013,6 +1064,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
   void dispose() {
     _seekDebounceTimer?.cancel();
     _hideIndicatorsTimer?.cancel();
+    _streamingArtworkDebounceTimer?.cancel();
     _fadeController.dispose();
     _lyricsScrollController.dispose();
     _dragValueSecondsNotifier.dispose();
@@ -1275,7 +1327,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                   ),
                                   FutureBuilder<bool>(
                                     future: FavoritesDB().isFavorite(
-                                      mediaItem.extras?['data'] ?? '',
+                                      _favoritePathForMediaItem(mediaItem),
                                     ),
                                     builder: (context, snapshot) {
                                       final isFav = snapshot.data ?? false;
@@ -1299,7 +1351,13 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                           Navigator.of(context).pop();
 
                                           final path =
-                                              mediaItem.extras?['data'] ?? '';
+                                              _favoritePathForMediaItem(
+                                                mediaItem,
+                                              );
+                                          final isStreaming =
+                                              mediaItem
+                                                  .extras?['isStreaming'] ==
+                                              true;
 
                                           if (isFav) {
                                             await FavoritesDB().removeFavorite(
@@ -1320,6 +1378,35 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                   ),
                                                 );
                                               }
+                                              return;
+                                            }
+
+                                            if (isStreaming) {
+                                              final videoId = mediaItem
+                                                  .extras?['videoId']
+                                                  ?.toString()
+                                                  .trim();
+                                              final displayArtUri = mediaItem
+                                                  .extras?['displayArtUri']
+                                                  ?.toString()
+                                                  .trim();
+                                              final artUri =
+                                                  (displayArtUri != null &&
+                                                      displayArtUri.isNotEmpty)
+                                                  ? displayArtUri
+                                                  : mediaItem.artUri
+                                                        ?.toString();
+
+                                              await FavoritesDB()
+                                                  .addFavoritePath(
+                                                    path,
+                                                    title: mediaItem.title,
+                                                    artist: mediaItem.artist,
+                                                    videoId: videoId,
+                                                    artUri: artUri,
+                                                  );
+                                              favoritesShouldReload.value =
+                                                  !favoritesShouldReload.value;
                                               return;
                                             }
 
@@ -1452,70 +1539,74 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                         );
                                       },
                                     ),
-                                  FutureBuilder<bool>(
-                                    future: ShortcutsDB().isShortcut(
-                                      mediaItem.extras?['data'] ?? '',
-                                    ),
-                                    builder: (context, snapshot) {
-                                      final isCurrentlyPinned =
-                                          snapshot.data ?? false;
-                                      final path =
-                                          mediaItem.extras?['data'] ?? '';
+                                  if (!(mediaItem.extras?['isStreaming'] ==
+                                      true))
+                                    FutureBuilder<bool>(
+                                      future: ShortcutsDB().isShortcut(
+                                        mediaItem.extras?['data'] ?? '',
+                                      ),
+                                      builder: (context, snapshot) {
+                                        final isCurrentlyPinned =
+                                            snapshot.data ?? false;
+                                        final path =
+                                            mediaItem.extras?['data'] ?? '';
 
-                                      return ListTile(
-                                        leading: Icon(
-                                          isCurrentlyPinned
-                                              ? Icons.push_pin
-                                              : Icons.push_pin_outlined,
-                                        ),
-                                        title: Text(
-                                          isCurrentlyPinned
-                                              ? LocaleProvider.tr(
-                                                  'unpin_shortcut',
-                                                )
-                                              : LocaleProvider.tr(
-                                                  'pin_shortcut',
-                                                ),
-                                        ),
-                                        onTap: () async {
-                                          Navigator.of(context).pop();
-
-                                          if (path.isEmpty) {
-                                            if (context.mounted) {
-                                              ScaffoldMessenger.of(
-                                                context,
-                                              ).showSnackBar(
-                                                const SnackBar(
-                                                  content: Text(
-                                                    'No se puede fijar: ruta no disponible',
+                                        return ListTile(
+                                          leading: Icon(
+                                            isCurrentlyPinned
+                                                ? Icons.push_pin
+                                                : Icons.push_pin_outlined,
+                                          ),
+                                          title: Text(
+                                            isCurrentlyPinned
+                                                ? LocaleProvider.tr(
+                                                    'unpin_shortcut',
+                                                  )
+                                                : LocaleProvider.tr(
+                                                    'pin_shortcut',
                                                   ),
-                                                ),
-                                              );
+                                          ),
+                                          onTap: () async {
+                                            Navigator.of(context).pop();
+
+                                            if (path.isEmpty) {
+                                              if (context.mounted) {
+                                                ScaffoldMessenger.of(
+                                                  context,
+                                                ).showSnackBar(
+                                                  const SnackBar(
+                                                    content: Text(
+                                                      'No se puede fijar: ruta no disponible',
+                                                    ),
+                                                  ),
+                                                );
+                                              }
+                                              return;
                                             }
-                                            return;
-                                          }
 
-                                          final shortcutsDB = ShortcutsDB();
+                                            final shortcutsDB = ShortcutsDB();
 
-                                          if (isCurrentlyPinned) {
-                                            // Desfijar de accesos directos
-                                            await shortcutsDB.removeShortcut(
-                                              path,
-                                            );
-                                            // Notificar que los accesos directos han cambiado
-                                            shortcutsShouldReload.value =
-                                                !shortcutsShouldReload.value;
-                                          } else {
-                                            // Fijar en accesos directos
-                                            await shortcutsDB.addShortcut(path);
-                                            // Notificar que los accesos directos han cambiado
-                                            shortcutsShouldReload.value =
-                                                !shortcutsShouldReload.value;
-                                          }
-                                        },
-                                      );
-                                    },
-                                  ),
+                                            if (isCurrentlyPinned) {
+                                              // Desfijar de accesos directos
+                                              await shortcutsDB.removeShortcut(
+                                                path,
+                                              );
+                                              // Notificar que los accesos directos han cambiado
+                                              shortcutsShouldReload.value =
+                                                  !shortcutsShouldReload.value;
+                                            } else {
+                                              // Fijar en accesos directos
+                                              await shortcutsDB.addShortcut(
+                                                path,
+                                              );
+                                              // Notificar que los accesos directos han cambiado
+                                              shortcutsShouldReload.value =
+                                                  !shortcutsShouldReload.value;
+                                            }
+                                          },
+                                        );
+                                      },
+                                    ),
                                   ListTile(
                                     leading: const Icon(Icons.lyrics_outlined),
                                     title: Text(
@@ -1651,20 +1742,53 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                         return const SizedBox.shrink();
                                       }
 
-                                      return ListTile(
-                                        leading: const Icon(Icons.link),
-                                        title: Text(
-                                          LocaleProvider.tr('share_link'),
-                                        ),
-                                        onTap: () async {
-                                          Navigator.of(context).pop();
-                                          await Future<void>.delayed(
-                                            const Duration(milliseconds: 220),
-                                          );
-                                          await SharePlus.instance.share(
-                                            ShareParams(text: shareUrl),
-                                          );
-                                        },
+                                      final isStreaming =
+                                          mediaItem.extras?['isStreaming'] ==
+                                          true;
+
+                                      return Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          ListTile(
+                                            leading: const Icon(Icons.link),
+                                            title: Text(
+                                              LocaleProvider.tr('share_link'),
+                                            ),
+                                            onTap: () async {
+                                              Navigator.of(context).pop();
+                                              await Future<void>.delayed(
+                                                const Duration(
+                                                  milliseconds: 220,
+                                                ),
+                                              );
+                                              await SharePlus.instance.share(
+                                                ShareParams(text: shareUrl),
+                                              );
+                                            },
+                                          ),
+                                          if (isStreaming)
+                                            ListTile(
+                                              leading: const Icon(
+                                                Icons.download_rounded,
+                                              ),
+                                              title: Text(
+                                                LocaleProvider.tr('download'),
+                                              ),
+                                              onTap: () async {
+                                                Navigator.of(context).pop();
+                                                await Future<void>.delayed(
+                                                  const Duration(
+                                                    milliseconds: 220,
+                                                  ),
+                                                );
+                                                if (!mounted) return;
+                                                await _queueStreamingDownload(
+                                                  this.context,
+                                                  mediaItem,
+                                                );
+                                              },
+                                            ),
+                                        ],
                                       );
                                     },
                                   ),
@@ -1754,6 +1878,143 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     return null;
   }
 
+  Future<void> _queueStreamingDownload(
+    BuildContext context,
+    MediaItem mediaItem,
+  ) async {
+    final videoId = mediaItem.extras?['videoId']?.toString().trim();
+    if (videoId == null || videoId.isEmpty) {
+      return;
+    }
+
+    final artist = (mediaItem.artist ?? '').trim().isNotEmpty
+        ? mediaItem.artist!.trim()
+        : LocaleProvider.tr('artist_unknown');
+
+    final downloadQueue = DownloadQueue();
+    await downloadQueue.addToQueue(
+      context: context,
+      videoId: videoId,
+      title: mediaItem.title,
+      artist: artist,
+    );
+    if (!context.mounted) return;
+    await _showDownloadStartedDialog(context);
+  }
+
+  Future<void> _showDownloadStartedDialog(BuildContext context) async {
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => ValueListenableBuilder<AppColorScheme>(
+        valueListenable: colorSchemeNotifier,
+        builder: (context, colorScheme, child) {
+          final isAmoled = colorScheme == AppColorScheme.amoled;
+          final isDark = Theme.of(context).brightness == Brightness.dark;
+          final primaryColor = Theme.of(context).colorScheme.primary;
+
+          return AlertDialog(
+            backgroundColor: isAmoled && isDark
+                ? Colors.black
+                : Theme.of(context).colorScheme.surface,
+            surfaceTintColor: Colors.transparent,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(28),
+              side: isAmoled && isDark
+                  ? const BorderSide(color: Colors.white24, width: 1)
+                  : BorderSide.none,
+            ),
+            contentPadding: const EdgeInsets.fromLTRB(0, 24, 0, 8),
+            content: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: 400,
+                maxHeight: MediaQuery.of(context).size.height * 0.8,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.download_done_rounded,
+                    size: 32,
+                    color: primaryColor,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    LocaleProvider.tr('success'),
+                    style: const TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: Text(
+                      LocaleProvider.tr('download_started'),
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withAlpha(180),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Padding(
+                    padding: const EdgeInsets.only(right: 24, bottom: 8),
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton(
+                        onPressed: () => Navigator.of(dialogContext).pop(),
+                        child: Text(
+                          LocaleProvider.tr('ok'),
+                          style: TextStyle(
+                            color: primaryColor,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  String _favoritePathForMediaItem(MediaItem mediaItem) {
+    final dataPath = mediaItem.extras?['data']?.toString().trim();
+    if (dataPath != null && dataPath.isNotEmpty) {
+      return dataPath;
+    }
+    final videoId = mediaItem.extras?['videoId']?.toString().trim();
+    if (videoId != null && videoId.isNotEmpty) {
+      return 'yt:$videoId';
+    }
+    return mediaItem.id;
+  }
+
+  bool _isStreamingPath(String path) {
+    final normalized = path.trim().toLowerCase();
+    if (normalized.isEmpty) return false;
+    if (normalized.startsWith('/')) return false;
+    if (normalized.startsWith('file://')) return false;
+    if (normalized.startsWith('content://')) return false;
+    return true;
+  }
+
+  bool _playlistMatchesTargetSource(
+    hive_model.PlaylistModel playlist, {
+    required bool forStreaming,
+  }) {
+    if (playlist.songPaths.isEmpty) return true;
+    if (forStreaming) return playlist.songPaths.any(_isStreamingPath);
+    return playlist.songPaths.any((path) => !_isStreamingPath(path));
+  }
+
   Future<void> _addToFavorites(SongModel song) async {
     await FavoritesDB().addFavorite(song);
     favoritesShouldReload.value = !favoritesShouldReload.value;
@@ -1763,7 +2024,14 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     BuildContext safeContext,
     MediaItem mediaItem,
   ) async {
-    final playlists = await PlaylistsDB().getAllPlaylists();
+    final isStreamingTarget = mediaItem.extras?['isStreaming'] == true;
+    final allPlaylists = await PlaylistsDB().getAllPlaylists();
+    final playlists = allPlaylists
+        .where(
+          (p) =>
+              _playlistMatchesTargetSource(p, forStreaming: isStreamingTarget),
+        )
+        .toList();
     final allSongs = await SongsIndexDB().getIndexedSongs();
     final TextEditingController controller = TextEditingController();
 
@@ -1961,6 +2229,49 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                 ).textTheme.titleMedium,
                                               ),
                                               onTap: () async {
+                                                final isStreaming =
+                                                    mediaItem
+                                                        .extras?['isStreaming'] ==
+                                                    true;
+                                                if (isStreaming) {
+                                                  final path =
+                                                      _favoritePathForMediaItem(
+                                                        mediaItem,
+                                                      );
+                                                  final videoId = mediaItem
+                                                      .extras?['videoId']
+                                                      ?.toString()
+                                                      .trim();
+                                                  final displayArtUri = mediaItem
+                                                      .extras?['displayArtUri']
+                                                      ?.toString()
+                                                      .trim();
+                                                  final artUri =
+                                                      (displayArtUri != null &&
+                                                          displayArtUri
+                                                              .isNotEmpty)
+                                                      ? displayArtUri
+                                                      : mediaItem.artUri
+                                                            ?.toString();
+                                                  await PlaylistsDB()
+                                                      .addSongPathToPlaylist(
+                                                        pl.id,
+                                                        path,
+                                                        title: mediaItem.title,
+                                                        artist:
+                                                            mediaItem.artist,
+                                                        videoId: videoId,
+                                                        artUri: artUri,
+                                                      );
+                                                  playlistsShouldReload.value =
+                                                      !playlistsShouldReload
+                                                          .value;
+                                                  if (context.mounted) {
+                                                    Navigator.of(context).pop();
+                                                  }
+                                                  return;
+                                                }
+
                                                 final songList = allSongs
                                                     .where(
                                                       (s) =>
@@ -2267,6 +2578,29 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     if (name.isEmpty) return;
 
     final playlistId = await PlaylistsDB().createPlaylist(name);
+    final isStreaming = mediaItem.extras?['isStreaming'] == true;
+    if (isStreaming) {
+      final path = _favoritePathForMediaItem(mediaItem);
+      final videoId = mediaItem.extras?['videoId']?.toString().trim();
+      final displayArtUri = mediaItem.extras?['displayArtUri']
+          ?.toString()
+          .trim();
+      final artUri = (displayArtUri != null && displayArtUri.isNotEmpty)
+          ? displayArtUri
+          : mediaItem.artUri?.toString();
+      await PlaylistsDB().addSongPathToPlaylist(
+        playlistId,
+        path,
+        title: mediaItem.title,
+        artist: mediaItem.artist,
+        videoId: videoId,
+        artUri: artUri,
+      );
+      playlistsShouldReload.value = !playlistsShouldReload.value;
+      if (context.mounted) Navigator.of(context).pop();
+      return;
+    }
+
     final allSongs = await _audioQuery.querySongs();
     final songList = allSongs
         .where((s) => s.data == (mediaItem.extras?['data'] ?? ''))
@@ -2274,6 +2608,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
 
     if (songList.isNotEmpty) {
       await PlaylistsDB().addSongToPlaylist(playlistId, songList.first);
+      playlistsShouldReload.value = !playlistsShouldReload.value;
       if (context.mounted) Navigator.of(context).pop();
     }
   }
@@ -2696,13 +3031,11 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
           _loadingLyrics = false;
 
           // Calcular favorito y dislike una sola vez por canción para evitar consultas repetidas
-          final path = mediaItem.extras?['data'] as String?;
+          final path = _favoritePathForMediaItem(mediaItem);
           unawaited(() async {
             bool fav = false;
             bool dislike = false;
-            if (path != null &&
-                path.isNotEmpty &&
-                !(mediaItem.extras?['isStreaming'] == true)) {
+            if (path.isNotEmpty) {
               try {
                 fav = await FavoritesDB().isFavorite(path);
                 dislike = await DislikesDB().isDisliked(path);
@@ -3981,10 +4314,13 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                                                   ) async {
                                                                                     if (isLoading) return false;
 
-                                                                                    final path =
-                                                                                        currentMediaItem.extras?['data'] ??
-                                                                                        '';
+                                                                                    final path = _favoritePathForMediaItem(
+                                                                                      currentMediaItem,
+                                                                                    );
                                                                                     if (path.isEmpty) return false;
+                                                                                    final isStreaming =
+                                                                                        currentMediaItem.extras?['isStreaming'] ==
+                                                                                        true;
 
                                                                                     if (isLiked) {
                                                                                       await FavoritesDB().removeFavorite(
@@ -3999,6 +4335,32 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                                                       );
                                                                                       return false;
                                                                                     } else {
+                                                                                      if (isStreaming) {
+                                                                                        final videoId = currentMediaItem.extras?['videoId']?.toString().trim();
+                                                                                        final displayArtUri = currentMediaItem.extras?['displayArtUri']?.toString().trim();
+                                                                                        final artUri =
+                                                                                            (displayArtUri !=
+                                                                                                    null &&
+                                                                                                displayArtUri.isNotEmpty)
+                                                                                            ? displayArtUri
+                                                                                            : currentMediaItem.artUri?.toString();
+                                                                                        await FavoritesDB().addFavoritePath(
+                                                                                          path,
+                                                                                          title: currentMediaItem.title,
+                                                                                          artist: currentMediaItem.artist,
+                                                                                          videoId: videoId,
+                                                                                          artUri: artUri,
+                                                                                        );
+                                                                                        favoritesShouldReload.value = !favoritesShouldReload.value;
+                                                                                        if (!mounted) return false;
+                                                                                        setState(
+                                                                                          () {
+                                                                                            _isCurrentFavorite = true;
+                                                                                          },
+                                                                                        );
+                                                                                        return true;
+                                                                                      }
+
                                                                                       final allSongs = await _audioQuery.querySongs();
                                                                                       final songList = allSongs
                                                                                           .where(
@@ -4269,6 +4631,89 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                           valueListenable:
                                                               playLoadingNotifier,
                                                           builder: (context, isLoading, _) {
+                                                            final isStreaming =
+                                                                currentMediaItem
+                                                                    .extras?['isStreaming'] ==
+                                                                true;
+
+                                                            if (isStreaming) {
+                                                              return AnimatedTapButton(
+                                                                onTap: isLoading
+                                                                    ? () {}
+                                                                    : () async {
+                                                                        await _queueStreamingDownload(
+                                                                          context,
+                                                                          currentMediaItem,
+                                                                        );
+                                                                      },
+                                                                child: Container(
+                                                                  decoration: BoxDecoration(
+                                                                    color: Theme.of(context)
+                                                                        .colorScheme
+                                                                        .primary
+                                                                        .withValues(
+                                                                          alpha:
+                                                                              0.08,
+                                                                        ),
+                                                                    borderRadius:
+                                                                        BorderRadius.circular(
+                                                                          26,
+                                                                        ),
+                                                                  ),
+                                                                  padding: EdgeInsets.symmetric(
+                                                                    horizontal:
+                                                                        isSmall
+                                                                        ? 12
+                                                                        : 14,
+                                                                    vertical: 6,
+                                                                  ),
+                                                                  margin: EdgeInsets.only(
+                                                                    right:
+                                                                        isSmall
+                                                                        ? 8
+                                                                        : 12,
+                                                                  ),
+                                                                  child: Row(
+                                                                    children: [
+                                                                      Icon(
+                                                                        Icons
+                                                                            .download_rounded,
+                                                                        color: Theme.of(
+                                                                          context,
+                                                                        ).colorScheme.onSurface,
+                                                                        size:
+                                                                            isSmall
+                                                                            ? 20
+                                                                            : 24,
+                                                                      ),
+                                                                      SizedBox(
+                                                                        width:
+                                                                            isSmall
+                                                                            ? 6
+                                                                            : 8,
+                                                                      ),
+                                                                      Text(
+                                                                        LocaleProvider.tr(
+                                                                          'download',
+                                                                        ),
+                                                                        style: TextStyle(
+                                                                          color: Theme.of(
+                                                                            context,
+                                                                          ).colorScheme.onSurface,
+                                                                          fontWeight:
+                                                                              FontWeight.w600,
+                                                                          fontSize:
+                                                                              isSmall
+                                                                              ? 12
+                                                                              : 14,
+                                                                        ),
+                                                                      ),
+                                                                    ],
+                                                                  ),
+                                                                ),
+                                                              );
+                                                            }
+
                                                             return AnimatedTapButton(
                                                               onTap: isLoading
                                                                   ? () {}
@@ -4460,6 +4905,27 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                               onTap: isLoading
                                                                   ? () {}
                                                                   : () async {
+                                                                      final isStreaming =
+                                                                          currentMediaItem
+                                                                              .extras?['isStreaming'] ==
+                                                                          true;
+                                                                      if (isStreaming) {
+                                                                        final shareUrl =
+                                                                            await _resolveShareUrl(
+                                                                              currentMediaItem,
+                                                                            );
+                                                                        if (shareUrl !=
+                                                                                null &&
+                                                                            shareUrl.isNotEmpty) {
+                                                                          await SharePlus.instance.share(
+                                                                            ShareParams(
+                                                                              text: shareUrl,
+                                                                            ),
+                                                                          );
+                                                                        }
+                                                                        return;
+                                                                      }
+
                                                                       final dataPath =
                                                                           currentMediaItem.extras?['data']
                                                                               as String?;

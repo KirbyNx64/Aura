@@ -1,10 +1,37 @@
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import 'package:music/utils/db/stream_cache_db.dart';
+import 'dart:io';
 
 class StreamService {
   static final Map<String, String?> _urlCache = {};
   static final Map<String, Future<String?>> _inFlightRequests = {};
   static StreamCacheDB? _cacheDB;
+  static YoutubeExplode? _ytInstance;
+  static const int _maxPrefetchConcurrency = 8;
+
+  static YoutubeExplode _getYoutubeExplode() {
+    _ytInstance ??= YoutubeExplode();
+    return _ytInstance!;
+  }
+
+  static void _recreateYoutubeExplode() {
+    try {
+      _ytInstance?.close();
+    } catch (_) {}
+    _ytInstance = YoutubeExplode();
+  }
+
+  static bool _shouldRecreateClient(Object error) {
+    if (error is SocketException || error is HttpException) return true;
+    final message = error.toString().toLowerCase();
+    return message.contains('connection closed') ||
+        message.contains('connection reset') ||
+        message.contains('broken pipe') ||
+        message.contains('timeout') ||
+        message.contains('timed out') ||
+        message.contains('header was received') ||
+        message.contains('client is closed');
+  }
 
   /// Inicializa la base de datos de cache
   static Future<void> _initCache() async {
@@ -72,41 +99,86 @@ class StreamService {
     return streamUrl;
   }
 
+  /// Precarga URLs de audio para calentar caché en memoria/DB sin bloquear la UI.
+  static Future<void> prefetchBestAudioUrls(
+    List<String> videoIds, {
+    int maxConcurrent = 3,
+  }) async {
+    await _initCache();
+    if (videoIds.isEmpty) return;
+
+    final uniqueIds = <String>{};
+    final pendingIds = <String>[];
+    for (final rawId in videoIds) {
+      final videoId = rawId.trim();
+      if (videoId.isEmpty || !uniqueIds.add(videoId)) continue;
+
+      final cached = _urlCache[videoId];
+      if (cached != null && cached.isNotEmpty) continue;
+
+      pendingIds.add(videoId);
+    }
+    if (pendingIds.isEmpty) return;
+
+    final int concurrency = maxConcurrent.clamp(1, _maxPrefetchConcurrency);
+    var cursor = 0;
+
+    Future<void> worker() async {
+      while (true) {
+        if (cursor >= pendingIds.length) return;
+        final int index = cursor++;
+        final videoId = pendingIds[index];
+        try {
+          await getBestAudioUrl(videoId);
+        } catch (_) {
+          // La precarga es best-effort; errores se ignoran.
+        }
+      }
+    }
+
+    await Future.wait(List.generate(concurrency, (_) => worker()));
+  }
+
   /// Obtiene información completa del mejor stream de audio
   static Future<Map<String, dynamic>?> _getBestAudioStreamInfo(
     String videoId,
   ) async {
-    final yt = YoutubeExplode();
-    try {
-      final manifest = await yt.videos.streamsClient.getManifest(videoId);
-      final audio =
-          manifest.audioOnly
-              .where(
-                (s) =>
-                    s.codec.mimeType == 'audio/mp4' ||
-                    s.codec.toString().contains('mp4a'),
-              )
-              .toList()
-            ..sort((a, b) => b.bitrate.compareTo(a.bitrate));
+    for (int attempt = 0; attempt < 2; attempt++) {
+      try {
+        final yt = _getYoutubeExplode();
+        final manifest = await yt.videos.streamsClient.getManifest(videoId);
+        final audio =
+            manifest.audioOnly
+                .where(
+                  (s) =>
+                      s.codec.mimeType == 'audio/mp4' ||
+                      s.codec.toString().contains('mp4a'),
+                )
+                .toList()
+              ..sort((a, b) => b.bitrate.compareTo(a.bitrate));
 
-      if (audio.isEmpty) return null;
+        if (audio.isEmpty) return null;
 
-      final bestAudio = audio.first;
-      return {
-        'url': bestAudio.url.toString(),
-        'itag': bestAudio.tag,
-        'codec': bestAudio.codec.toString(),
-        'bitrate': bestAudio.bitrate.bitsPerSecond,
-        'size': bestAudio.size.totalBytes,
-        'duration': bestAudio.duration,
-        'loudnessDb':
-            0.0, // YouTube no proporciona esta información directamente
-      };
-    } catch (_) {
-      return null;
-    } finally {
-      yt.close();
+        final bestAudio = audio.first;
+        return {
+          'url': bestAudio.url.toString(),
+          'itag': bestAudio.tag,
+          'codec': bestAudio.codec.toString(),
+          'bitrate': bestAudio.bitrate.bitsPerSecond,
+          'size': bestAudio.size.totalBytes,
+          'duration': bestAudio.duration,
+          'loudnessDb':
+              0.0, // YouTube no proporciona esta información directamente
+        };
+      } catch (e) {
+        if (attempt == 0 && _shouldRecreateClient(e)) {
+          _recreateYoutubeExplode();
+          continue;
+        }
+        return null;
+      }
     }
+    return null;
   }
 
   /// Limpia el cache de streams expirados
@@ -132,5 +204,9 @@ class StreamService {
   static Future<void> close() async {
     await _cacheDB?.close();
     _cacheDB = null;
+    try {
+      _ytInstance?.close();
+    } catch (_) {}
+    _ytInstance = null;
   }
 }

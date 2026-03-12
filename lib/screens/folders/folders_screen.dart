@@ -25,6 +25,7 @@ import 'package:mini_music_visualizer/mini_music_visualizer.dart';
 // import 'package:music/widgets/hero_cached.dart';
 import 'package:music/widgets/artwork_list_tile.dart';
 import 'package:music/utils/db/playlist_model.dart' as hive_model;
+import 'package:music/utils/yt_search/stream_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:music/widgets/song_info_dialog.dart';
@@ -40,8 +41,98 @@ enum OrdenCarpetas {
   fechaEdicionDesc, // Más recientes primero
 }
 
+enum PlaylistSource { local, streaming }
+
 OrdenCarpetas _orden = OrdenCarpetas.normal;
 OrdenCarpetas _ordenPlaylist = OrdenCarpetas.normal;
+
+class _StreamingPlaylistItem {
+  final String rawPath;
+  final String title;
+  final String artist;
+  final String? videoId;
+  final String? artUri;
+
+  const _StreamingPlaylistItem({
+    required this.rawPath,
+    required this.title,
+    required this.artist,
+    this.videoId,
+    this.artUri,
+  });
+}
+
+class _StreamingArtwork extends StatefulWidget {
+  final List<String> sources;
+  final Color backgroundColor;
+  final Color iconColor;
+
+  const _StreamingArtwork({
+    required this.sources,
+    required this.backgroundColor,
+    required this.iconColor,
+  });
+
+  @override
+  State<_StreamingArtwork> createState() => _StreamingArtworkState();
+}
+
+class _StreamingArtworkState extends State<_StreamingArtwork> {
+  int _sourceIndex = 0;
+
+  void _tryNextSource() {
+    if (_sourceIndex >= widget.sources.length - 1) return;
+    if (!mounted) return;
+    setState(() {
+      _sourceIndex++;
+    });
+  }
+
+  Widget _buildFallback() {
+    return Container(
+      color: widget.backgroundColor,
+      child: Icon(Icons.music_note_rounded, color: widget.iconColor),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.sources.isEmpty || _sourceIndex >= widget.sources.length) {
+      return _buildFallback();
+    }
+
+    final currentSource = widget.sources[_sourceIndex];
+    final lower = currentSource.toLowerCase();
+
+    if (lower.startsWith('file://') || currentSource.startsWith('/')) {
+      final filePath = lower.startsWith('file://')
+          ? (Uri.tryParse(currentSource)?.toFilePath() ?? '')
+          : currentSource;
+      if (filePath.isEmpty) {
+        _tryNextSource();
+        return _buildFallback();
+      }
+
+      return Image.file(
+        File(filePath),
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) {
+          _tryNextSource();
+          return _buildFallback();
+        },
+      );
+    }
+
+    return Image.network(
+      currentSource,
+      fit: BoxFit.cover,
+      errorBuilder: (context, error, stackTrace) {
+        _tryNextSource();
+        return _buildFallback();
+      },
+    );
+  }
+}
 
 class FoldersScreen extends StatefulWidget {
   const FoldersScreen({super.key});
@@ -69,12 +160,16 @@ class _FoldersScreenState extends State<FoldersScreen>
   List<SongModel> _displaySongs =
       []; // Canciones que se muestran en la UI (filtradas por búsqueda)
   List<SongModel> _originalSongs = []; // Lista original para restaurar orden
+  List<_StreamingPlaylistItem> _originalPlaylistStreamingItems = [];
+  List<_StreamingPlaylistItem> _playlistStreamingItems = [];
+  List<_StreamingPlaylistItem> _filteredPlaylistStreamingItems = [];
 
   // Variable para controlar si se muestran todas las canciones vs carpetas
   bool _showAllSongs = false;
 
   // Variables para la vista de playlists
   bool _showPlaylists = false;
+  PlaylistSource _playlistSource = PlaylistSource.local;
   List<hive_model.PlaylistModel> _playlists = [];
   List<hive_model.PlaylistModel> _filteredPlaylists = [];
   List<SongModel> _allSongsForGrid = [];
@@ -474,6 +569,99 @@ class _FoldersScreenState extends State<FoldersScreen>
         _ordenPlaylist = OrdenCarpetas.values[savedPlaylistIndex];
       });
     }
+  }
+
+  void _togglePlaylistSource() {
+    setState(() {
+      _playlistSource = _playlistSource == PlaylistSource.local
+          ? PlaylistSource.streaming
+          : PlaylistSource.local;
+      _applyPlaylistFilters();
+    });
+  }
+
+  bool _isStreamingPath(String path) {
+    final normalized = path.trim().toLowerCase();
+    if (normalized.isEmpty) return false;
+    if (normalized.startsWith('/')) return false;
+    if (normalized.startsWith('file://')) return false;
+    if (normalized.startsWith('content://')) return false;
+    return true;
+  }
+
+  String? _extractVideoIdFromPath(String rawPath) {
+    final path = rawPath.trim();
+    if (path.isEmpty) return null;
+
+    if (path.startsWith('yt:')) {
+      final id = path.substring(3).trim();
+      return id.isEmpty ? null : id;
+    }
+
+    final uri = Uri.tryParse(path);
+    if (uri != null) {
+      final queryVideoId = uri.queryParameters['v']?.trim();
+      if (queryVideoId != null && queryVideoId.isNotEmpty) {
+        return queryVideoId;
+      }
+      if (uri.host.contains('youtu.be') && uri.pathSegments.isNotEmpty) {
+        final shortId = uri.pathSegments.first.trim();
+        if (shortId.isNotEmpty) {
+          return shortId;
+        }
+      }
+    }
+
+    final idLike = RegExp(r'^[a-zA-Z0-9_-]{11}$');
+    if (idLike.hasMatch(path)) return path;
+    return null;
+  }
+
+  List<String> _streamingArtworkSources(_StreamingPlaylistItem item) {
+    final sources = <String>[];
+    final rawArt = item.artUri?.trim();
+    if (rawArt != null && rawArt.isNotEmpty && rawArt != 'null') {
+      sources.add(rawArt);
+    }
+    final id = item.videoId?.trim();
+    if (id != null && id.isNotEmpty) {
+      sources.addAll([
+        'https://img.youtube.com/vi/$id/maxresdefault.jpg',
+        'https://img.youtube.com/vi/$id/sddefault.jpg',
+        'https://i.ytimg.com/vi/$id/hqdefault.jpg',
+      ]);
+    }
+    return sources.toSet().toList();
+  }
+
+  bool _playlistMatchesCurrentSource(hive_model.PlaylistModel playlist) {
+    return _playlistMatchesTargetSource(
+      playlist,
+      forStreaming: _playlistSource == PlaylistSource.streaming,
+    );
+  }
+
+  bool _playlistMatchesTargetSource(
+    hive_model.PlaylistModel playlist, {
+    required bool forStreaming,
+  }) {
+    if (playlist.songPaths.isEmpty) return true;
+    if (forStreaming) return playlist.songPaths.any(_isStreamingPath);
+    return playlist.songPaths.any((path) => !_isStreamingPath(path));
+  }
+
+  void _applyPlaylistFilters() {
+    final query = _playlistSearchController.text.trim().toLowerCase();
+    final sourceFiltered = _playlists
+        .where(_playlistMatchesCurrentSource)
+        .toList();
+    if (query.isEmpty) {
+      _filteredPlaylists = sourceFiltered;
+      return;
+    }
+    _filteredPlaylists = sourceFiltered
+        .where((p) => p.name.toLowerCase().contains(query))
+        .toList();
   }
 
   Future<void> _saveOrderFilter() async {
@@ -1349,8 +1537,42 @@ class _FoldersScreenState extends State<FoldersScreen>
     }
   }
 
+  void _aplicarOrdenamientoStreaming(List<_StreamingPlaylistItem> lista) {
+    final ordenActual = _selectedPlaylist != null ? _ordenPlaylist : _orden;
+    switch (ordenActual) {
+      case OrdenCarpetas.normal:
+        lista
+          ..clear()
+          ..addAll(_originalPlaylistStreamingItems);
+        break;
+      case OrdenCarpetas.alfabetico:
+        lista.sort((a, b) => a.title.compareTo(b.title));
+        break;
+      case OrdenCarpetas.invertido:
+        lista.sort((a, b) => b.title.compareTo(a.title));
+        break;
+      case OrdenCarpetas.ultimoAgregado:
+        lista
+          ..clear()
+          ..addAll(_originalPlaylistStreamingItems.reversed);
+        break;
+      case OrdenCarpetas.fechaEdicionAsc:
+      case OrdenCarpetas.fechaEdicionDesc:
+        // No aplica para streaming: mantener orden actual/base.
+        break;
+    }
+  }
+
   // Modificar _ordenarCanciones y _onSearchChanged para ser async y esperar el ordenamiento
   Future<void> _ordenarCanciones() async {
+    if (_selectedPlaylist != null &&
+        _playlistSource == PlaylistSource.streaming) {
+      _aplicarOrdenamientoStreaming(_playlistStreamingItems);
+      _saveOrderFilter();
+      await _onSearchChanged();
+      return;
+    }
+
     await _aplicarOrdenamiento(_filteredSongs);
     _saveOrderFilter();
     await _onSearchChanged();
@@ -1358,6 +1580,30 @@ class _FoldersScreenState extends State<FoldersScreen>
 
   Future<void> _onSearchChanged() async {
     final query = quitarDiacriticos(_searchController.text.toLowerCase());
+
+    if (_selectedPlaylist != null &&
+        _playlistSource == PlaylistSource.streaming) {
+      if (query.isEmpty) {
+        setState(() {
+          _filteredPlaylistStreamingItems = [];
+        });
+        return;
+      }
+      setState(() {
+        _filteredPlaylistStreamingItems = _playlistStreamingItems.where((item) {
+          final title = quitarDiacriticos(item.title);
+          final artist = quitarDiacriticos(item.artist);
+          final rawPath = quitarDiacriticos(item.rawPath);
+          final videoId = quitarDiacriticos(item.videoId ?? '');
+          return title.contains(query) ||
+              artist.contains(query) ||
+              rawPath.contains(query) ||
+              videoId.contains(query);
+        }).toList();
+      });
+      return;
+    }
+
     final allSongsOrdered = List<SongModel>.from(_originalSongs);
     await _aplicarOrdenamiento(allSongsOrdered);
     _filteredSongs = allSongsOrdered;
@@ -1376,6 +1622,529 @@ class _FoldersScreenState extends State<FoldersScreen>
     setState(() {
       _displaySongs = displayList;
     });
+  }
+
+  Future<void> _playStreamingPlaylistItem(_StreamingPlaylistItem item) async {
+    if (playLoadingNotifier.value) return;
+    final targetVideoId = item.videoId?.trim();
+    if (targetVideoId == null || targetVideoId.isEmpty) return;
+
+    playLoadingNotifier.value = true;
+    openPlayerPanelNotifier.value = true;
+    try {
+      final handler = audioHandler;
+      if (handler == null) return;
+      final visibleList = _searchController.text.isNotEmpty
+          ? _filteredPlaylistStreamingItems
+          : _playlistStreamingItems;
+      final queueItems = visibleList
+          .where((entry) => (entry.videoId?.trim().isNotEmpty ?? false))
+          .map((entry) {
+            final entryVideoId = entry.videoId!.trim();
+            final entryArtUri = entry.artUri?.trim().isNotEmpty == true
+                ? entry.artUri!.trim()
+                : 'https://i.ytimg.com/vi/$entryVideoId/hqdefault.jpg';
+            return <String, dynamic>{
+              'videoId': entryVideoId,
+              'title': entry.title.trim().isNotEmpty
+                  ? entry.title.trim()
+                  : LocaleProvider.tr('title_unknown'),
+              'artist': entry.artist.trim().isNotEmpty
+                  ? entry.artist.trim()
+                  : LocaleProvider.tr('artist_unknown'),
+              'artUri': entryArtUri,
+            };
+          })
+          .toList();
+      if (queueItems.isEmpty) return;
+      int initialQueueIndex = queueItems.indexWhere(
+        (entry) => entry['videoId'] == targetVideoId,
+      );
+      if (initialQueueIndex < 0) initialQueueIndex = 0;
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+        'last_queue_source',
+        _selectedPlaylist?.name ?? LocaleProvider.tr('playlists'),
+      );
+
+      await handler.customAction('playYtStreamQueue', {
+        'items': queueItems,
+        'initialIndex': initialQueueIndex,
+        'autoPlay': true,
+      });
+    } finally {
+      playLoadingNotifier.value = false;
+    }
+  }
+
+  Future<void> _startStreamingRadioFromItem(_StreamingPlaylistItem item) async {
+    final videoId = item.videoId?.trim();
+    if (videoId == null || videoId.isEmpty) return;
+    if (playLoadingNotifier.value) return;
+
+    playLoadingNotifier.value = true;
+    openPlayerPanelNotifier.value = true;
+    try {
+      final streamUrl = await StreamService.getBestAudioUrl(
+        videoId,
+      ).timeout(const Duration(seconds: 10));
+      if (streamUrl == null || streamUrl.isEmpty) return;
+      final artUri = item.artUri?.trim().isNotEmpty == true
+          ? item.artUri!.trim()
+          : 'https://i.ytimg.com/vi/$videoId/hqdefault.jpg';
+
+      await audioHandler.myHandler?.customAction('playYtStream', {
+        'streamUrl': streamUrl,
+        'videoId': videoId,
+        'mediaId': 'yt:$videoId',
+        'title': item.title.trim().isNotEmpty
+            ? item.title.trim()
+            : LocaleProvider.tr('title_unknown'),
+        'artist': item.artist.trim().isNotEmpty
+            ? item.artist.trim()
+            : LocaleProvider.tr('artist_unknown'),
+        'artUri': artUri,
+        'radioMode': true,
+        'autoPlay': true,
+      });
+    } finally {
+      playLoadingNotifier.value = false;
+    }
+  }
+
+  String _streamingDisplayUrl(_StreamingPlaylistItem item) {
+    final id = item.videoId?.trim();
+    if (id != null && id.isNotEmpty) {
+      return 'https://www.youtube.com/watch?v=$id';
+    }
+    return item.rawPath;
+  }
+
+  Future<void> _searchStreamingOnYouTube(_StreamingPlaylistItem item) async {
+    try {
+      String searchQuery = item.title.trim();
+      final artist = item.artist.trim();
+      if (artist.isNotEmpty &&
+          artist != LocaleProvider.tr('artist_unknown').trim()) {
+        searchQuery = '$artist ${item.title.trim()}';
+      }
+      final encodedQuery = Uri.encodeComponent(searchQuery);
+      final url = Uri.parse(
+        'https://www.youtube.com/results?search_query=$encodedQuery',
+      );
+      if (await canLaunchUrl(url)) {
+        await launchUrl(url, mode: LaunchMode.externalApplication);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _searchStreamingOnYouTubeMusic(
+    _StreamingPlaylistItem item,
+  ) async {
+    try {
+      String searchQuery = item.title.trim();
+      final artist = item.artist.trim();
+      if (artist.isNotEmpty &&
+          artist != LocaleProvider.tr('artist_unknown').trim()) {
+        searchQuery = '$artist ${item.title.trim()}';
+      }
+      final encodedQuery = Uri.encodeComponent(searchQuery);
+      final url = Uri.parse('https://music.youtube.com/search?q=$encodedQuery');
+      if (await canLaunchUrl(url)) {
+        await launchUrl(url, mode: LaunchMode.externalApplication);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _showStreamingSearchOptions(_StreamingPlaylistItem item) async {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return ValueListenableBuilder<AppColorScheme>(
+          valueListenable: colorSchemeNotifier,
+          builder: (context, colorScheme, child) {
+            final isAmoled = colorScheme == AppColorScheme.amoled;
+            final isDark = Theme.of(context).brightness == Brightness.dark;
+            final primaryColor = Theme.of(context).colorScheme.primary;
+
+            return AlertDialog(
+              backgroundColor: isAmoled && isDark
+                  ? Colors.black
+                  : Theme.of(context).colorScheme.surface,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(28),
+                side: isAmoled && isDark
+                    ? const BorderSide(color: Colors.white24, width: 1)
+                    : BorderSide.none,
+              ),
+              contentPadding: const EdgeInsets.fromLTRB(0, 24, 0, 8),
+              content: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: 400,
+                  maxHeight: MediaQuery.of(context).size.height * 0.8,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.search_rounded, size: 32),
+                    const SizedBox(height: 16),
+                    TranslatedText(
+                      'search_song',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w500,
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    _buildActionOption(
+                      context: context,
+                      title: 'YouTube',
+                      leading: Image.asset(
+                        'assets/icon/Youtube_logo.png',
+                        width: 24,
+                        height: 24,
+                      ),
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        _searchStreamingOnYouTube(item);
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    _buildActionOption(
+                      context: context,
+                      title: 'YT Music',
+                      leading: Image.asset(
+                        'assets/icon/Youtube_Music_icon.png',
+                        width: 24,
+                        height: 24,
+                      ),
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        _searchStreamingOnYouTubeMusic(item);
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    Padding(
+                      padding: const EdgeInsets.only(right: 24, bottom: 8),
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          child: TranslatedText(
+                            'cancel',
+                            style: TextStyle(
+                              color: primaryColor,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _handleStreamingPlaylistLongPress(
+    BuildContext context,
+    _StreamingPlaylistItem item,
+  ) async {
+    final isFavorite = await FavoritesDB().isFavorite(item.rawPath);
+    if (!context.mounted) return;
+    final isAmoled =
+        Theme.of(context).brightness == Brightness.dark &&
+        Theme.of(context).colorScheme.surface == Colors.black;
+    final videoUrl = _streamingDisplayUrl(item);
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (context) {
+        final maxHeight =
+            MediaQuery.of(context).size.height -
+            MediaQuery.of(context).padding.top;
+        return Container(
+          constraints: BoxConstraints(maxHeight: maxHeight),
+          child: SafeArea(
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    child: Row(
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: SizedBox(
+                            width: 60,
+                            height: 60,
+                            child: _StreamingArtwork(
+                              sources: _streamingArtworkSources(item),
+                              backgroundColor: Theme.of(
+                                context,
+                              ).colorScheme.surfaceContainerHigh,
+                              iconColor: Theme.of(
+                                context,
+                              ).colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                item.title,
+                                maxLines: 1,
+                                style: Theme.of(context).textTheme.titleMedium,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                item.artist,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: isAmoled
+                                      ? Colors.white.withValues(alpha: 0.85)
+                                      : null,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        GestureDetector(
+                          onTap: () async {
+                            Navigator.of(context).pop();
+                            await _showStreamingSearchOptions(item);
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 8,
+                            ),
+                            decoration: BoxDecoration(
+                              color:
+                                  Theme.of(context).brightness ==
+                                      Brightness.dark
+                                  ? Theme.of(context).colorScheme.primary
+                                  : Theme.of(context)
+                                        .colorScheme
+                                        .onPrimaryContainer
+                                        .withValues(alpha: 0.7),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.search,
+                                  size: 20,
+                                  color:
+                                      Theme.of(context).brightness ==
+                                          Brightness.dark
+                                      ? Theme.of(context).colorScheme.onPrimary
+                                      : Theme.of(
+                                          context,
+                                        ).colorScheme.surfaceContainer,
+                                ),
+                                const SizedBox(width: 8),
+                                TranslatedText(
+                                  'search',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 14,
+                                    color:
+                                        Theme.of(context).brightness ==
+                                            Brightness.dark
+                                        ? Theme.of(
+                                            context,
+                                          ).colorScheme.onPrimary
+                                        : Theme.of(
+                                            context,
+                                          ).colorScheme.surfaceContainer,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.sensors),
+                    title: TranslatedText('start_radio'),
+                    onTap: () async {
+                      Navigator.of(context).pop();
+                      await _startStreamingRadioFromItem(item);
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.queue_music),
+                    title: TranslatedText('add_to_queue'),
+                    onTap: () async {
+                      Navigator.of(context).pop();
+                      final videoId = item.videoId?.trim();
+                      if (videoId == null || videoId.isEmpty) return;
+                      final artUri = item.artUri?.trim().isNotEmpty == true
+                          ? item.artUri!.trim()
+                          : 'https://i.ytimg.com/vi/$videoId/hqdefault.jpg';
+                      await audioHandler.myHandler
+                          ?.customAction('addYtStreamToQueue', {
+                            'videoId': videoId,
+                            'title': item.title,
+                            'artist': item.artist,
+                            'artUri': artUri,
+                          });
+                    },
+                  ),
+                  ListTile(
+                    leading: Icon(
+                      isFavorite
+                          ? Icons.delete_outline
+                          : Icons.favorite_outline_rounded,
+                      weight: isFavorite ? null : 600,
+                    ),
+                    title: TranslatedText(
+                      isFavorite ? 'remove_from_favorites' : 'add_to_favorites',
+                    ),
+                    onTap: () async {
+                      Navigator.of(context).pop();
+                      if (isFavorite) {
+                        await FavoritesDB().removeFavorite(item.rawPath);
+                      } else {
+                        await FavoritesDB().addFavoritePath(
+                          item.rawPath,
+                          title: item.title,
+                          artist: item.artist,
+                          videoId: item.videoId,
+                          artUri: item.artUri,
+                        );
+                      }
+                      favoritesShouldReload.value =
+                          !favoritesShouldReload.value;
+                    },
+                  ),
+                  if (_selectedPlaylist != null)
+                    ListTile(
+                      leading: const Icon(Icons.delete_outline),
+                      title: TranslatedText('remove_from_playlist'),
+                      onTap: () async {
+                        Navigator.of(context).pop();
+                        await PlaylistsDB().removeSongFromPlaylist(
+                          _selectedPlaylist!.id,
+                          item.rawPath,
+                        );
+                        playlistsShouldReload.value =
+                            !playlistsShouldReload.value;
+                        await _loadSongsFromPlaylist(_selectedPlaylist!);
+                      },
+                    ),
+                  if (item.artist.trim().isNotEmpty &&
+                      item.artist.trim() != LocaleProvider.tr('artist_unknown'))
+                    ListTile(
+                      leading: const Icon(Icons.person_outline),
+                      title: const TranslatedText('go_to_artist'),
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        final name = item.artist.trim();
+                        if (name.isEmpty) return;
+                        Navigator.of(context).push(
+                          PageRouteBuilder(
+                            pageBuilder:
+                                (context, animation, secondaryAnimation) =>
+                                    ArtistScreen(artistName: name),
+                            transitionsBuilder:
+                                (
+                                  context,
+                                  animation,
+                                  secondaryAnimation,
+                                  child,
+                                ) {
+                                  const begin = Offset(1.0, 0.0);
+                                  const end = Offset.zero;
+                                  const curve = Curves.ease;
+                                  final tween = Tween(
+                                    begin: begin,
+                                    end: end,
+                                  ).chain(CurveTween(curve: curve));
+                                  return SlideTransition(
+                                    position: animation.drive(tween),
+                                    child: child,
+                                  );
+                                },
+                          ),
+                        );
+                      },
+                    ),
+                  ListTile(
+                    leading: const Icon(Icons.share_rounded),
+                    title: TranslatedText('share_link'),
+                    onTap: () async {
+                      Navigator.of(context).pop();
+                      await SharePlus.instance.share(
+                        ShareParams(text: videoUrl),
+                      );
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.check_box_outlined),
+                    title: TranslatedText('select'),
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      setState(() {
+                        _isSelecting = true;
+                        _selectedSongPaths.add(item.rawPath);
+                      });
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.info_outline),
+                    title: TranslatedText('song_info'),
+                    onTap: () async {
+                      Navigator.of(context).pop();
+                      final mediaItem = MediaItem(
+                        id: item.rawPath,
+                        title: item.title,
+                        artist: item.artist,
+                        artUri: Uri.tryParse(item.artUri ?? ''),
+                        extras: {
+                          'data': item.rawPath,
+                          'videoId': item.videoId,
+                          'isStreaming': true,
+                          if (item.artUri != null &&
+                              item.artUri!.trim().isNotEmpty)
+                            'displayArtUri': item.artUri!.trim(),
+                        },
+                      );
+                      await SongInfoDialog.show(
+                        context,
+                        mediaItem,
+                        colorSchemeNotifier,
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
   }
 
   // Función para filtrar carpetas
@@ -2309,6 +3078,9 @@ class _FoldersScreenState extends State<FoldersScreen>
           builder: (context, colorScheme, child) {
             final isAmoled = colorScheme == AppColorScheme.amoled;
             final isDark = Theme.of(context).brightness == Brightness.dark;
+            final isStreamingPlaylistSortContext =
+                _selectedPlaylist != null &&
+                _playlistSource == PlaylistSource.streaming;
 
             return AlertDialog(
               backgroundColor: isAmoled && isDark
@@ -2335,16 +3107,30 @@ class _FoldersScreenState extends State<FoldersScreen>
                     ),
                   ),
                   const SizedBox(height: 24),
-                  _buildSortOption(
-                    OrdenCarpetas.normal,
-                    'default',
-                    Icons.history_rounded,
-                  ),
-                  _buildSortOption(
-                    OrdenCarpetas.ultimoAgregado,
-                    'invert_order',
-                    Icons.swap_vert_rounded,
-                  ),
+                  if (isStreamingPlaylistSortContext)
+                    _buildSortOption(
+                      OrdenCarpetas.ultimoAgregado,
+                      'last_added',
+                      Icons.history_rounded,
+                    )
+                  else
+                    _buildSortOption(
+                      OrdenCarpetas.normal,
+                      'default',
+                      Icons.history_rounded,
+                    ),
+                  if (isStreamingPlaylistSortContext)
+                    _buildSortOption(
+                      OrdenCarpetas.normal,
+                      'invert_order',
+                      Icons.swap_vert_rounded,
+                    )
+                  else
+                    _buildSortOption(
+                      OrdenCarpetas.ultimoAgregado,
+                      'invert_order',
+                      Icons.swap_vert_rounded,
+                    ),
                   _buildSortOption(
                     OrdenCarpetas.alfabetico,
                     'alphabetical_az',
@@ -2355,16 +3141,18 @@ class _FoldersScreenState extends State<FoldersScreen>
                     'alphabetical_za',
                     Icons.sort_by_alpha_rounded,
                   ),
-                  _buildSortOption(
-                    OrdenCarpetas.fechaEdicionDesc,
-                    'edit_date_newest_first',
-                    Icons.calendar_month_rounded,
-                  ),
-                  _buildSortOption(
-                    OrdenCarpetas.fechaEdicionAsc,
-                    'edit_date_oldest_first',
-                    Icons.calendar_today_rounded,
-                  ),
+                  if (!isStreamingPlaylistSortContext)
+                    _buildSortOption(
+                      OrdenCarpetas.fechaEdicionDesc,
+                      'edit_date_newest_first',
+                      Icons.calendar_month_rounded,
+                    ),
+                  if (!isStreamingPlaylistSortContext)
+                    _buildSortOption(
+                      OrdenCarpetas.fechaEdicionAsc,
+                      'edit_date_oldest_first',
+                      Icons.calendar_today_rounded,
+                    ),
                   const SizedBox(height: 8),
                 ],
               ),
@@ -2457,6 +3245,9 @@ class _FoldersScreenState extends State<FoldersScreen>
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
+    final selectingStreamingPlaylist =
+        _selectedPlaylist != null &&
+        _playlistSource == PlaylistSource.streaming;
 
     if (_isLoading) {
       return Scaffold(body: Center(child: LoadingIndicator()));
@@ -2584,12 +3375,54 @@ class _FoldersScreenState extends State<FoldersScreen>
             ),
           ),
           actions: [
-            IconButton(
-              icon: const Icon(Icons.add),
-              tooltip: LocaleProvider.tr('create_playlist'),
-              onPressed: () => _createNewPlaylist(),
+            PopupMenuButton<String>(
+              icon: const Icon(Icons.more_vert),
+              tooltip: LocaleProvider.tr('want_more_options'),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              onSelected: (value) {
+                switch (value) {
+                  case 'switch_source':
+                    _togglePlaylistSource();
+                    break;
+                  case 'create_playlist':
+                    _createNewPlaylist();
+                    break;
+                }
+              },
+              itemBuilder: (context) => [
+                PopupMenuItem<String>(
+                  value: 'switch_source',
+                  child: Row(
+                    children: [
+                      Icon(
+                        _playlistSource == PlaylistSource.local
+                            ? Icons.cloud_outlined
+                            : Icons.music_note_rounded,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        _playlistSource == PlaylistSource.local
+                            ? LocaleProvider.tr('show_streaming_songs')
+                            : LocaleProvider.tr('show_local_songs'),
+                      ),
+                    ],
+                  ),
+                ),
+                PopupMenuItem<String>(
+                  value: 'create_playlist',
+                  child: Row(
+                    children: [
+                      const Icon(Icons.add, size: 20),
+                      const SizedBox(width: 12),
+                      Text(LocaleProvider.tr('create_playlist')),
+                    ],
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: 8),
           ],
           bottom: PreferredSize(
             preferredSize: const Size.fromHeight(56),
@@ -2613,7 +3446,7 @@ class _FoldersScreenState extends State<FoldersScreen>
                           onPressed: () {
                             _playlistSearchController.clear();
                             setState(() {
-                              _filteredPlaylists = _playlists;
+                              _applyPlaylistFilters();
                             });
                           },
                         )
@@ -2639,17 +3472,7 @@ class _FoldersScreenState extends State<FoldersScreen>
                 ),
                 onChanged: (value) {
                   setState(() {
-                    if (value.isEmpty) {
-                      _filteredPlaylists = _playlists;
-                    } else {
-                      _filteredPlaylists = _playlists
-                          .where(
-                            (p) => p.name.toLowerCase().contains(
-                              value.toLowerCase(),
-                            ),
-                          )
-                          .toList();
-                    }
+                    _applyPlaylistFilters();
                   });
                 },
               ),
@@ -3415,8 +4238,25 @@ class _FoldersScreenState extends State<FoldersScreen>
                 icon: const Icon(Icons.select_all),
                 tooltip: LocaleProvider.tr('select_all'),
                 onPressed: () {
+                  final visibleStreamingItems =
+                      _searchController.text.isNotEmpty
+                      ? _filteredPlaylistStreamingItems
+                      : _playlistStreamingItems;
                   setState(() {
-                    if (_selectedSongPaths.length == _displaySongs.length) {
+                    if (selectingStreamingPlaylist) {
+                      if (_selectedSongPaths.length ==
+                          visibleStreamingItems.length) {
+                        _selectedSongPaths.clear();
+                        if (_selectedSongPaths.isEmpty) {
+                          _isSelecting = false;
+                        }
+                      } else {
+                        _selectedSongPaths.addAll(
+                          visibleStreamingItems.map((s) => s.rawPath),
+                        );
+                      }
+                    } else if (_selectedSongPaths.length ==
+                        _displaySongs.length) {
                       // Si todos están seleccionados, deseleccionar todos
                       _selectedSongPaths.clear();
                       if (_selectedSongPaths.isEmpty) {
@@ -3456,11 +4296,32 @@ class _FoldersScreenState extends State<FoldersScreen>
                   switch (value) {
                     case 'add_to_favorites':
                       if (_selectedSongPaths.isNotEmpty) {
-                        final selectedSongs = _displaySongs.where(
-                          (s) => _selectedSongPaths.contains(s.data),
-                        );
-                        for (final song in selectedSongs) {
-                          await _addToFavorites(song);
+                        if (selectingStreamingPlaylist) {
+                          final visibleStreamingItems =
+                              _searchController.text.isNotEmpty
+                              ? _filteredPlaylistStreamingItems
+                              : _playlistStreamingItems;
+                          final selectedStreamingItems = visibleStreamingItems
+                              .where(
+                                (item) =>
+                                    _selectedSongPaths.contains(item.rawPath),
+                              );
+                          for (final item in selectedStreamingItems) {
+                            await FavoritesDB().addFavoritePath(
+                              item.rawPath,
+                              title: item.title,
+                              artist: item.artist,
+                              videoId: item.videoId,
+                              artUri: item.artUri,
+                            );
+                          }
+                        } else {
+                          final selectedSongs = _displaySongs.where(
+                            (s) => _selectedSongPaths.contains(s.data),
+                          );
+                          for (final song in selectedSongs) {
+                            await _addToFavorites(song);
+                          }
                         }
                         favoritesShouldReload.value =
                             !favoritesShouldReload.value;
@@ -3487,7 +4348,13 @@ class _FoldersScreenState extends State<FoldersScreen>
                       break;
                     case 'delete_songs':
                       if (_selectedSongPaths.isNotEmpty) {
-                        await _handleDeleteSongs(context);
+                        if (selectingStreamingPlaylist) {
+                          await _handleRemoveStreamingFromPlaylistMassive(
+                            context,
+                          );
+                        } else {
+                          await _handleDeleteSongs(context);
+                        }
                       }
                       break;
                   }
@@ -3519,7 +4386,7 @@ class _FoldersScreenState extends State<FoldersScreen>
                       ],
                     ),
                   ),
-                  if (_isAndroid10OrHigher)
+                  if (_isAndroid10OrHigher && !selectingStreamingPlaylist)
                     PopupMenuItem<String>(
                       value: 'copy_to_folder',
                       enabled: _selectedSongPaths.isNotEmpty,
@@ -3533,7 +4400,7 @@ class _FoldersScreenState extends State<FoldersScreen>
                         ],
                       ),
                     ),
-                  if (_isAndroid10OrHigher)
+                  if (_isAndroid10OrHigher && !selectingStreamingPlaylist)
                     PopupMenuItem<String>(
                       value: 'move_to_folder',
                       enabled: _selectedSongPaths.isNotEmpty,
@@ -3563,7 +4430,8 @@ class _FoldersScreenState extends State<FoldersScreen>
                 ],
               ),
             ] else ...[
-              if (_selectedPlaylist != null)
+              if (_selectedPlaylist != null &&
+                  _playlistSource == PlaylistSource.local)
                 IconButton(
                   icon: const Icon(Icons.add, size: 28),
                   tooltip: LocaleProvider.tr('add_songs'),
@@ -3573,6 +4441,21 @@ class _FoldersScreenState extends State<FoldersScreen>
                 icon: const Icon(Icons.shuffle_rounded, size: 28, weight: 600),
                 tooltip: LocaleProvider.tr('shuffle'),
                 onPressed: () {
+                  final showingStreamingPlaylist =
+                      _selectedPlaylist != null &&
+                      _playlistSource == PlaylistSource.streaming;
+                  if (showingStreamingPlaylist) {
+                    final visibleStreaming = _searchController.text.isNotEmpty
+                        ? _filteredPlaylistStreamingItems
+                        : _playlistStreamingItems;
+                    if (visibleStreaming.isNotEmpty) {
+                      final random =
+                          (visibleStreaming.toList()..shuffle()).first;
+                      _playStreamingPlaylistItem(random);
+                    }
+                    return;
+                  }
+
                   if (_displaySongs.isNotEmpty) {
                     final random = (_displaySongs.toList()..shuffle()).first;
                     unawaited(_preloadArtworkForSong(random));
@@ -3673,8 +4556,16 @@ class _FoldersScreenState extends State<FoldersScreen>
               final bottomPadding = MediaQuery.of(context).padding.bottom;
               final space =
                   (currentMediaItem != null ? 100.0 : 0.0) + bottomPadding;
+              final showingStreamingPlaylist =
+                  _selectedPlaylist != null &&
+                  _playlistSource == PlaylistSource.streaming;
+              final streamingToShow =
+                  showingStreamingPlaylist && _searchController.text.isNotEmpty
+                  ? _filteredPlaylistStreamingItems
+                  : _playlistStreamingItems;
 
-              if (_filteredSongs.isEmpty) {
+              if ((showingStreamingPlaylist && streamingToShow.isEmpty) ||
+                  (!showingStreamingPlaylist && _filteredSongs.isEmpty)) {
                 return SingleChildScrollView(
                   physics: const AlwaysScrollableScrollPhysics(),
                   child: SizedBox(
@@ -3716,7 +4607,9 @@ class _FoldersScreenState extends State<FoldersScreen>
                             _showAllSongs
                                 ? 'no_songs'
                                 : _selectedPlaylist != null
-                                ? 'no_songs_in_playlist'
+                                ? (showingStreamingPlaylist
+                                      ? 'no_streaming_songs'
+                                      : 'no_songs_in_playlist')
                                 : 'no_songs_in_folder',
                             style: TextStyle(
                               fontSize: 14,
@@ -3758,8 +4651,233 @@ class _FoldersScreenState extends State<FoldersScreen>
                     top: 8.0,
                     bottom: space,
                   ),
-                  itemCount: _displaySongs.length,
+                  itemCount: showingStreamingPlaylist
+                      ? streamingToShow.length
+                      : _displaySongs.length,
                   itemBuilder: (context, i) {
+                    if (showingStreamingPlaylist) {
+                      final item = streamingToShow[i];
+                      final sources = _streamingArtworkSources(item);
+                      final isSelected = _selectedSongPaths.contains(
+                        item.rawPath,
+                      );
+                      final currentVideoId = currentMediaItem
+                          ?.extras?['videoId']
+                          ?.toString()
+                          .trim();
+                      final isCurrent =
+                          currentVideoId != null &&
+                          item.videoId?.trim() == currentVideoId;
+                      final bool isFirst = i == 0;
+                      final bool isLast = i == streamingToShow.length - 1;
+                      final bool isOnly = streamingToShow.length == 1;
+
+                      BorderRadius borderRadius;
+                      if (isOnly) {
+                        borderRadius = BorderRadius.circular(20);
+                      } else if (isFirst) {
+                        borderRadius = const BorderRadius.only(
+                          topLeft: Radius.circular(20),
+                          topRight: Radius.circular(20),
+                          bottomLeft: Radius.circular(4),
+                          bottomRight: Radius.circular(4),
+                        );
+                      } else if (isLast) {
+                        borderRadius = const BorderRadius.only(
+                          topLeft: Radius.circular(4),
+                          topRight: Radius.circular(4),
+                          bottomLeft: Radius.circular(20),
+                          bottomRight: Radius.circular(20),
+                        );
+                      } else {
+                        borderRadius = BorderRadius.circular(4);
+                      }
+
+                      Widget buildStreamingTile(bool playing) {
+                        return ListTile(
+                          shape: RoundedRectangleBorder(
+                            borderRadius: borderRadius,
+                          ),
+                          onTap: () {
+                            if (_isSelecting) {
+                              setState(() {
+                                if (isSelected) {
+                                  _selectedSongPaths.remove(item.rawPath);
+                                  if (_selectedSongPaths.isEmpty) {
+                                    _isSelecting = false;
+                                  }
+                                } else {
+                                  _selectedSongPaths.add(item.rawPath);
+                                }
+                              });
+                            } else {
+                              _playStreamingPlaylistItem(item);
+                            }
+                          },
+                          onLongPress: () {
+                            if (_isSelecting) {
+                              setState(() {
+                                if (isSelected) {
+                                  _selectedSongPaths.remove(item.rawPath);
+                                  if (_selectedSongPaths.isEmpty) {
+                                    _isSelecting = false;
+                                  }
+                                } else {
+                                  _selectedSongPaths.add(item.rawPath);
+                                }
+                              });
+                            } else {
+                              _handleStreamingPlaylistLongPress(context, item);
+                            }
+                          },
+                          leading: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (_isSelecting)
+                                Checkbox(
+                                  value: isSelected,
+                                  onChanged: (checked) {
+                                    setState(() {
+                                      if (checked == true) {
+                                        _selectedSongPaths.add(item.rawPath);
+                                      } else {
+                                        _selectedSongPaths.remove(item.rawPath);
+                                        if (_selectedSongPaths.isEmpty) {
+                                          _isSelecting = false;
+                                        }
+                                      }
+                                    });
+                                  },
+                                ),
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: SizedBox(
+                                  width: 50,
+                                  height: 50,
+                                  child: _StreamingArtwork(
+                                    sources: sources,
+                                    backgroundColor: Theme.of(
+                                      context,
+                                    ).colorScheme.surfaceContainerHigh,
+                                    iconColor: Theme.of(
+                                      context,
+                                    ).colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          title: Row(
+                            children: [
+                              if (isCurrent)
+                                Padding(
+                                  padding: const EdgeInsets.only(right: 8.0),
+                                  child: MiniMusicVisualizer(
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.primary,
+                                    width: 4,
+                                    height: 15,
+                                    radius: 4,
+                                    animate: playing,
+                                  ),
+                                ),
+                              Expanded(
+                                child: Text(
+                                  item.title,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: isCurrent
+                                      ? Theme.of(
+                                          context,
+                                        ).textTheme.titleMedium?.copyWith(
+                                          color: isAmoled
+                                              ? Colors.white
+                                              : Theme.of(
+                                                  context,
+                                                ).colorScheme.primary,
+                                          fontWeight: FontWeight.bold,
+                                        )
+                                      : Theme.of(context).textTheme.titleMedium,
+                                ),
+                              ),
+                            ],
+                          ),
+                          subtitle: Text(
+                            item.artist,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: isAmoled
+                                ? TextStyle(
+                                    color: Colors.white.withValues(alpha: 0.8),
+                                  )
+                                : null,
+                          ),
+                          trailing: Container(
+                            width: 40,
+                            height: 40,
+                            decoration: BoxDecoration(
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.primary.withAlpha(20),
+                              shape: BoxShape.circle,
+                            ),
+                            child: IconButton(
+                              icon: Icon(
+                                isCurrent && playing
+                                    ? Icons.pause_rounded
+                                    : Icons.play_arrow_rounded,
+                                grade: 200,
+                                fill: 1,
+                                color: isCurrent
+                                    ? Theme.of(context).colorScheme.primary
+                                    : null,
+                              ),
+                              onPressed: () {
+                                if (isCurrent) {
+                                  playing
+                                      ? audioHandler.myHandler?.pause()
+                                      : audioHandler.myHandler?.play();
+                                } else {
+                                  _playStreamingPlaylistItem(item);
+                                }
+                              },
+                            ),
+                          ),
+                          selected: isCurrent,
+                          selectedTileColor: Colors.transparent,
+                        );
+                      }
+
+                      return Padding(
+                        padding: EdgeInsets.only(bottom: isLast ? 0 : 4),
+                        child: Card(
+                          color: isCurrent
+                              ? isAmoled
+                                    ? cardColor
+                                    : Theme.of(context).colorScheme.primary
+                                          .withAlpha(isDark ? 40 : 25)
+                              : cardColor,
+                          margin: EdgeInsets.zero,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: borderRadius,
+                          ),
+                          child: ClipRRect(
+                            borderRadius: borderRadius,
+                            child: isCurrent
+                                ? ValueListenableBuilder<bool>(
+                                    valueListenable: _isPlayingNotifier,
+                                    builder: (context, playing, child) {
+                                      return buildStreamingTile(playing);
+                                    },
+                                  )
+                                : buildStreamingTile(false),
+                          ),
+                        ),
+                      );
+                    }
+
                     final song = _displaySongs[i];
                     final path = song.data;
                     final isCurrent =
@@ -4026,7 +5144,46 @@ class _FoldersScreenState extends State<FoldersScreen>
   }
 
   Future<void> _handleAddToPlaylistMassive(BuildContext context) async {
-    final playlists = await PlaylistsDB().getAllPlaylists();
+    final allPlaylists = await PlaylistsDB().getAllPlaylists();
+    final selectingStreamingPlaylist =
+        _selectedPlaylist != null &&
+        _playlistSource == PlaylistSource.streaming;
+    final playlists = allPlaylists
+        .where(
+          (p) => _playlistMatchesTargetSource(
+            p,
+            forStreaming: selectingStreamingPlaylist,
+          ),
+        )
+        .toList();
+    final visibleStreamingItems = _searchController.text.isNotEmpty
+        ? _filteredPlaylistStreamingItems
+        : _playlistStreamingItems;
+
+    Future<void> addSelectedToPlaylist(String playlistId) async {
+      if (selectingStreamingPlaylist) {
+        final selectedStreamingItems = visibleStreamingItems.where(
+          (item) => _selectedSongPaths.contains(item.rawPath),
+        );
+        for (final item in selectedStreamingItems) {
+          await PlaylistsDB().addSongPathToPlaylist(
+            playlistId,
+            item.rawPath,
+            title: item.title,
+            artist: item.artist,
+            videoId: item.videoId,
+            artUri: item.artUri,
+          );
+        }
+      } else {
+        final selectedSongs = _displaySongs.where(
+          (s) => _selectedSongPaths.contains(s.data),
+        );
+        for (final song in selectedSongs) {
+          await PlaylistsDB().addSongToPlaylist(playlistId, song);
+        }
+      }
+    }
 
     if (_allSongsForGrid.isEmpty) {
       final allIndexedSongs = await SongsIndexDB().getIndexedSongs();
@@ -4172,16 +5329,7 @@ class _FoldersScreenState extends State<FoldersScreen>
                                     ).textTheme.titleMedium,
                                   ),
                                   onTap: () async {
-                                    final selectedSongs = _displaySongs.where(
-                                      (s) =>
-                                          _selectedSongPaths.contains(s.data),
-                                    );
-                                    for (final song in selectedSongs) {
-                                      await PlaylistsDB().addSongToPlaylist(
-                                        pl.id,
-                                        song,
-                                      );
-                                    }
+                                    await addSelectedToPlaylist(pl.id);
                                     setState(() {
                                       _isSelecting = false;
                                       _selectedSongPaths.clear();
@@ -4212,12 +5360,7 @@ class _FoldersScreenState extends State<FoldersScreen>
                           final name = controller.text.trim();
                           if (name.isNotEmpty) {
                             final id = await PlaylistsDB().createPlaylist(name);
-                            final selectedSongs = _displaySongs.where(
-                              (s) => _selectedSongPaths.contains(s.data),
-                            );
-                            for (final song in selectedSongs) {
-                              await PlaylistsDB().addSongToPlaylist(id, song);
-                            }
+                            await addSelectedToPlaylist(id);
                             setState(() {
                               _isSelecting = false;
                               _selectedSongPaths.clear();
@@ -4251,12 +5394,7 @@ class _FoldersScreenState extends State<FoldersScreen>
                       final name = value.trim();
                       if (name.isNotEmpty) {
                         final id = await PlaylistsDB().createPlaylist(name);
-                        final selectedSongs = _displaySongs.where(
-                          (s) => _selectedSongPaths.contains(s.data),
-                        );
-                        for (final song in selectedSongs) {
-                          await PlaylistsDB().addSongToPlaylist(id, song);
-                        }
+                        await addSelectedToPlaylist(id);
                         setState(() {
                           _isSelecting = false;
                           _selectedSongPaths.clear();
@@ -4303,6 +5441,35 @@ class _FoldersScreenState extends State<FoldersScreen>
     // Usar la función existente para mostrar el selector de carpetas
     // pero adaptada para múltiples canciones
     await _showFolderSelectorMultiple(selectedSongs, isMove: true);
+  }
+
+  Future<void> _handleRemoveStreamingFromPlaylistMassive(
+    BuildContext context,
+  ) async {
+    if (!context.mounted || _selectedPlaylist == null) return;
+
+    final visibleStreamingItems = _searchController.text.isNotEmpty
+        ? _filteredPlaylistStreamingItems
+        : _playlistStreamingItems;
+    final selectedStreamingItems = visibleStreamingItems
+        .where((item) => _selectedSongPaths.contains(item.rawPath))
+        .toList();
+    if (selectedStreamingItems.isEmpty) return;
+
+    for (final item in selectedStreamingItems) {
+      await PlaylistsDB().removeSongFromPlaylist(
+        _selectedPlaylist!.id,
+        item.rawPath,
+      );
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _isSelecting = false;
+      _selectedSongPaths.clear();
+    });
+    playlistsShouldReload.value = !playlistsShouldReload.value;
+    await _loadSongsFromPlaylist(_selectedPlaylist!);
   }
 
   Future<void> _handleDeleteSongs(BuildContext context) async {
@@ -4906,7 +6073,10 @@ class _FoldersScreenState extends State<FoldersScreen>
     BuildContext context,
     SongModel song,
   ) async {
-    final playlists = await PlaylistsDB().getAllPlaylists();
+    final allPlaylists = await PlaylistsDB().getAllPlaylists();
+    final playlists = allPlaylists
+        .where((p) => _playlistMatchesTargetSource(p, forStreaming: false))
+        .toList();
 
     if (_allSongsForGrid.isEmpty) {
       final allIndexedSongs = await SongsIndexDB().getIndexedSongs();
@@ -5458,7 +6628,7 @@ class _FoldersScreenState extends State<FoldersScreen>
     if (!mounted) return;
     setState(() {
       _playlists = playlists;
-      _filteredPlaylists = playlists;
+      _applyPlaylistFilters();
       _allSongsForGrid = allIndexedSongs;
       _isLoading = false;
     });
@@ -6051,6 +7221,8 @@ class _FoldersScreenState extends State<FoldersScreen>
       _originalSongs = [];
       _filteredSongs = [];
       _displaySongs = [];
+      _playlistStreamingItems = [];
+      _filteredPlaylistStreamingItems = [];
       _isLoading = true;
     });
 
@@ -6066,6 +7238,36 @@ class _FoldersScreenState extends State<FoldersScreen>
 
     // Obtener las canciones de la playlist
     final songs = await PlaylistsDB().getSongsFromPlaylist(playlist.id);
+    final streamingItems = <_StreamingPlaylistItem>[];
+    for (final path in playlist.songPaths) {
+      if (!_isStreamingPath(path)) continue;
+      final meta = await PlaylistsDB().getPlaylistSongMeta(playlist.id, path);
+      final metaVideoId = meta?['videoId']?.toString().trim();
+      final videoId = (metaVideoId != null && metaVideoId.isNotEmpty)
+          ? metaVideoId
+          : _extractVideoIdFromPath(path);
+      final metaTitle = meta?['title']?.toString().trim();
+      final metaArtist = meta?['artist']?.toString().trim();
+      final metaArtUri = meta?['artUri']?.toString().trim();
+
+      streamingItems.add(
+        _StreamingPlaylistItem(
+          rawPath: path,
+          title: (metaTitle != null && metaTitle.isNotEmpty)
+              ? metaTitle
+              : (videoId != null && videoId.isNotEmpty)
+              ? 'YouTube Music ($videoId)'
+              : path,
+          artist: (metaArtist != null && metaArtist.isNotEmpty)
+              ? metaArtist
+              : LocaleProvider.tr('artist_unknown'),
+          videoId: videoId,
+          artUri: (metaArtUri != null && metaArtUri.isNotEmpty)
+              ? metaArtUri
+              : null,
+        ),
+      );
+    }
 
     if (!mounted) return;
 
@@ -6074,6 +7276,9 @@ class _FoldersScreenState extends State<FoldersScreen>
     _originalSongs = List.from(songs);
     _filteredSongs = songsToShow;
     _displaySongs = songsToShow;
+    _originalPlaylistStreamingItems = List.from(streamingItems);
+    _playlistStreamingItems = streamingItems;
+    _filteredPlaylistStreamingItems = [];
 
     await _aplicarOrdenamiento(_filteredSongs);
 

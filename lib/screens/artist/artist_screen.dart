@@ -1,8 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'dart:async';
+import 'package:audio_service/audio_service.dart';
+import 'package:music/main.dart'
+    show
+        audioHandler,
+        audioServiceReady,
+        initializeAudioServiceSafely;
 import 'package:music/l10n/locale_provider.dart';
 import 'package:music/utils/yt_search/service.dart';
-import 'package:music/utils/yt_search/yt_screen.dart' hide AnimatedTapButton;
 import 'package:music/utils/db/artist_images_cache_db.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:music/utils/theme_preferences.dart';
@@ -973,6 +979,93 @@ class _ArtistScreenState extends State<ArtistScreen> {
     return cleaned.trim();
   }
 
+  Future<void> _playStreamingFromList({
+    required List<YtMusicResult> results,
+    required int tappedIndex,
+    required String queueSource,
+  }) async {
+    if (tappedIndex < 0 || tappedIndex >= results.length) return;
+    final targetVideoId = results[tappedIndex].videoId?.trim();
+    if (targetVideoId == null || targetVideoId.isEmpty) return;
+    if (playLoadingNotifier.value) return;
+
+    playLoadingNotifier.value = true;
+    openPlayerPanelNotifier.value = true;
+    var loadingReleased = false;
+    void releaseLoading() {
+      if (loadingReleased) return;
+      loadingReleased = true;
+      playLoadingNotifier.value = false;
+    }
+
+    StreamSubscription<PlaybackState>? playbackWatchSub;
+    final loadingGuard = Timer(const Duration(seconds: 8), releaseLoading);
+
+    try {
+      if (!audioServiceReady.value || audioHandler == null) {
+        await initializeAudioServiceSafely();
+      }
+      final handler = audioHandler;
+      if (handler == null) return;
+
+      playbackWatchSub = handler.playbackState.listen((playbackState) {
+        if (loadingReleased) return;
+        final currentMedia = handler.mediaItem.value;
+        final currentVideoId = currentMedia?.extras?['videoId']
+            ?.toString()
+            .trim();
+        if (playbackState.playing && currentVideoId == targetVideoId) {
+          releaseLoading();
+        }
+      });
+
+      final queueItems = results
+          .where((entry) => (entry.videoId?.trim().isNotEmpty ?? false))
+          .map((entry) {
+            final videoId = entry.videoId!.trim();
+            final artUri = entry.thumbUrl?.trim().isNotEmpty == true
+                ? entry.thumbUrl!.trim()
+                : 'https://i.ytimg.com/vi/$videoId/hqdefault.jpg';
+            return <String, dynamic>{
+              'videoId': videoId,
+              'title': entry.title?.trim().isNotEmpty == true
+                  ? entry.title!.trim()
+                  : LocaleProvider.tr('title_unknown'),
+              'artist': entry.artist?.trim().isNotEmpty == true
+                  ? entry.artist!.trim()
+                  : LocaleProvider.tr('artist_unknown'),
+              'artUri': artUri,
+            };
+          })
+          .toList();
+      if (queueItems.isEmpty) return;
+
+      int initialQueueIndex = queueItems.indexWhere(
+        (entry) => entry['videoId'] == targetVideoId,
+      );
+      if (initialQueueIndex < 0) {
+        initialQueueIndex = tappedIndex.clamp(0, queueItems.length - 1);
+      }
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('last_queue_source', queueSource);
+
+      await handler
+          .customAction('playYtStreamQueue', {
+            'items': queueItems,
+            'initialIndex': initialQueueIndex,
+            'autoPlay': true,
+          })
+          .timeout(const Duration(seconds: 20));
+    } catch (_) {
+      // Ignorar para no mostrar error si inició correctamente entre transiciones.
+    } finally {
+      await playbackWatchSub?.cancel();
+      loadingGuard.cancel();
+      releaseLoading();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
@@ -1743,25 +1836,12 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                     if (_isSelectionMode) {
                                       _toggleSelection(index, isVideo: false);
                                     } else {
-                                      // Mostrar preview de la canción
-                                      showModalBottomSheet(
-                                        context: context,
-                                        shape: const RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.vertical(
-                                            top: Radius.circular(16),
-                                          ),
-                                        ),
-                                        builder: (context) {
-                                          return SafeArea(
-                                            child: Padding(
-                                              padding: const EdgeInsets.all(24),
-                                              child: YtPreviewPlayer(
-                                                results: _songs,
-                                                currentIndex: index,
-                                              ),
-                                            ),
-                                          );
-                                        },
+                                      _playStreamingFromList(
+                                        results: _songs,
+                                        tappedIndex: index,
+                                        queueSource:
+                                            _artist?['name']?.toString() ??
+                                            widget.artistName,
                                       );
                                     }
                                   },
@@ -2027,25 +2107,12 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                     if (_isSelectionMode) {
                                       _toggleSelection(index, isVideo: true);
                                     } else {
-                                      // Mostrar preview del video
-                                      showModalBottomSheet(
-                                        context: context,
-                                        shape: const RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.vertical(
-                                            top: Radius.circular(16),
-                                          ),
-                                        ),
-                                        builder: (context) {
-                                          return SafeArea(
-                                            child: Padding(
-                                              padding: const EdgeInsets.all(24),
-                                              child: YtPreviewPlayer(
-                                                results: _videos,
-                                                currentIndex: index,
-                                              ),
-                                            ),
-                                          );
-                                        },
+                                      _playStreamingFromList(
+                                        results: _videos,
+                                        tappedIndex: index,
+                                        queueSource:
+                                            _artist?['name']?.toString() ??
+                                            widget.artistName,
                                       );
                                     }
                                   },
@@ -2843,29 +2910,14 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                         isAlbum: true,
                                       );
                                     } else {
-                                      // Mostrar preview de la canción del álbum
-                                      showModalBottomSheet(
-                                        context: context,
-                                        shape: const RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.vertical(
-                                            top: Radius.circular(16),
-                                          ),
-                                        ),
-                                        builder: (context) {
-                                          return SafeArea(
-                                            child: Padding(
-                                              padding: const EdgeInsets.all(24),
-                                              child: YtPreviewPlayer(
-                                                results: _albumSongs,
-                                                currentIndex: index,
-                                                fallbackThumbUrl:
-                                                    _currentAlbum?['thumbUrl'],
-                                                fallbackArtist:
-                                                    _currentAlbum?['artist'],
-                                              ),
-                                            ),
-                                          );
-                                        },
+                                      _playStreamingFromList(
+                                        results: _albumSongs,
+                                        tappedIndex: index,
+                                        queueSource:
+                                            _currentAlbum?['title']
+                                                ?.toString() ??
+                                            (_artist?['name']?.toString() ??
+                                                widget.artistName),
                                       );
                                     }
                                   },
@@ -3132,31 +3184,13 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                                   isVideo: false,
                                                 );
                                               } else {
-                                                // Mostrar preview de la canción
-                                                showModalBottomSheet(
-                                                  context: context,
-                                                  shape: const RoundedRectangleBorder(
-                                                    borderRadius:
-                                                        BorderRadius.vertical(
-                                                          top: Radius.circular(
-                                                            16,
-                                                          ),
-                                                        ),
-                                                  ),
-                                                  builder: (context) {
-                                                    return SafeArea(
-                                                      child: Padding(
-                                                        padding:
-                                                            const EdgeInsets.all(
-                                                              24,
-                                                            ),
-                                                        child: YtPreviewPlayer(
-                                                          results: _songs,
-                                                          currentIndex: index,
-                                                        ),
-                                                      ),
-                                                    );
-                                                  },
+                                                _playStreamingFromList(
+                                                  results: _songs,
+                                                  tappedIndex: index,
+                                                  queueSource:
+                                                      _artist?['name']
+                                                          ?.toString() ??
+                                                      widget.artistName,
                                                 );
                                               }
                                             },
@@ -3745,31 +3779,13 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                                   isVideo: true,
                                                 );
                                               } else {
-                                                // Mostrar preview del video
-                                                showModalBottomSheet(
-                                                  context: context,
-                                                  shape: const RoundedRectangleBorder(
-                                                    borderRadius:
-                                                        BorderRadius.vertical(
-                                                          top: Radius.circular(
-                                                            16,
-                                                          ),
-                                                        ),
-                                                  ),
-                                                  builder: (context) {
-                                                    return SafeArea(
-                                                      child: Padding(
-                                                        padding:
-                                                            const EdgeInsets.all(
-                                                              24,
-                                                            ),
-                                                        child: YtPreviewPlayer(
-                                                          results: _videos,
-                                                          currentIndex: index,
-                                                        ),
-                                                      ),
-                                                    );
-                                                  },
+                                                _playStreamingFromList(
+                                                  results: _videos,
+                                                  tappedIndex: index,
+                                                  queueSource:
+                                                      _artist?['name']
+                                                          ?.toString() ??
+                                                      widget.artistName,
                                                 );
                                               }
                                             },
