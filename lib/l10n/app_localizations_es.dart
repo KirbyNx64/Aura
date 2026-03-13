@@ -315,7 +315,7 @@ const Map<String, String> appLocalizationsEs = {
   'open_in_youtube_music': 'Abrir en YouTube Music',
   'info': 'Información',
   'search_music_in_ytm':
-      'Busca, reproduce y descarga música desde YouTube Music.\n\nNota: Algunas canciones no están disponibles para descarga, como contenido protegido por derechos de autor o contenido infantil.',
+      'Busca, reproduce y descarga música desde YouTube Music.\n\nNota: Algunas canciones no están disponibles para reproducir o descarga, como contenido protegido por derechos de autor o contenido infantil.',
   'download_understood': 'Entendido',
   'no_results': 'Sin resultados',
   'results': 'Resultados',

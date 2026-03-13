@@ -1878,6 +1878,11 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
             },
           );
 
+      // El stream ya quedó preparado en el player; no mantener loader de UI.
+      if (playLoadingNotifier.value) {
+        playLoadingNotifier.value = false;
+      }
+
       playbackState.add(
         playbackState.value.copyWith(
           queueIndex: 0,
@@ -1908,6 +1913,10 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         await play();
       }
     } finally {
+      // Seguro anti-bloqueo: nunca dejar loader global colgado.
+      if (playLoadingNotifier.value) {
+        playLoadingNotifier.value = false;
+      }
       if (_initializing) {
         _initializing = false;
         initializingNotifier.value = false;
@@ -2055,6 +2064,11 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
             },
           );
 
+      // La cola streaming ya está lista en el player; ocultar loader.
+      if (playLoadingNotifier.value) {
+        playLoadingNotifier.value = false;
+      }
+
       playbackState.add(
         playbackState.value.copyWith(
           queueIndex: targetIndex,
@@ -2078,6 +2092,10 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         await play();
       }
     } finally {
+      // Seguro anti-bloqueo: nunca dejar loader global colgado.
+      if (playLoadingNotifier.value) {
+        playLoadingNotifier.value = false;
+      }
       if (_initializing) {
         _initializing = false;
         initializingNotifier.value = false;
@@ -2905,7 +2923,6 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       }
 
       final pendingResolvers = <Future<Map<String, dynamic>?>>{};
-      final resolvedCandidates = <Map<String, dynamic>>[];
       var candidateCursor = 0;
 
       void scheduleNext() {
@@ -2939,42 +2956,24 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
         final resolved = completed.value;
         if (resolved != null) {
-          resolvedCandidates.add(resolved);
+          final videoId = resolved['videoId'] as String?;
+          final item = resolved['item'] as MediaItem?;
+          final source = resolved['source'] as AudioSource?;
+          if (videoId != null &&
+              videoId.isNotEmpty &&
+              item != null &&
+              source != null &&
+              _streamQueuedVideoIds.add(videoId)) {
+            // Append incremental: evita esperar todo el batch para mostrar "Up next".
+            await _appendResolvedStreamingTracks(
+              items: [item],
+              sources: [source],
+              sessionVersion: sessionVersion,
+            );
+          }
         }
 
         scheduleNext();
-      }
-
-      if (resolvedCandidates.isEmpty) return;
-      if (sessionVersion != _streamSessionVersion) return;
-
-      resolvedCandidates.sort(
-        (a, b) => (a['order'] as int).compareTo(b['order'] as int),
-      );
-
-      final batchItems = <MediaItem>[];
-      final batchSources = <AudioSource>[];
-      for (final resolved in resolvedCandidates) {
-        final videoId = resolved['videoId'] as String?;
-        final item = resolved['item'] as MediaItem?;
-        final source = resolved['source'] as AudioSource?;
-        if (videoId == null ||
-            videoId.isEmpty ||
-            item == null ||
-            source == null ||
-            !_streamQueuedVideoIds.add(videoId)) {
-          continue;
-        }
-        batchItems.add(item);
-        batchSources.add(source);
-      }
-
-      if (batchItems.isNotEmpty) {
-        await _appendResolvedStreamingTracks(
-          items: batchItems,
-          sources: batchSources,
-          sessionVersion: sessionVersion,
-        );
       }
     } catch (_) {
       // Mantener la reproducción estable ante errores de red/parsing.
