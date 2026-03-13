@@ -44,6 +44,7 @@ enum OrdenCarpetas {
 }
 
 enum PlaylistSource { local, streaming }
+
 enum FoldersRootView { folders, allSongs, playlists }
 
 OrdenCarpetas _orden = OrdenCarpetas.normal;
@@ -1278,13 +1279,15 @@ class _FoldersScreenState extends State<FoldersScreen>
       // Obtener la carátula para la pantalla del reproductor
       final songId = song.id;
       final songPath = song.data;
+      final previousMediaItem = audioHandler.myHandler?.mediaItem.value;
+      final wasStreamingBeforeSelection =
+          previousMediaItem?.extras?['isStreaming'] == true;
 
       // Crear MediaItem temporal y actualizar inmediatamente para evitar visualizar la canción anterior
       // ArtworkHeroCached.clearFallback();
 
       // Iniciar carga de carátula
       final artUriFuture = getOrCacheArtwork(songId, songPath);
-      await (artUriFuture);
 
       Uri? cachedArtUri;
       try {
@@ -1307,7 +1310,7 @@ class _FoldersScreenState extends State<FoldersScreen>
         });
       }
 
-      if (audioHandler != null) {
+      if (audioHandler != null && !wasStreamingBeforeSelection) {
         final tempMediaItem = MediaItem(
           id: song.data,
           title: song.displayTitle,
@@ -1331,18 +1334,32 @@ class _FoldersScreenState extends State<FoldersScreen>
       openPlayerPanelNotifier.value = true;
 
       // Activar indicador de carga
+      final loaderStartedAt = DateTime.now();
+      const minLoaderVisible = Duration(milliseconds: 320);
       playLoadingNotifier.value = true;
-
-      // Reproducir la canción después de un breve delay para que se abra la pantalla
-      Future.delayed(const Duration(milliseconds: 400), () {
-        if (mounted) {
-          _playSong(path);
-          Future.delayed(const Duration(milliseconds: 200), () {
-            // Desactivar indicador de carga después de reproducir
-            playLoadingNotifier.value = false;
-          });
+      final loaderHardGuard = Timer(const Duration(seconds: 6), () {
+        if (mounted && playLoadingNotifier.value) {
+          playLoadingNotifier.value = false;
         }
       });
+
+      try {
+        await Future<void>.delayed(const Duration(milliseconds: 16));
+        if (!mounted) return;
+        await _playSong(
+          path,
+        ).timeout(const Duration(seconds: 4), onTimeout: () {});
+      } finally {
+        loaderHardGuard.cancel();
+        final elapsed = DateTime.now().difference(loaderStartedAt);
+        if (elapsed < minLoaderVisible) {
+          await Future<void>.delayed(minLoaderVisible - elapsed);
+        }
+        if (mounted) {
+          // Desactivar indicador de carga después de reproducir
+          playLoadingNotifier.value = false;
+        }
+      }
     }
   }
 
@@ -1706,6 +1723,7 @@ class _FoldersScreenState extends State<FoldersScreen>
       playbackWatchSub?.cancel();
       playbackWatchSub = null;
     }
+
     loadingGuard = Timer(const Duration(seconds: 8), releaseLoading);
     try {
       final handler = audioHandler;
@@ -1756,11 +1774,13 @@ class _FoldersScreenState extends State<FoldersScreen>
         _selectedPlaylist?.name ?? LocaleProvider.tr('playlists'),
       );
 
-      await handler.customAction('playYtStreamQueue', {
-        'items': queueItems,
-        'initialIndex': initialQueueIndex,
-        'autoPlay': true,
-      }).timeout(const Duration(seconds: 20));
+      await handler
+          .customAction('playYtStreamQueue', {
+            'items': queueItems,
+            'initialIndex': initialQueueIndex,
+            'autoPlay': true,
+          })
+          .timeout(const Duration(seconds: 20));
     } catch (_) {
       releaseLoading();
     } finally {
@@ -1816,7 +1836,9 @@ class _FoldersScreenState extends State<FoldersScreen>
     return item.rawPath;
   }
 
-  Future<void> _downloadStreamingPlaylistItem(_StreamingPlaylistItem item) async {
+  Future<void> _downloadStreamingPlaylistItem(
+    _StreamingPlaylistItem item,
+  ) async {
     final videoId = item.videoId?.trim();
     if (videoId == null || videoId.isEmpty) return;
     await SimpleYtDownload.downloadVideoWithArtist(
@@ -4509,9 +4531,7 @@ class _FoldersScreenState extends State<FoldersScreen>
                       children: [
                         const Icon(Icons.download_rounded),
                         const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(LocaleProvider.tr('download')),
-                        ),
+                        Expanded(child: Text(LocaleProvider.tr('download'))),
                       ],
                     ),
                   ),
@@ -6715,7 +6735,9 @@ class _FoldersScreenState extends State<FoldersScreen>
             : _extractVideoIdFromPath(path);
 
         final sources = <String>[];
-        if (metaArtUri != null && metaArtUri.isNotEmpty && metaArtUri != 'null') {
+        if (metaArtUri != null &&
+            metaArtUri.isNotEmpty &&
+            metaArtUri != 'null') {
           sources.add(metaArtUri);
         }
         if (videoId != null && videoId.isNotEmpty) {

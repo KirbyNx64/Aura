@@ -580,6 +580,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
       playbackWatchSub?.cancel();
       playbackWatchSub = null;
     }
+
     loadingGuard = Timer(const Duration(seconds: 8), releaseLoading);
 
     try {
@@ -845,13 +846,15 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     // Obtener la carátula para la pantalla del reproductor
     final songId = song.id;
     final songPath = song.data;
+    final previousMediaItem = audioHandler.myHandler?.mediaItem.value;
+    final wasStreamingBeforeSelection =
+        previousMediaItem?.extras?['isStreaming'] == true;
 
     // Crear MediaItem temporal y actualizar inmediatamente para evitar visualizar la canción anterior
     // ArtworkHeroCached.clearFallback();
 
     // Iniciar carga de carátula
     final artUriFuture = getOrCacheArtwork(songId, songPath);
-    await (artUriFuture);
 
     Uri? cachedArtUri;
     try {
@@ -873,39 +876,54 @@ class _FavoritesScreenState extends State<FavoritesScreen>
       });
     }
 
-    final tempMediaItem = MediaItem(
-      id: song.data,
-      title: song.displayTitle,
-      artist: song.displayArtist,
-      duration: (song.duration != null && song.duration! > 0)
-          ? Duration(milliseconds: song.duration!)
-          : null,
-      artUri: cachedArtUri,
-      extras: {
-        'songId': song.id,
-        'albumId': song.albumId,
-        'data': song.data,
-        'queueIndex': 0,
-      },
-    );
-    audioHandler.myHandler?.mediaItem.add(tempMediaItem);
+    if (!wasStreamingBeforeSelection) {
+      final tempMediaItem = MediaItem(
+        id: song.data,
+        title: song.displayTitle,
+        artist: song.displayArtist,
+        duration: (song.duration != null && song.duration! > 0)
+            ? Duration(milliseconds: song.duration!)
+            : null,
+        artUri: cachedArtUri,
+        extras: {
+          'songId': song.id,
+          'albumId': song.albumId,
+          'data': song.data,
+          'queueIndex': 0,
+        },
+      );
+      audioHandler.myHandler?.mediaItem.add(tempMediaItem);
+    }
 
     // Abrir el panel del reproductor con la nueva animación
     if (!mounted) return;
     openPlayerPanelNotifier.value = true;
     // Activar indicador de carga
+    final loaderStartedAt = DateTime.now();
+    const minLoaderVisible = Duration(milliseconds: 320);
     playLoadingNotifier.value = true;
-
-    // Reproducir la canción después de un breve delay para que se abra la pantalla
-    Future.delayed(const Duration(milliseconds: 400), () {
-      if (mounted) {
-        _playSong(song);
-        // Desactivar indicador de carga después de reproducir
-        Future.delayed(const Duration(milliseconds: 200), () {
-          playLoadingNotifier.value = false;
-        });
+    final loaderHardGuard = Timer(const Duration(seconds: 6), () {
+      if (mounted && playLoadingNotifier.value) {
+        playLoadingNotifier.value = false;
       }
     });
+
+    try {
+      await Future<void>.delayed(const Duration(milliseconds: 16));
+      if (!mounted) return;
+      await _playSong(
+        song,
+      ).timeout(const Duration(seconds: 4), onTimeout: () {});
+    } finally {
+      loaderHardGuard.cancel();
+      final elapsed = DateTime.now().difference(loaderStartedAt);
+      if (elapsed < minLoaderVisible) {
+        await Future<void>.delayed(minLoaderVisible - elapsed);
+      }
+      if (mounted) {
+        playLoadingNotifier.value = false;
+      }
+    }
   }
 
   void _handleLongPress(BuildContext context, SongModel song) async {

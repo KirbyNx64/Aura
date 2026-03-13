@@ -128,6 +128,18 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
   static const Duration _streamingArtworkDebounceDelay = Duration(
     milliseconds: 140,
   );
+  Timer? _sourceSwitchTransitionTimer;
+  bool _suppressSourceSwitchTransitions = false;
+  bool? _lastMediaItemWasStreaming;
+  static const Duration _sourceSwitchTransitionSuppression = Duration(
+    milliseconds: 420,
+  );
+  MediaItem? _stabilizedMediaItem;
+  Timer? _sourceBounceGuardTimer;
+  bool? _sourceBounceTargetIsStreaming;
+  static const Duration _sourceBounceGuardDuration = Duration(
+    milliseconds: 850,
+  );
 
   // Control de indicadores de doble toque
   bool _showDoubleTapIndicators = false;
@@ -207,6 +219,67 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
       if (parsed != null) return parsed;
     }
     return mediaItem.artUri;
+  }
+
+  void _handleMediaSourceTransition(MediaItem mediaItem) {
+    final isStreaming = mediaItem.extras?['isStreaming'] == true;
+    final didSwitchSource =
+        _lastMediaItemWasStreaming != null &&
+        _lastMediaItemWasStreaming != isStreaming;
+
+    _lastMediaItemWasStreaming = isStreaming;
+    if (!didSwitchSource) return;
+
+    _sourceSwitchTransitionTimer?.cancel();
+    _suppressSourceSwitchTransitions = true;
+    _sourceSwitchTransitionTimer = Timer(
+      _sourceSwitchTransitionSuppression,
+      () {
+        if (!mounted) return;
+        setState(() {
+          _suppressSourceSwitchTransitions = false;
+        });
+      },
+    );
+  }
+
+  MediaItem? _resolveStableMediaItem(MediaItem? incomingMediaItem) {
+    if (incomingMediaItem == null) {
+      // Mantener último item solo mientras haya guardia activa para absorber rebotes.
+      if (_sourceBounceTargetIsStreaming != null &&
+          _stabilizedMediaItem != null) {
+        return _stabilizedMediaItem;
+      }
+      _stabilizedMediaItem = null;
+      return null;
+    }
+
+    final incomingIsStreaming =
+        incomingMediaItem.extras?['isStreaming'] == true;
+    final guardedTargetSource = _sourceBounceTargetIsStreaming;
+
+    // Si llega un item de la fuente opuesta durante la guardia, ignorarlo.
+    if (guardedTargetSource != null &&
+        incomingIsStreaming != guardedTargetSource) {
+      return _stabilizedMediaItem ?? incomingMediaItem;
+    }
+
+    final previousMediaItem = _stabilizedMediaItem;
+    if (previousMediaItem != null) {
+      final previousIsStreaming =
+          previousMediaItem.extras?['isStreaming'] == true;
+      if (previousIsStreaming != incomingIsStreaming) {
+        _sourceBounceTargetIsStreaming = incomingIsStreaming;
+        _sourceBounceGuardTimer?.cancel();
+        _sourceBounceGuardTimer = Timer(_sourceBounceGuardDuration, () {
+          _sourceBounceGuardTimer = null;
+          _sourceBounceTargetIsStreaming = null;
+        });
+      }
+    }
+
+    _stabilizedMediaItem = incomingMediaItem;
+    return incomingMediaItem;
   }
 
   void _setStreamingArtworkLoadingDebounced({
@@ -1081,6 +1154,8 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     _seekDebounceTimer?.cancel();
     _hideIndicatorsTimer?.cancel();
     _streamingArtworkDebounceTimer?.cancel();
+    _sourceSwitchTransitionTimer?.cancel();
+    _sourceBounceGuardTimer?.cancel();
     _fadeController.dispose();
     _lyricsScrollController.dispose();
     _dragValueSecondsNotifier.dispose();
@@ -1170,6 +1245,11 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                     final isAmoled = colorScheme == AppColorScheme.amoled;
                     final isDark =
                         Theme.of(context).brightness == Brightness.dark;
+                    final useWhiteSearchButton =
+                        colorScheme == AppColorScheme.system ||
+                        colorScheme == AppColorScheme.dynamic ||
+                        useDynamicBg ||
+                        useDynamicDialogs;
                     final showDynamicBg =
                         (useDynamicBg || useDynamicDialogs) &&
                         isAmoled &&
@@ -1263,80 +1343,82 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                         ),
                                         const SizedBox(width: 8),
                                         // Botón de búsqueda para abrir opciones
-                                        Ink(
-                                          decoration: BoxDecoration(
-                                            color:
-                                                Theme.of(context).brightness ==
-                                                    Brightness.dark
+                                        Builder(
+                                          builder: (context) {
+                                            final searchButtonBackgroundColor =
+                                                useWhiteSearchButton && isAmoled
+                                                ? Colors.white
+                                                : Theme.of(
+                                                        context,
+                                                      ).brightness ==
+                                                      Brightness.dark
                                                 ? Theme.of(
                                                     context,
                                                   ).colorScheme.primary
                                                 : Theme.of(context)
                                                       .colorScheme
                                                       .onPrimaryContainer
-                                                      .withValues(alpha: 0.7),
-                                            borderRadius: BorderRadius.circular(
-                                              12,
-                                            ),
-                                          ),
-                                          child: InkWell(
-                                            onTap: () async {
-                                              Navigator.of(context).pop();
-                                              await _showSearchOptions(
-                                                mediaItem,
-                                              );
-                                            },
-                                            borderRadius: BorderRadius.circular(
-                                              12,
-                                            ),
-                                            child: Container(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                    horizontal: 16,
-                                                    vertical: 8,
+                                                      .withValues(alpha: 0.7);
+                                            final searchButtonForegroundColor =
+                                                useWhiteSearchButton && isAmoled
+                                                ? Colors.black
+                                                : Theme.of(
+                                                        context,
+                                                      ).brightness ==
+                                                      Brightness.dark
+                                                ? Theme.of(
+                                                    context,
+                                                  ).colorScheme.onPrimary
+                                                : Theme.of(context)
+                                                      .colorScheme
+                                                      .surfaceContainer;
+
+                                            return Material(
+                                              color:
+                                                  searchButtonBackgroundColor,
+                                              borderRadius:
+                                                  BorderRadius.circular(12),
+                                              clipBehavior: Clip.antiAlias,
+                                              child: InkWell(
+                                                onTap: () async {
+                                                  Navigator.of(context).pop();
+                                                  await _showSearchOptions(
+                                                    mediaItem,
+                                                  );
+                                                },
+                                                child: Padding(
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                        horizontal: 16,
+                                                        vertical: 8,
+                                                      ),
+                                                  child: Row(
+                                                    mainAxisSize:
+                                                        MainAxisSize.min,
+                                                    children: [
+                                                      Icon(
+                                                        Icons.search,
+                                                        size: 20,
+                                                        color:
+                                                            searchButtonForegroundColor,
+                                                      ),
+                                                      const SizedBox(width: 8),
+                                                      TranslatedText(
+                                                        'search',
+                                                        style: TextStyle(
+                                                          fontWeight:
+                                                              FontWeight.w600,
+                                                          fontSize: 14,
+                                                          color:
+                                                              searchButtonForegroundColor,
+                                                        ),
+                                                      ),
+                                                    ],
                                                   ),
-                                              child: Row(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  Icon(
-                                                    Icons.search,
-                                                    size: 20,
-                                                    color:
-                                                        Theme.of(
-                                                              context,
-                                                            ).brightness ==
-                                                            Brightness.dark
-                                                        ? Theme.of(context)
-                                                              .colorScheme
-                                                              .onPrimary
-                                                        : Theme.of(context)
-                                                              .colorScheme
-                                                              .surfaceContainer,
-                                                  ),
-                                                  const SizedBox(width: 8),
-                                                  TranslatedText(
-                                                    'search',
-                                                    style: TextStyle(
-                                                      fontWeight:
-                                                          FontWeight.w600,
-                                                      fontSize: 14,
-                                                      color:
-                                                          Theme.of(
-                                                                context,
-                                                              ).brightness ==
-                                                              Brightness.dark
-                                                          ? Theme.of(context)
-                                                                .colorScheme
-                                                                .onPrimary
-                                                          : Theme.of(context)
-                                                                .colorScheme
-                                                                .surfaceContainer,
-                                                    ),
-                                                  ),
-                                                ],
+                                                ),
                                               ),
-                                            ),
-                                          ),
+                                            );
+                                          },
                                         ),
                                       ],
                                     ),
@@ -2986,6 +3068,9 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
 
     // Si no hay imagen disponible, no mostrar fondo
     if (imageProvider == null) {
+      if (_suppressSourceSwitchTransitions && _cachedAmoledBackground != null) {
+        return _cachedAmoledBackground;
+      }
       _cachedAmoledBackground = null;
       _cachedBackgroundSongId = null;
       _cachedBlurredImage = null;
@@ -3104,7 +3189,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
       stream: audioHandler?.mediaItem,
       initialData: widget.initialMediaItem,
       builder: (context, snapshot) {
-        final mediaItem = snapshot.data;
+        final mediaItem = _resolveStableMediaItem(snapshot.data);
 
         // Solo manejar cambio de carátula cuando realmente cambia la canción
         if (mediaItem != null && mediaItem.id != _lastMediaItemId) {
@@ -3115,6 +3200,8 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
 
         // Solo procesar si es una canción nueva
         if (mediaItem != null && mediaItem.id != _lastMediaItemId) {
+          _handleMediaSourceTransition(mediaItem);
+
           // Resetear progreso visual para evitar arrastrar la posición de la cola anterior.
           _lastKnownPosition = Duration.zero;
           _lastMediaItemId = mediaItem.id;
@@ -3207,9 +3294,12 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                     if (showBackground)
                                       Positioned.fill(
                                         child: AnimatedSwitcher(
-                                          duration: const Duration(
-                                            milliseconds: 200,
-                                          ),
+                                          duration:
+                                              _suppressSourceSwitchTransitions
+                                              ? Duration.zero
+                                              : const Duration(
+                                                  milliseconds: 200,
+                                                ),
                                           child:
                                               _buildAmoledBackground(
                                                 currentMediaItem,
@@ -3798,168 +3888,174 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                         child: ValueListenableBuilder<bool>(
                                                           valueListenable:
                                                               _artworkLoadingNotifier,
-                                                          builder: (context, _, child) {
-                                                            return FutureBuilder<
-                                                              bool
-                                                            >(
-                                                              future: SharedPreferences.getInstance().then(
-                                                                (prefs) =>
-                                                                    prefs.getBool(
-                                                                      'show_lyrics_on_cover',
-                                                                    ) ??
-                                                                    false,
-                                                              ),
-                                                              builder: (context, snapshot) {
-                                                                final showLyricsOnCover =
-                                                                    snapshot
-                                                                        .data ??
-                                                                    false;
+                                                          builder:
+                                                              (
+                                                                context,
+                                                                _,
+                                                                child,
+                                                              ) =>
+                                                                  child ??
+                                                                  const SizedBox.shrink(),
+                                                          child: FutureBuilder<bool>(
+                                                            future: SharedPreferences.getInstance().then(
+                                                              (prefs) =>
+                                                                  prefs.getBool(
+                                                                    'show_lyrics_on_cover',
+                                                                  ) ??
+                                                                  false,
+                                                            ),
+                                                            builder: (context, snapshot) {
+                                                              final showLyricsOnCover =
+                                                                  snapshot
+                                                                      .data ??
+                                                                  false;
 
-                                                                return ValueListenableBuilder<
-                                                                  double
-                                                                >(
-                                                                  valueListenable:
-                                                                      widget
-                                                                          .panelPositionNotifier ??
-                                                                      const AlwaysStoppedAnimation(
-                                                                        1.0,
-                                                                      ),
-                                                                  builder:
-                                                                      (
-                                                                        context,
-                                                                        position,
-                                                                        child,
-                                                                      ) {
-                                                                        // La carátula aparece un poco antes que los botones (0.4 vs 0.7)
-                                                                        return Opacity(
-                                                                          opacity:
-                                                                              ((position -
-                                                                                          0.35) /
-                                                                                      0.55)
-                                                                                  .clamp(
-                                                                                    0.0,
-                                                                                    1.0,
-                                                                                  ),
-                                                                          child:
-                                                                              child,
-                                                                        );
-                                                                      },
-                                                                  child: Stack(
-                                                                    children: [
-                                                                      AnimatedSwitcher(
-                                                                        duration: const Duration(
-                                                                          milliseconds:
-                                                                              75,
-                                                                        ),
-                                                                        child: KeyedSubtree(
-                                                                          key: ValueKey(
-                                                                            'player_art_${(currentMediaItem.extras?['songId'] ?? currentMediaItem.id).toString()}',
-                                                                          ),
-                                                                          child: buildArtwork(
-                                                                            currentMediaItem,
-                                                                            artworkSize,
-                                                                          ),
-                                                                        ),
-                                                                      ),
-                                                                      // Indicadores de doble toque solo cuando las letras se muestran en modal y se ha hecho doble toque
-                                                                      if (!showLyricsOnCover &&
-                                                                          _showDoubleTapIndicators)
-                                                                        Positioned.fill(
-                                                                          child: Container(
-                                                                            decoration: BoxDecoration(
-                                                                              borderRadius: BorderRadius.circular(
-                                                                                artworkSize *
-                                                                                    0.06,
-                                                                              ),
+                                                              return ValueListenableBuilder<
+                                                                double
+                                                              >(
+                                                                valueListenable:
+                                                                    widget
+                                                                        .panelPositionNotifier ??
+                                                                    const AlwaysStoppedAnimation(
+                                                                      1.0,
+                                                                    ),
+                                                                builder:
+                                                                    (
+                                                                      context,
+                                                                      position,
+                                                                      child,
+                                                                    ) {
+                                                                      // La carátula aparece un poco antes que los botones (0.4 vs 0.7)
+                                                                      return Opacity(
+                                                                        opacity:
+                                                                            ((position -
+                                                                                        0.35) /
+                                                                                    0.55)
+                                                                                .clamp(
+                                                                                  0.0,
+                                                                                  1.0,
+                                                                                ),
+                                                                        child:
+                                                                            child,
+                                                                      );
+                                                                    },
+                                                                child: Stack(
+                                                                  children: [
+                                                                    AnimatedSwitcher(
+                                                                      duration:
+                                                                          _suppressSourceSwitchTransitions
+                                                                          ? Duration.zero
+                                                                          : const Duration(
+                                                                              milliseconds: 75,
                                                                             ),
-                                                                            child: Stack(
-                                                                              children: [
-                                                                                // Indicador izquierdo (retroceder) - solo si se tocó el lado izquierdo
-                                                                                if (_showLeftIndicator)
-                                                                                  Positioned(
-                                                                                    left: 20,
-                                                                                    top: 0,
-                                                                                    bottom: 0,
-                                                                                    child: AnimatedBuilder(
-                                                                                      animation: _fadeAnimation,
-                                                                                      builder:
-                                                                                          (
-                                                                                            context,
-                                                                                            child,
-                                                                                          ) {
-                                                                                            return Opacity(
-                                                                                              opacity: _fadeAnimation.value,
-                                                                                              child: Center(
-                                                                                                child: Container(
-                                                                                                  width: 50,
-                                                                                                  height: 50,
-                                                                                                  decoration: BoxDecoration(
-                                                                                                    color: Colors.black.withValues(
-                                                                                                      alpha: 0.5,
-                                                                                                    ),
-                                                                                                    shape: BoxShape.circle,
+                                                                      child: KeyedSubtree(
+                                                                        key: ValueKey(
+                                                                          'player_art_${(currentMediaItem.extras?['songId'] ?? currentMediaItem.id).toString()}',
+                                                                        ),
+                                                                        child: buildArtwork(
+                                                                          currentMediaItem,
+                                                                          artworkSize,
+                                                                        ),
+                                                                      ),
+                                                                    ),
+                                                                    // Indicadores de doble toque solo cuando las letras se muestran en modal y se ha hecho doble toque
+                                                                    if (!showLyricsOnCover &&
+                                                                        _showDoubleTapIndicators)
+                                                                      Positioned.fill(
+                                                                        child: Container(
+                                                                          decoration: BoxDecoration(
+                                                                            borderRadius: BorderRadius.circular(
+                                                                              artworkSize *
+                                                                                  0.06,
+                                                                            ),
+                                                                          ),
+                                                                          child: Stack(
+                                                                            children: [
+                                                                              // Indicador izquierdo (retroceder) - solo si se tocó el lado izquierdo
+                                                                              if (_showLeftIndicator)
+                                                                                Positioned(
+                                                                                  left: 20,
+                                                                                  top: 0,
+                                                                                  bottom: 0,
+                                                                                  child: AnimatedBuilder(
+                                                                                    animation: _fadeAnimation,
+                                                                                    builder:
+                                                                                        (
+                                                                                          context,
+                                                                                          child,
+                                                                                        ) {
+                                                                                          return Opacity(
+                                                                                            opacity: _fadeAnimation.value,
+                                                                                            child: Center(
+                                                                                              child: Container(
+                                                                                                width: 50,
+                                                                                                height: 50,
+                                                                                                decoration: BoxDecoration(
+                                                                                                  color: Colors.black.withValues(
+                                                                                                    alpha: 0.5,
                                                                                                   ),
-                                                                                                  child: Center(
-                                                                                                    child: Icon(
-                                                                                                      Icons.replay_10,
-                                                                                                      color: Colors.white,
-                                                                                                      size: 28,
-                                                                                                    ),
+                                                                                                  shape: BoxShape.circle,
+                                                                                                ),
+                                                                                                child: Center(
+                                                                                                  child: Icon(
+                                                                                                    Icons.replay_10,
+                                                                                                    color: Colors.white,
+                                                                                                    size: 28,
                                                                                                   ),
                                                                                                 ),
                                                                                               ),
-                                                                                            );
-                                                                                          },
-                                                                                    ),
+                                                                                            ),
+                                                                                          );
+                                                                                        },
                                                                                   ),
-                                                                                // Indicador derecho (avanzar) - solo si se tocó el lado derecho
-                                                                                if (_showRightIndicator)
-                                                                                  Positioned(
-                                                                                    right: 20,
-                                                                                    top: 0,
-                                                                                    bottom: 0,
-                                                                                    child: AnimatedBuilder(
-                                                                                      animation: _fadeAnimation,
-                                                                                      builder:
-                                                                                          (
-                                                                                            context,
-                                                                                            child,
-                                                                                          ) {
-                                                                                            return Opacity(
-                                                                                              opacity: _fadeAnimation.value,
-                                                                                              child: Center(
-                                                                                                child: Container(
-                                                                                                  width: 50,
-                                                                                                  height: 50,
-                                                                                                  decoration: BoxDecoration(
-                                                                                                    color: Colors.black.withValues(
-                                                                                                      alpha: 0.5,
-                                                                                                    ),
-                                                                                                    shape: BoxShape.circle,
+                                                                                ),
+                                                                              // Indicador derecho (avanzar) - solo si se tocó el lado derecho
+                                                                              if (_showRightIndicator)
+                                                                                Positioned(
+                                                                                  right: 20,
+                                                                                  top: 0,
+                                                                                  bottom: 0,
+                                                                                  child: AnimatedBuilder(
+                                                                                    animation: _fadeAnimation,
+                                                                                    builder:
+                                                                                        (
+                                                                                          context,
+                                                                                          child,
+                                                                                        ) {
+                                                                                          return Opacity(
+                                                                                            opacity: _fadeAnimation.value,
+                                                                                            child: Center(
+                                                                                              child: Container(
+                                                                                                width: 50,
+                                                                                                height: 50,
+                                                                                                decoration: BoxDecoration(
+                                                                                                  color: Colors.black.withValues(
+                                                                                                    alpha: 0.5,
                                                                                                   ),
-                                                                                                  child: Center(
-                                                                                                    child: Icon(
-                                                                                                      Icons.forward_10,
-                                                                                                      color: Colors.white,
-                                                                                                      size: 28,
-                                                                                                    ),
+                                                                                                  shape: BoxShape.circle,
+                                                                                                ),
+                                                                                                child: Center(
+                                                                                                  child: Icon(
+                                                                                                    Icons.forward_10,
+                                                                                                    color: Colors.white,
+                                                                                                    size: 28,
                                                                                                   ),
                                                                                                 ),
                                                                                               ),
-                                                                                            );
-                                                                                          },
-                                                                                    ),
+                                                                                            ),
+                                                                                          );
+                                                                                        },
                                                                                   ),
-                                                                              ],
-                                                                            ),
+                                                                                ),
+                                                                            ],
                                                                           ),
                                                                         ),
-                                                                    ],
-                                                                  ),
-                                                                );
-                                                              },
-                                                            );
-                                                          },
+                                                                      ),
+                                                                  ],
+                                                                ),
+                                                              );
+                                                            },
+                                                          ),
                                                         ),
                                                       ),
                                                     );
