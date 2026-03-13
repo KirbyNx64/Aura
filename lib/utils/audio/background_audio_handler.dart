@@ -432,6 +432,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   Timer? _streamUrlPrefetchDebounceTimer;
   final List<Map<String, dynamic>> _streamQueuePendingItems =
       <Map<String, dynamic>>[];
+  final List<MediaItem> _streamQueueVisualMetadata = <MediaItem>[];
   int _streamQueuePendingCursor = 0;
   bool _streamQueueTailResolveInProgress = false;
   int _streamQueueOperationVersion = 0;
@@ -783,6 +784,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     _streamUrlPrefetchDebounceTimer = null;
     _pendingStreamUrlPrefetchIds.clear();
     _streamQueuePendingItems.clear();
+    _streamQueueVisualMetadata.clear();
     _streamQueuePendingCursor = 0;
     _streamQueueTailResolveInProgress = false;
 
@@ -1982,6 +1984,14 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       if (desiredIndex < 0 || desiredIndex >= normalizedItems.length) {
         desiredIndex = 0;
       }
+      final visualMetadataQueue = <MediaItem>[
+        for (int i = 0; i < normalizedItems.length; i++)
+          _buildStreamingMetadataItemFromNormalizedEntry(
+            normalizedItems[i],
+            radioMode: false,
+            queueIndex: i,
+          ),
+      ];
 
       int bootstrapCount = _streamQueueBootstrapCount;
       if (bootstrapCount < desiredIndex + 1) {
@@ -2049,6 +2059,9 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       _streamRadioEnabled = false;
       _streamRadioSeedVideoId = null;
       _streamRadioContinuationParams = null;
+      _streamQueueVisualMetadata
+        ..clear()
+        ..addAll(visualMetadataQueue);
       if (normalizedItems.length > bootstrapCount) {
         _streamQueuePendingItems.addAll(
           normalizedItems
@@ -2208,6 +2221,17 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       // ignore: deprecated_member_use
       await _concat!.addAll([AudioSource.uri(Uri.parse(resolvedStreamUrl))]);
       _mediaQueue.add(streamItem);
+      if (!_streamRadioEnabled &&
+          _mediaQueue.isNotEmpty &&
+          _isStreamingMediaItem(_mediaQueue.first) &&
+          _streamQueueVisualMetadata.isNotEmpty) {
+        final visualIndex = _streamQueueVisualMetadata.length;
+        _streamQueueVisualMetadata.add(
+          streamItem.copyWith(
+            extras: {...?streamItem.extras, 'queueIndex': visualIndex},
+          ),
+        );
+      }
       queue.add(List<MediaItem>.from(_mediaQueue));
       unawaited(() async {
         try {
@@ -2426,6 +2450,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     _streamUrlPrefetchDebounceTimer = null;
     _pendingStreamUrlPrefetchIds.clear();
     _streamQueuePendingItems.clear();
+    _streamQueueVisualMetadata.clear();
     _streamQueuePendingCursor = 0;
     _streamArtworkPreloadTasks.clear();
     if (clearQueuedVideos) {
@@ -2554,16 +2579,29 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     return normalizedUrl;
   }
 
-  MediaItem _buildStreamingMediaItemFromNormalizedEntry(
-    Map<String, dynamic> entry,
-    String streamUrl, {
+  MediaItem _buildStreamingMetadataItemFromNormalizedEntry(
+    Map<String, dynamic> entry, {
+    String? streamUrl,
     bool radioMode = false,
+    int? queueIndex,
   }) {
     final videoId = entry['videoId'].toString();
     final durationMs = entry['durationMs'] as int?;
     final durationText = entry['durationText']?.toString().trim();
     final displayArtUri = entry['displayArtUri']?.toString().trim();
     final artist = entry['artist']?.toString().trim();
+
+    final extras = <String, dynamic>{
+      'videoId': videoId,
+      'isStreaming': true,
+      'radioMode': radioMode,
+      'displayArtUri': displayArtUri,
+      if (streamUrl != null && streamUrl.isNotEmpty) 'streamUrl': streamUrl,
+      if (queueIndex != null) 'queueIndex': queueIndex,
+      if (durationMs != null && durationMs > 0) 'durationMs': durationMs,
+      if (durationText != null && durationText.isNotEmpty)
+        'durationText': durationText,
+    };
 
     return MediaItem(
       id: 'yt:$videoId',
@@ -2573,16 +2611,19 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
           ? Duration(milliseconds: durationMs)
           : null,
       artUri: Uri.tryParse(displayArtUri ?? ''),
-      extras: {
-        'videoId': videoId,
-        'isStreaming': true,
-        'radioMode': radioMode,
-        'streamUrl': streamUrl,
-        'displayArtUri': displayArtUri,
-        if (durationMs != null && durationMs > 0) 'durationMs': durationMs,
-        if (durationText != null && durationText.isNotEmpty)
-          'durationText': durationText,
-      },
+      extras: extras,
+    );
+  }
+
+  MediaItem _buildStreamingMediaItemFromNormalizedEntry(
+    Map<String, dynamic> entry,
+    String streamUrl, {
+    bool radioMode = false,
+  }) {
+    return _buildStreamingMetadataItemFromNormalizedEntry(
+      entry,
+      streamUrl: streamUrl,
+      radioMode: radioMode,
     );
   }
 
@@ -4134,6 +4175,13 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   /// Obtiene la cola actual respetando el orden del shuffle si está activo
   List<MediaItem> get effectiveQueue {
     if (_mediaQueue.isEmpty) return [];
+    final bool isNonRadioStreamingQueue =
+        !_streamRadioEnabled &&
+        _isStreamingMediaItem(_mediaQueue.first) &&
+        _streamQueueVisualMetadata.isNotEmpty;
+    if (isNonRadioStreamingQueue) {
+      return List<MediaItem>.from(_streamQueueVisualMetadata);
+    }
 
     // Si shuffle NO está activo, devolver la cola original
     if (!isShuffleNotifier.value) {
