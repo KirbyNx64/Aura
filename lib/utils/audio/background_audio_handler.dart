@@ -455,7 +455,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   );
   static const int _streamArtworkPrefetchCount = 0;
   static const int _streamArtworkCacheMaxEntries = 120;
-  static const int _streamQueueBootstrapCount = 1;
+  static const int _streamQueueBootstrapCount = 2;
   static const int _streamQueueTailPrefetchThreshold = 0;
   static const int _streamQueueTailBatchSize = 1;
   static const int _streamQueueResolveConcurrency = 6;
@@ -1990,7 +1990,18 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       if (desiredIndex < 0 || desiredIndex >= normalizedItems.length) {
         desiredIndex = 0;
       }
-      final targetEntry = normalizedItems[desiredIndex];
+      // Reordenar para que la reproducción siempre inicie en el elemento
+      // seleccionado y solo se resuelvan inmediatamente "actual + siguiente".
+      final playbackOrderedItems = <Map<String, dynamic>>[];
+      if (desiredIndex > 0) {
+        playbackOrderedItems.addAll(normalizedItems.sublist(desiredIndex));
+        playbackOrderedItems.addAll(normalizedItems.sublist(0, desiredIndex));
+      } else {
+        playbackOrderedItems.addAll(normalizedItems);
+      }
+      desiredIndex = 0;
+
+      final targetEntry = playbackOrderedItems[desiredIndex];
       final preResolvedTargetStreamUrl = targetEntry['streamUrl']
           ?.toString()
           .trim();
@@ -2016,24 +2027,21 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         targetEntry['streamUrl'] = resolvedTargetStreamUrl;
       }
       final visualMetadataQueue = <MediaItem>[
-        for (int i = 0; i < normalizedItems.length; i++)
+        for (int i = 0; i < playbackOrderedItems.length; i++)
           _buildStreamingMetadataItemFromNormalizedEntry(
-            normalizedItems[i],
+            playbackOrderedItems[i],
             radioMode: false,
             queueIndex: i,
           ),
       ];
 
       int bootstrapCount = _streamQueueBootstrapCount;
-      if (bootstrapCount < desiredIndex + 1) {
-        bootstrapCount = desiredIndex + 1;
-      }
-      if (bootstrapCount > normalizedItems.length) {
-        bootstrapCount = normalizedItems.length;
+      if (bootstrapCount > playbackOrderedItems.length) {
+        bootstrapCount = playbackOrderedItems.length;
       }
 
       final resolvingSessionVersion = _streamSessionVersion;
-      final bootstrapEntries = normalizedItems.sublist(0, bootstrapCount);
+      final bootstrapEntries = playbackOrderedItems.sublist(0, bootstrapCount);
       final bootstrapResolvedEntries =
           await _resolveStreamingQueueEntriesOrdered(
             entries: bootstrapEntries,
@@ -2049,7 +2057,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
       if (!bootstrapResolved.containsKey(desiredIndex)) {
         final forcedUrl = await _resolveStreamingQueueEntryUrl(
-          normalizedItems[desiredIndex],
+          playbackOrderedItems[desiredIndex],
           forceRefresh: true,
         );
         if (forcedUrl != null && forcedUrl.isNotEmpty) {
@@ -2058,7 +2066,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       }
 
       if (!bootstrapResolved.containsKey(desiredIndex)) {
-        final targetVideoId = normalizedItems[desiredIndex]['videoId']
+        final targetVideoId = playbackOrderedItems[desiredIndex]['videoId']
             ?.toString();
         _reportStreamResolveFailure(videoId: targetVideoId);
         return;
@@ -2071,7 +2079,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       for (int i = 0; i < bootstrapCount; i++) {
         final streamUrl = bootstrapResolved[i];
         if (streamUrl == null || streamUrl.isEmpty) continue;
-        final entry = normalizedItems[i];
+        final entry = playbackOrderedItems[i];
         final mediaItem = _buildStreamingMediaItemFromNormalizedEntry(
           entry,
           streamUrl,
@@ -2098,9 +2106,9 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       _streamQueueVisualMetadata
         ..clear()
         ..addAll(visualMetadataQueue);
-      if (normalizedItems.length > bootstrapCount) {
+      if (playbackOrderedItems.length > bootstrapCount) {
         _streamQueuePendingItems.addAll(
-          normalizedItems
+          playbackOrderedItems
               .sublist(bootstrapCount)
               .map((entry) => Map<String, dynamic>.from(entry)),
         );
