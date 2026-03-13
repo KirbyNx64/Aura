@@ -43,8 +43,17 @@ class YtMusicResult {
   final String? artist;
   final String? thumbUrl;
   final String? videoId;
+  final String? durationText;
+  final int? durationMs;
 
-  YtMusicResult({this.title, this.artist, this.thumbUrl, this.videoId});
+  YtMusicResult({
+    this.title,
+    this.artist,
+    this.thumbUrl,
+    this.videoId,
+    this.durationText,
+    this.durationMs,
+  });
 }
 
 // Búsqueda recursiva de una clave dentro de un árbol Map/List
@@ -1243,6 +1252,58 @@ int? _parseDurationTextMs(String? text) {
   return totalSeconds * 1000;
 }
 
+String? _extractDurationText(dynamic renderer) {
+  if (renderer is! Map) return null;
+  const pattern = r'^(\d+:)*\d+:\d+$';
+
+  final candidates = <dynamic>[
+    nav(renderer, [
+      'fixedColumns',
+      0,
+      'musicResponsiveListItemFixedColumnRenderer',
+      'text',
+      'simpleText',
+    ]),
+    nav(renderer, [
+      'fixedColumns',
+      0,
+      'musicResponsiveListItemFixedColumnRenderer',
+      'text',
+      'runs',
+      0,
+      'text',
+    ]),
+    nav(renderer, ['lengthText', 'simpleText']),
+    nav(renderer, ['lengthText', 'runs', 0, 'text']),
+  ];
+
+  for (final candidate in candidates) {
+    final text = candidate?.toString().trim();
+    if (text != null && text.isNotEmpty && RegExp(pattern).hasMatch(text)) {
+      return text;
+    }
+  }
+
+  final subtitleRuns = nav(renderer, [
+    'flexColumns',
+    1,
+    'musicResponsiveListItemFlexColumnRenderer',
+    'text',
+    'runs',
+  ]);
+  if (subtitleRuns is List) {
+    for (final run in subtitleRuns) {
+      if (run is! Map) continue;
+      final text = run['text']?.toString().trim();
+      if (text != null && text.isNotEmpty && RegExp(pattern).hasMatch(text)) {
+        return text;
+      }
+    }
+  }
+
+  return null;
+}
+
 // Función para parsear canciones específicamente
 void parseSongs(List items, List<YtMusicResult> results) {
   for (var item in items) {
@@ -1265,6 +1326,8 @@ void parseSongs(List items, List<YtMusicResult> results) {
       if (videoType == null || videoType == 'MUSIC_VIDEO_TYPE_ATV') {
         final title =
             renderer['flexColumns']?[0]?['musicResponsiveListItemFlexColumnRenderer']?['text']?['runs']?[0]?['text'];
+        final durationText = _extractDurationText(renderer);
+        final durationMs = _parseDurationTextMs(durationText);
 
         final subtitleRuns =
             renderer['flexColumns']?[1]?['musicResponsiveListItemFlexColumnRenderer']?['text']?['runs'];
@@ -1304,6 +1367,8 @@ void parseSongs(List items, List<YtMusicResult> results) {
               artist: artist,
               thumbUrl: thumbUrl,
               videoId: videoId,
+              durationText: durationText,
+              durationMs: durationMs,
             ),
           );
         }
@@ -1684,6 +1749,8 @@ Future<List<YtMusicResult>> searchVideosWithPagination(
               }
               final videoId =
                   renderer['overlay']?['musicItemThumbnailOverlayRenderer']?['content']?['musicPlayButtonRenderer']?['playNavigationEndpoint']?['watchEndpoint']?['videoId'];
+              final durationText = _extractDurationText(renderer);
+              final durationMs = _parseDurationTextMs(durationText);
               if (videoId != null && title != null) {
                 results.add(
                   YtMusicResult(
@@ -1691,6 +1758,8 @@ Future<List<YtMusicResult>> searchVideosWithPagination(
                     artist: artist,
                     thumbUrl: thumbUrl,
                     videoId: videoId,
+                    durationText: durationText,
+                    durationMs: durationMs,
                   ),
                 );
               }
@@ -1783,6 +1852,8 @@ Future<List<YtMusicResult>> searchVideosWithPagination(
               }
               final videoId =
                   renderer['overlay']?['musicItemThumbnailOverlayRenderer']?['content']?['musicPlayButtonRenderer']?['playNavigationEndpoint']?['watchEndpoint']?['videoId'];
+              final durationText = _extractDurationText(renderer);
+              final durationMs = _parseDurationTextMs(durationText);
               if (videoId != null && title != null) {
                 results.add(
                   YtMusicResult(
@@ -1790,6 +1861,8 @@ Future<List<YtMusicResult>> searchVideosWithPagination(
                     artist: artist,
                     thumbUrl: thumbUrl,
                     videoId: videoId,
+                    durationText: durationText,
+                    durationMs: durationMs,
                   ),
                 );
               }
@@ -2350,12 +2423,16 @@ Future<List<YtMusicResult>> getAlbumSongs(String browseId) async {
         }
 
         if (videoId != null && title != null) {
+          final durationText = _extractDurationText(renderer);
+          final durationMs = _parseDurationTextMs(durationText);
           results.add(
             YtMusicResult(
               title: title,
               artist: artist,
               thumbUrl: thumbUrl,
               videoId: videoId,
+              durationText: durationText,
+              durationMs: durationMs,
             ),
           );
         }
@@ -2882,14 +2959,8 @@ YtMusicResult? _parsePlaylistSong(Map<String, dynamic> renderer) {
     )['text'];
   }
 
-  // Obtener duración (comentado ya que YtMusicResult no tiene este campo)
-  // String? duration;
-  // final fixedColumns = nav(renderer, ['fixedColumns']);
-  // if (fixedColumns != null && fixedColumns is List && fixedColumns.isNotEmpty) {
-  //   final durationText = nav(fixedColumns[0], ['text', 'simpleText']) ??
-  //       nav(fixedColumns[0], ['text', 'runs', 0, 'text']);
-  //   duration = durationText;
-  // }
+  final durationText = _extractDurationText(renderer);
+  final durationMs = _parseDurationTextMs(durationText);
 
   // Obtener thumbnail
   String? thumbUrl;
@@ -2908,6 +2979,8 @@ YtMusicResult? _parsePlaylistSong(Map<String, dynamic> renderer) {
     artist: artist,
     thumbUrl: thumbUrl,
     videoId: videoId,
+    durationText: durationText,
+    durationMs: durationMs,
   );
 }
 

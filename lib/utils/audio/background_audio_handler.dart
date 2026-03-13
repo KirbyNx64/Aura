@@ -667,6 +667,8 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
                   artUri: (displayArtUri != null && displayArtUri.isNotEmpty)
                       ? displayArtUri
                       : currentItem.artUri?.toString(),
+                  durationText: _durationTextFromMediaItem(currentItem),
+                  durationMs: _durationMsFromMediaItem(currentItem),
                 );
               }
             }
@@ -798,6 +800,8 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     String? artist,
     String? videoId,
     String? artUri,
+    String? durationText,
+    int? durationMs,
   }) {
     _trackingTimer?.cancel();
     final remainingTime = const Duration(seconds: 10) - _elapsedTrackingTime;
@@ -813,6 +817,8 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
             artist: artist,
             videoId: videoId,
             artUri: artUri,
+            durationText: durationText,
+            durationMs: durationMs,
           ),
         );
         unawaited(_updateMostPlayedAsync(path));
@@ -829,6 +835,8 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
               artist: artist,
               videoId: videoId,
               artUri: artUri,
+              durationText: durationText,
+              durationMs: durationMs,
             ),
           );
           // Actualizar más reproducidas de forma asíncrona
@@ -952,6 +960,37 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     return item.id.trim();
   }
 
+  int? _durationMsFromMediaItem(MediaItem item) {
+    final fromDuration = item.duration?.inMilliseconds;
+    if (fromDuration != null && fromDuration > 0) return fromDuration;
+
+    final raw = item.extras?['durationMs'] ?? item.extras?['duration'];
+    if (raw is int && raw > 0) return raw;
+    if (raw is num && raw > 0) return raw.toInt();
+    if (raw is String) {
+      final parsed = int.tryParse(raw.trim());
+      if (parsed != null && parsed > 0) return parsed;
+    }
+    return null;
+  }
+
+  String? _durationTextFromMediaItem(MediaItem item) {
+    final raw = item.extras?['durationText']?.toString().trim();
+    if (raw != null && raw.isNotEmpty) return raw;
+
+    final durationMs = _durationMsFromMediaItem(item);
+    if (durationMs == null || durationMs <= 0) return null;
+
+    final duration = Duration(milliseconds: durationMs);
+    final hours = duration.inHours;
+    final minutes = duration.inMinutes.remainder(60);
+    final seconds = duration.inSeconds.remainder(60).toString().padLeft(2, '0');
+    if (hours > 0) {
+      return '$hours:${minutes.toString().padLeft(2, '0')}:$seconds';
+    }
+    return '$minutes:$seconds';
+  }
+
   /// Transform a just_audio event into an audio_service state.
   /// Sigue exactamente el patrón de la documentación oficial de audio_service
   PlaybackState _transformPlaybackEvent(PlaybackEvent event) {
@@ -1057,6 +1096,8 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
             artUri: (displayArtUri != null && displayArtUri.isNotEmpty)
                 ? displayArtUri
                 : currentMediaItem.artUri?.toString(),
+            durationText: _durationTextFromMediaItem(currentMediaItem),
+            durationMs: _durationMsFromMediaItem(currentMediaItem),
           );
         }
       }
@@ -1097,7 +1138,15 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       _trackingStartTime = DateTime.now();
 
       if (songPath != null) {
-        _startTrackingPlaytime(currentMediaItem.id, songPath);
+        _startTrackingPlaytime(
+          currentMediaItem.id,
+          songPath,
+          title: currentMediaItem.title,
+          artist: currentMediaItem.artist,
+          artUri: currentMediaItem.artUri?.toString(),
+          durationText: _durationTextFromMediaItem(currentMediaItem),
+          durationMs: _durationMsFromMediaItem(currentMediaItem),
+        );
       }
     }
 
@@ -1892,6 +1941,16 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         final title = raw['title']?.toString().trim();
         final artist = raw['artist']?.toString().trim();
         final artUriRaw = raw['artUri']?.toString().trim();
+        final rawDuration = raw['durationMs'];
+        int? durationMs;
+        if (rawDuration is int) {
+          durationMs = rawDuration;
+        } else if (rawDuration is num) {
+          durationMs = rawDuration.toInt();
+        } else if (rawDuration is String) {
+          durationMs = int.tryParse(rawDuration.trim());
+        }
+        final durationText = raw['durationText']?.toString().trim();
         final resolvedDisplayArtUri = _resolveStreamingDisplayArtUri(
           preferred: raw['displayArtUri']?.toString(),
           artUri: (artUriRaw != null && artUriRaw.isNotEmpty)
@@ -1904,6 +1963,9 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
           id: 'yt:$videoId',
           title: (title != null && title.isNotEmpty) ? title : 'Unknown title',
           artist: (artist != null && artist.isNotEmpty) ? artist : null,
+          duration: (durationMs != null && durationMs > 0)
+              ? Duration(milliseconds: durationMs)
+              : null,
           artUri: Uri.tryParse(resolvedDisplayArtUri ?? ''),
           extras: {
             'videoId': videoId,
@@ -1911,6 +1973,9 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
             'radioMode': false,
             'streamUrl': streamUrl,
             'displayArtUri': resolvedDisplayArtUri,
+            if (durationMs != null && durationMs > 0) 'durationMs': durationMs,
+            if (durationText != null && durationText.isNotEmpty)
+              'durationText': durationText,
           },
         );
 
@@ -2404,6 +2469,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     final title = rawTrack['title']?.toString().trim();
     final artist = rawTrack['artist']?.toString().trim();
     final artUriRaw = rawTrack['thumbUrl']?.toString().trim();
+    final durationText = rawTrack['durationText']?.toString().trim();
 
     final resolvedDisplayArtUri = _resolveStreamingDisplayArtUri(
       preferred: artUriRaw,
@@ -2427,6 +2493,9 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         'radioMode': true,
         'streamUrl': streamUrl,
         'displayArtUri': resolvedDisplayArtUri,
+        if (durationMs != null && durationMs > 0) 'durationMs': durationMs,
+        if (durationText != null && durationText.isNotEmpty)
+          'durationText': durationText,
       },
     );
 
@@ -2452,6 +2521,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     final title = rawTrack['title']?.toString().trim();
     final artist = rawTrack['artist']?.toString().trim();
     final artUriRaw = rawTrack['thumbUrl']?.toString().trim();
+    final durationText = rawTrack['durationText']?.toString().trim();
     final resolvedDisplayArtUri = _resolveStreamingDisplayArtUri(
       preferred: artUriRaw,
       artUri: (artUriRaw != null && artUriRaw.isNotEmpty)
@@ -2474,6 +2544,9 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         'radioMode': true,
         'pendingStream': true,
         'displayArtUri': resolvedDisplayArtUri,
+        if (durationMs != null && durationMs > 0) 'durationMs': durationMs,
+        if (durationText != null && durationText.isNotEmpty)
+          'durationText': durationText,
       },
     );
   }
@@ -4016,6 +4089,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         } else if (rawDuration is String) {
           durationMs = int.tryParse(rawDuration);
         }
+        final durationText = extras?['durationText']?.toString().trim();
 
         final mediaId =
             (extras?['mediaId']?.toString().trim().isNotEmpty ?? false)
@@ -4052,6 +4126,9 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
             'playlistId': extras?['playlistId']?.toString().trim(),
             'streamUrl': streamUrl,
             'displayArtUri': resolvedDisplayArtUri,
+            if (durationMs != null && durationMs > 0) 'durationMs': durationMs,
+            if (durationText != null && durationText.isNotEmpty)
+              'durationText': durationText,
           },
         );
 
@@ -4122,6 +4199,8 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
           final displayArtUri = item.extras?['displayArtUri']
               ?.toString()
               .trim();
+          final durationMs = _durationMsFromMediaItem(item);
+          final durationText = _durationTextFromMediaItem(item);
           await FavoritesDB().addFavoritePath(
             songPath,
             title: item.title,
@@ -4130,6 +4209,8 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
             artUri: (displayArtUri != null && displayArtUri.isNotEmpty)
                 ? displayArtUri
                 : item.artUri?.toString(),
+            durationText: durationText,
+            durationMs: durationMs,
           );
           _favoriteIds.add(item.id);
         }

@@ -56,6 +56,8 @@ class _StreamingPlaylistItem {
   final String artist;
   final String? videoId;
   final String? artUri;
+  final String? durationText;
+  final int? durationMs;
 
   const _StreamingPlaylistItem({
     required this.rawPath,
@@ -63,6 +65,8 @@ class _StreamingPlaylistItem {
     required this.artist,
     this.videoId,
     this.artUri,
+    this.durationText,
+    this.durationMs,
   });
 }
 
@@ -1522,6 +1526,46 @@ class _FoldersScreenState extends State<FoldersScreen>
     return artist;
   }
 
+  int? _parseDurationMs(dynamic raw) {
+    if (raw is int && raw > 0) return raw;
+    if (raw is num && raw > 0) return raw.toInt();
+    if (raw is String) {
+      final parsed = int.tryParse(raw.trim());
+      if (parsed != null && parsed > 0) return parsed;
+    }
+    return null;
+  }
+
+  String _formatDurationMs(int durationMs) {
+    final duration = Duration(milliseconds: durationMs);
+    final hours = duration.inHours;
+    final minutes = duration.inMinutes % 60;
+    final seconds = (duration.inSeconds % 60).toString().padLeft(2, '0');
+
+    if (hours > 0) {
+      return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:$seconds';
+    }
+    return '$minutes:$seconds';
+  }
+
+  String _formatStreamingArtistWithDuration(_StreamingPlaylistItem item) {
+    final artist = item.artist.trim().isEmpty
+        ? LocaleProvider.tr('artist_unknown')
+        : item.artist;
+
+    final durationText = item.durationText?.trim();
+    if (durationText != null && durationText.isNotEmpty) {
+      return '$artist • $durationText';
+    }
+
+    final durationMs = item.durationMs;
+    if (durationMs != null && durationMs > 0) {
+      return '$artist • ${_formatDurationMs(durationMs)}';
+    }
+
+    return artist;
+  }
+
   Future<void> _preloadArtworksForSongs(List<SongModel> songs) async {
     try {
       for (final song in songs.take(20)) {
@@ -1759,6 +1803,11 @@ class _FoldersScreenState extends State<FoldersScreen>
                   ? entry.artist.trim()
                   : LocaleProvider.tr('artist_unknown'),
               'artUri': entryArtUri,
+              if (entry.durationMs != null && entry.durationMs! > 0)
+                'durationMs': entry.durationMs,
+              if (entry.durationText != null &&
+                  entry.durationText!.trim().isNotEmpty)
+                'durationText': entry.durationText!.trim(),
             };
           })
           .toList();
@@ -1820,6 +1869,10 @@ class _FoldersScreenState extends State<FoldersScreen>
             ? item.artist.trim()
             : LocaleProvider.tr('artist_unknown'),
         'artUri': artUri,
+        if (item.durationMs != null && item.durationMs! > 0)
+          'durationMs': item.durationMs,
+        if (item.durationText != null && item.durationText!.trim().isNotEmpty)
+          'durationText': item.durationText!.trim(),
         'radioMode': true,
         'autoPlay': true,
       });
@@ -2161,6 +2214,8 @@ class _FoldersScreenState extends State<FoldersScreen>
                           artist: item.artist,
                           videoId: item.videoId,
                           artUri: item.artUri,
+                          durationText: item.durationText,
+                          durationMs: item.durationMs,
                         );
                       }
                       favoritesShouldReload.value =
@@ -4443,6 +4498,8 @@ class _FoldersScreenState extends State<FoldersScreen>
                               artist: item.artist,
                               videoId: item.videoId,
                               artUri: item.artUri,
+                              durationText: item.durationText,
+                              durationMs: item.durationMs,
                             );
                           }
                         } else {
@@ -4953,7 +5010,7 @@ class _FoldersScreenState extends State<FoldersScreen>
                             ],
                           ),
                           subtitle: Text(
-                            item.artist,
+                            _formatStreamingArtistWithDuration(item),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: isAmoled
@@ -5322,6 +5379,8 @@ class _FoldersScreenState extends State<FoldersScreen>
             artist: item.artist,
             videoId: item.videoId,
             artUri: item.artUri,
+            durationText: item.durationText,
+            durationMs: item.durationMs,
           );
         }
       } else {
@@ -7456,6 +7515,14 @@ class _FoldersScreenState extends State<FoldersScreen>
       final metaTitle = meta?['title']?.toString().trim();
       final metaArtist = meta?['artist']?.toString().trim();
       final metaArtUri = meta?['artUri']?.toString().trim();
+      final metaDurationText = meta?['durationText']?.toString().trim();
+      final metaDurationMs = _parseDurationMs(meta?['durationMs']);
+      final durationText =
+          (metaDurationText != null && metaDurationText.isNotEmpty)
+          ? metaDurationText
+          : (metaDurationMs != null && metaDurationMs > 0)
+          ? _formatDurationMs(metaDurationMs)
+          : null;
 
       streamingItems.add(
         _StreamingPlaylistItem(
@@ -7472,6 +7539,8 @@ class _FoldersScreenState extends State<FoldersScreen>
           artUri: (metaArtUri != null && metaArtUri.isNotEmpty)
               ? metaArtUri
               : null,
+          durationText: durationText,
+          durationMs: metaDurationMs,
         ),
       );
     }

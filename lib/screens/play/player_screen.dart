@@ -200,6 +200,32 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     }
   }
 
+  int? _durationMsFromMediaItem(MediaItem mediaItem) {
+    final fromDuration = mediaItem.duration?.inMilliseconds;
+    if (fromDuration != null && fromDuration > 0) return fromDuration;
+
+    final raw =
+        mediaItem.extras?['durationMs'] ?? mediaItem.extras?['duration'];
+    if (raw is int && raw > 0) return raw;
+    if (raw is num && raw > 0) return raw.toInt();
+    if (raw is String) {
+      final parsed = int.tryParse(raw.trim());
+      if (parsed != null && parsed > 0) return parsed;
+    }
+    return null;
+  }
+
+  String? _durationTextFromMediaItem(MediaItem mediaItem) {
+    final raw = mediaItem.extras?['durationText']?.toString().trim();
+    if (raw != null && raw.isNotEmpty) return raw;
+
+    final durationMs = _durationMsFromMediaItem(mediaItem);
+    if (durationMs != null && durationMs > 0) {
+      return _formatDuration(Duration(milliseconds: durationMs));
+    }
+    return null;
+  }
+
   String _formatSleepTimerDuration(Duration duration) {
     final hours = duration.inHours;
     final minutes = duration.inMinutes.remainder(60);
@@ -1505,6 +1531,14 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                   ? displayArtUri
                                                   : mediaItem.artUri
                                                         ?.toString();
+                                              final durationMs =
+                                                  _durationMsFromMediaItem(
+                                                    mediaItem,
+                                                  );
+                                              final durationText =
+                                                  _durationTextFromMediaItem(
+                                                    mediaItem,
+                                                  );
 
                                               await FavoritesDB()
                                                   .addFavoritePath(
@@ -1513,6 +1547,8 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                     artist: mediaItem.artist,
                                                     videoId: videoId,
                                                     artUri: artUri,
+                                                    durationText: durationText,
+                                                    durationMs: durationMs,
                                                   );
                                               favoritesShouldReload.value =
                                                   !favoritesShouldReload.value;
@@ -2445,6 +2481,14 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                             mediaItem.artist,
                                                         videoId: videoId,
                                                         artUri: artUri,
+                                                        durationText:
+                                                            _durationTextFromMediaItem(
+                                                              mediaItem,
+                                                            ),
+                                                        durationMs:
+                                                            _durationMsFromMediaItem(
+                                                              mediaItem,
+                                                            ),
                                                       );
                                                   playlistsShouldReload.value =
                                                       !playlistsShouldReload
@@ -2778,6 +2822,8 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
         artist: mediaItem.artist,
         videoId: videoId,
         artUri: artUri,
+        durationText: _durationTextFromMediaItem(mediaItem),
+        durationMs: _durationMsFromMediaItem(mediaItem),
       );
       playlistsShouldReload.value = !playlistsShouldReload.value;
       if (context.mounted) Navigator.of(context).pop();
@@ -4548,12 +4594,20 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                                                                 displayArtUri.isNotEmpty)
                                                                                             ? displayArtUri
                                                                                             : currentMediaItem.artUri?.toString();
+                                                                                        final durationMs = _durationMsFromMediaItem(
+                                                                                          currentMediaItem,
+                                                                                        );
+                                                                                        final durationText = _durationTextFromMediaItem(
+                                                                                          currentMediaItem,
+                                                                                        );
                                                                                         await FavoritesDB().addFavoritePath(
                                                                                           path,
                                                                                           title: currentMediaItem.title,
                                                                                           artist: currentMediaItem.artist,
                                                                                           videoId: videoId,
                                                                                           artUri: artUri,
+                                                                                          durationText: durationText,
+                                                                                          durationMs: durationMs,
                                                                                         );
                                                                                         favoritesShouldReload.value = !favoritesShouldReload.value;
                                                                                         if (!mounted) return false;

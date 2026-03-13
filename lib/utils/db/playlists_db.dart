@@ -76,6 +76,9 @@ class PlaylistsDB {
       song.data,
       title: song.title,
       artist: song.artist,
+      durationMs: (song.duration != null && song.duration! > 0)
+          ? song.duration
+          : null,
     );
   }
 
@@ -86,6 +89,8 @@ class PlaylistsDB {
     String? artist,
     String? videoId,
     String? artUri,
+    String? durationText,
+    int? durationMs,
   }) async {
     final normalizedPath = path.trim();
     if (normalizedPath.isEmpty) return;
@@ -112,6 +117,9 @@ class PlaylistsDB {
       if (videoId != null && videoId.trim().isNotEmpty)
         'videoId': videoId.trim(),
       if (artUri != null && artUri.trim().isNotEmpty) 'artUri': artUri.trim(),
+      if (durationText != null && durationText.trim().isNotEmpty)
+        'durationText': durationText.trim(),
+      if (durationMs != null && durationMs > 0) 'durationMs': durationMs,
     };
     if (next.isNotEmpty) {
       await mb.put(_metaKey(playlistId, normalizedPath), next);

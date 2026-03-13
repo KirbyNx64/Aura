@@ -1917,6 +1917,8 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
       artist: artist,
       videoId: videoId,
       artUri: artUri,
+      durationText: item.durationText,
+      durationMs: item.durationMs,
     );
     favoritesShouldReload.value = !favoritesShouldReload.value;
   }
@@ -2159,6 +2161,8 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
         artist: artist,
         videoId: videoId,
         artUri: artUri,
+        durationText: item.durationText,
+        durationMs: item.durationMs,
       );
       playlistsShouldReload.value = !playlistsShouldReload.value;
     }
@@ -2629,6 +2633,8 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
           artUri: item.thumbUrl?.trim().isNotEmpty == true
               ? item.thumbUrl!.trim()
               : 'https://i.ytimg.com/vi/$videoId/hqdefault.jpg',
+          durationText: item.durationText,
+          durationMs: item.durationMs,
         );
       }
       playlistsShouldReload.value = !playlistsShouldReload.value;

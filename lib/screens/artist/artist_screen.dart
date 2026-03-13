@@ -1048,6 +1048,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
       playbackWatchSub?.cancel();
       playbackWatchSub = null;
     }
+
     loadingGuard = Timer(const Duration(seconds: 8), releaseLoading);
 
     try {
@@ -1158,11 +1159,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
         shape: BoxShape.circle,
       ),
       child: IconButton(
-        icon: const Icon(
-          Icons.play_arrow_rounded,
-          grade: 200,
-          fill: 1,
-        ),
+        icon: const Icon(Icons.play_arrow_rounded, grade: 200, fill: 1),
         tooltip: LocaleProvider.tr('play'),
         onPressed: () {
           _playStreamingFromList(
@@ -1220,6 +1217,8 @@ class _ArtistScreenState extends State<ArtistScreen> {
       artist: artist,
       videoId: videoId,
       artUri: artUri,
+      durationText: item.durationText,
+      durationMs: item.durationMs,
     );
     favoritesShouldReload.value = !favoritesShouldReload.value;
   }
@@ -1293,6 +1292,8 @@ class _ArtistScreenState extends State<ArtistScreen> {
         artist: artist,
         videoId: videoId,
         artUri: artUri,
+        durationText: item.durationText,
+        durationMs: item.durationMs,
       );
       playlistsShouldReload.value = !playlistsShouldReload.value;
     }
@@ -1435,7 +1436,8 @@ class _ArtistScreenState extends State<ArtistScreen> {
     final title = item.title?.trim() ?? '';
     if (title.isEmpty) return;
     final resolvedArtist = item.artist?.replaceFirst(RegExp(r' - Topic$'), '');
-    final artist = (resolvedArtist?.trim().isNotEmpty == true
+    final artist =
+        (resolvedArtist?.trim().isNotEmpty == true
             ? resolvedArtist!.trim()
             : fallbackArtist?.trim()) ??
         '';
@@ -1457,7 +1459,8 @@ class _ArtistScreenState extends State<ArtistScreen> {
     final title = item.title?.trim() ?? '';
     if (title.isEmpty) return;
     final resolvedArtist = item.artist?.replaceFirst(RegExp(r' - Topic$'), '');
-    final artist = (resolvedArtist?.trim().isNotEmpty == true
+    final artist =
+        (resolvedArtist?.trim().isNotEmpty == true
             ? resolvedArtist!.trim()
             : fallbackArtist?.trim()) ??
         '';
@@ -1636,16 +1639,18 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                 fallback: Container(
                                   width: 60,
                                   height: 60,
-                                  color:
-                                      Theme.of(context).colorScheme.surfaceContainer,
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.surfaceContainer,
                                   child: const Icon(Icons.music_note_rounded),
                                 ),
                               )
                             : Container(
                                 width: 60,
                                 height: 60,
-                                color:
-                                    Theme.of(context).colorScheme.surfaceContainer,
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.surfaceContainer,
                                 child: const Icon(Icons.music_note_rounded),
                               ),
                       ),
@@ -1687,10 +1692,12 @@ class _ArtistScreenState extends State<ArtistScreen> {
                             vertical: 8,
                           ),
                           decoration: BoxDecoration(
-                            color: Theme.of(context).brightness ==
-                                    Brightness.dark
+                            color:
+                                Theme.of(context).brightness == Brightness.dark
                                 ? Theme.of(context).colorScheme.primary
-                                : Theme.of(context).colorScheme.onPrimaryContainer
+                                : Theme.of(context)
+                                      .colorScheme
+                                      .onPrimaryContainer
                                       .withValues(alpha: 0.7),
                             borderRadius: BorderRadius.circular(12),
                           ),
@@ -1771,12 +1778,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
                               (context, animation, secondaryAnimation) =>
                                   ArtistScreen(artistName: name),
                           transitionsBuilder:
-                              (
-                                context,
-                                animation,
-                                secondaryAnimation,
-                                child,
-                              ) {
+                              (context, animation, secondaryAnimation, child) {
                                 const begin = Offset(1.0, 0.0);
                                 const end = Offset.zero;
                                 const curve = Curves.ease;
@@ -1958,7 +1960,9 @@ class _ArtistScreenState extends State<ArtistScreen> {
                             const Icon(Icons.favorite_outline_rounded),
                             const SizedBox(width: 12),
                             Expanded(
-                              child: Text(LocaleProvider.tr('add_to_favorites')),
+                              child: Text(
+                                LocaleProvider.tr('add_to_favorites'),
+                              ),
                             ),
                           ],
                         ),
@@ -1981,7 +1985,9 @@ class _ArtistScreenState extends State<ArtistScreen> {
                           children: [
                             const Icon(Icons.download_rounded),
                             const SizedBox(width: 12),
-                            Expanded(child: Text(LocaleProvider.tr('download'))),
+                            Expanded(
+                              child: Text(LocaleProvider.tr('download')),
+                            ),
                           ],
                         ),
                       ),
@@ -2717,14 +2723,17 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                         final videoId = item.videoId;
                                         if (videoId == null) return;
                                         if (_isSelectionMode) {
-                                          _toggleSelection(index, isVideo: false);
+                                          _toggleSelection(
+                                            index,
+                                            isVideo: false,
+                                          );
                                           return;
                                         }
                                         _showSongActionsModal(
                                           item,
                                           selectionKey: 'song-$videoId',
-                                          fallbackArtist:
-                                              _artist?['name']?.toString(),
+                                          fallbackArtist: _artist?['name']
+                                              ?.toString(),
                                         );
                                       },
                                       onTap: () {
@@ -2999,14 +3008,17 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                         final videoId = item.videoId;
                                         if (videoId == null) return;
                                         if (_isSelectionMode) {
-                                          _toggleSelection(index, isVideo: true);
+                                          _toggleSelection(
+                                            index,
+                                            isVideo: true,
+                                          );
                                           return;
                                         }
                                         _showSongActionsModal(
                                           item,
                                           selectionKey: 'video-$videoId',
-                                          fallbackArtist:
-                                              _artist?['name']?.toString(),
+                                          fallbackArtist: _artist?['name']
+                                              ?.toString(),
                                         );
                                       },
                                       onTap: () {
@@ -3838,9 +3850,11 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                           item,
                                           selectionKey: 'album-$videoId',
                                           fallbackArtist:
-                                              _currentAlbum?['artist']?.toString(),
+                                              _currentAlbum?['artist']
+                                                  ?.toString(),
                                           fallbackThumbUrl:
-                                              _currentAlbum?['thumbUrl']?.toString(),
+                                              _currentAlbum?['thumbUrl']
+                                                  ?.toString(),
                                         );
                                       },
                                       onTap: () {
@@ -4117,9 +4131,11 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                                   }
                                                   _showSongActionsModal(
                                                     item,
-                                                    selectionKey: 'song-$videoId',
+                                                    selectionKey:
+                                                        'song-$videoId',
                                                     fallbackArtist:
-                                                        _artist?['name']?.toString(),
+                                                        _artist?['name']
+                                                            ?.toString(),
                                                   );
                                                 },
                                                 onTap: () {
@@ -4784,9 +4800,11 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                                   }
                                                   _showSongActionsModal(
                                                     item,
-                                                    selectionKey: 'video-$videoId',
+                                                    selectionKey:
+                                                        'video-$videoId',
                                                     fallbackArtist:
-                                                        _artist?['name']?.toString(),
+                                                        _artist?['name']
+                                                            ?.toString(),
                                                   );
                                                 },
                                                 onTap: () {
@@ -5331,7 +5349,10 @@ class _ArtistScreenState extends State<ArtistScreen> {
     final items = _getSelectedItems();
     if (items.isEmpty) return;
     for (final item in items) {
-      await _addSongToFavorites(item, fallbackArtist: _artist?['name']?.toString());
+      await _addSongToFavorites(
+        item,
+        fallbackArtist: _artist?['name']?.toString(),
+      );
     }
     _clearSelection();
   }
@@ -5360,6 +5381,8 @@ class _ArtistScreenState extends State<ArtistScreen> {
           artUri: item.thumbUrl?.trim().isNotEmpty == true
               ? item.thumbUrl!.trim()
               : 'https://i.ytimg.com/vi/$videoId/hqdefault.jpg',
+          durationText: item.durationText,
+          durationMs: item.durationMs,
         );
       }
       playlistsShouldReload.value = !playlistsShouldReload.value;
@@ -5416,7 +5439,9 @@ class _ArtistScreenState extends State<ArtistScreen> {
                               title: Text(pl.name),
                               onTap: () async {
                                 await addItemsToPlaylist(pl.id);
-                                if (context.mounted) Navigator.of(context).pop();
+                                if (context.mounted) {
+                                  Navigator.of(context).pop();
+                                }
                               },
                             ),
                           );
