@@ -147,6 +147,111 @@ class _ArtistScreenState extends State<ArtistScreen> {
     return text;
   }
 
+  String _formatDurationMs(int durationMs) {
+    final duration = Duration(milliseconds: durationMs);
+    final hours = duration.inHours;
+    final minutes = duration.inMinutes % 60;
+    final seconds = (duration.inSeconds % 60).toString().padLeft(2, '0');
+
+    if (hours > 0) {
+      return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:$seconds';
+    }
+    return '$minutes:$seconds';
+  }
+
+  String _formatYtArtistWithDuration(
+    YtMusicResult item, {
+    String? fallbackArtist,
+  }) {
+    final artist = item.artist?.trim().isNotEmpty == true
+        ? item.artist!.trim()
+        : (fallbackArtist?.trim().isNotEmpty == true
+              ? fallbackArtist!.trim()
+              : LocaleProvider.tr('artist_unknown'));
+
+    final durationText = item.durationText?.trim();
+    if (durationText != null && durationText.isNotEmpty) {
+      return '$artist • $durationText';
+    }
+
+    final durationMs = item.durationMs;
+    if (durationMs != null && durationMs > 0) {
+      return '$artist • ${_formatDurationMs(durationMs)}';
+    }
+
+    return artist;
+  }
+
+  int? _parseYtDurationTextMs(String? text) {
+    final value = text?.trim();
+    if (value == null || value.isEmpty) return null;
+
+    final parts = value.split(':');
+    if (parts.isEmpty || parts.length > 3) return null;
+
+    int totalSeconds = 0;
+    for (final part in parts) {
+      final parsed = int.tryParse(part.trim());
+      if (parsed == null) return null;
+      totalSeconds = totalSeconds * 60 + parsed;
+    }
+
+    if (totalSeconds <= 0) return null;
+    return totalSeconds * 1000;
+  }
+
+  String? _extractYtDurationTextFromRenderer(dynamic renderer) {
+    if (renderer is! Map) return null;
+    const pattern = r'^(\d+:)*\d+:\d+$';
+
+    final candidates = <dynamic>[
+      nav(renderer, [
+        'fixedColumns',
+        0,
+        'musicResponsiveListItemFixedColumnRenderer',
+        'text',
+        'simpleText',
+      ]),
+      nav(renderer, [
+        'fixedColumns',
+        0,
+        'musicResponsiveListItemFixedColumnRenderer',
+        'text',
+        'runs',
+        0,
+        'text',
+      ]),
+      nav(renderer, ['lengthText', 'simpleText']),
+      nav(renderer, ['lengthText', 'runs', 0, 'text']),
+    ];
+
+    for (final candidate in candidates) {
+      final text = candidate?.toString().trim();
+      if (text != null && text.isNotEmpty && RegExp(pattern).hasMatch(text)) {
+        return text;
+      }
+    }
+
+    final subtitleRuns = nav(renderer, [
+      'flexColumns',
+      1,
+      'musicResponsiveListItemFlexColumnRenderer',
+      'text',
+      'runs',
+    ]);
+    if (subtitleRuns is List) {
+      for (final run in subtitleRuns) {
+        if (run is! Map) continue;
+        final text = run['text']?.toString().trim();
+        if (text != null && text.isNotEmpty && RegExp(pattern).hasMatch(text)) {
+          return text;
+        }
+      }
+    }
+
+    return null;
+  }
+
   // Función helper para manejar imágenes de red de forma segura
   Widget _buildSafeNetworkImage(
     String? imageUrl, {
@@ -743,6 +848,10 @@ class _ArtistScreenState extends State<ArtistScreen> {
                 }
                 final videoId =
                     renderer['overlay']?['musicItemThumbnailOverlayRenderer']?['content']?['musicPlayButtonRenderer']?['playNavigationEndpoint']?['watchEndpoint']?['videoId'];
+                final durationText = _extractYtDurationTextFromRenderer(
+                  renderer,
+                );
+                final durationMs = _parseYtDurationTextMs(durationText);
                 if (videoId != null && title != null) {
                   results.add(
                     YtMusicResult(
@@ -750,6 +859,8 @@ class _ArtistScreenState extends State<ArtistScreen> {
                       artist: artist,
                       thumbUrl: thumbUrl,
                       videoId: videoId,
+                      durationText: durationText,
+                      durationMs: durationMs,
                     ),
                   );
                 }
@@ -842,6 +953,10 @@ class _ArtistScreenState extends State<ArtistScreen> {
                   }
                   final videoId =
                       renderer['overlay']?['musicItemThumbnailOverlayRenderer']?['content']?['musicPlayButtonRenderer']?['playNavigationEndpoint']?['watchEndpoint']?['videoId'];
+                  final durationText = _extractYtDurationTextFromRenderer(
+                    renderer,
+                  );
+                  final durationMs = _parseYtDurationTextMs(durationText);
                   if (videoId != null && title != null) {
                     results.add(
                       YtMusicResult(
@@ -849,6 +964,8 @@ class _ArtistScreenState extends State<ArtistScreen> {
                         artist: artist,
                         thumbUrl: thumbUrl,
                         videoId: videoId,
+                        durationText: durationText,
+                        durationMs: durationMs,
                       ),
                     );
                   }
@@ -1600,11 +1717,10 @@ class _ArtistScreenState extends State<ArtistScreen> {
     final title = item.title?.trim().isNotEmpty == true
         ? item.title!.trim()
         : LocaleProvider.tr('title_unknown');
-    final artist = item.artist?.trim().isNotEmpty == true
-        ? item.artist!.trim()
-        : (fallbackArtist?.trim().isNotEmpty == true
-              ? fallbackArtist!.trim()
-              : LocaleProvider.tr('artist_unknown'));
+    final artist = _formatYtArtistWithDuration(
+      item,
+      fallbackArtist: fallbackArtist,
+    );
     final thumb = item.thumbUrl?.trim().isNotEmpty == true
         ? item.thumbUrl!.trim()
         : (fallbackThumbUrl?.trim().isNotEmpty == true
@@ -2830,7 +2946,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                           overflow: TextOverflow.ellipsis,
                                         ),
                                         subtitle: Text(
-                                          item.artist ?? 'Artista desconocido',
+                                          _formatYtArtistWithDuration(item),
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
                                           style: TextStyle(
@@ -3116,7 +3232,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                           overflow: TextOverflow.ellipsis,
                                         ),
                                         subtitle: Text(
-                                          item.artist ?? 'Artista desconocido',
+                                          _formatYtArtistWithDuration(item),
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
                                           style: TextStyle(
@@ -3950,13 +4066,12 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                           overflow: TextOverflow.ellipsis,
                                         ),
                                         subtitle: Text(
-                                          (item.artist != null &&
-                                                  item.artist!.isNotEmpty)
-                                              ? item.artist!
-                                              : (_currentAlbum?['artist'] !=
-                                                    null)
-                                              ? _currentAlbum!['artist']
-                                              : 'Artista desconocido',
+                                          _formatYtArtistWithDuration(
+                                            item,
+                                            fallbackArtist:
+                                                _currentAlbum?['artist']
+                                                    ?.toString(),
+                                          ),
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
                                           style: TextStyle(
@@ -4250,8 +4365,9 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                                         TextOverflow.ellipsis,
                                                   ),
                                                   subtitle: Text(
-                                                    item.artist ??
-                                                        'Artista desconocido',
+                                                    _formatYtArtistWithDuration(
+                                                      item,
+                                                    ),
                                                     maxLines: 1,
                                                     overflow:
                                                         TextOverflow.ellipsis,
@@ -4919,8 +5035,9 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                                         TextOverflow.ellipsis,
                                                   ),
                                                   subtitle: Text(
-                                                    item.artist ??
-                                                        'Artista desconocido',
+                                                    _formatYtArtistWithDuration(
+                                                      item,
+                                                    ),
                                                     maxLines: 1,
                                                     overflow:
                                                         TextOverflow.ellipsis,

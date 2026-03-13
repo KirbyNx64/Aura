@@ -89,6 +89,43 @@ Uint8List? decodeAndCropImageHQ(Uint8List bytes) {
   return null;
 }
 
+String _formatDurationFromMilliseconds(int durationMs) {
+  final duration = Duration(milliseconds: durationMs);
+  final hours = duration.inHours;
+  final minutes = duration.inMinutes.remainder(60);
+  final seconds = duration.inSeconds.remainder(60).toString().padLeft(2, '0');
+  if (hours > 0) {
+    return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:$seconds';
+  }
+  return '$minutes:$seconds';
+}
+
+String _artistWithDurationText({
+  String? artist,
+  String? fallbackArtist,
+  String? durationText,
+  int? durationMs,
+}) {
+  final artistText = artist?.trim();
+  final fallbackText = fallbackArtist?.trim();
+  final baseArtist = (artistText != null && artistText.isNotEmpty)
+      ? artistText
+      : (fallbackText != null && fallbackText.isNotEmpty)
+      ? fallbackText
+      : LocaleProvider.tr('artist_unknown');
+
+  final normalizedDurationText = durationText?.trim();
+  if (normalizedDurationText != null && normalizedDurationText.isNotEmpty) {
+    return '$baseArtist • $normalizedDurationText';
+  }
+
+  if (durationMs != null && durationMs > 0) {
+    return '$baseArtist • ${_formatDurationFromMilliseconds(durationMs)}';
+  }
+
+  return baseArtist;
+}
+
 class TabItem {
   final String label;
   final String?
@@ -173,96 +210,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
   bool _hasMorePlaylists = true;
 
   Future<List<YtMusicResult>> _searchVideosOnly(String query) async {
-    final data = {
-      ...ytServiceContext,
-      'query': query,
-      'params': getSearchParams('videos', null, false),
-    };
-    final response = (await sendRequest("search", data)).data;
-    final results = <YtMusicResult>[];
-    // Obtener videos de la respuesta
-    final contents = nav(response, [
-      'contents',
-      'tabbedSearchResultsRenderer',
-      'tabs',
-      0,
-      'tabRenderer',
-      'content',
-      'sectionListRenderer',
-      'contents',
-    ]);
-    if (contents is List) {
-      for (var section in contents) {
-        final shelfRenderer = section['musicShelfRenderer'];
-        if (shelfRenderer != null) {
-          final sectionContents = shelfRenderer['contents'];
-          if (sectionContents is List) {
-            // parseSongs filtra solo canciones, así que parseamos manualmente para videos
-            for (var item in sectionContents) {
-              final renderer = item['musicResponsiveListItemRenderer'];
-              if (renderer != null) {
-                // Verificar si es un video
-                final videoType = nav(renderer, [
-                  'overlay',
-                  'musicItemThumbnailOverlayRenderer',
-                  'content',
-                  'musicPlayButtonRenderer',
-                  'playNavigationEndpoint',
-                  'watchEndpoint',
-                  'watchEndpointMusicSupportedConfigs',
-                  'watchEndpointMusicConfig',
-                  'musicVideoType',
-                ]);
-                if (videoType == 'MUSIC_VIDEO_TYPE_MV' ||
-                    videoType == 'MUSIC_VIDEO_TYPE_OMV' ||
-                    videoType == 'MUSIC_VIDEO_TYPE_UGC') {
-                  final title =
-                      renderer['flexColumns']?[0]?['musicResponsiveListItemFlexColumnRenderer']?['text']?['runs']?[0]?['text'];
-                  final subtitleRuns =
-                      renderer['flexColumns']?[1]?['musicResponsiveListItemFlexColumnRenderer']?['text']?['runs'];
-                  String? artist;
-                  if (subtitleRuns is List) {
-                    for (var run in subtitleRuns) {
-                      if (run['navigationEndpoint']?['browseEndpoint']?['browseEndpointContextSupportedConfigs'] !=
-                              null ||
-                          run['navigationEndpoint']?['browseEndpoint']?['browseId']
-                                  ?.startsWith('UC') ==
-                              true) {
-                        artist = run['text'];
-                        break;
-                      }
-                    }
-                    artist ??= subtitleRuns.firstWhere(
-                      (run) => run['text'] != ' • ',
-                      orElse: () => {'text': null},
-                    )['text'];
-                  }
-                  String? thumbUrl;
-                  final thumbnails =
-                      renderer['thumbnail']?['musicThumbnailRenderer']?['thumbnail']?['thumbnails'];
-                  if (thumbnails is List && thumbnails.isNotEmpty) {
-                    thumbUrl = thumbnails.last['url'];
-                  }
-                  final videoId =
-                      renderer['overlay']?['musicItemThumbnailOverlayRenderer']?['content']?['musicPlayButtonRenderer']?['playNavigationEndpoint']?['watchEndpoint']?['videoId'];
-                  if (videoId != null && title != null) {
-                    results.add(
-                      YtMusicResult(
-                        title: title,
-                        artist: artist,
-                        thumbUrl: thumbUrl,
-                        videoId: videoId,
-                      ),
-                    );
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-    return results;
+    return searchVideosWithPagination(query, maxPages: 1);
   }
 
   Future<void> _search() async {
@@ -402,11 +350,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
       ) {
         if (!mounted) return;
         setState(() {
-          final existingIds = _videoResults.map((e) => e.videoId).toSet();
-          final newOnes = moreVideos
-              .where((e) => !existingIds.contains(e.videoId))
-              .toList();
-          _videoResults.addAll(newOnes);
+          _mergeVideoResultsInPlace(moreVideos);
           _loadingMoreVideos = false;
         });
       });
@@ -1249,11 +1193,15 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                 ),
                               ),
                               subtitle: Text(
-                                item.artist?.replaceFirst(
-                                      RegExp(r' - Topic$'),
-                                      '',
-                                    ) ??
-                                    'Unknown Artist',
+                                _artistWithDurationText(
+                                  artist: item.artist?.replaceFirst(
+                                    RegExp(r' - Topic$'),
+                                    '',
+                                  ),
+                                  fallbackArtist: 'Unknown Artist',
+                                  durationText: item.durationText,
+                                  durationMs: item.durationMs,
+                                ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
@@ -2307,11 +2255,12 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
     final title = item.title?.trim().isNotEmpty == true
         ? item.title!.trim()
         : LocaleProvider.tr('title_unknown');
-    final artist = item.artist?.trim().isNotEmpty == true
-        ? item.artist!.trim()
-        : (fallbackArtist?.trim().isNotEmpty == true
-              ? fallbackArtist!.trim()
-              : LocaleProvider.tr('artist_unknown'));
+    final artist = _artistWithDurationText(
+      artist: item.artist,
+      fallbackArtist: fallbackArtist,
+      durationText: item.durationText,
+      durationMs: item.durationMs,
+    );
     final thumb = item.thumbUrl?.trim().isNotEmpty == true
         ? item.thumbUrl!.trim()
         : (fallbackThumbUrl?.trim().isNotEmpty == true
@@ -2759,6 +2708,72 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
     );
   }
 
+  bool _hasNonEmptyText(String? value) =>
+      value != null && value.trim().isNotEmpty;
+
+  YtMusicResult _mergeVideoResultEntry(
+    YtMusicResult current,
+    YtMusicResult incoming,
+  ) {
+    final currentDurationText = current.durationText?.trim();
+    final incomingDurationText = incoming.durationText?.trim();
+
+    return YtMusicResult(
+      title: _hasNonEmptyText(current.title) ? current.title : incoming.title,
+      artist: _hasNonEmptyText(current.artist)
+          ? current.artist
+          : incoming.artist,
+      thumbUrl: _hasNonEmptyText(current.thumbUrl)
+          ? current.thumbUrl
+          : incoming.thumbUrl,
+      videoId: _hasNonEmptyText(current.videoId)
+          ? current.videoId
+          : incoming.videoId,
+      durationText:
+          (currentDurationText != null && currentDurationText.isNotEmpty)
+          ? currentDurationText
+          : incomingDurationText,
+      durationMs: (current.durationMs != null && current.durationMs! > 0)
+          ? current.durationMs
+          : incoming.durationMs,
+    );
+  }
+
+  int _mergeVideoResultsInPlace(List<YtMusicResult> incoming) {
+    int addedCount = 0;
+    for (final candidate in incoming) {
+      final candidateId = candidate.videoId?.trim();
+      if (candidateId == null || candidateId.isEmpty) {
+        _videoResults.add(candidate);
+        addedCount++;
+        continue;
+      }
+
+      final existingIndex = _videoResults.indexWhere(
+        (entry) => entry.videoId?.trim() == candidateId,
+      );
+      if (existingIndex == -1) {
+        _videoResults.add(candidate);
+        addedCount++;
+        continue;
+      }
+
+      final existing = _videoResults[existingIndex];
+      final merged = _mergeVideoResultEntry(existing, candidate);
+      final hasChanged =
+          merged.title != existing.title ||
+          merged.artist != existing.artist ||
+          merged.thumbUrl != existing.thumbUrl ||
+          merged.videoId != existing.videoId ||
+          merged.durationText != existing.durationText ||
+          merged.durationMs != existing.durationMs;
+      if (hasChanged) {
+        _videoResults[existingIndex] = merged;
+      }
+    }
+    return addedCount;
+  }
+
   Future<void> _loadMoreSongs() async {
     if (_loadingMoreSongs || !_hasMoreSongs) return;
     setState(() {
@@ -2794,14 +2809,10 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
     );
     if (!mounted) return;
     setState(() {
-      final existingIds = _videoResults.map((e) => e.videoId).toSet();
-      final newOnes = moreVideos
-          .where((e) => !existingIds.contains(e.videoId))
-          .toList();
-      _videoResults.addAll(newOnes);
+      final addedCount = _mergeVideoResultsInPlace(moreVideos);
       _videoPage = nextPage;
       _loadingMoreVideos = false;
-      _hasMoreVideos = newOnes.isNotEmpty;
+      _hasMoreVideos = addedCount > 0;
     });
   }
 
@@ -3886,10 +3897,17 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                         TextOverflow.ellipsis,
                                                   ),
                                                   subtitle: Text(
-                                                    item.artist ??
-                                                        LocaleProvider.tr(
-                                                          'artist_unknown',
-                                                        ),
+                                                    _artistWithDurationText(
+                                                      artist: item.artist,
+                                                      fallbackArtist:
+                                                          LocaleProvider.tr(
+                                                            'artist_unknown',
+                                                          ),
+                                                      durationText:
+                                                          item.durationText,
+                                                      durationMs:
+                                                          item.durationMs,
+                                                    ),
                                                     maxLines: 1,
                                                     overflow:
                                                         TextOverflow.ellipsis,
@@ -4177,10 +4195,17 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                         TextOverflow.ellipsis,
                                                   ),
                                                   subtitle: Text(
-                                                    item.artist ??
-                                                        LocaleProvider.tr(
-                                                          'artist_unknown',
-                                                        ),
+                                                    _artistWithDurationText(
+                                                      artist: item.artist,
+                                                      fallbackArtist:
+                                                          LocaleProvider.tr(
+                                                            'artist_unknown',
+                                                          ),
+                                                      durationText:
+                                                          item.durationText,
+                                                      durationMs:
+                                                          item.durationMs,
+                                                    ),
                                                     maxLines: 1,
                                                     overflow:
                                                         TextOverflow.ellipsis,
@@ -4851,15 +4876,16 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                             .ellipsis,
                                                       ),
                                                       subtitle: Text(
-                                                        (item.artist != null &&
-                                                                item.artist!
-                                                                    .trim()
-                                                                    .isNotEmpty)
-                                                            ? item.artist!
-                                                            : (_currentAlbum?['artist'] ??
-                                                                  LocaleProvider.tr(
-                                                                    'artist_unknown',
-                                                                  )),
+                                                        _artistWithDurationText(
+                                                          artist: item.artist,
+                                                          fallbackArtist:
+                                                              _currentAlbum?['artist']
+                                                                  ?.toString(),
+                                                          durationText:
+                                                              item.durationText,
+                                                          durationMs:
+                                                              item.durationMs,
+                                                        ),
                                                         maxLines: 1,
                                                         overflow: TextOverflow
                                                             .ellipsis,
@@ -5327,10 +5353,17 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                             .ellipsis,
                                                       ),
                                                       subtitle: Text(
-                                                        item.artist ??
-                                                            LocaleProvider.tr(
-                                                              'artist_unknown',
-                                                            ),
+                                                        _artistWithDurationText(
+                                                          artist: item.artist,
+                                                          fallbackArtist:
+                                                              LocaleProvider.tr(
+                                                                'artist_unknown',
+                                                              ),
+                                                          durationText:
+                                                              item.durationText,
+                                                          durationMs:
+                                                              item.durationMs,
+                                                        ),
                                                         maxLines: 1,
                                                         overflow: TextOverflow
                                                             .ellipsis,
@@ -6351,10 +6384,17 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                               .ellipsis,
                                                         ),
                                                         subtitle: Text(
-                                                          item.artist ??
-                                                              LocaleProvider.tr(
-                                                                'artist_unknown',
-                                                              ),
+                                                          _artistWithDurationText(
+                                                            artist: item.artist,
+                                                            fallbackArtist:
+                                                                LocaleProvider.tr(
+                                                                  'artist_unknown',
+                                                                ),
+                                                            durationText: item
+                                                                .durationText,
+                                                            durationMs:
+                                                                item.durationMs,
+                                                          ),
                                                           maxLines: 1,
                                                           overflow: TextOverflow
                                                               .ellipsis,
@@ -6691,10 +6731,17 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                               .ellipsis,
                                                         ),
                                                         subtitle: Text(
-                                                          item.artist ??
-                                                              LocaleProvider.tr(
-                                                                'artist_unknown',
-                                                              ),
+                                                          _artistWithDurationText(
+                                                            artist: item.artist,
+                                                            fallbackArtist:
+                                                                LocaleProvider.tr(
+                                                                  'artist_unknown',
+                                                                ),
+                                                            durationText: item
+                                                                .durationText,
+                                                            durationMs:
+                                                                item.durationMs,
+                                                          ),
                                                           maxLines: 1,
                                                           overflow: TextOverflow
                                                               .ellipsis,
@@ -8099,9 +8146,12 @@ class YtPreviewPlayerState extends State<YtPreviewPlayer>
                               builder: (context) => ImageViewer(
                                 imageUrl: imageUrl,
                                 title: _currentItem.title,
-                                subtitle:
-                                    _currentItem.artist ??
-                                    widget.fallbackArtist,
+                                subtitle: _artistWithDurationText(
+                                  artist: _currentItem.artist,
+                                  fallbackArtist: widget.fallbackArtist,
+                                  durationText: _currentItem.durationText,
+                                  durationMs: _currentItem.durationMs,
+                                ),
                                 videoId: _currentItem.videoId,
                               ),
                             ),
@@ -8461,11 +8511,12 @@ class YtPreviewPlayerState extends State<YtPreviewPlayer>
                             overflow: TextOverflow.ellipsis,
                           ),
                           Text(
-                            (_currentItem.artist != null &&
-                                    _currentItem.artist!.trim().isNotEmpty)
-                                ? _currentItem.artist!
-                                : (widget.fallbackArtist ??
-                                      LocaleProvider.tr('artist_unknown')),
+                            _artistWithDurationText(
+                              artist: _currentItem.artist,
+                              fallbackArtist: widget.fallbackArtist,
+                              durationText: _currentItem.durationText,
+                              durationMs: _currentItem.durationMs,
+                            ),
                             style: TextStyle(
                               fontSize: 15,
                               color: isAmoled
