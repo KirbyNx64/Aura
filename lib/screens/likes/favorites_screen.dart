@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:music/utils/db/favorites_db.dart';
 import 'package:on_audio_query/on_audio_query.dart';
@@ -81,8 +82,8 @@ class _StreamingArtworkState extends State<_StreamingArtwork> {
 
   Widget _buildFallback() {
     return Container(
-      color: widget.backgroundColor,
-      child: Icon(Icons.music_note_rounded, color: widget.iconColor),
+      color: Colors.transparent,
+      child: Icon(Icons.music_note_rounded, color: Colors.transparent),
     );
   }
 
@@ -114,10 +115,13 @@ class _StreamingArtworkState extends State<_StreamingArtwork> {
       );
     }
 
-    return Image.network(
-      currentSource,
+    return CachedNetworkImage(
+      imageUrl: currentSource,
       fit: BoxFit.cover,
-      errorBuilder: (context, error, stackTrace) {
+      fadeInDuration: Duration.zero,
+      fadeOutDuration: Duration.zero,
+      placeholder: (context, url) => _buildFallback(),
+      errorWidget: (context, url, error) {
         _tryNextSource();
         return _buildFallback();
       },
@@ -142,6 +146,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
   final FocusNode _searchFocusNode = FocusNode();
   List<SongModel> _filteredFavorites = [];
   List<_StreamingFavoriteItem> _streamingFavorites = [];
+  List<_StreamingFavoriteItem> _originalStreamingFavorites = [];
   List<_StreamingFavoriteItem> _filteredStreamingFavorites = [];
   FavoritesSource _favoritesSource = FavoritesSource.local;
   double _lastBottomInset = 0.0;
@@ -152,6 +157,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
   final Set<String> _selectedStreamingPaths = {};
 
   static const String _orderPrefsKey = 'favorites_screen_order_filter';
+  static const String _sourcePrefsKey = 'favorites_screen_source_filter';
 
   Timer? _debounce;
   Timer? _playingDebounce;
@@ -163,6 +169,32 @@ class _FavoritesScreenState extends State<FavoritesScreen>
   static String? _pathFromMediaItem(MediaItem? item) =>
       item?.extras?['data'] ?? item?.id;
 
+  bool _isStreamingMediaItem(MediaItem? item) {
+    if (item == null) return false;
+    if (item.extras?['isStreaming'] == true) return true;
+    final path = _pathFromMediaItem(item);
+    if (path == null || path.trim().isEmpty) return false;
+    return _isStreamingFavoritePath(path);
+  }
+
+  bool _matchesVisibleSource(MediaItem? item) {
+    if (item == null) return true;
+    final isStreaming = _isStreamingMediaItem(item);
+    return _favoritesSource == FavoritesSource.streaming
+        ? isStreaming
+        : !isStreaming;
+  }
+
+  void _syncCurrentMediaItemForVisibleSource() {
+    final current = audioHandler?.mediaItem.valueOrNull;
+    final visibleItem = _matchesVisibleSource(current) ? current : null;
+    final currentPath = _pathFromMediaItem(_currentMediaItemNotifier.value);
+    final newPath = _pathFromMediaItem(visibleItem);
+    if (currentPath != newPath) {
+      _currentMediaItemNotifier.value = visibleItem;
+    }
+  }
+
   void _onFavoritesReload() => _loadFavorites();
 
   @override
@@ -173,18 +205,15 @@ class _FavoritesScreenState extends State<FavoritesScreen>
       vsync: this,
       duration: const Duration(milliseconds: 800),
     );
-    _loadOrderFilter().then((_) => _loadFavorites(initial: true));
+    _loadScreenPrefs().then((_) => _loadFavorites(initial: true));
 
     _searchFocusNode.addListener(() {
       setState(() {});
     });
     favoritesShouldReload.addListener(_onFavoritesReload);
 
-    // Inicializar con el valor actual si ya hay algo reproduciéndose
-    if (audioHandler?.mediaItem.valueOrNull != null) {
-      _mediaItemDebounce?.cancel();
-      _currentMediaItemNotifier.value = audioHandler!.mediaItem.valueOrNull;
-    }
+    // Inicializar con el mediaItem actual solo si aplica a la fuente visible.
+    _syncCurrentMediaItemForVisibleSource();
 
     // Inicializar el estado de reproducción actual
     if (audioHandler?.playbackState.valueOrNull != null) {
@@ -206,11 +235,12 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     // Un solo listener para MediaItem: evita rebuilds duplicados (antes 50ms + 200ms)
     // Solo actualizar si la ruta de la canción realmente cambió
     audioHandler?.mediaItem.listen((mediaItem) {
-      final newPath = _pathFromMediaItem(mediaItem);
       _mediaItemDebounce?.cancel();
       _mediaItemDebounce = Timer(const Duration(milliseconds: 80), () {
-        if (mounted &&
-            _pathFromMediaItem(_currentMediaItemNotifier.value) != newPath) {
+        if (!mounted) return;
+        if (!_matchesVisibleSource(mediaItem)) return;
+        final newPath = _pathFromMediaItem(mediaItem);
+        if (_pathFromMediaItem(_currentMediaItemNotifier.value) != newPath) {
           _currentMediaItemNotifier.value = mediaItem;
         }
       });
@@ -243,11 +273,9 @@ class _FavoritesScreenState extends State<FavoritesScreen>
       });
     }
 
-    // Actualizar los notifiers con los valores actuales del audioHandler
-    if (audioHandler?.mediaItem.valueOrNull != null) {
-      _mediaItemDebounce?.cancel();
-      _currentMediaItemNotifier.value = audioHandler!.mediaItem.valueOrNull;
-    }
+    // Actualizar notifiers con el contexto actual visible
+    _mediaItemDebounce?.cancel();
+    _syncCurrentMediaItemForVisibleSource();
     if (audioHandler?.playbackState.valueOrNull != null) {
       _isPlayingNotifier.value =
           audioHandler!.playbackState.valueOrNull!.playing;
@@ -268,6 +296,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
       _favorites = favs;
       _originalFavorites = List.from(favs);
       _streamingFavorites = streamingFavs;
+      _originalStreamingFavorites = List.from(streamingFavs);
       _isReloading = false;
       _refreshController.stop();
       _refreshController.reset();
@@ -526,6 +555,8 @@ class _FavoritesScreenState extends State<FavoritesScreen>
       _selectedSongIds.clear();
       _selectedStreamingPaths.clear();
     });
+    _syncCurrentMediaItemForVisibleSource();
+    await _saveSourceFilter();
     _onSearchChanged();
   }
 
@@ -537,14 +568,18 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     playLoadingNotifier.value = true;
     openPlayerPanelNotifier.value = true;
     var loadingReleased = false;
+    StreamSubscription<PlaybackState>? playbackWatchSub;
+    Timer? loadingGuard;
     void releaseLoading() {
       if (loadingReleased) return;
       loadingReleased = true;
       playLoadingNotifier.value = false;
+      loadingGuard?.cancel();
+      loadingGuard = null;
+      playbackWatchSub?.cancel();
+      playbackWatchSub = null;
     }
-
-    StreamSubscription<PlaybackState>? playbackWatchSub;
-    final loadingGuard = Timer(const Duration(seconds: 8), releaseLoading);
+    loadingGuard = Timer(const Duration(seconds: 8), releaseLoading);
 
     try {
       if (!audioServiceReady.value || audioHandler == null) {
@@ -559,7 +594,9 @@ class _FavoritesScreenState extends State<FavoritesScreen>
         final currentVideoId = currentMedia?.extras?['videoId']
             ?.toString()
             .trim();
-        if (playbackState.playing && currentVideoId == videoId) {
+        if (playbackState.playing &&
+            currentVideoId == videoId &&
+            playbackState.updatePosition > Duration.zero) {
           releaseLoading();
         }
       });
@@ -617,10 +654,16 @@ class _FavoritesScreenState extends State<FavoritesScreen>
           .timeout(const Duration(seconds: 20));
     } catch (_) {
       // Ignorar para no mostrar error si inició correctamente entre transiciones.
-    } finally {
-      await playbackWatchSub?.cancel();
-      loadingGuard.cancel();
       releaseLoading();
+    } finally {
+      // Mantener loader activo hasta que el playback listener confirme inicio
+      // o hasta que venza el timeout de seguridad.
+      if (loadingReleased) {
+        loadingGuard?.cancel();
+        loadingGuard = null;
+        await playbackWatchSub?.cancel();
+        playbackWatchSub = null;
+      }
     }
   }
 
@@ -672,9 +715,31 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     }
   }
 
+  Future<void> _loadSourceFilter() async {
+    final prefs = await SharedPreferences.getInstance();
+    final int? savedIndex = prefs.getInt(_sourcePrefsKey);
+    if (savedIndex != null &&
+        savedIndex >= 0 &&
+        savedIndex < FavoritesSource.values.length) {
+      setState(() {
+        _favoritesSource = FavoritesSource.values[savedIndex];
+      });
+    }
+  }
+
+  Future<void> _loadScreenPrefs() async {
+    await _loadOrderFilter();
+    await _loadSourceFilter();
+  }
+
   Future<void> _saveOrderFilter() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(_orderPrefsKey, _orden.index);
+  }
+
+  Future<void> _saveSourceFilter() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_sourcePrefsKey, _favoritesSource.index);
   }
 
   void _ordenarFavoritos() {
@@ -684,15 +749,19 @@ class _FavoritesScreenState extends State<FavoritesScreen>
           _favorites = List.from(
             _originalFavorites,
           ); // Restaura el orden original
+          _streamingFavorites = List.from(_originalStreamingFavorites);
           break;
         case OrdenFavoritos.alfabetico:
           _favorites.sort((a, b) => a.title.compareTo(b.title));
+          _streamingFavorites.sort((a, b) => a.title.compareTo(b.title));
           break;
         case OrdenFavoritos.invertido:
           _favorites.sort((a, b) => b.title.compareTo(a.title));
+          _streamingFavorites.sort((a, b) => b.title.compareTo(a.title));
           break;
         case OrdenFavoritos.ultimoAgregado:
           _favorites = List.from(_originalFavorites.reversed);
+          _streamingFavorites = List.from(_originalStreamingFavorites.reversed);
           break;
       }
     });
@@ -2893,9 +2962,9 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     final id = item.videoId?.trim();
     if (id != null && id.isNotEmpty) {
       sources.addAll([
-        'https://img.youtube.com/vi/$id/maxresdefault.jpg',
-        'https://img.youtube.com/vi/$id/sddefault.jpg',
         'https://i.ytimg.com/vi/$id/hqdefault.jpg',
+        'https://img.youtube.com/vi/$id/sddefault.jpg',
+        'https://img.youtube.com/vi/$id/maxresdefault.jpg',
       ]);
     }
     return sources.toSet().toList();
@@ -3174,15 +3243,15 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                 ),
               ]
             : [
-                if (_favoritesSource == FavoritesSource.local)
-                  IconButton(
-                    icon: const Icon(
-                      Icons.shuffle_rounded,
-                      size: 28,
-                      weight: 600,
-                    ),
-                    tooltip: LocaleProvider.tr('shuffle'),
-                    onPressed: () {
+                IconButton(
+                  icon: const Icon(
+                    Icons.shuffle_rounded,
+                    size: 28,
+                    weight: 600,
+                  ),
+                  tooltip: LocaleProvider.tr('shuffle'),
+                  onPressed: () {
+                    if (_favoritesSource == FavoritesSource.local) {
                       final List<SongModel> songsToShow =
                           _searchController.text.isNotEmpty
                           ? _filteredFavorites
@@ -3191,8 +3260,24 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                         final random = (songsToShow.toList()..shuffle()).first;
                         _onSongSelected(random);
                       }
-                    },
-                  ),
+                      return;
+                    }
+
+                    final List<_StreamingFavoriteItem> streamingToShow =
+                        _searchController.text.isNotEmpty
+                        ? _filteredStreamingFavorites
+                        : _streamingFavorites;
+                    final playable = streamingToShow
+                        .where(
+                          (item) => item.videoId?.trim().isNotEmpty ?? false,
+                        )
+                        .toList();
+                    if (playable.isNotEmpty) {
+                      final random = (playable.toList()..shuffle()).first;
+                      _playStreamingFavorite(random);
+                    }
+                  },
+                ),
                 PopupMenuButton<String>(
                   icon: const Icon(Icons.more_vert),
                   tooltip: LocaleProvider.tr('want_more_options'),
@@ -3211,9 +3296,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                         }
                         break;
                       case 'filters':
-                        if (_favoritesSource == FavoritesSource.local) {
-                          _showSortOptionsDialog();
-                        }
+                        _showSortOptionsDialog();
                         break;
                     }
                   },
@@ -3250,7 +3333,6 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                     ),
                     PopupMenuItem<String>(
                       value: 'filters',
-                      enabled: _favoritesSource == FavoritesSource.local,
                       child: Row(
                         children: [
                           const Icon(Icons.sort, size: 20),

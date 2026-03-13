@@ -1,5 +1,7 @@
 import 'dart:ui';
+
 import 'package:audio_service/audio_service.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:music/main.dart';
 import 'package:music/utils/yt_search/service.dart';
@@ -673,32 +675,27 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
       );
     }
 
-    return Image.network(
-      imageUrl,
-      headers: headers,
+    return CachedNetworkImage(
+      imageUrl: imageUrl,
+      httpHeaders: headers,
       width: width,
       height: height,
       fit: fit ?? BoxFit.cover,
-      errorBuilder: (context, error, stackTrace) {
+      fadeInDuration: Duration.zero,
+      fadeOutDuration: Duration.zero,
+      errorWidget: (context, url, error) {
         return fallback ?? const Icon(Icons.music_note, size: 32);
       },
-      loadingBuilder: (context, child, loadingProgress) {
-        if (loadingProgress == null) return child;
+      placeholder: (context, url) {
         return Container(
           width: width,
           height: height,
           decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surfaceContainer,
+            color: Colors.transparent,
             borderRadius: BorderRadius.circular(8),
           ),
           child: Center(
-            child: CircularProgressIndicator(
-              color: Colors.transparent,
-              value: loadingProgress.expectedTotalBytes != null
-                  ? loadingProgress.cumulativeBytesLoaded /
-                        loadingProgress.expectedTotalBytes!
-                  : null,
-            ),
+            child: CircularProgressIndicator(color: Colors.transparent),
           ),
         );
       },
@@ -3489,11 +3486,39 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                         ),
                                                     child:
                                                         album.thumbUrl != null
-                                                        ? Image.network(
-                                                            album.thumbUrl!,
+                                                        ? CachedNetworkImage(
+                                                            imageUrl:
+                                                                album.thumbUrl!,
                                                             width: 56,
                                                             height: 56,
                                                             fit: BoxFit.cover,
+                                                            fadeInDuration:
+                                                                Duration.zero,
+                                                            fadeOutDuration:
+                                                                Duration.zero,
+                                                            errorWidget:
+                                                                (
+                                                                  context,
+                                                                  url,
+                                                                  error,
+                                                                ) => Container(
+                                                                  width: 56,
+                                                                  height: 56,
+                                                                  decoration: BoxDecoration(
+                                                                    color: Colors
+                                                                        .grey[300],
+                                                                    borderRadius:
+                                                                        BorderRadius.circular(
+                                                                          12,
+                                                                        ),
+                                                                  ),
+                                                                  child: const Icon(
+                                                                    Icons.album,
+                                                                    size: 32,
+                                                                    color: Colors
+                                                                        .grey,
+                                                                  ),
+                                                                ),
                                                           )
                                                         : Container(
                                                             width: 56,
@@ -6931,15 +6956,16 @@ class YtPreviewPlayerState extends State<YtPreviewPlayer>
           // Gracias al caché de Flutter, si ya se mostró en la lista se verá instantánea
           return ClipRRect(
             borderRadius: BorderRadius.circular(8),
-            child: Image.network(
-              imageUrl,
+            child: CachedNetworkImage(
+              imageUrl: imageUrl,
               width: width,
               height: height,
               fit: fit ?? BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) =>
+              fadeInDuration: Duration.zero,
+              fadeOutDuration: Duration.zero,
+              errorWidget: (context, url, error) =>
                   fallback ?? const Icon(Icons.music_note, size: 32),
-              loadingBuilder: (context, child, loadingProgress) {
-                if (loadingProgress == null) return child;
+              placeholder: (context, url) {
                 return Container(
                   width: width,
                   height: height,

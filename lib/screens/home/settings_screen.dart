@@ -4934,7 +4934,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                     buildItem(
                       'preferences',
-                      LocaleProvider.tr('ignore_files'),
+                      LocaleProvider.tr('ignored_files'),
                       Icons.settings_rounded,
                     ),
                   ],
@@ -4986,8 +4986,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       }
 
       if (options['recents'] == true) {
-        final recents = await RecentsDB().getRecents();
-        backup['recents'] = recents.map((s) => s.data).toList();
+        final recents = await RecentsDB().getRecentPaths();
+        backup['recents'] = recents;
       }
 
       if (options['mostPlayed'] == true) {
@@ -5340,11 +5340,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
       }
 
       if (options['recents'] == true) {
-        final boxRec = await RecentsDB().box;
-        await boxRec.clear();
+        await RecentsDB().clearAll();
         if (data['recents'] is List) {
           for (final path in data['recents']) {
-            await boxRec.put(path, DateTime.now().millisecondsSinceEpoch);
+            await RecentsDB().addRecentPath(path.toString());
           }
         }
       }
@@ -5754,8 +5753,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       final boxFav = await FavoritesDB().box;
       await boxFav.clear();
 
-      final boxRec = await RecentsDB().box;
-      await boxRec.clear();
+      await RecentsDB().clearAll();
 
       final boxMost = await MostPlayedDB().box;
       await boxMost.clear();

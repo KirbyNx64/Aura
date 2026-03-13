@@ -24,6 +24,7 @@ import 'package:music/utils/db/shortcuts_db.dart';
 import 'package:music/utils/db/songs_index_db.dart';
 import 'package:music/utils/db/artists_db.dart';
 import 'package:music/utils/db/artist_images_cache_db.dart';
+import 'package:music/utils/db/download_history_hive.dart';
 import 'package:music/utils/yt_search/service.dart';
 // import 'package:music/widgets/hero_cached.dart';
 import 'package:music/widgets/artwork_list_tile.dart';
@@ -34,9 +35,103 @@ import 'package:music/utils/song_info_dialog.dart';
 import 'package:music/screens/artist/artist_screen.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'dart:async';
+import 'dart:io';
 import 'package:music/widgets/refresh_m3e.dart';
 
 enum OrdenCancionesPlaylist { normal, alfabetico, invertido, ultimoAgregado }
+
+enum RecentSongsSource { local, streaming }
+
+class _StreamingRecentItem {
+  final String rawPath;
+  final String title;
+  final String artist;
+  final String? videoId;
+  final String? artUri;
+
+  const _StreamingRecentItem({
+    required this.rawPath,
+    required this.title,
+    required this.artist,
+    this.videoId,
+    this.artUri,
+  });
+}
+
+class _StreamingArtwork extends StatefulWidget {
+  final List<String> sources;
+  final Color backgroundColor;
+  final Color iconColor;
+
+  const _StreamingArtwork({
+    required this.sources,
+    required this.backgroundColor,
+    required this.iconColor,
+  });
+
+  @override
+  State<_StreamingArtwork> createState() => _StreamingArtworkState();
+}
+
+class _StreamingArtworkState extends State<_StreamingArtwork> {
+  int _sourceIndex = 0;
+
+  void _tryNextSource() {
+    if (_sourceIndex >= widget.sources.length - 1) return;
+    if (!mounted) return;
+    setState(() {
+      _sourceIndex++;
+    });
+  }
+
+  Widget _buildFallback() {
+    return Container(
+      color: Colors.transparent,
+      child: Icon(Icons.music_note_rounded, color: Colors.transparent),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.sources.isEmpty || _sourceIndex >= widget.sources.length) {
+      return _buildFallback();
+    }
+
+    final currentSource = widget.sources[_sourceIndex];
+    final lower = currentSource.toLowerCase();
+
+    if (lower.startsWith('file://') || currentSource.startsWith('/')) {
+      final filePath = lower.startsWith('file://')
+          ? (Uri.tryParse(currentSource)?.toFilePath() ?? '')
+          : currentSource;
+      if (filePath.isEmpty) {
+        _tryNextSource();
+        return _buildFallback();
+      }
+
+      return Image.file(
+        File(filePath),
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) {
+          _tryNextSource();
+          return _buildFallback();
+        },
+      );
+    }
+
+    return CachedNetworkImage(
+      imageUrl: currentSource,
+      fit: BoxFit.cover,
+      fadeInDuration: Duration.zero,
+      fadeOutDuration: Duration.zero,
+      placeholder: (context, url) => _buildFallback(),
+      errorWidget: (context, url, error) {
+        _tryNextSource();
+        return _buildFallback();
+      },
+    );
+  }
+}
 
 class HomeScreen extends StatefulWidget {
   final void Function(int)? onTabChange;
@@ -55,7 +150,9 @@ class HomeScreen extends StatefulWidget {
 
 class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   List<SongModel> _recentSongs = [];
+  List<_StreamingRecentItem> _streamingRecents = [];
   bool _showingRecents = false;
+  RecentSongsSource _recentSongsSource = RecentSongsSource.local;
   bool _showingPlaylistSongs = false;
   List<SongModel> _playlistSongs = [];
   Map<String, dynamic>? _selectedPlaylist;
@@ -86,9 +183,11 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       TextEditingController();
   final FocusNode _searchRecentsFocus = FocusNode();
   List<SongModel> _filteredRecents = [];
+  List<_StreamingRecentItem> _filteredStreamingRecents = [];
   OrdenCancionesPlaylist _ordenCancionesPlaylist =
       OrdenCancionesPlaylist.normal;
   static const String _orderPrefsKey = 'home_screen_playlist_order_filter';
+  static const String _recentsSourcePrefsKey = 'home_screen_recents_source';
 
   // Controladores y estados para búsqueda en playlist
   final TextEditingController _searchPlaylistController =
@@ -454,6 +553,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     try {
       // Cargar filtros de orden
       await _loadOrderFilter();
+      await _loadRecentsSourceFilter();
 
       // Cargar todas las canciones
       await _loadAllSongs();
@@ -523,6 +623,23 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         _ordenCancionesPlaylist = OrdenCancionesPlaylist.values[savedIndex];
       });
     }
+  }
+
+  Future<void> _loadRecentsSourceFilter() async {
+    final prefs = await SharedPreferences.getInstance();
+    final int? savedIndex = prefs.getInt(_recentsSourcePrefsKey);
+    if (savedIndex != null &&
+        savedIndex >= 0 &&
+        savedIndex < RecentSongsSource.values.length) {
+      setState(() {
+        _recentSongsSource = RecentSongsSource.values[savedIndex];
+      });
+    }
+  }
+
+  Future<void> _saveRecentsSourceFilter() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_recentsSourcePrefsKey, _recentSongsSource.index);
   }
 
   Future<void> _saveOrderFilter() async {
@@ -2180,11 +2297,234 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
+  bool _isStreamingRecentPath(String path) {
+    final normalized = path.trim().toLowerCase();
+    if (normalized.isEmpty) return false;
+    if (normalized.startsWith('/')) return false;
+    if (normalized.startsWith('file://')) return false;
+    if (normalized.startsWith('content://')) return false;
+    return true;
+  }
+
+  String? _extractVideoIdFromPath(String rawPath) {
+    final path = rawPath.trim();
+    if (path.isEmpty) return null;
+
+    if (path.startsWith('yt:')) {
+      final id = path.substring(3).trim();
+      return id.isEmpty ? null : id;
+    }
+
+    final uri = Uri.tryParse(path);
+    if (uri != null) {
+      final queryVideoId = uri.queryParameters['v']?.trim();
+      if (queryVideoId != null && queryVideoId.isNotEmpty) {
+        return queryVideoId;
+      }
+      if (uri.host.contains('youtu.be') && uri.pathSegments.isNotEmpty) {
+        final shortId = uri.pathSegments.first.trim();
+        if (shortId.isNotEmpty) {
+          return shortId;
+        }
+      }
+    }
+
+    final idLike = RegExp(r'^[a-zA-Z0-9_-]{11}$');
+    if (idLike.hasMatch(path)) {
+      return path;
+    }
+
+    return null;
+  }
+
+  Future<List<_StreamingRecentItem>> _buildStreamingRecents(
+    List<String> paths,
+  ) async {
+    final items = <_StreamingRecentItem>[];
+    for (final path in paths) {
+      final normalizedPath = path.trim();
+      if (normalizedPath.isEmpty) continue;
+
+      final meta = await RecentsDB().getRecentMeta(normalizedPath);
+      final metaVideoId = meta?['videoId']?.toString().trim();
+      final videoId = (metaVideoId != null && metaVideoId.isNotEmpty)
+          ? metaVideoId
+          : _extractVideoIdFromPath(normalizedPath);
+      final byPath = await DownloadHistoryHive.getDownloadByPath(
+        normalizedPath,
+      );
+      final byVideo = videoId == null
+          ? null
+          : await DownloadHistoryHive.getDownloadByVideoId(videoId);
+      final history = byPath ?? byVideo;
+
+      final metaTitle = meta?['title']?.toString().trim();
+      final metaArtist = meta?['artist']?.toString().trim();
+      final metaArtUri = meta?['artUri']?.toString().trim();
+
+      final title = (metaTitle != null && metaTitle.isNotEmpty)
+          ? metaTitle
+          : (history?.title.trim().isNotEmpty ?? false)
+          ? history!.title.trim()
+          : videoId != null && videoId.isNotEmpty
+          ? 'YouTube Music ($videoId)'
+          : normalizedPath;
+      final artist = (metaArtist != null && metaArtist.isNotEmpty)
+          ? metaArtist
+          : (history?.artist.trim().isNotEmpty ?? false)
+          ? history!.artist.trim()
+          : LocaleProvider.tr('artist_unknown');
+
+      items.add(
+        _StreamingRecentItem(
+          rawPath: normalizedPath,
+          title: title,
+          artist: artist,
+          videoId: videoId,
+          artUri: (metaArtUri != null && metaArtUri.isNotEmpty)
+              ? metaArtUri
+              : null,
+        ),
+      );
+    }
+    return items;
+  }
+
+  Future<void> _toggleRecentsSource() async {
+    setState(() {
+      _recentSongsSource = _recentSongsSource == RecentSongsSource.local
+          ? RecentSongsSource.streaming
+          : RecentSongsSource.local;
+    });
+    await _saveRecentsSourceFilter();
+    _onSearchRecentsChanged();
+  }
+
+  List<String> _streamingArtworkSources(_StreamingRecentItem item) {
+    final sources = <String>[];
+    final rawArt = item.artUri?.trim();
+    if (rawArt != null && rawArt.isNotEmpty && rawArt != 'null') {
+      sources.add(rawArt);
+    }
+    final id = item.videoId?.trim();
+    if (id != null && id.isNotEmpty) {
+      sources.addAll([
+        'https://i.ytimg.com/vi/$id/hqdefault.jpg',
+        'https://img.youtube.com/vi/$id/sddefault.jpg',
+        'https://img.youtube.com/vi/$id/maxresdefault.jpg',
+      ]);
+    }
+    return sources.toSet().toList();
+  }
+
+  Future<void> _playStreamingRecent(_StreamingRecentItem item) async {
+    final videoId = item.videoId?.trim();
+    if (videoId == null || videoId.isEmpty) return;
+    if (playLoadingNotifier.value) return;
+
+    playLoadingNotifier.value = true;
+    openPlayerPanelNotifier.value = true;
+    var loadingReleased = false;
+    StreamSubscription<PlaybackState>? playbackWatchSub;
+    Timer? loadingGuard;
+    void releaseLoading() {
+      if (loadingReleased) return;
+      loadingReleased = true;
+      playLoadingNotifier.value = false;
+      loadingGuard?.cancel();
+      loadingGuard = null;
+      playbackWatchSub?.cancel();
+      playbackWatchSub = null;
+    }
+    loadingGuard = Timer(const Duration(seconds: 8), releaseLoading);
+
+    try {
+      final handler = await getAudioServiceSafely();
+      if (handler == null) return;
+
+      playbackWatchSub = handler.playbackState.listen((playbackState) {
+        if (loadingReleased) return;
+        final currentMedia = handler.mediaItem.value;
+        final currentVideoId = currentMedia?.extras?['videoId']
+            ?.toString()
+            .trim();
+        if (playbackState.playing &&
+            currentVideoId == videoId &&
+            playbackState.updatePosition > Duration.zero) {
+          releaseLoading();
+        }
+      });
+
+      final visibleList = _searchRecentsController.text.isNotEmpty
+          ? _filteredStreamingRecents
+          : _streamingRecents;
+      if (visibleList.isEmpty) return;
+      final selectedIndex = visibleList.indexWhere(
+        (entry) => entry.rawPath == item.rawPath,
+      );
+      final queueItems = visibleList
+          .where((entry) => (entry.videoId?.trim().isNotEmpty ?? false))
+          .map((entry) {
+            final entryVideoId = entry.videoId!.trim();
+            final entryArtUri = entry.artUri?.trim().isNotEmpty == true
+                ? entry.artUri!.trim()
+                : 'https://i.ytimg.com/vi/$entryVideoId/hqdefault.jpg';
+            return <String, dynamic>{
+              'videoId': entryVideoId,
+              'title': entry.title.trim().isNotEmpty
+                  ? entry.title.trim()
+                  : LocaleProvider.tr('title_unknown'),
+              'artist': entry.artist.trim().isNotEmpty
+                  ? entry.artist.trim()
+                  : LocaleProvider.tr('artist_unknown'),
+              'artUri': entryArtUri,
+            };
+          })
+          .toList();
+      if (queueItems.isEmpty) return;
+
+      int initialQueueIndex = queueItems.indexWhere(
+        (entry) => entry['videoId'] == videoId,
+      );
+      if (initialQueueIndex < 0) {
+        initialQueueIndex = selectedIndex.clamp(0, queueItems.length - 1);
+      }
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+        'last_queue_source',
+        LocaleProvider.tr('recent_songs_title'),
+      );
+
+      await handler
+          .customAction('playYtStreamQueue', {
+            'items': queueItems,
+            'initialIndex': initialQueueIndex,
+            'autoPlay': true,
+          })
+          .timeout(const Duration(seconds: 20));
+    } catch (_) {
+      // Ignorar para no mostrar error si inició correctamente entre transiciones.
+      releaseLoading();
+    } finally {
+      if (loadingReleased) {
+        loadingGuard?.cancel();
+        loadingGuard = null;
+        await playbackWatchSub?.cancel();
+        playbackWatchSub = null;
+      }
+    }
+  }
+
   Future<void> _loadRecents() async {
     try {
       final recents = await RecentsDB().getRecents();
+      final recentPaths = await RecentsDB().getRecentPaths();
+      final streamingPaths = recentPaths.where(_isStreamingRecentPath).toList();
+      final streamingRecents = await _buildStreamingRecents(streamingPaths);
       setState(() {
         _recentSongs = recents;
+        _streamingRecents = streamingRecents;
         _showingRecents = true;
         _gradientAlphaNotifier.value = 1.0;
       });
@@ -2194,6 +2534,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     } catch (e) {
       setState(() {
         _recentSongs = [];
+        _streamingRecents = [];
         _showingRecents = true;
         _gradientAlphaNotifier.value = 1.0;
       });
@@ -2204,8 +2545,12 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Future<void> _loadRecentsData() async {
     try {
       final recents = await RecentsDB().getRecents();
+      final recentPaths = await RecentsDB().getRecentPaths();
+      final streamingPaths = recentPaths.where(_isStreamingRecentPath).toList();
+      final streamingRecents = await _buildStreamingRecents(streamingPaths);
       setState(() {
         _recentSongs = recents;
+        _streamingRecents = streamingRecents;
         // No cambiamos _showingRecents aquí
       });
 
@@ -2214,6 +2559,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     } catch (e) {
       setState(() {
         _recentSongs = [];
+        _streamingRecents = [];
         // No cambiamos _showingRecents aquí
       });
     }
@@ -2222,13 +2568,21 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void _onSearchRecentsChanged() {
     final query = _quitarDiacriticos(_searchRecentsController.text.trim());
     if (query.isEmpty) {
-      setState(() => _filteredRecents = []);
+      setState(() {
+        _filteredRecents = [];
+        _filteredStreamingRecents = [];
+      });
       return;
     }
     setState(() {
       _filteredRecents = _recentSongs.where((song) {
         final title = _quitarDiacriticos(song.displayTitle);
         final artist = _quitarDiacriticos(song.displayArtist);
+        return title.contains(query) || artist.contains(query);
+      }).toList();
+      _filteredStreamingRecents = _streamingRecents.where((item) {
+        final title = _quitarDiacriticos(item.title);
+        final artist = _quitarDiacriticos(item.artist);
         return title.contains(query) || artist.contains(query);
       }).toList();
     });
@@ -3274,6 +3628,9 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final quickPickPageCount = limitedQuickPick.isEmpty
         ? 0
         : (limitedQuickPick.length / quickPickSongsPerPage).ceil();
+    final menuColor = isAmoled
+        ? Colors.grey.shade900
+        : Theme.of(context).colorScheme.surfaceContainerHigh;
 
     final scaffold = Scaffold(
       backgroundColor: isAmoled ? Colors.transparent : null,
@@ -3434,6 +3791,79 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       ),
                     );
                   },
+                ),
+              ]
+            : _showingRecents
+            ? [
+                IconButton(
+                  icon: const Icon(
+                    Icons.shuffle_rounded,
+                    size: 28,
+                    weight: 600,
+                  ),
+                  tooltip: LocaleProvider.tr('shuffle'),
+                  onPressed: () {
+                    if (_recentSongsSource == RecentSongsSource.local) {
+                      final List<SongModel> songsToShow =
+                          _searchRecentsController.text.isNotEmpty
+                          ? _filteredRecents
+                          : _recentSongs;
+                      if (songsToShow.isNotEmpty) {
+                        final random = (songsToShow.toList()..shuffle()).first;
+                        unawaited(_preloadArtworkForSong(random));
+                        _playSongAndOpenPlayer(random, songsToShow);
+                      }
+                      return;
+                    }
+
+                    final List<_StreamingRecentItem> streamingToShow =
+                        _searchRecentsController.text.isNotEmpty
+                        ? _filteredStreamingRecents
+                        : _streamingRecents;
+                    final playable = streamingToShow
+                        .where(
+                          (item) => item.videoId?.trim().isNotEmpty ?? false,
+                        )
+                        .toList();
+                    if (playable.isNotEmpty) {
+                      final random = (playable.toList()..shuffle()).first;
+                      _playStreamingRecent(random);
+                    }
+                  },
+                ),
+                PopupMenuButton<String>(
+                  icon: const Icon(Icons.more_vert),
+                  tooltip: LocaleProvider.tr('want_more_options'),
+                  color: menuColor,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  onSelected: (value) {
+                    if (value == 'switch_source') {
+                      _toggleRecentsSource();
+                    }
+                  },
+                  itemBuilder: (context) => [
+                    PopupMenuItem<String>(
+                      value: 'switch_source',
+                      child: Row(
+                        children: [
+                          Icon(
+                            _recentSongsSource == RecentSongsSource.local
+                                ? Icons.cloud_outlined
+                                : Icons.music_note_rounded,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 12),
+                          Text(
+                            _recentSongsSource == RecentSongsSource.local
+                                ? LocaleProvider.tr('show_streaming_songs')
+                                : LocaleProvider.tr('show_local_songs'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ]
             : _showingPlaylistSongs
@@ -3640,6 +4070,366 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               (currentMediaItem != null ? 100.0 : 0.0) + bottomPadding;
 
           if (_showingRecents) {
+            if (_recentSongsSource == RecentSongsSource.streaming) {
+              final List<_StreamingRecentItem> streamingToShow =
+                  _searchRecentsController.text.isNotEmpty
+                  ? _filteredStreamingRecents
+                  : _streamingRecents;
+              if (streamingToShow.isEmpty) {
+                final isDark = Theme.of(context).brightness == Brightness.dark;
+                return ExpressiveRefreshIndicator(
+                  onRefresh: () async {
+                    await _loadRecents();
+                  },
+                  color: Theme.of(context).colorScheme.primary,
+                  child: SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    child: SizedBox(
+                      height: MediaQuery.of(context).size.height - 200,
+                      child: Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Container(
+                              width: 80,
+                              height: 80,
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: isDark
+                                    ? Theme.of(context).colorScheme.secondary
+                                          .withValues(alpha: 0.04)
+                                    : Theme.of(context).colorScheme.secondary
+                                          .withValues(alpha: 0.05),
+                              ),
+                              child: Icon(
+                                Icons.cloud_outlined,
+                                size: 50,
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurface.withValues(alpha: 0.7),
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            TranslatedText(
+                              _searchRecentsController.text.isNotEmpty
+                                  ? 'no_results'
+                                  : 'no_streaming_songs',
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurface.withValues(alpha: 0.5),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              }
+              final colorScheme = colorSchemeNotifier.value;
+              final isAmoled = colorScheme == AppColorScheme.amoled;
+              final isDark = Theme.of(context).brightness == Brightness.dark;
+              final cardColor = isAmoled
+                  ? Colors.white.withAlpha(20)
+                  : isDark
+                  ? Theme.of(
+                      context,
+                    ).colorScheme.secondary.withValues(alpha: 0.06)
+                  : Theme.of(
+                      context,
+                    ).colorScheme.secondary.withValues(alpha: 0.07);
+              final isAmoledTheme =
+                  colorSchemeNotifier.value == AppColorScheme.amoled;
+
+              return ExpressiveRefreshIndicator(
+                onRefresh: () async {
+                  await _loadRecents();
+                },
+                color: Theme.of(context).colorScheme.primary,
+                child: RawScrollbar(
+                  controller: _recentsScrollController,
+                  thumbColor: Theme.of(context).colorScheme.primary,
+                  thickness: 6.0,
+                  radius: const Radius.circular(8),
+                  interactive: true,
+                  padding: EdgeInsets.only(bottom: space),
+                  child: ListView.builder(
+                    controller: _recentsScrollController,
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: EdgeInsets.only(
+                      left: 16.0,
+                      right: 16.0,
+                      top: 8.0,
+                      bottom: space,
+                    ),
+                    itemCount: streamingToShow.length,
+                    itemBuilder: (context, index) {
+                      final item = streamingToShow[index];
+                      final itemVideoId = item.videoId?.trim();
+                      final currentVideoId = currentMediaItem
+                          ?.extras?['videoId']
+                          ?.toString()
+                          .trim();
+                      final isCurrent =
+                          (itemVideoId != null &&
+                              itemVideoId.isNotEmpty &&
+                              currentVideoId == itemVideoId) ||
+                          currentMediaItem?.id == item.rawPath ||
+                          (itemVideoId != null &&
+                              currentMediaItem?.id == 'yt:$itemVideoId');
+
+                      final bool isFirst = index == 0;
+                      final bool isLast = index == streamingToShow.length - 1;
+                      final bool isOnly = streamingToShow.length == 1;
+                      BorderRadius borderRadius;
+                      if (isOnly) {
+                        borderRadius = BorderRadius.circular(20);
+                      } else if (isFirst) {
+                        borderRadius = const BorderRadius.only(
+                          topLeft: Radius.circular(20),
+                          topRight: Radius.circular(20),
+                          bottomLeft: Radius.circular(4),
+                          bottomRight: Radius.circular(4),
+                        );
+                      } else if (isLast) {
+                        borderRadius = const BorderRadius.only(
+                          topLeft: Radius.circular(4),
+                          topRight: Radius.circular(4),
+                          bottomLeft: Radius.circular(20),
+                          bottomRight: Radius.circular(20),
+                        );
+                      } else {
+                        borderRadius = BorderRadius.circular(4);
+                      }
+
+                      final artworkSources = _streamingArtworkSources(item);
+                      final artworkFallbackBackground = Theme.of(
+                        context,
+                      ).colorScheme.surfaceContainerHigh;
+                      final artworkFallbackIconColor = Theme.of(
+                        context,
+                      ).colorScheme.onSurfaceVariant;
+
+                      Widget listTileWidget;
+                      if (isCurrent) {
+                        listTileWidget = ValueListenableBuilder<bool>(
+                          valueListenable: _isPlayingNotifier,
+                          builder: (context, playing, child) {
+                            return ListTile(
+                              shape: RoundedRectangleBorder(
+                                borderRadius: borderRadius,
+                              ),
+                              leading: ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: SizedBox(
+                                  width: 50,
+                                  height: 50,
+                                  child: _StreamingArtwork(
+                                    sources: artworkSources,
+                                    backgroundColor: artworkFallbackBackground,
+                                    iconColor: artworkFallbackIconColor,
+                                  ),
+                                ),
+                              ),
+                              title: Row(
+                                children: [
+                                  Padding(
+                                    padding: const EdgeInsets.only(right: 8.0),
+                                    child: MiniMusicVisualizer(
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.primary,
+                                      width: 4,
+                                      height: 15,
+                                      radius: 4,
+                                      animate: playing,
+                                    ),
+                                  ),
+                                  Expanded(
+                                    child: Text(
+                                      item.title,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleMedium
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.bold,
+                                            color: isAmoledTheme
+                                                ? Colors.white
+                                                : Theme.of(
+                                                    context,
+                                                  ).colorScheme.primary,
+                                          ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              subtitle: Text(
+                                item.artist,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              trailing: Container(
+                                width: 40,
+                                height: 40,
+                                decoration: BoxDecoration(
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.primary.withAlpha(20),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: IconButton(
+                                  icon: Icon(
+                                    playing
+                                        ? Icons.pause_rounded
+                                        : Icons.play_arrow_rounded,
+                                    grade: 200,
+                                    fill: 1,
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.primary,
+                                  ),
+                                  onPressed: () {
+                                    playing
+                                        ? audioHandler.myHandler?.pause()
+                                        : audioHandler.myHandler?.play();
+                                  },
+                                ),
+                              ),
+                              selected: true,
+                              selectedTileColor: Colors.transparent,
+                              onTap: () async {
+                                if (playing) {
+                                  await audioHandler.myHandler?.pause();
+                                } else {
+                                  await audioHandler.myHandler?.play();
+                                }
+                              },
+                              onLongPress: () {
+                                showModalBottomSheet(
+                                  context: context,
+                                  builder: (context) => SafeArea(
+                                    child: ListTile(
+                                      leading: const Icon(Icons.delete_outline),
+                                      title: const TranslatedText(
+                                        'remove_from_recents',
+                                      ),
+                                      onTap: () async {
+                                        Navigator.of(context).pop();
+                                        await RecentsDB().removeRecent(
+                                          item.rawPath,
+                                        );
+                                        await _loadRecents();
+                                      },
+                                    ),
+                                  ),
+                                );
+                              },
+                            );
+                          },
+                        );
+                      } else {
+                        listTileWidget = ListTile(
+                          shape: RoundedRectangleBorder(
+                            borderRadius: borderRadius,
+                          ),
+                          leading: ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: SizedBox(
+                              width: 50,
+                              height: 50,
+                              child: _StreamingArtwork(
+                                sources: artworkSources,
+                                backgroundColor: artworkFallbackBackground,
+                                iconColor: artworkFallbackIconColor,
+                              ),
+                            ),
+                          ),
+                          title: Text(
+                            item.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          subtitle: Text(
+                            item.artist,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          trailing: Container(
+                            width: 40,
+                            height: 40,
+                            decoration: BoxDecoration(
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.primary.withAlpha(20),
+                              shape: BoxShape.circle,
+                            ),
+                            child: IconButton(
+                              icon: const Icon(
+                                Icons.play_arrow_rounded,
+                                grade: 200,
+                                fill: 1,
+                              ),
+                              onPressed: () => _playStreamingRecent(item),
+                            ),
+                          ),
+                          onTap: () => _playStreamingRecent(item),
+                          onLongPress: () {
+                            showModalBottomSheet(
+                              context: context,
+                              builder: (context) => SafeArea(
+                                child: ListTile(
+                                  leading: const Icon(Icons.delete_outline),
+                                  title: const TranslatedText(
+                                    'remove_from_recents',
+                                  ),
+                                  onTap: () async {
+                                    Navigator.of(context).pop();
+                                    await RecentsDB().removeRecent(
+                                      item.rawPath,
+                                    );
+                                    await _loadRecents();
+                                  },
+                                ),
+                              ),
+                            );
+                          },
+                        );
+                      }
+
+                      final bool isLastItem =
+                          index == streamingToShow.length - 1;
+                      return RepaintBoundary(
+                        child: Padding(
+                          padding: EdgeInsets.only(bottom: isLastItem ? 0 : 4),
+                          child: Card(
+                            color: isCurrent
+                                ? isAmoledTheme
+                                      ? cardColor
+                                      : Theme.of(context).colorScheme.primary
+                                            .withAlpha(isDark ? 40 : 25)
+                                : cardColor,
+                            margin: EdgeInsets.zero,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: borderRadius,
+                            ),
+                            child: ClipRRect(
+                              borderRadius: borderRadius,
+                              child: listTileWidget,
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              );
+            }
             final List<SongModel> songsToShow =
                 _searchRecentsController.text.isNotEmpty
                 ? _filteredRecents

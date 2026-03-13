@@ -661,20 +661,18 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> {
                                                             overflow:
                                                                 TextOverflow
                                                                     .ellipsis,
-                                                            style: isAmoled
-                                                                ? TextStyle(
-                                                                    color: Colors
-                                                                        .white
-                                                                        .withValues(
+                                                            style: Theme.of(context)
+                                                                .textTheme
+                                                                .bodyMedium
+                                                                ?.copyWith(
+                                                                  color:
+                                                                      isAmoled
+                                                                      ? Colors.white.withValues(
                                                                           alpha:
                                                                               0.80,
-                                                                        ),
-                                                                  )
-                                                                : Theme.of(
-                                                                        context,
-                                                                      )
-                                                                      .textTheme
-                                                                      .bodyMedium,
+                                                                        )
+                                                                      : null,
+                                                                ),
                                                           ),
                                                         ),
                                                         Icon(

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:music/widgets/sliding_up_panel/sliding_up_panel.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:music/main.dart';
@@ -169,16 +170,17 @@ class _CurrentPlaylistScreenState extends State<CurrentPlaylistScreen>
       }
       // Si es una URL remota
       else if (scheme == 'http' || scheme == 'https') {
-        return Image.network(
-          artUri.toString(),
+        return CachedNetworkImage(
+          imageUrl: artUri.toString(),
           width: 50,
           height: 50,
           fit: BoxFit.cover,
           alignment: Alignment.center,
-          cacheWidth: 200,
-          errorBuilder: (context, error, stackTrace) {
-            return _buildFallbackIcon();
-          },
+          fadeInDuration: Duration.zero,
+          fadeOutDuration: Duration.zero,
+          placeholder: (context, url) => _buildFallbackIcon(),
+          memCacheWidth: 200,
+          errorWidget: (context, url, error) => _buildFallbackIcon(),
         );
       }
     }

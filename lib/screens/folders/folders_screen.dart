@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:music/widgets/refresh_m3e.dart';
 import 'dart:io';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 import 'package:on_audio_query/on_audio_query.dart';
@@ -42,6 +43,7 @@ enum OrdenCarpetas {
 }
 
 enum PlaylistSource { local, streaming }
+enum FoldersRootView { folders, allSongs, playlists }
 
 OrdenCarpetas _orden = OrdenCarpetas.normal;
 OrdenCarpetas _ordenPlaylist = OrdenCarpetas.normal;
@@ -90,8 +92,8 @@ class _StreamingArtworkState extends State<_StreamingArtwork> {
 
   Widget _buildFallback() {
     return Container(
-      color: widget.backgroundColor,
-      child: Icon(Icons.music_note_rounded, color: widget.iconColor),
+      color: Colors.transparent,
+      child: Icon(Icons.music_note_rounded, color: Colors.transparent),
     );
   }
 
@@ -123,10 +125,13 @@ class _StreamingArtworkState extends State<_StreamingArtwork> {
       );
     }
 
-    return Image.network(
-      currentSource,
+    return CachedNetworkImage(
+      imageUrl: currentSource,
       fit: BoxFit.cover,
-      errorBuilder: (context, error, stackTrace) {
+      fadeInDuration: Duration.zero,
+      fadeOutDuration: Duration.zero,
+      placeholder: (context, url) => _buildFallback(),
+      errorWidget: (context, url, error) {
         _tryNextSource();
         return _buildFallback();
       },
@@ -207,9 +212,13 @@ class _FoldersScreenState extends State<FoldersScreen>
 
   static const String _orderPrefsKey = 'folders_screen_order_filter';
   static const String _orderPlaylistPrefsKey = 'playlists_screen_order_filter';
+  static const String _lastRootViewPrefsKey = 'folders_screen_last_root_view';
+  static const String _lastPlaylistSourcePrefsKey =
+      'folders_screen_last_playlist_source';
   static const String _pinnedSongsKey = 'pinned_songs';
   static const String _ignoredSongsKey = 'ignored_songs';
   static const String _ignoredFoldersKey = 'ignored_folders';
+  FoldersRootView _initialRootView = FoldersRootView.folders;
 
   // Utilidades para gestionar canciones fijadas
   Future<List<String>> getPinnedSongs() async {
@@ -486,7 +495,7 @@ class _FoldersScreenState extends State<FoldersScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _checkAndroidVersion();
-    _loadOrderFilter().then((_) => cargarCanciones());
+    unawaited(_initializeScreenState());
     foldersShouldReload.addListener(_onFoldersShouldReload);
     folderUpdatedNotifier.addListener(_onFolderUpdated);
 
@@ -525,6 +534,57 @@ class _FoldersScreenState extends State<FoldersScreen>
         }
       });
     });
+  }
+
+  Future<void> _initializeScreenState() async {
+    await _loadOrderFilter();
+    await _loadLastViewPrefs();
+    switch (_initialRootView) {
+      case FoldersRootView.folders:
+        await cargarCanciones();
+        break;
+      case FoldersRootView.allSongs:
+        await _loadAllSongs();
+        break;
+      case FoldersRootView.playlists:
+        await _loadPlaylists();
+        break;
+    }
+  }
+
+  FoldersRootView _currentRootView() {
+    if (_showPlaylists) return FoldersRootView.playlists;
+    if (_showAllSongs) return FoldersRootView.allSongs;
+    return FoldersRootView.folders;
+  }
+
+  Future<void> _saveLastViewPrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_lastRootViewPrefsKey, _currentRootView().index);
+    await prefs.setInt(_lastPlaylistSourcePrefsKey, _playlistSource.index);
+  }
+
+  Future<void> _loadLastViewPrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedRootView = prefs.getInt(_lastRootViewPrefsKey);
+    if (savedRootView != null &&
+        savedRootView >= 0 &&
+        savedRootView < FoldersRootView.values.length) {
+      _initialRootView = FoldersRootView.values[savedRootView];
+    }
+
+    final savedPlaylistSource = prefs.getInt(_lastPlaylistSourcePrefsKey);
+    if (savedPlaylistSource != null &&
+        savedPlaylistSource >= 0 &&
+        savedPlaylistSource < PlaylistSource.values.length) {
+      if (mounted) {
+        setState(() {
+          _playlistSource = PlaylistSource.values[savedPlaylistSource];
+        });
+      } else {
+        _playlistSource = PlaylistSource.values[savedPlaylistSource];
+      }
+    }
   }
 
   // Verificar versión de Android
@@ -578,6 +638,7 @@ class _FoldersScreenState extends State<FoldersScreen>
           : PlaylistSource.local;
       _applyPlaylistFilters();
     });
+    unawaited(_saveLastViewPrefs());
   }
 
   bool _isStreamingPath(String path) {
@@ -626,9 +687,9 @@ class _FoldersScreenState extends State<FoldersScreen>
     final id = item.videoId?.trim();
     if (id != null && id.isNotEmpty) {
       sources.addAll([
-        'https://img.youtube.com/vi/$id/maxresdefault.jpg',
-        'https://img.youtube.com/vi/$id/sddefault.jpg',
         'https://i.ytimg.com/vi/$id/hqdefault.jpg',
+        'https://img.youtube.com/vi/$id/sddefault.jpg',
+        'https://img.youtube.com/vi/$id/maxresdefault.jpg',
       ]);
     }
     return sources.toSet().toList();
@@ -1631,9 +1692,34 @@ class _FoldersScreenState extends State<FoldersScreen>
 
     playLoadingNotifier.value = true;
     openPlayerPanelNotifier.value = true;
+    var loadingReleased = false;
+    StreamSubscription<PlaybackState>? playbackWatchSub;
+    Timer? loadingGuard;
+    void releaseLoading() {
+      if (loadingReleased) return;
+      loadingReleased = true;
+      playLoadingNotifier.value = false;
+      loadingGuard?.cancel();
+      loadingGuard = null;
+      playbackWatchSub?.cancel();
+      playbackWatchSub = null;
+    }
+    loadingGuard = Timer(const Duration(seconds: 8), releaseLoading);
     try {
       final handler = audioHandler;
       if (handler == null) return;
+      playbackWatchSub = handler.playbackState.listen((playbackState) {
+        if (loadingReleased) return;
+        final currentMedia = handler.mediaItem.value;
+        final currentVideoId = currentMedia?.extras?['videoId']
+            ?.toString()
+            .trim();
+        if (playbackState.playing &&
+            currentVideoId == targetVideoId &&
+            playbackState.updatePosition > Duration.zero) {
+          releaseLoading();
+        }
+      });
       final visibleList = _searchController.text.isNotEmpty
           ? _filteredPlaylistStreamingItems
           : _playlistStreamingItems;
@@ -1672,9 +1758,16 @@ class _FoldersScreenState extends State<FoldersScreen>
         'items': queueItems,
         'initialIndex': initialQueueIndex,
         'autoPlay': true,
-      });
+      }).timeout(const Duration(seconds: 20));
+    } catch (_) {
+      releaseLoading();
     } finally {
-      playLoadingNotifier.value = false;
+      if (loadingReleased) {
+        loadingGuard?.cancel();
+        loadingGuard = null;
+        await playbackWatchSub?.cancel();
+        playbackWatchSub = null;
+      }
     }
   }
 
@@ -4273,14 +4366,8 @@ class _FoldersScreenState extends State<FoldersScreen>
               ),
               PopupMenuButton<String>(
                 surfaceTintColor: isAmoled
-                    ? Colors.white.withAlpha(20)
-                    : isDark
-                    ? Theme.of(
-                        context,
-                      ).colorScheme.secondary.withValues(alpha: 0.06)
-                    : Theme.of(
-                        context,
-                      ).colorScheme.secondary.withValues(alpha: 0.07),
+                    ? Colors.grey.shade900
+                    : Theme.of(context).colorScheme.surfaceContainerHigh,
                 icon: const Icon(Icons.more_vert),
                 tooltip: LocaleProvider.tr('options'),
                 elevation: 3,
@@ -6471,6 +6558,7 @@ class _FoldersScreenState extends State<FoldersScreen>
     setState(() {
       _isLoading = false;
     });
+    unawaited(_saveLastViewPrefs());
   }
 
   /// Generar cuadrícula de carátulas para una playlist (como en Home)
@@ -6632,6 +6720,7 @@ class _FoldersScreenState extends State<FoldersScreen>
       _allSongsForGrid = allIndexedSongs;
       _isLoading = false;
     });
+    unawaited(_saveLastViewPrefs());
   }
 
   /// Crear una nueva lista de reproducción
@@ -7288,6 +7377,7 @@ class _FoldersScreenState extends State<FoldersScreen>
     setState(() {
       _isLoading = false;
     });
+    unawaited(_saveLastViewPrefs());
   }
 
   /// Mostrar el modal de selección de vista (Carpetas o Todas)
@@ -7363,6 +7453,7 @@ class _FoldersScreenState extends State<FoldersScreen>
                         _isSelecting = false;
                         _selectedSongPaths.clear();
                       });
+                      await _saveLastViewPrefs();
                       // Recargar las carpetas para mostrar las ignoradas también
                       await cargarCanciones(forceIndex: false);
                     }
@@ -7476,6 +7567,7 @@ class _FoldersScreenState extends State<FoldersScreen>
       _showPlaylists = false;
       _selectedPlaylist = null;
     });
+    unawaited(_saveLastViewPrefs());
     // Recargar la lista de carpetas para mostrar el estado actual
     cargarCanciones(forceIndex: false);
   }

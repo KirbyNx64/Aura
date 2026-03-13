@@ -399,7 +399,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   Timer? _songChangeResumeTimer;
 
   static const Duration _songChangeDelay = Duration(milliseconds: 800);
-  static const Duration _streamingSkipSeekTimeout = Duration(milliseconds: 220);
+  static const Duration _streamingSkipSeekTimeout = Duration(milliseconds: 125);
 
   // Claves de SharedPreferences
   static const String _kPrefQueuePaths = 'playback_queue_paths';
@@ -651,9 +651,23 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
           if (_currentTrackingId != null && !_hasBeenTracked) {
             _trackingStartTime = DateTime.now();
             final currentItem = mediaItem.value;
-            final songPath = currentItem?.extras?['data'] as String?;
-            if (songPath != null) {
-              _startTrackingPlaytime(_currentTrackingId!, songPath);
+            if (currentItem != null) {
+              final songPath = _favoritePathForMediaItem(currentItem);
+              if (songPath.isNotEmpty) {
+                final displayArtUri = currentItem.extras?['displayArtUri']
+                    ?.toString()
+                    .trim();
+                _startTrackingPlaytime(
+                  _currentTrackingId!,
+                  songPath,
+                  title: currentItem.title,
+                  artist: currentItem.artist,
+                  videoId: currentItem.extras?['videoId']?.toString().trim(),
+                  artUri: (displayArtUri != null && displayArtUri.isNotEmpty)
+                      ? displayArtUri
+                      : currentItem.artUri?.toString(),
+                );
+              }
             }
           }
         } else {
@@ -753,10 +767,18 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
   /// Función para actualizar más reproducidas desde el background
   Future<void> _updateMostPlayedAsync(String path) async {
+    final normalizedPath = path.trim();
+    final lowerPath = normalizedPath.toLowerCase();
+    final isLocalPath =
+        normalizedPath.startsWith('/') ||
+        lowerPath.startsWith('file://') ||
+        lowerPath.startsWith('content://');
+    if (!isLocalPath) return;
+
     try {
       final query = OnAudioQuery();
       final allSongs = await query.querySongs();
-      final match = allSongs.where((s) => s.data == path);
+      final match = allSongs.where((s) => s.data == normalizedPath);
       if (match.isNotEmpty) {
         await MostPlayedDB().incrementPlayCount(match.first);
       } else {
@@ -768,7 +790,14 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   }
 
   /// Función para guardar la canción después de 10 segundos
-  void _startTrackingPlaytime(String trackId, String path) {
+  void _startTrackingPlaytime(
+    String trackId,
+    String path, {
+    String? title,
+    String? artist,
+    String? videoId,
+    String? artUri,
+  }) {
     _trackingTimer?.cancel();
     final remainingTime = const Duration(seconds: 10) - _elapsedTrackingTime;
 
@@ -776,7 +805,15 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       // Ya pasó el tiempo, guardar inmediatamente
       if (_currentTrackingId == trackId && !_hasBeenTracked) {
         _hasBeenTracked = true;
-        unawaited(RecentsDB().addRecentPath(path));
+        unawaited(
+          RecentsDB().addRecentPath(
+            path,
+            title: title,
+            artist: artist,
+            videoId: videoId,
+            artUri: artUri,
+          ),
+        );
         unawaited(_updateMostPlayedAsync(path));
       }
     } else {
@@ -784,7 +821,15 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         if (_currentTrackingId == trackId && !_hasBeenTracked) {
           _hasBeenTracked = true;
           // Actualizar recientes de forma asíncrona
-          unawaited(RecentsDB().addRecentPath(path));
+          unawaited(
+            RecentsDB().addRecentPath(
+              path,
+              title: title,
+              artist: artist,
+              videoId: videoId,
+              artUri: artUri,
+            ),
+          );
           // Actualizar más reproducidas de forma asíncrona
           unawaited(_updateMostPlayedAsync(path));
         }
@@ -994,6 +1039,26 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     final currentSongId = currentMediaItem.id;
 
     if (_isStreamingMediaItem(currentMediaItem)) {
+      if (currentSongId.isNotEmpty && currentSongId != _currentTrackingId) {
+        _resetTracking();
+        _currentTrackingId = currentSongId;
+        _trackingStartTime = DateTime.now();
+        if (favoritePath.isNotEmpty) {
+          final displayArtUri = currentMediaItem.extras?['displayArtUri']
+              ?.toString()
+              .trim();
+          _startTrackingPlaytime(
+            currentSongId,
+            favoritePath,
+            title: currentMediaItem.title,
+            artist: currentMediaItem.artist,
+            videoId: currentMediaItem.extras?['videoId']?.toString().trim(),
+            artUri: (displayArtUri != null && displayArtUri.isNotEmpty)
+                ? displayArtUri
+                : currentMediaItem.artUri?.toString(),
+          );
+        }
+      }
       mediaItem.add(currentMediaItem);
       final artScheme = currentMediaItem.artUri?.scheme.toLowerCase();
       final hasLocalArtUri =

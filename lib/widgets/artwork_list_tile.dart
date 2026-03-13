@@ -1,9 +1,10 @@
 import 'dart:io';
 import 'dart:math';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:music/utils/audio/background_audio_handler.dart';
-import 'package:music/utils/notifiers.dart';
-import 'package:music/utils/theme_preferences.dart';
+// import 'package:music/utils/notifiers.dart';
+// import 'package:music/utils/theme_preferences.dart';
 
 class ArtworkListTile extends StatefulWidget {
   final int songId;
@@ -173,19 +174,19 @@ class _ArtworkListTileState extends State<ArtworkListTile> {
     if (effectiveArtUri != null && _isRemoteUri(effectiveArtUri)) {
       return ClipRRect(
         borderRadius: widget.borderRadius,
-        child: Image.network(
-          effectiveArtUri.toString(),
+        child: CachedNetworkImage(
+          imageUrl: effectiveArtUri.toString(),
           width: w,
           height: h,
           fit: BoxFit.cover,
           alignment: Alignment.center,
-          gaplessPlayback: true,
+          fadeInDuration: Duration.zero,
+          fadeOutDuration: Duration.zero,
+          placeholder: (context, url) => _buildFallbackIcon(w, h),
           // Decodificar cerca del tamaño final reduce trabajo en scroll.
-          cacheWidth: cacheW,
-          filterQuality: FilterQuality.low,
-          errorBuilder: (context, error, stackTrace) {
-            return _buildFallbackIcon(w, h);
-          },
+          memCacheWidth: cacheW,
+          memCacheHeight: cacheW,
+          errorWidget: (context, url, error) => _buildFallbackIcon(w, h),
         ),
       );
     }
@@ -221,22 +222,18 @@ class _ArtworkListTileState extends State<ArtworkListTile> {
   }
 
   Widget _buildFallbackIcon(double w, double h) {
-    final isSystem = colorSchemeNotifier.value == AppColorScheme.system;
+    // final isSystem = colorSchemeNotifier.value == AppColorScheme.system;
     return Container(
       width: w,
       height: h,
       decoration: BoxDecoration(
-        color: isSystem
-            ? Theme.of(
-                context,
-              ).colorScheme.secondaryContainer.withValues(alpha: 0.5)
-            : Theme.of(context).colorScheme.surfaceContainer,
+        color: Colors.transparent,
         borderRadius: widget.borderRadius,
       ),
       child: Icon(
         Icons.music_note,
         size: (w < h ? w : h) * 0.5,
-        color: Theme.of(context).colorScheme.onSurface,
+        color: Colors.transparent,
       ),
     );
   }

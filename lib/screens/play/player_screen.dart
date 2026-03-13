@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:android_nav_setting/android_nav_setting.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:music/widgets/title_marquee.dart';
 import 'package:music/main.dart';
 import 'package:share_plus/share_plus.dart';
@@ -259,31 +260,33 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
         );
       }
 
-      // Si es una URL de red, usar Image.network con optimizaciones
+      // Si es una URL de red, usar CachedNetworkImage con optimizaciones
       if (scheme == 'http' || scheme == 'https') {
+        final cacheSize = (size * MediaQuery.of(context).devicePixelRatio)
+            .round();
         return ClipRRect(
           borderRadius: BorderRadius.circular(16),
-          child: Image.network(
-            artUri.toString(),
+          child: CachedNetworkImage(
+            imageUrl: artUri.toString(),
             width: size,
             height: size,
             fit: BoxFit.cover,
             alignment: Alignment.center,
-            errorBuilder: (context, error, stackTrace) => _defaultArtwork(size),
-            loadingBuilder: (context, child, loadingProgress) =>
-                loadingProgress == null
-                ? child
-                : Container(
-                    width: size,
-                    height: size,
-                    alignment: Alignment.center,
-                    child: CircularProgressIndicator(strokeWidth: 3),
-                  ),
-            // Optimización: Cache de imagen
-            cacheWidth: (size * MediaQuery.of(context).devicePixelRatio)
-                .round(),
-            cacheHeight: (size * MediaQuery.of(context).devicePixelRatio)
-                .round(),
+            fadeInDuration: Duration.zero,
+            fadeOutDuration: Duration.zero,
+            errorWidget: (context, url, error) => _defaultArtwork(size),
+            placeholder: (context, url) => Container(
+              width: size,
+              height: size,
+              alignment: Alignment.center,
+              child: const CircularProgressIndicator(
+                strokeWidth: 3,
+                color: Colors.transparent,
+              ),
+            ),
+            // Decodificar al tamaño objetivo reduce trabajo de render.
+            memCacheWidth: cacheSize,
+            memCacheHeight: cacheSize,
           ),
         );
       }
@@ -357,22 +360,20 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
 
       // Si es una URL de red
       if (scheme == 'http' || scheme == 'https') {
-        return Image.network(
-          artUri.toString(),
+        return CachedNetworkImage(
+          imageUrl: artUri.toString(),
           width: 60,
           height: 60,
           fit: BoxFit.cover,
-          errorBuilder: (context, error, stackTrace) =>
-              _buildModalPlaceholder(),
-          loadingBuilder: (context, child, loadingProgress) =>
-              loadingProgress == null
-              ? child
-              : Container(
-                  width: 60,
-                  height: 60,
-                  alignment: Alignment.center,
-                  child: LoadingIndicator(),
-                ),
+          fadeInDuration: Duration.zero,
+          fadeOutDuration: Duration.zero,
+          errorWidget: (context, url, error) => _buildModalPlaceholder(),
+          placeholder: (context, url) => Container(
+            width: 60,
+            height: 60,
+            alignment: Alignment.center,
+            child: LoadingIndicator(),
+          ),
         );
       }
     }
@@ -1047,7 +1048,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
         if (artUri.scheme == 'file') {
           provider = FileImage(File(artUri.toFilePath()));
         } else if (artUri.scheme == 'http' || artUri.scheme == 'https') {
-          provider = NetworkImage(artUri.toString());
+          provider = CachedNetworkImageProvider(artUri.toString());
         } else {
           return;
         }
@@ -2862,9 +2863,9 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
           imageProvider = null;
         }
       }
-      // Si es una URL de red, usar NetworkImage
+      // Si es una URL de red, usar CachedNetworkImageProvider
       else if (scheme == 'http' || scheme == 'https') {
-        imageProvider = NetworkImage(artUri.toString());
+        imageProvider = CachedNetworkImageProvider(artUri.toString());
       }
     }
 
