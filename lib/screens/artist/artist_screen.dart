@@ -1224,7 +1224,8 @@ class _ArtistScreenState extends State<ArtistScreen> {
         final selected = results[tappedIndex];
         final streamUrl = await StreamService.getBestAudioUrl(
           targetVideoId,
-        ).timeout(const Duration(seconds: 10));
+          reportError: true,
+        ).timeout(const Duration(seconds: 6));
         if (streamUrl == null || streamUrl.isEmpty) return;
         final artUri = selected.thumbUrl?.trim().isNotEmpty == true
             ? selected.thumbUrl!.trim()

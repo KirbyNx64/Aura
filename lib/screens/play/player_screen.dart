@@ -421,19 +421,18 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
   }
 
   Widget _defaultArtwork(double size) {
-    final isSystem = colorSchemeNotifier.value == AppColorScheme.system;
     return Container(
       width: size,
       height: size,
       decoration: BoxDecoration(
-        color: isSystem
-            ? Theme.of(
-                context,
-              ).colorScheme.secondaryContainer.withValues(alpha: 0.5)
-            : Theme.of(context).colorScheme.surfaceContainer,
+        color: Colors.transparent,
         borderRadius: BorderRadius.circular(16),
       ),
-      child: Icon(Icons.music_note, size: size * 0.5),
+      child: Icon(
+        Icons.music_note,
+        size: size * 0.5,
+        color: Colors.transparent,
+      ),
     );
   }
 
@@ -2053,14 +2052,13 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     if ((streamUrl == null || streamUrl.isEmpty) &&
         videoId != null &&
         videoId.isNotEmpty) {
-      streamUrl = await StreamService.getBestAudioUrl(videoId);
+      streamUrl = await StreamService.getBestAudioUrl(
+        videoId,
+        reportError: true,
+      );
     }
 
     if (streamUrl == null || streamUrl.isEmpty) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(LocaleProvider.tr('error_loading_audio'))),
-      );
       return;
     }
 
@@ -2090,11 +2088,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
       'initialPositionMs': initialPositionMs,
     });
 
-    if (result is Map && result['ok'] == false && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(LocaleProvider.tr('error_loading_audio'))),
-      );
-    }
+    if (result is Map && result['ok'] == false) return;
   }
 
   Future<void> _queueStreamingDownload(

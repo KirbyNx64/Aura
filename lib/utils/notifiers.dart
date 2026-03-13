@@ -39,6 +39,33 @@ final ValueNotifier<String> coverQualityNotifier = ValueNotifier<String>(
 
 final ValueNotifier<bool> playLoadingNotifier = ValueNotifier(false);
 
+class StreamPlaybackErrorEvent {
+  final int id;
+  final String code;
+  final String? videoId;
+
+  const StreamPlaybackErrorEvent({
+    required this.id,
+    required this.code,
+    this.videoId,
+  });
+}
+
+final ValueNotifier<StreamPlaybackErrorEvent?> streamPlaybackErrorNotifier =
+    ValueNotifier<StreamPlaybackErrorEvent?>(null);
+
+void reportStreamPlaybackError(String code, {String? videoId}) {
+  final normalizedCode = code.trim().isNotEmpty ? code.trim() : 'unknown';
+  final normalizedVideoId = videoId?.trim();
+  streamPlaybackErrorNotifier.value = StreamPlaybackErrorEvent(
+    id: DateTime.now().microsecondsSinceEpoch,
+    code: normalizedCode,
+    videoId: (normalizedVideoId != null && normalizedVideoId.isNotEmpty)
+        ? normalizedVideoId
+        : null,
+  );
+}
+
 final ValueNotifier<bool> overlayNextButtonEnabled = ValueNotifier(false);
 
 // Notifier para controlar si el overlay puede abrir la pantalla del reproductor

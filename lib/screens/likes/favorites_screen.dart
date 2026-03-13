@@ -702,7 +702,8 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     try {
       final streamUrl = await StreamService.getBestAudioUrl(
         videoId,
-      ).timeout(const Duration(seconds: 10));
+        reportError: true,
+      ).timeout(const Duration(seconds: 6));
       if (streamUrl == null || streamUrl.isEmpty) return;
 
       final artUri = item.artUri?.trim().isNotEmpty == true

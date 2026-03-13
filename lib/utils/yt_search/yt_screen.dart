@@ -7486,7 +7486,8 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
 
         final streamUrl = await StreamService.getBestAudioUrl(
           videoId,
-        ).timeout(const Duration(seconds: 10));
+          reportError: true,
+        ).timeout(const Duration(seconds: 6));
         if (streamUrl == null || streamUrl.isEmpty) {
           throw Exception('No se pudo generar el stream de audio');
         }
@@ -8049,6 +8050,7 @@ class YtPreviewPlayerState extends State<YtPreviewPlayer>
       // Usar StreamService con cache
       final audioUrl = await StreamService.getBestAudioUrl(
         _currentItem.videoId!,
+        reportError: true,
       );
       if (thisLoad != _loadToken) {
         await _player.stop();

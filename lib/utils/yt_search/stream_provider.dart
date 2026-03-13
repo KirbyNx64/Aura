@@ -1,10 +1,12 @@
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import 'package:music/utils/db/stream_cache_db.dart';
+import 'package:music/utils/notifiers.dart';
 import 'dart:io';
 
 class StreamService {
   static final Map<String, String?> _urlCache = {};
   static final Map<String, Future<String?>> _inFlightRequests = {};
+  static final Map<String, String> _lastResolveErrorCodeByVideoId = {};
   static StreamCacheDB? _cacheDB;
   static YoutubeExplode? _ytInstance;
   static const int _maxPrefetchConcurrency = 8;
@@ -34,6 +36,95 @@ class StreamService {
         message.contains('client is closed');
   }
 
+  static bool _containsAny(String source, List<String> tokens) {
+    for (final token in tokens) {
+      if (source.contains(token)) return true;
+    }
+    return false;
+  }
+
+  static String _classifyResolveError(Object error) {
+    if (error is SocketException) return 'network';
+
+    final message = error.toString().toLowerCase();
+
+    if (_containsAny(message, <String>[
+      'copyright',
+      'copyrighted',
+      'restricted',
+      'restriction',
+      'not available',
+      'unavailable',
+      'video unavailable',
+      'private',
+      'age-restricted',
+      'age restricted',
+      'members-only',
+      'members only',
+      'forbidden',
+      'status code: 403',
+      'error 403',
+      'geo',
+      'country',
+      'region',
+      'premium',
+    ])) {
+      return 'restricted';
+    }
+
+    if (error is HttpException) {
+      if (_containsAny(message, <String>['403', 'forbidden'])) {
+        return 'restricted';
+      }
+      return 'network';
+    }
+
+    if (_containsAny(message, <String>[
+      'socketexception',
+      'httpexception',
+      'network',
+      'connection',
+      'dns',
+      'timeout',
+      'timed out',
+      'handshake',
+      'connection closed',
+      'connection reset',
+      'broken pipe',
+    ])) {
+      return 'network';
+    }
+
+    return 'unknown';
+  }
+
+  static void _setLastResolveErrorCode(String videoId, String code) {
+    final normalizedVideoId = videoId.trim();
+    if (normalizedVideoId.isEmpty) return;
+    _lastResolveErrorCodeByVideoId[normalizedVideoId] = code;
+  }
+
+  static void _clearLastResolveErrorCode(String videoId) {
+    final normalizedVideoId = videoId.trim();
+    if (normalizedVideoId.isEmpty) return;
+    _lastResolveErrorCodeByVideoId.remove(normalizedVideoId);
+  }
+
+  static String? takeLastResolveErrorCode(String videoId) {
+    final normalizedVideoId = videoId.trim();
+    if (normalizedVideoId.isEmpty) return null;
+    return _lastResolveErrorCodeByVideoId.remove(normalizedVideoId);
+  }
+
+  static void _reportResolveErrorIfNeeded(
+    String videoId, {
+    required bool reportError,
+  }) {
+    if (!reportError) return;
+    final errorCode = takeLastResolveErrorCode(videoId) ?? 'unknown';
+    reportStreamPlaybackError(errorCode, videoId: videoId);
+  }
+
   /// Inicializa la base de datos de cache
   static Future<void> _initCache() async {
     _cacheDB ??= StreamCacheDB();
@@ -43,6 +134,8 @@ class StreamService {
   static Future<String?> getBestAudioUrl(
     String videoId, {
     bool forceRefresh = false,
+    bool reportError = false,
+    bool fastFail = false,
   }) async {
     await _initCache();
     final normalizedVideoId = videoId.trim();
@@ -65,20 +158,44 @@ class StreamService {
     if (!forceRefresh) {
       final pending = _inFlightRequests[normalizedVideoId];
       if (pending != null) {
-        return await pending;
+        final resolvedPending = await pending;
+        if (resolvedPending == null || resolvedPending.isEmpty) {
+          _reportResolveErrorIfNeeded(
+            normalizedVideoId,
+            reportError: reportError,
+          );
+          return null;
+        }
+        _clearLastResolveErrorCode(normalizedVideoId);
+        return resolvedPending;
       }
     }
 
-    final request = _resolveBestAudioUrl(normalizedVideoId);
+    final request = _resolveBestAudioUrl(
+      normalizedVideoId,
+      fastFail: fastFail || reportError,
+    );
     _inFlightRequests[normalizedVideoId] = request;
     try {
-      return await request;
+      final resolved = await request;
+      if (resolved == null || resolved.isEmpty) {
+        _reportResolveErrorIfNeeded(
+          normalizedVideoId,
+          reportError: reportError,
+        );
+        return null;
+      }
+      _clearLastResolveErrorCode(normalizedVideoId);
+      return resolved;
     } finally {
       _inFlightRequests.remove(normalizedVideoId);
     }
   }
 
-  static Future<String?> _resolveBestAudioUrl(String videoId) async {
+  static Future<String?> _resolveBestAudioUrl(
+    String videoId, {
+    bool fastFail = false,
+  }) async {
     // En cola "Up next" priorizamos latencia: usar cache persistente sin HEAD.
     // Si el stream expiró antes de tiempo, fallará al reproducir y se regenerará.
     final cachedStream = await _cacheDB!.getStream(videoId);
@@ -87,6 +204,7 @@ class StreamService {
         !cachedStream.isExpired &&
         !_isStreamUrlExpired(cachedStream.streamUrl)) {
       _urlCache[videoId] = cachedStream.streamUrl;
+      _clearLastResolveErrorCode(videoId);
       return cachedStream.streamUrl;
     }
     if (cachedStream != null) {
@@ -94,11 +212,23 @@ class StreamService {
     }
 
     // Si no está en cache o expiró, generar uno nuevo
-    final streamInfo = await _getBestAudioStreamInfo(videoId);
-    if (streamInfo == null) return null;
+    final streamInfo = await _getBestAudioStreamInfo(
+      videoId,
+      fastFail: fastFail,
+    );
+    if (streamInfo == null) {
+      _setLastResolveErrorCode(
+        videoId,
+        _lastResolveErrorCodeByVideoId[videoId] ?? 'unknown',
+      );
+      return null;
+    }
 
     final streamUrl = streamInfo['url'];
-    if (streamUrl == null || streamUrl.isEmpty) return null;
+    if (streamUrl == null || streamUrl.isEmpty) {
+      _setLastResolveErrorCode(videoId, 'unknown');
+      return null;
+    }
 
     // Guardar en cache persistente
     await _cacheDB!.saveStream(
@@ -113,6 +243,7 @@ class StreamService {
     );
 
     _urlCache[videoId] = streamUrl;
+    _clearLastResolveErrorCode(videoId);
     return streamUrl;
   }
 
@@ -161,9 +292,11 @@ class StreamService {
 
   /// Obtiene información completa del mejor stream de audio
   static Future<Map<String, dynamic>?> _getBestAudioStreamInfo(
-    String videoId,
-  ) async {
-    for (int attempt = 0; attempt < 2; attempt++) {
+    String videoId, {
+    bool fastFail = false,
+  }) async {
+    final maxAttempts = fastFail ? 1 : 2;
+    for (int attempt = 0; attempt < maxAttempts; attempt++) {
       try {
         final yt = _getYoutubeExplode();
         final manifest = await yt.videos.streamsClient.getManifest(videoId);
@@ -177,9 +310,13 @@ class StreamService {
                 .toList()
               ..sort((a, b) => b.bitrate.compareTo(a.bitrate));
 
-        if (audio.isEmpty) return null;
+        if (audio.isEmpty) {
+          _setLastResolveErrorCode(videoId, 'restricted');
+          return null;
+        }
 
         final bestAudio = audio.first;
+        _clearLastResolveErrorCode(videoId);
         return {
           'url': bestAudio.url.toString(),
           'itag': bestAudio.tag,
@@ -191,7 +328,9 @@ class StreamService {
               0.0, // YouTube no proporciona esta información directamente
         };
       } catch (e) {
-        if (attempt == 0 && _shouldRecreateClient(e)) {
+        final classified = _classifyResolveError(e);
+        _setLastResolveErrorCode(videoId, classified);
+        if (!fastFail && attempt == 0 && _shouldRecreateClient(e)) {
           _recreateYoutubeExplode();
           continue;
         }
@@ -219,6 +358,7 @@ class StreamService {
     await _cacheDB!.clearCache();
     _urlCache.clear();
     _inFlightRequests.clear();
+    _lastResolveErrorCodeByVideoId.clear();
   }
 
   /// Invalida el cache de stream para un video específico
@@ -228,6 +368,7 @@ class StreamService {
     if (normalizedVideoId.isEmpty) return;
     _urlCache.remove(normalizedVideoId);
     _inFlightRequests.remove(normalizedVideoId);
+    _lastResolveErrorCodeByVideoId.remove(normalizedVideoId);
     await _cacheDB!.invalidateStream(normalizedVideoId);
   }
 

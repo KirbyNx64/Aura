@@ -106,6 +106,12 @@ const Map<String, String> appLocalizationsEs = {
   'volume_boost_set_to': 'Volume boost establecido a',
   'error_applying_volume_boost': 'Error al aplicar volume boost',
   'error_audiohandler_not_available': 'Error: AudioHandler no disponible',
+  'error_loading_audio':
+      'No se pudo cargar el stream de audio. Intenta con otra canción.',
+  'error_loading_audio_restricted':
+      'Este audio no está disponible por derechos de autor o restricciones de YouTube.',
+  'error_loading_audio_network':
+      'No se pudo cargar el stream de audio. Revisa tu conexión a internet.',
   'equalizer': 'Ecualizador',
   'equalizer_desc': 'Ajusta el sonido con el ecualizador de audio',
   'equalizer_not_prossessing': 'Sin reproducción actual',

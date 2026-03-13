@@ -163,14 +163,10 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> {
       width: 50,
       height: 50,
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainer,
+        color: Colors.transparent,
         borderRadius: BorderRadius.circular(8),
       ),
-      child: Icon(
-        Icons.music_note,
-        size: 24,
-        color: Theme.of(context).colorScheme.onSurface,
-      ),
+      child: Icon(Icons.music_note, size: 24, color: Colors.transparent),
     );
   }
 

@@ -633,6 +633,7 @@ class MainApp extends StatefulWidget {
 class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
   bool _isLoading = true;
   bool _showOnboarding = false;
+  int? _lastShownStreamErrorId;
 
   // Variables para mantener los colores dinámicos actuales
   ColorScheme? _currentLightDynamic;
@@ -936,6 +937,17 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
     );
   }
 
+  String _streamErrorMessageForCode(String code) {
+    switch (code) {
+      case 'restricted':
+        return LocaleProvider.tr('error_loading_audio_restricted');
+      case 'network':
+        return LocaleProvider.tr('error_loading_audio_network');
+      default:
+        return LocaleProvider.tr('error_loading_audio');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     // Mostrar pantalla de carga mientras se cargan las preferencias
@@ -977,6 +989,37 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
                     return MaterialApp(
                       title: 'Aura',
                       themeAnimationDuration: Duration.zero,
+                      builder: (context, child) {
+                        return ValueListenableBuilder<
+                          StreamPlaybackErrorEvent?
+                        >(
+                          valueListenable: streamPlaybackErrorNotifier,
+                          builder: (context, streamError, _) {
+                            if (streamError != null &&
+                                streamError.id != _lastShownStreamErrorId) {
+                              _lastShownStreamErrorId = streamError.id;
+                              WidgetsBinding.instance.addPostFrameCallback((_) {
+                                if (!mounted) return;
+                                final messenger = ScaffoldMessenger.maybeOf(
+                                  context,
+                                );
+                                if (messenger == null) return;
+                                messenger.hideCurrentSnackBar();
+                                messenger.showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      _streamErrorMessageForCode(
+                                        streamError.code,
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              });
+                            }
+                            return child ?? const SizedBox.shrink();
+                          },
+                        );
+                      },
                       localizationsDelegates: const [
                         GlobalMaterialLocalizations.delegate,
                         GlobalWidgetsLocalizations.delegate,
