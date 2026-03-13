@@ -446,6 +446,9 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   );
   static const int _streamArtworkPrefetchCount = 0;
   static const int _streamArtworkCacheMaxEntries = 120;
+  bool _streamErrorRecoveryInProgress = false;
+  final Map<String, DateTime> _streamRetryAttempts = <String, DateTime>{};
+  static const Duration _streamRetryCooldown = Duration(seconds: 45);
 
   MyAudioHandler() {
     _initializePlayerWithEnhancer();
@@ -505,6 +508,11 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
     try {
       _prefs ??= await SharedPreferences.getInstance();
+      unawaited(() async {
+        try {
+          await StreamService.cleanExpiredStreams();
+        } catch (_) {}
+      }());
       final session = await AudioSession.instance;
       await session.configure(const AudioSessionConfiguration.music());
 
@@ -604,11 +612,12 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
           }
         },
         onError: (Object e, StackTrace stackTrace) {
-          // print('❌ Error en playbackStream: $e');
-          // Intentar recuperar saltando a la siguiente canción si es posible
-          if (mounted && _mediaQueue.isNotEmpty) {
-            skipToNext();
-          }
+          unawaited(() async {
+            final recovered = await _recoverStreamingPlaybackError(e);
+            if (!recovered && mounted && _mediaQueue.isNotEmpty) {
+              await skipToNext();
+            }
+          }());
         },
       );
 
@@ -2160,6 +2169,142 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   bool _isStreamingMediaItem(MediaItem item) {
     if (item.extras?['isStreaming'] == true) return true;
     return item.id.startsWith('yt:') || item.id.startsWith('yt_stream_');
+  }
+
+  void _pruneStreamRetryAttempts() {
+    if (_streamRetryAttempts.isEmpty) return;
+    final now = DateTime.now();
+    _streamRetryAttempts.removeWhere(
+      (_, attemptedAt) =>
+          now.difference(attemptedAt) > const Duration(minutes: 5),
+    );
+  }
+
+  bool _canRetryStreamVideo(String videoId) {
+    _pruneStreamRetryAttempts();
+    final lastAttempt = _streamRetryAttempts[videoId];
+    if (lastAttempt == null) return true;
+    return DateTime.now().difference(lastAttempt) > _streamRetryCooldown;
+  }
+
+  void _markStreamRetryAttempt(String videoId) {
+    _pruneStreamRetryAttempts();
+    _streamRetryAttempts[videoId] = DateTime.now();
+  }
+
+  Future<bool> _recoverStreamingPlaybackError(Object error) async {
+    if (_streamErrorRecoveryInProgress || _mediaQueue.isEmpty) return false;
+
+    final currentIndex = (_player.currentIndex ?? 0).clamp(
+      0,
+      _mediaQueue.length - 1,
+    );
+    if (currentIndex < 0 || currentIndex >= _mediaQueue.length) return false;
+
+    final currentItem = _mediaQueue[currentIndex];
+    if (!_isStreamingMediaItem(currentItem)) return false;
+
+    final videoId = currentItem.extras?['videoId']?.toString().trim();
+    if (videoId == null || videoId.isEmpty) return false;
+    if (!_canRetryStreamVideo(videoId)) return false;
+
+    _streamErrorRecoveryInProgress = true;
+    _markStreamRetryAttempt(videoId);
+
+    final resumePosition = _player.position;
+    final wasPlaying = _player.playing || playbackState.value.playing;
+    final restoreRadio = _streamRadioEnabled;
+    final previousSeedVideoId = _streamRadioSeedVideoId;
+    final previousContinuation = _streamRadioContinuationParams;
+
+    try {
+      final refreshedStreamUrl = await StreamService.refreshBestAudioUrl(
+        videoId,
+      ).timeout(const Duration(seconds: 8), onTimeout: () => null);
+      if (refreshedStreamUrl == null || refreshedStreamUrl.isEmpty) {
+        return false;
+      }
+
+      final rawItems = <Map<String, dynamic>>[];
+      var targetRawIndex = 0;
+      for (int i = 0; i < _mediaQueue.length; i++) {
+        final item = _mediaQueue[i];
+        if (!_isStreamingMediaItem(item)) continue;
+
+        if (i == currentIndex) {
+          targetRawIndex = rawItems.length;
+        }
+
+        final itemVideoId = item.extras?['videoId']?.toString().trim();
+        if (itemVideoId == null || itemVideoId.isEmpty) continue;
+
+        final durationMs = _durationMsFromMediaItem(item);
+        final durationText = _durationTextFromMediaItem(item);
+        final artUri = item.artUri?.toString().trim();
+        final displayArtUri = item.extras?['displayArtUri']?.toString().trim();
+        final cachedStreamUrl = item.extras?['streamUrl']?.toString().trim();
+
+        rawItems.add({
+          'videoId': itemVideoId,
+          'title': item.title,
+          if (item.artist != null) 'artist': item.artist,
+          if (artUri != null && artUri.isNotEmpty) 'artUri': artUri,
+          if (displayArtUri != null && displayArtUri.isNotEmpty)
+            'displayArtUri': displayArtUri,
+          if (durationMs != null && durationMs > 0) 'durationMs': durationMs,
+          if (durationText != null && durationText.isNotEmpty)
+            'durationText': durationText,
+          'streamUrl': i == currentIndex
+              ? refreshedStreamUrl
+              : (cachedStreamUrl ?? ''),
+        });
+      }
+
+      if (rawItems.isEmpty) return false;
+
+      await playStreamingQueue(
+        rawItems: rawItems,
+        initialIndex: targetRawIndex,
+        autoPlay: false,
+      );
+
+      if (restoreRadio) {
+        _streamRadioEnabled = true;
+        _streamRadioSeedVideoId =
+            (previousSeedVideoId?.trim().isNotEmpty ?? false)
+            ? previousSeedVideoId!.trim()
+            : videoId;
+        _streamRadioContinuationParams = previousContinuation;
+        _streamQueuedVideoIds
+          ..clear()
+          ..addAll(
+            _mediaQueue
+                .map((entry) => entry.extras?['videoId']?.toString().trim())
+                .whereType<String>()
+                .where((id) => id.isNotEmpty),
+          );
+        _scheduleStreamingRadioQueueEnsure();
+      }
+
+      if (resumePosition > Duration.zero && _mediaQueue.isNotEmpty) {
+        final rebuiltIndex = (_player.currentIndex ?? targetRawIndex).clamp(
+          0,
+          _mediaQueue.length - 1,
+        );
+        await _player
+            .seek(resumePosition, index: rebuiltIndex)
+            .timeout(const Duration(milliseconds: 900), onTimeout: () {});
+      }
+
+      if (wasPlaying) {
+        await _player.play();
+      }
+      return true;
+    } catch (_) {
+      return false;
+    } finally {
+      _streamErrorRecoveryInProgress = false;
+    }
   }
 
   String? _fallbackStreamingDisplayArtUri(String? videoId) {
@@ -4055,6 +4200,15 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   Future customAction(String name, [Map<String, dynamic>? extras]) async {
     if (name == "saveSession") {
       await _saveSessionToPrefs();
+      return {'ok': true};
+    }
+    if (name == "cleanExpiredStreamCache" ||
+        extras?['action'] == 'cleanExpiredStreamCache') {
+      final removed = await StreamService.cleanExpiredStreams();
+      return {'ok': true, 'removed': removed};
+    }
+    if (name == "clearStreamCache" || extras?['action'] == 'clearStreamCache') {
+      await StreamService.clearCache();
       return {'ok': true};
     }
     if (name == "startStreamingRadioFromCurrent" ||

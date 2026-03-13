@@ -20,6 +20,7 @@ import 'package:music/utils/db/playlist_model.dart';
 import 'package:music/utils/db/download_history_model.dart';
 import 'package:music/utils/audio/synced_lyrics_service.dart';
 import 'package:music/utils/audio/background_audio_handler.dart';
+import 'package:music/utils/yt_search/stream_provider.dart';
 import 'package:music/utils/db/songs_index_db.dart';
 import 'package:music/utils/db/artists_db.dart';
 import 'package:on_audio_query/on_audio_query.dart';
@@ -468,6 +469,12 @@ void main() async {
   } catch (e) {
     // La app seguirá, pero el audio podría no estar disponible hasta que se intente de nuevo
   }
+
+  Future.microtask(() async {
+    try {
+      await StreamService.cleanExpiredStreams();
+    } catch (_) {}
+  });
 
   // Realizar indexación solo si es la primera vez que se abre la app (pero no en onboarding)
   if (!isFirstRun) {

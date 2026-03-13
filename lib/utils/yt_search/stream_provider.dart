@@ -8,6 +8,7 @@ class StreamService {
   static StreamCacheDB? _cacheDB;
   static YoutubeExplode? _ytInstance;
   static const int _maxPrefetchConcurrency = 8;
+  static const Duration _urlExpirySafetyMargin = Duration(minutes: 5);
 
   static YoutubeExplode _getYoutubeExplode() {
     _ytInstance ??= YoutubeExplode();
@@ -39,21 +40,33 @@ class StreamService {
   }
 
   /// Obtiene la mejor URL de audio con cache persistente
-  static Future<String?> getBestAudioUrl(String videoId) async {
+  static Future<String?> getBestAudioUrl(
+    String videoId, {
+    bool forceRefresh = false,
+  }) async {
     await _initCache();
     final normalizedVideoId = videoId.trim();
     if (normalizedVideoId.isEmpty) return null;
+    if (forceRefresh) {
+      await invalidateCachedStream(normalizedVideoId);
+    }
 
     // Cache en memoria (fast path)
     final memoryCached = _urlCache[normalizedVideoId];
     if (memoryCached != null && memoryCached.isNotEmpty) {
-      return memoryCached;
+      if (!_isStreamUrlExpired(memoryCached)) {
+        return memoryCached;
+      }
+      _urlCache.remove(normalizedVideoId);
+      await _cacheDB?.invalidateStream(normalizedVideoId);
     }
 
     // Deduplicar solicitudes concurrentes por videoId
-    final pending = _inFlightRequests[normalizedVideoId];
-    if (pending != null) {
-      return await pending;
+    if (!forceRefresh) {
+      final pending = _inFlightRequests[normalizedVideoId];
+      if (pending != null) {
+        return await pending;
+      }
     }
 
     final request = _resolveBestAudioUrl(normalizedVideoId);
@@ -71,9 +84,13 @@ class StreamService {
     final cachedStream = await _cacheDB!.getStream(videoId);
     if (cachedStream != null &&
         cachedStream.streamUrl.isNotEmpty &&
-        !cachedStream.isExpired) {
+        !cachedStream.isExpired &&
+        !_isStreamUrlExpired(cachedStream.streamUrl)) {
       _urlCache[videoId] = cachedStream.streamUrl;
       return cachedStream.streamUrl;
+    }
+    if (cachedStream != null) {
+      await _cacheDB!.invalidateStream(videoId);
     }
 
     // Si no está en cache o expiró, generar uno nuevo
@@ -114,7 +131,10 @@ class StreamService {
       if (videoId.isEmpty || !uniqueIds.add(videoId)) continue;
 
       final cached = _urlCache[videoId];
-      if (cached != null && cached.isNotEmpty) continue;
+      if (cached != null && cached.isNotEmpty) {
+        if (!_isStreamUrlExpired(cached)) continue;
+        _urlCache.remove(videoId);
+      }
 
       pendingIds.add(videoId);
     }
@@ -198,6 +218,24 @@ class StreamService {
     await _initCache();
     await _cacheDB!.clearCache();
     _urlCache.clear();
+    _inFlightRequests.clear();
+  }
+
+  /// Invalida el cache de stream para un video específico
+  static Future<void> invalidateCachedStream(String videoId) async {
+    await _initCache();
+    final normalizedVideoId = videoId.trim();
+    if (normalizedVideoId.isEmpty) return;
+    _urlCache.remove(normalizedVideoId);
+    _inFlightRequests.remove(normalizedVideoId);
+    await _cacheDB!.invalidateStream(normalizedVideoId);
+  }
+
+  /// Fuerza generar una URL nueva de stream para un video específico
+  static Future<String?> refreshBestAudioUrl(String videoId) async {
+    final normalizedVideoId = videoId.trim();
+    if (normalizedVideoId.isEmpty) return null;
+    return await getBestAudioUrl(normalizedVideoId, forceRefresh: true);
   }
 
   /// Cierra la base de datos
@@ -208,5 +246,26 @@ class StreamService {
       _ytInstance?.close();
     } catch (_) {}
     _ytInstance = null;
+  }
+
+  static int? _extractExpireEpochSeconds(String streamUrl) {
+    try {
+      final parsed = Uri.tryParse(streamUrl);
+      final expireRaw = parsed?.queryParameters['expire'];
+      if (expireRaw != null) {
+        return int.tryParse(expireRaw);
+      }
+    } catch (_) {}
+
+    final match = RegExp(r'(?:^|[?&])expire=(\d+)').firstMatch(streamUrl);
+    if (match == null) return null;
+    return int.tryParse(match.group(1)!);
+  }
+
+  static bool _isStreamUrlExpired(String streamUrl) {
+    final expireEpoch = _extractExpireEpochSeconds(streamUrl);
+    if (expireEpoch == null) return false;
+    final nowEpochSeconds = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    return (nowEpochSeconds + _urlExpirySafetyMargin.inSeconds) >= expireEpoch;
   }
 }
