@@ -3295,6 +3295,21 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     final selectedCount = selectingStreamingFavorites
         ? _selectedStreamingPaths.length
         : _selectedSongIds.length;
+    final visibleLocalFavorites = _searchController.text.isNotEmpty
+        ? _filteredFavorites
+        : _favorites;
+    final visibleStreamingFavorites = _searchController.text.isNotEmpty
+        ? _filteredStreamingFavorites
+        : _streamingFavorites;
+    final allVisibleSelected = selectingStreamingFavorites
+        ? visibleStreamingFavorites.isNotEmpty &&
+              visibleStreamingFavorites.every(
+                (item) => _selectedStreamingPaths.contains(item.rawPath),
+              )
+        : visibleLocalFavorites.isNotEmpty &&
+              visibleLocalFavorites.every(
+                (song) => _selectedSongIds.contains(song.id),
+              );
     return Scaffold(
       resizeToAvoidBottomInset: true,
       appBar: AppBar(
@@ -3323,6 +3338,47 @@ class _FavoritesScreenState extends State<FavoritesScreen>
               ),
         actions: _isSelecting
             ? [
+                IconButton(
+                  icon: const Icon(Icons.select_all),
+                  tooltip: allVisibleSelected
+                      ? LocaleProvider.tr('cancel_selection')
+                      : LocaleProvider.tr('select_all'),
+                  onPressed: () {
+                    setState(() {
+                      if (selectingStreamingFavorites) {
+                        if (visibleStreamingFavorites.isEmpty) return;
+                        if (allVisibleSelected) {
+                          for (final item in visibleStreamingFavorites) {
+                            _selectedStreamingPaths.remove(item.rawPath);
+                          }
+                          if (_selectedStreamingPaths.isEmpty) {
+                            _isSelecting = false;
+                          }
+                        } else {
+                          _selectedStreamingPaths.addAll(
+                            visibleStreamingFavorites.map(
+                              (item) => item.rawPath,
+                            ),
+                          );
+                        }
+                      } else {
+                        if (visibleLocalFavorites.isEmpty) return;
+                        if (allVisibleSelected) {
+                          for (final song in visibleLocalFavorites) {
+                            _selectedSongIds.remove(song.id);
+                          }
+                          if (_selectedSongIds.isEmpty) {
+                            _isSelecting = false;
+                          }
+                        } else {
+                          _selectedSongIds.addAll(
+                            visibleLocalFavorites.map((song) => song.id),
+                          );
+                        }
+                      }
+                    });
+                  },
+                ),
                 PopupMenuButton<String>(
                   icon: const Icon(Icons.more_vert),
                   tooltip: LocaleProvider.tr('want_more_options'),
