@@ -248,7 +248,7 @@ const Map<String, String> appLocalizationsEs = {
       'Selecciona que fondo usar en el reproductor (Solo en tema oscuro AMOLED)',
   'use_dynamic_color_background': 'Usar fondo de color dinámico',
   'artwork_quality_description':
-      'Selecciona la calidad de las carátulas al reproducir música',
+      'Selecciona la calidad de las carátulas al reproducir música (Solo música local)',
   'use_dynamic_color_in_dialogs':
       'Usar color dinámico en secciones (Temporizador, etc)',
   '100_percent_maximum': '100% (Máximo)',
@@ -315,7 +315,7 @@ const Map<String, String> appLocalizationsEs = {
   'open_in_youtube_music': 'Abrir en YouTube Music',
   'info': 'Información',
   'search_music_in_ytm':
-      'Busca y descarga música desde YouTube Music.\n\nNota: Algunas canciones no están disponibles para descarga, como contenido protegido por derechos de autor o contenido infantil.',
+      'Busca, reproduce y descarga música desde YouTube Music.\n\nNota: Algunas canciones no están disponibles para descarga, como contenido protegido por derechos de autor o contenido infantil.',
   'download_understood': 'Entendido',
   'no_results': 'Sin resultados',
   'results': 'Resultados',

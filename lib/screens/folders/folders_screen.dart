@@ -27,6 +27,7 @@ import 'package:mini_music_visualizer/mini_music_visualizer.dart';
 import 'package:music/widgets/artwork_list_tile.dart';
 import 'package:music/utils/db/playlist_model.dart' as hive_model;
 import 'package:music/utils/yt_search/stream_provider.dart';
+import 'package:music/utils/simple_yt_download.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:music/widgets/song_info_dialog.dart';
@@ -178,6 +179,7 @@ class _FoldersScreenState extends State<FoldersScreen>
   List<hive_model.PlaylistModel> _playlists = [];
   List<hive_model.PlaylistModel> _filteredPlaylists = [];
   List<SongModel> _allSongsForGrid = [];
+  Map<String, List<String>> _playlistArtworkSourcesCache = {};
   hive_model.PlaylistModel? _selectedPlaylist;
   final TextEditingController _playlistSearchController =
       TextEditingController();
@@ -1814,6 +1816,17 @@ class _FoldersScreenState extends State<FoldersScreen>
     return item.rawPath;
   }
 
+  Future<void> _downloadStreamingPlaylistItem(_StreamingPlaylistItem item) async {
+    final videoId = item.videoId?.trim();
+    if (videoId == null || videoId.isEmpty) return;
+    await SimpleYtDownload.downloadVideoWithArtist(
+      context,
+      videoId,
+      item.title,
+      item.artist,
+    );
+  }
+
   Future<void> _searchStreamingOnYouTube(_StreamingPlaylistItem item) async {
     try {
       String searchQuery = item.title.trim();
@@ -2184,6 +2197,14 @@ class _FoldersScreenState extends State<FoldersScreen>
                         );
                       },
                     ),
+                  ListTile(
+                    leading: const Icon(Icons.download_rounded),
+                    title: TranslatedText('download'),
+                    onTap: () async {
+                      Navigator.of(context).pop();
+                      await _downloadStreamingPlaylistItem(item);
+                    },
+                  ),
                   ListTile(
                     leading: const Icon(Icons.share_rounded),
                     title: TranslatedText('share_link'),
@@ -4423,6 +4444,12 @@ class _FoldersScreenState extends State<FoldersScreen>
                         await _handleAddToPlaylistMassive(context);
                       }
                       break;
+                    case 'download':
+                      if (_selectedSongPaths.isNotEmpty &&
+                          selectingStreamingPlaylist) {
+                        await _handleDownloadSelectedStreamingPlaylistItems();
+                      }
+                      break;
                     case 'copy_to_folder':
                       if (_selectedSongPaths.isNotEmpty) {
                         await _handleCopyToFolder(context);
@@ -4469,6 +4496,21 @@ class _FoldersScreenState extends State<FoldersScreen>
                         const SizedBox(width: 12),
                         Expanded(
                           child: Text(LocaleProvider.tr('add_to_playlist')),
+                        ),
+                      ],
+                    ),
+                  ),
+                  PopupMenuItem<String>(
+                    value: 'download',
+                    enabled:
+                        _selectedSongPaths.isNotEmpty &&
+                        selectingStreamingPlaylist,
+                    child: Row(
+                      children: [
+                        const Icon(Icons.download_rounded),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(LocaleProvider.tr('download')),
                         ),
                       ],
                     ),
@@ -5559,6 +5601,26 @@ class _FoldersScreenState extends State<FoldersScreen>
     await _loadSongsFromPlaylist(_selectedPlaylist!);
   }
 
+  Future<void> _handleDownloadSelectedStreamingPlaylistItems() async {
+    final visibleStreamingItems = _searchController.text.isNotEmpty
+        ? _filteredPlaylistStreamingItems
+        : _playlistStreamingItems;
+    final selectedStreamingItems = visibleStreamingItems
+        .where((item) => _selectedSongPaths.contains(item.rawPath))
+        .toList();
+    if (selectedStreamingItems.isEmpty) return;
+
+    for (final item in selectedStreamingItems) {
+      await _downloadStreamingPlaylistItem(item);
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _isSelecting = false;
+      _selectedSongPaths.clear();
+    });
+  }
+
   Future<void> _handleDeleteSongs(BuildContext context) async {
     if (!context.mounted) return;
 
@@ -6563,32 +6625,116 @@ class _FoldersScreenState extends State<FoldersScreen>
 
   /// Generar cuadrícula de carátulas para una playlist (como en Home)
   Widget _buildPlaylistArtworkGrid(hive_model.PlaylistModel playlist) {
-    final rawList = playlist.songPaths;
-    // Filtra solo rutas válidas
-    final filtered = rawList.where((e) => e.isNotEmpty).toList();
+    final filtered = playlist.songPaths
+        .where((path) => path.trim().isNotEmpty)
+        .toList();
+    final latestPaths = filtered.reversed.take(4).toList();
 
-    // Obtener las canciones reales que existen en el índice cargado
-    final List<SongModel> validSongs = [];
-    for (final songPath in filtered) {
-      final songIndex = _allSongsForGrid.indexWhere((s) => s.data == songPath);
-      if (songIndex != -1) {
-        validSongs.add(_allSongsForGrid[songIndex]);
-        if (validSongs.length >= 4) break; // Máximo 4 para el grid
+    final List<Widget> artworks = latestPaths.map((path) {
+      final normalizedPath = path.trim();
+      if (_isStreamingPath(normalizedPath)) {
+        final sources = _streamingPlaylistArtworkSources(
+          playlist.id,
+          normalizedPath,
+        );
+        return _StreamingArtwork(
+          sources: sources,
+          backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
+          iconColor: Theme.of(context).colorScheme.onSurfaceVariant,
+        );
       }
-    }
+
+      final songIndex = _allSongsForGrid.indexWhere(
+        (song) => song.data == normalizedPath,
+      );
+      if (songIndex == -1) {
+        return Container(
+          color: Theme.of(context).colorScheme.surfaceContainer,
+          child: Center(
+            child: Icon(
+              Icons.music_note,
+              color: Theme.of(context).colorScheme.onSurface,
+              size: 20,
+            ),
+          ),
+        );
+      }
+      final song = _allSongsForGrid[songIndex];
+      return ArtworkListTile(
+        songId: song.id,
+        songPath: song.data,
+        borderRadius: BorderRadius.zero,
+      );
+    }).toList();
 
     return SizedBox(
       width: 48,
       height: 48,
       child: ClipRRect(
         borderRadius: BorderRadius.circular(8),
-        child: _buildArtworkLayout(validSongs),
+        child: _buildArtworkLayout(artworks),
       ),
     );
   }
 
-  Widget _buildArtworkLayout(List<SongModel> songs) {
-    switch (songs.length) {
+  List<String> _streamingPlaylistArtworkSources(
+    String playlistId,
+    String path,
+  ) {
+    final cacheKey = '$playlistId::$path';
+    final cached = _playlistArtworkSourcesCache[cacheKey];
+    if (cached != null && cached.isNotEmpty) return cached;
+
+    final videoId = _extractVideoIdFromPath(path);
+    if (videoId == null || videoId.isEmpty) return const [];
+    return [
+      'https://img.youtube.com/vi/$videoId/maxresdefault.jpg',
+      'https://img.youtube.com/vi/$videoId/sddefault.jpg',
+      'https://i.ytimg.com/vi/$videoId/hqdefault.jpg',
+    ];
+  }
+
+  Future<Map<String, List<String>>> _buildPlaylistArtworkSourcesCache(
+    List<hive_model.PlaylistModel> playlists,
+  ) async {
+    final cache = <String, List<String>>{};
+    for (final playlist in playlists) {
+      final paths = playlist.songPaths
+          .where((p) => p.trim().isNotEmpty)
+          .toList()
+          .reversed
+          .take(4);
+      for (final rawPath in paths) {
+        final path = rawPath.trim();
+        if (!_isStreamingPath(path)) continue;
+        final meta = await PlaylistsDB().getPlaylistSongMeta(playlist.id, path);
+        final metaArtUri = meta?['artUri']?.toString().trim();
+        final metaVideoId = meta?['videoId']?.toString().trim();
+        final videoId = (metaVideoId != null && metaVideoId.isNotEmpty)
+            ? metaVideoId
+            : _extractVideoIdFromPath(path);
+
+        final sources = <String>[];
+        if (metaArtUri != null && metaArtUri.isNotEmpty && metaArtUri != 'null') {
+          sources.add(metaArtUri);
+        }
+        if (videoId != null && videoId.isNotEmpty) {
+          sources.addAll([
+            'https://img.youtube.com/vi/$videoId/maxresdefault.jpg',
+            'https://img.youtube.com/vi/$videoId/sddefault.jpg',
+            'https://i.ytimg.com/vi/$videoId/hqdefault.jpg',
+          ]);
+        }
+        if (sources.isNotEmpty) {
+          cache['${playlist.id}::$path'] = sources.toSet().toList();
+        }
+      }
+    }
+    return cache;
+  }
+
+  Widget _buildArtworkLayout(List<Widget> artworks) {
+    switch (artworks.length) {
       case 0:
         return Container(
           color: Theme.of(context).colorScheme.surfaceContainer,
@@ -6602,37 +6748,15 @@ class _FoldersScreenState extends State<FoldersScreen>
         );
 
       case 1:
-        return ArtworkListTile(
-          songId: songs[0].id,
-          songPath: songs[0].data,
-          width: 48,
-          height: 48,
-          borderRadius: BorderRadius.zero,
-        );
+        return artworks[0];
 
       case 2:
       case 3:
         // Caso 2 y 3: mostramos 2 (lado a lado)
         return Row(
           children: [
-            Expanded(
-              child: ArtworkListTile(
-                songId: songs[0].id,
-                songPath: songs[0].data,
-                width: 24,
-                height: 48,
-                borderRadius: BorderRadius.zero,
-              ),
-            ),
-            Expanded(
-              child: ArtworkListTile(
-                songId: songs[1].id,
-                songPath: songs[1].data,
-                width: 24,
-                height: 48,
-                borderRadius: BorderRadius.zero,
-              ),
-            ),
+            Expanded(child: artworks[0]),
+            Expanded(child: artworks[1]),
           ],
         );
 
@@ -6643,48 +6767,16 @@ class _FoldersScreenState extends State<FoldersScreen>
             Expanded(
               child: Row(
                 children: [
-                  Expanded(
-                    child: ArtworkListTile(
-                      songId: songs[0].id,
-                      songPath: songs[0].data,
-                      width: 24,
-                      height: 24,
-                      borderRadius: BorderRadius.zero,
-                    ),
-                  ),
-                  Expanded(
-                    child: ArtworkListTile(
-                      songId: songs[1].id,
-                      songPath: songs[1].data,
-                      width: 24,
-                      height: 24,
-                      borderRadius: BorderRadius.zero,
-                    ),
-                  ),
+                  Expanded(child: artworks[0]),
+                  Expanded(child: artworks[1]),
                 ],
               ),
             ),
             Expanded(
               child: Row(
                 children: [
-                  Expanded(
-                    child: ArtworkListTile(
-                      songId: songs[2].id,
-                      songPath: songs[2].data,
-                      width: 24,
-                      height: 24,
-                      borderRadius: BorderRadius.zero,
-                    ),
-                  ),
-                  Expanded(
-                    child: ArtworkListTile(
-                      songId: songs[3].id,
-                      songPath: songs[3].data,
-                      width: 24,
-                      height: 24,
-                      borderRadius: BorderRadius.zero,
-                    ),
-                  ),
+                  Expanded(child: artworks[2]),
+                  Expanded(child: artworks[3]),
                 ],
               ),
             ),
@@ -6712,12 +6804,16 @@ class _FoldersScreenState extends State<FoldersScreen>
 
     final playlists = await PlaylistsDB().getAllPlaylists();
     final allIndexedSongs = await SongsIndexDB().getIndexedSongs();
+    final streamingArtworkCache = await _buildPlaylistArtworkSourcesCache(
+      playlists,
+    );
 
     if (!mounted) return;
     setState(() {
       _playlists = playlists;
       _applyPlaylistFilters();
       _allSongsForGrid = allIndexedSongs;
+      _playlistArtworkSourcesCache = streamingArtworkCache;
       _isLoading = false;
     });
     unawaited(_saveLastViewPrefs());
@@ -7369,7 +7465,8 @@ class _FoldersScreenState extends State<FoldersScreen>
     _playlistStreamingItems = streamingItems;
     _filteredPlaylistStreamingItems = [];
 
-    await _aplicarOrdenamiento(_filteredSongs);
+    // Reaplicar el orden activo (local o streaming) y sincronizar listas visibles.
+    await _ordenarCanciones();
 
     // Precargar artworks
     unawaited(_preloadArtworksForSongs(songsToShow));

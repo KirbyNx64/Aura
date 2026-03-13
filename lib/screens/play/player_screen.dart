@@ -578,6 +578,20 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     );
   }
 
+  Future<void> _closePlayerBeforeArtistNavigation() async {
+    if (widget.onClose != null) {
+      widget.onClose!();
+      await Future.delayed(Duration.zero);
+      return;
+    }
+    if (!mounted) return;
+    final navigator = Navigator.of(context);
+    if (navigator.canPop()) {
+      navigator.pop();
+      await Future.delayed(Duration.zero);
+    }
+  }
+
   // Función para mostrar opciones de búsqueda
   Future<void> _showSearchOptions(MediaItem mediaItem) async {
     showDialog(
@@ -1471,7 +1485,6 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                       ),
                                       onTap: () async {
                                         final navigator = Navigator.of(context);
-                                        navigator.pop();
 
                                         final videoId =
                                             (mediaItem.extras?['videoId']
@@ -1497,47 +1510,50 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
 
                                         if (name.isEmpty) return;
 
-                                        navigator.push(
-                                          PageRouteBuilder(
-                                            pageBuilder:
-                                                (
-                                                  context,
-                                                  animation,
-                                                  secondaryAnimation,
-                                                ) => ArtistScreen(
-                                                  artistName: name,
-                                                ),
-                                            transitionsBuilder:
-                                                (
-                                                  context,
-                                                  animation,
-                                                  secondaryAnimation,
-                                                  child,
-                                                ) {
-                                                  const begin = Offset(
-                                                    1.0,
-                                                    0.0,
-                                                  );
-                                                  const end = Offset.zero;
-                                                  const curve = Curves.ease;
-                                                  final tween =
-                                                      Tween(
-                                                        begin: begin,
-                                                        end: end,
-                                                      ).chain(
-                                                        CurveTween(
-                                                          curve: curve,
-                                                        ),
-                                                      );
-                                                  return SlideTransition(
-                                                    position: animation.drive(
-                                                      tween,
-                                                    ),
-                                                    child: child,
-                                                  );
-                                                },
-                                          ),
+                                        final route = PageRouteBuilder(
+                                          pageBuilder:
+                                              (
+                                                context,
+                                                animation,
+                                                secondaryAnimation,
+                                              ) => ArtistScreen(
+                                                artistName: name,
+                                              ),
+                                          transitionsBuilder:
+                                              (
+                                                context,
+                                                animation,
+                                                secondaryAnimation,
+                                                child,
+                                              ) {
+                                                const begin = Offset(1.0, 0.0);
+                                                const end = Offset.zero;
+                                                const curve = Curves.ease;
+                                                final tween =
+                                                    Tween(
+                                                      begin: begin,
+                                                      end: end,
+                                                    ).chain(
+                                                      CurveTween(
+                                                        curve: curve,
+                                                      ),
+                                                    );
+                                                return SlideTransition(
+                                                  position: animation.drive(
+                                                    tween,
+                                                  ),
+                                                  child: child,
+                                                );
+                                              },
                                         );
+                                        // Cerrar primero el modal de opciones.
+                                        navigator.pop();
+                                        await _closePlayerBeforeArtistNavigation();
+                                        if (ArtistScreen.hasActiveInstance) {
+                                          navigator.pushReplacement(route);
+                                        } else {
+                                          navigator.push(route);
+                                        }
                                       },
                                     ),
                                   if (!(mediaItem.extras?['isStreaming'] ==
@@ -4069,60 +4085,73 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                           return;
                                                         }
 
-                                                        Navigator.of(
-                                                          context,
-                                                        ).push(
-                                                          PageRouteBuilder(
-                                                            pageBuilder:
-                                                                (
-                                                                  context,
-                                                                  animation,
-                                                                  secondaryAnimation,
-                                                                ) => ArtistScreen(
-                                                                  artistName:
-                                                                      name,
-                                                                ),
-                                                            transitionsBuilder:
-                                                                (
-                                                                  context,
-                                                                  animation,
-                                                                  secondaryAnimation,
-                                                                  child,
-                                                                ) {
-                                                                  const begin =
-                                                                      Offset(
-                                                                        1.0,
-                                                                        0.0,
-                                                                      );
-                                                                  const end =
-                                                                      Offset
-                                                                          .zero;
-                                                                  const curve =
-                                                                      Curves
-                                                                          .ease;
-                                                                  final tween =
-                                                                      Tween(
-                                                                        begin:
-                                                                            begin,
-                                                                        end:
-                                                                            end,
-                                                                      ).chain(
-                                                                        CurveTween(
-                                                                          curve:
-                                                                              curve,
-                                                                        ),
-                                                                      );
-                                                                  return SlideTransition(
-                                                                    position: animation
-                                                                        .drive(
-                                                                          tween,
-                                                                        ),
-                                                                    child:
-                                                                        child,
-                                                                  );
-                                                                },
-                                                          ),
-                                                        );
+                                                        final navigator =
+                                                            Navigator.of(
+                                                              context,
+                                                            );
+                                                        final route =
+                                                            PageRouteBuilder(
+                                                              pageBuilder:
+                                                                  (
+                                                                    context,
+                                                                    animation,
+                                                                    secondaryAnimation,
+                                                                  ) =>
+                                                                      ArtistScreen(
+                                                                        artistName:
+                                                                            name,
+                                                                      ),
+                                                              transitionsBuilder:
+                                                                  (
+                                                                    context,
+                                                                    animation,
+                                                                    secondaryAnimation,
+                                                                    child,
+                                                                  ) {
+                                                                    const begin =
+                                                                        Offset(
+                                                                          1.0,
+                                                                          0.0,
+                                                                        );
+                                                                    const end =
+                                                                        Offset
+                                                                            .zero;
+                                                                    const curve =
+                                                                        Curves
+                                                                            .ease;
+                                                                    final tween =
+                                                                        Tween(
+                                                                          begin:
+                                                                              begin,
+                                                                          end:
+                                                                              end,
+                                                                        ).chain(
+                                                                          CurveTween(
+                                                                            curve:
+                                                                                curve,
+                                                                          ),
+                                                                        );
+                                                                    return SlideTransition(
+                                                                      position:
+                                                                          animation
+                                                                              .drive(
+                                                                                tween,
+                                                                              ),
+                                                                      child:
+                                                                          child,
+                                                                    );
+                                                                  },
+                                                            );
+                                                        await _closePlayerBeforeArtistNavigation();
+                                                        if (ArtistScreen
+                                                            .hasActiveInstance) {
+                                                          navigator
+                                                              .pushReplacement(
+                                                                route,
+                                                              );
+                                                        } else {
+                                                          navigator.push(route);
+                                                        }
                                                       },
                                                       child: Text(
                                                         (currentMediaItem

@@ -226,7 +226,7 @@ const Map<String, String> appLocalizationsEn = {
   'select_theme_desc': 'Select the theme of the app',
   'artwork_quality': 'Artwork quality when playing',
   'artwork_quality_description':
-      'Select the quality of artwork when playing music',
+      'Select the quality of artwork when playing music (local music only)',
 
   'overlay_next_button': 'Next button in overlay',
   'overlay_next_button_desc':
@@ -306,7 +306,7 @@ const Map<String, String> appLocalizationsEn = {
   'open_in_youtube_music': 'Open in YouTube Music',
   'info': 'Information',
   'search_music_in_ytm':
-      'Search and download music from YouTube Music.\n\nNote: Some songs may not be available for download, such as copyrighted content or children\'s content.',
+      'Search, play and download music from YouTube Music.\n\nNote: Some songs may not be available for download, such as copyrighted content or children\'s content.',
   'understood': 'Understood',
   'songs_search': 'Songs',
   'albums': 'Albums',

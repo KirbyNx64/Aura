@@ -22,6 +22,7 @@ import 'package:music/utils/db/shortcuts_db.dart';
 import 'package:music/utils/db/songs_index_db.dart';
 import 'package:music/utils/db/download_history_hive.dart';
 import 'package:music/utils/yt_search/stream_provider.dart';
+import 'package:music/utils/simple_yt_download.dart';
 import 'package:mini_music_visualizer/mini_music_visualizer.dart';
 import 'package:music/utils/db/playlist_model.dart' as hive_model;
 import 'package:share_plus/share_plus.dart';
@@ -1139,6 +1140,17 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     return item.rawPath;
   }
 
+  Future<void> _downloadStreamingFavorite(_StreamingFavoriteItem item) async {
+    final videoId = item.videoId?.trim();
+    if (videoId == null || videoId.isEmpty) return;
+    await SimpleYtDownload.downloadVideoWithArtist(
+      context,
+      videoId,
+      item.title,
+      item.artist,
+    );
+  }
+
   Future<void> _searchStreamingOnYouTube(_StreamingFavoriteItem item) async {
     try {
       String searchQuery = item.title.trim();
@@ -1438,6 +1450,14 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                     );
                   },
                 ),
+              ListTile(
+                leading: const Icon(Icons.download_rounded),
+                title: TranslatedText('download'),
+                onTap: () async {
+                  Navigator.of(context).pop();
+                  await _downloadStreamingFavorite(item);
+                },
+              ),
               ListTile(
                 leading: const Icon(Icons.share_rounded),
                 title: TranslatedText('share_link'),
@@ -2400,6 +2420,25 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     });
   }
 
+  Future<void> _downloadSelectedStreamingFavorites() async {
+    final selectedItems =
+        (_searchController.text.isNotEmpty
+                ? _filteredStreamingFavorites
+                : _streamingFavorites)
+            .where((item) => _selectedStreamingPaths.contains(item.rawPath))
+            .toList();
+    if (selectedItems.isEmpty) return;
+
+    for (final item in selectedItems) {
+      await _downloadStreamingFavorite(item);
+    }
+
+    setState(() {
+      _isSelecting = false;
+      _selectedStreamingPaths.clear();
+    });
+  }
+
   Future<void> _showAddSongsToFavoritesDialog() async {
     final allSongs = await SongsIndexDB().getIndexedSongs();
     final currentFavoritePaths = _favorites.map((s) => s.data).toSet();
@@ -3190,56 +3229,85 @@ class _FavoritesScreenState extends State<FavoritesScreen>
               ),
         actions: _isSelecting
             ? [
-                IconButton(
-                  icon: const Icon(Icons.delete_outline),
-                  tooltip: LocaleProvider.tr('remove_from_favorites'),
-                  onPressed: selectedCount == 0
-                      ? null
-                      : selectingStreamingFavorites
-                      ? _removeStreamingFromFavoritesMassive
-                      : _removeFromFavoritesMassive,
-                ),
-                IconButton(
-                  icon: const Icon(Icons.playlist_add),
-                  tooltip: LocaleProvider.tr('add_to_playlist'),
-                  onPressed: selectedCount == 0
-                      ? null
-                      : () => _handleAddToPlaylistMassive(context),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.select_all),
-                  tooltip: LocaleProvider.tr('select_all'),
-                  onPressed: () {
-                    final songsToShow = _searchController.text.isNotEmpty
-                        ? _filteredFavorites
-                        : _favorites;
-                    final streamingToShow = _searchController.text.isNotEmpty
-                        ? _filteredStreamingFavorites
-                        : _streamingFavorites;
-                    setState(() {
-                      if (selectingStreamingFavorites) {
-                        if (_selectedStreamingPaths.length ==
-                            streamingToShow.length) {
-                          _selectedStreamingPaths.clear();
-                          if (_selectedStreamingPaths.isEmpty) {
-                            _isSelecting = false;
-                          }
+                PopupMenuButton<String>(
+                  icon: const Icon(Icons.more_vert),
+                  tooltip: LocaleProvider.tr('want_more_options'),
+                  color: menuColor,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  onSelected: (value) async {
+                    switch (value) {
+                      case 'remove':
+                        if (selectingStreamingFavorites) {
+                          await _removeStreamingFromFavoritesMassive();
                         } else {
-                          _selectedStreamingPaths.addAll(
-                            streamingToShow.map((s) => s.rawPath),
-                          );
+                          await _removeFromFavoritesMassive();
                         }
-                      } else if (_selectedSongIds.length ==
-                          songsToShow.length) {
-                        _selectedSongIds.clear();
-                        if (_selectedSongIds.isEmpty) {
-                          _isSelecting = false;
+                        break;
+                      case 'playlist':
+                        await _handleAddToPlaylistMassive(context);
+                        break;
+                      case 'download':
+                        if (selectingStreamingFavorites) {
+                          await _downloadSelectedStreamingFavorites();
                         }
-                      } else {
-                        _selectedSongIds.addAll(songsToShow.map((s) => s.id));
-                      }
-                    });
+                        break;
+                    }
                   },
+                  itemBuilder: (context) => [
+                    PopupMenuItem<String>(
+                      value: 'remove',
+                      enabled: selectedCount > 0,
+                      child: Row(
+                        children: [
+                          const Icon(Icons.delete_outline, size: 20),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              LocaleProvider.tr('remove_from_favorites'),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    PopupMenuItem<String>(
+                      value: 'playlist',
+                      enabled: selectedCount > 0,
+                      child: Row(
+                        children: [
+                          const Icon(Icons.playlist_add, size: 20),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              LocaleProvider.tr('add_to_playlist'),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    PopupMenuItem<String>(
+                      value: 'download',
+                      enabled: selectedCount > 0 && selectingStreamingFavorites,
+                      child: Row(
+                        children: [
+                          const Icon(Icons.download_rounded, size: 20),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              LocaleProvider.tr('download'),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ]
             : [

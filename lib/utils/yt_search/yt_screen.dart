@@ -28,11 +28,15 @@ import 'package:music/utils/notification_service.dart';
 import 'package:music/widgets/image_viewer.dart';
 import 'package:music/screens/artist/artist_screen.dart';
 import 'package:music/screens/download/download_history_screen.dart';
+import 'package:music/utils/db/favorites_db.dart';
+import 'package:music/utils/db/playlists_db.dart';
+import 'package:music/utils/song_info_dialog.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import 'package:buttons_tabbar/buttons_tabbar.dart';
 import 'package:material_loading_indicator/loading_indicator.dart';
 import 'package:open_settings_plus/open_settings_plus.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 import 'dart:io';
 
 // Top-level function para usar con compute
@@ -1870,53 +1874,865 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
     });
   }
 
-  Future<void> _downloadSelected() async {
-    final items = _selectedIndexes
+  void _selectByKey(String key) {
+    setState(() {
+      _selectedIndexes.add(key);
+      _isSelectionMode = true;
+    });
+  }
+
+  Future<void> _downloadSingleSong(YtMusicResult item) async {
+    final videoId = item.videoId?.trim();
+    if (videoId == null || videoId.isEmpty) return;
+    final downloadQueue = DownloadQueue();
+    await downloadQueue.addToQueue(
+      context: context,
+      videoId: videoId,
+      title: item.title ?? 'Sin título',
+      artist: item.artist?.replaceFirst(RegExp(r' - Topic$'), '') ??
+          LocaleProvider.tr('artist_unknown'),
+    );
+    _showMessage(
+      LocaleProvider.tr('success'),
+      LocaleProvider.tr('songs_added_to_queue').replaceAll('@count', '1'),
+    );
+  }
+
+  Future<void> _addSongToFavorites(YtMusicResult item) async {
+    final videoId = item.videoId?.trim();
+    if (videoId == null || videoId.isEmpty) return;
+    final title = item.title?.trim().isNotEmpty == true
+        ? item.title!.trim()
+        : LocaleProvider.tr('title_unknown');
+    final artist = item.artist?.trim().isNotEmpty == true
+        ? item.artist!.trim()
+        : LocaleProvider.tr('artist_unknown');
+    final artUri = item.thumbUrl?.trim().isNotEmpty == true
+        ? item.thumbUrl!.trim()
+        : 'https://i.ytimg.com/vi/$videoId/hqdefault.jpg';
+    await FavoritesDB().addFavoritePath(
+      'yt:$videoId',
+      title: title,
+      artist: artist,
+      videoId: videoId,
+      artUri: artUri,
+    );
+    favoritesShouldReload.value = !favoritesShouldReload.value;
+  }
+
+  Future<void> _searchSongOnYouTube(YtMusicResult item) async {
+    final title = item.title?.trim() ?? '';
+    if (title.isEmpty) return;
+    final artist = item.artist?.replaceFirst(RegExp(r' - Topic$'), '').trim();
+    var searchQuery = title;
+    if (artist != null && artist.isNotEmpty) {
+      searchQuery = '$artist $title';
+    }
+    final encodedQuery = Uri.encodeComponent(searchQuery);
+    final url = Uri.parse(
+      'https://www.youtube.com/results?search_query=$encodedQuery',
+    );
+    await launchUrl(url, mode: LaunchMode.externalApplication);
+  }
+
+  Future<void> _searchSongOnYouTubeMusic(YtMusicResult item) async {
+    final title = item.title?.trim() ?? '';
+    if (title.isEmpty) return;
+    final artist = item.artist?.replaceFirst(RegExp(r' - Topic$'), '').trim();
+    var searchQuery = title;
+    if (artist != null && artist.isNotEmpty) {
+      searchQuery = '$artist $title';
+    }
+    final encodedQuery = Uri.encodeComponent(searchQuery);
+    final url = Uri.parse('https://music.youtube.com/search?q=$encodedQuery');
+    await launchUrl(url, mode: LaunchMode.externalApplication);
+  }
+
+  Widget _buildActionOption({
+    required BuildContext context,
+    required String title,
+    required VoidCallback onTap,
+    IconData? icon,
+    Widget? leading,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(28),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.primary,
+            borderRadius: BorderRadius.circular(28),
+          ),
+          child: Row(
+            children: [
+              if (leading != null)
+                SizedBox(width: 24, height: 24, child: Center(child: leading))
+              else if (icon != null)
+                Icon(
+                  icon,
+                  color: Theme.of(context).colorScheme.onPrimary,
+                  size: 24,
+                ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: Theme.of(context).colorScheme.onPrimary,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showSongSearchOptions(YtMusicResult item) async {
+    showDialog(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return ValueListenableBuilder<AppColorScheme>(
+          valueListenable: colorSchemeNotifier,
+          builder: (context, colorScheme, child) {
+            final isAmoled = colorScheme == AppColorScheme.amoled;
+            final isDark = Theme.of(context).brightness == Brightness.dark;
+            final primaryColor = Theme.of(context).colorScheme.primary;
+
+            return AlertDialog(
+              backgroundColor: isAmoled && isDark
+                  ? Colors.black
+                  : Theme.of(context).colorScheme.surface,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(28),
+                side: isAmoled && isDark
+                    ? const BorderSide(color: Colors.white24, width: 1)
+                    : BorderSide.none,
+              ),
+              contentPadding: const EdgeInsets.fromLTRB(0, 24, 0, 8),
+              content: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: 400,
+                  maxHeight: MediaQuery.of(context).size.height * 0.8,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.search_rounded, size: 32),
+                    const SizedBox(height: 16),
+                    TranslatedText(
+                      'search_song',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w500,
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: TranslatedText(
+                        'search_options',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onSurface.withAlpha(180),
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    _buildActionOption(
+                      context: context,
+                      title: 'YouTube',
+                      leading: Image.asset(
+                        'assets/icon/Youtube_logo.png',
+                        width: 24,
+                        height: 24,
+                      ),
+                      onTap: () {
+                        Navigator.of(dialogContext).pop();
+                        _searchSongOnYouTube(item);
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    _buildActionOption(
+                      context: context,
+                      title: 'YT Music',
+                      leading: Image.asset(
+                        'assets/icon/Youtube_Music_icon.png',
+                        width: 24,
+                        height: 24,
+                      ),
+                      onTap: () {
+                        Navigator.of(dialogContext).pop();
+                        _searchSongOnYouTubeMusic(item);
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    Padding(
+                      padding: const EdgeInsets.only(right: 24, bottom: 8),
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: () => Navigator.of(dialogContext).pop(),
+                          child: TranslatedText(
+                            'cancel',
+                            style: TextStyle(
+                              color: primaryColor,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _showSongInfo(YtMusicResult item) async {
+    final videoId = item.videoId?.trim();
+    if (videoId == null || videoId.isEmpty) return;
+    final mediaItem = MediaItem(
+      id: 'yt:$videoId',
+      title: item.title?.trim().isNotEmpty == true
+          ? item.title!.trim()
+          : LocaleProvider.tr('title_unknown'),
+      artist: item.artist?.trim().isNotEmpty == true
+          ? item.artist!.trim()
+          : LocaleProvider.tr('artist_unknown'),
+      artUri: Uri.tryParse(
+        item.thumbUrl?.trim().isNotEmpty == true
+            ? item.thumbUrl!.trim()
+            : 'https://i.ytimg.com/vi/$videoId/hqdefault.jpg',
+      ),
+      extras: {
+        'data': 'yt:$videoId',
+        'videoId': videoId,
+        'isStreaming': true,
+        if (item.thumbUrl?.trim().isNotEmpty == true)
+          'displayArtUri': item.thumbUrl!.trim(),
+      },
+    );
+    await SongInfoDialog.show(context, mediaItem, colorSchemeNotifier);
+  }
+
+  Future<void> _showAddSongToPlaylistDialog(YtMusicResult item) async {
+    final videoId = item.videoId?.trim();
+    if (videoId == null || videoId.isEmpty) return;
+    final allPlaylists = await PlaylistsDB().getAllPlaylists();
+    final textController = TextEditingController();
+    if (!mounted) return;
+
+    final title = item.title?.trim().isNotEmpty == true
+        ? item.title!.trim()
+        : LocaleProvider.tr('title_unknown');
+    final artist = item.artist?.trim().isNotEmpty == true
+        ? item.artist!.trim()
+        : LocaleProvider.tr('artist_unknown');
+    final artUri = item.thumbUrl?.trim().isNotEmpty == true
+        ? item.thumbUrl!.trim()
+        : 'https://i.ytimg.com/vi/$videoId/hqdefault.jpg';
+    final path = 'yt:$videoId';
+
+    Future<void> addToPlaylist(String playlistId) async {
+      await PlaylistsDB().addSongPathToPlaylist(
+        playlistId,
+        path,
+        title: title,
+        artist: artist,
+        videoId: videoId,
+        artUri: artUri,
+      );
+      playlistsShouldReload.value = !playlistsShouldReload.value;
+    }
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+        final barColor = isDark
+            ? Theme.of(context).colorScheme.secondary.withValues(alpha: 0.06)
+            : Theme.of(context).colorScheme.secondary.withValues(alpha: 0.07);
+        return Container(
+          decoration: BoxDecoration(
+            color: Theme.of(context).scaffoldBackgroundColor,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          child: SafeArea(
+            child: Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+                left: 16,
+                right: 16,
+                top: 12,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurfaceVariant.withAlpha(100),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    LocaleProvider.tr('save_to_playlist'),
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  if (allPlaylists.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 24),
+                      child: Text(LocaleProvider.tr('no_playlists_yet')),
+                    ),
+                  if (allPlaylists.isNotEmpty)
+                    Flexible(
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxHeight: MediaQuery.of(context).size.height * 0.4,
+                        ),
+                        child: ListView.builder(
+                          shrinkWrap: true,
+                          padding: EdgeInsets.zero,
+                          itemCount: allPlaylists.length,
+                          itemBuilder: (context, i) {
+                            final pl = allPlaylists[i];
+                            return Padding(
+                              padding: EdgeInsets.only(
+                                bottom: i == allPlaylists.length - 1 ? 0 : 4,
+                              ),
+                              child: Card(
+                                color: barColor,
+                                margin: EdgeInsets.zero,
+                                elevation: 0,
+                                child: ListTile(
+                                  title: Text(
+                                    pl.name,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  onTap: () async {
+                                    await addToPlaylist(pl.id);
+                                    if (context.mounted) {
+                                      Navigator.of(context).pop();
+                                    }
+                                  },
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: textController,
+                    decoration: InputDecoration(
+                      hintText: LocaleProvider.tr('new_playlist'),
+                      prefixIcon: const Icon(Icons.playlist_add),
+                      suffixIcon: IconButton(
+                        icon: const Icon(Icons.check_rounded),
+                        onPressed: () async {
+                          final name = textController.text.trim();
+                          if (name.isEmpty) return;
+                          final playlistId = await PlaylistsDB().createPlaylist(
+                            name,
+                          );
+                          await addToPlaylist(playlistId);
+                          if (context.mounted) Navigator.of(context).pop();
+                        },
+                      ),
+                      filled: true,
+                      fillColor: barColor,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(20),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                    onSubmitted: (value) async {
+                      final name = value.trim();
+                      if (name.isEmpty) return;
+                      final playlistId = await PlaylistsDB().createPlaylist(
+                        name,
+                      );
+                      await addToPlaylist(playlistId);
+                      if (context.mounted) Navigator.of(context).pop();
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _showSongActionsModal(
+    YtMusicResult item, {
+    required String selectionKey,
+    String? fallbackThumbUrl,
+    String? fallbackArtist,
+  }) async {
+    final title = item.title?.trim().isNotEmpty == true
+        ? item.title!.trim()
+        : LocaleProvider.tr('title_unknown');
+    final artist = item.artist?.trim().isNotEmpty == true
+        ? item.artist!.trim()
+        : (fallbackArtist?.trim().isNotEmpty == true
+              ? fallbackArtist!.trim()
+              : LocaleProvider.tr('artist_unknown'));
+    final thumb = item.thumbUrl?.trim().isNotEmpty == true
+        ? item.thumbUrl!.trim()
+        : (fallbackThumbUrl?.trim().isNotEmpty == true
+              ? fallbackThumbUrl!.trim()
+              : null);
+    final videoId = item.videoId?.trim();
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (modalContext) {
+        return SafeArea(
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: thumb != null
+                            ? _buildSafeNetworkImage(
+                                thumb,
+                                width: 60,
+                                height: 60,
+                                fit: BoxFit.cover,
+                                fallback: Container(
+                                  width: 60,
+                                  height: 60,
+                                  color:
+                                      Theme.of(context).colorScheme.surfaceContainer,
+                                  child: const Icon(Icons.music_note_rounded),
+                                ),
+                              )
+                            : Container(
+                                width: 60,
+                                height: 60,
+                                color:
+                                    Theme.of(context).colorScheme.surfaceContainer,
+                                child: const Icon(Icons.music_note_rounded),
+                              ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.titleMedium,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              artist,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.bodyMedium,
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      InkWell(
+                        onTap: () async {
+                          Navigator.of(modalContext).pop();
+                          await _showSongSearchOptions(item);
+                        },
+                        borderRadius: BorderRadius.circular(12),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).brightness ==
+                                    Brightness.dark
+                                ? Theme.of(context).colorScheme.primary
+                                : Theme.of(context).colorScheme.onPrimaryContainer
+                                      .withValues(alpha: 0.7),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.search,
+                                size: 20,
+                                color:
+                                    Theme.of(context).brightness ==
+                                        Brightness.dark
+                                    ? Theme.of(context).colorScheme.onPrimary
+                                    : Theme.of(
+                                        context,
+                                      ).colorScheme.surfaceContainer,
+                              ),
+                              const SizedBox(width: 8),
+                              TranslatedText(
+                                'search',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 14,
+                                  color:
+                                      Theme.of(context).brightness ==
+                                          Brightness.dark
+                                      ? Theme.of(context).colorScheme.onPrimary
+                                      : Theme.of(
+                                          context,
+                                        ).colorScheme.surfaceContainer,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.favorite_outline_rounded),
+                  title: TranslatedText('add_to_favorites'),
+                  onTap: () async {
+                    Navigator.of(modalContext).pop();
+                    await _addSongToFavorites(item);
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.playlist_add_rounded),
+                  title: TranslatedText('add_to_playlist'),
+                  onTap: () async {
+                    Navigator.of(modalContext).pop();
+                    await _showAddSongToPlaylistDialog(item);
+                  },
+                ),
+                if (artist.trim().isNotEmpty &&
+                    artist.trim() != LocaleProvider.tr('artist_unknown'))
+                  ListTile(
+                    leading: const Icon(Icons.person_outline),
+                    title: const TranslatedText('go_to_artist'),
+                    onTap: () {
+                      Navigator.of(modalContext).pop();
+                      final name = artist.trim();
+                      if (name.isEmpty) return;
+                      Navigator.of(context).push(
+                        PageRouteBuilder(
+                          pageBuilder:
+                              (context, animation, secondaryAnimation) =>
+                                  ArtistScreen(artistName: name),
+                          transitionsBuilder:
+                              (
+                                context,
+                                animation,
+                                secondaryAnimation,
+                                child,
+                              ) {
+                                const begin = Offset(1.0, 0.0);
+                                const end = Offset.zero;
+                                const curve = Curves.ease;
+                                final tween = Tween(
+                                  begin: begin,
+                                  end: end,
+                                ).chain(CurveTween(curve: curve));
+                                return SlideTransition(
+                                  position: animation.drive(tween),
+                                  child: child,
+                                );
+                              },
+                        ),
+                      );
+                    },
+                  ),
+                ListTile(
+                  leading: const Icon(Icons.download_rounded),
+                  title: TranslatedText('download'),
+                  onTap: () async {
+                    Navigator.of(modalContext).pop();
+                    await _downloadSingleSong(item);
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.share_rounded),
+                  title: TranslatedText('share_link'),
+                  onTap: () async {
+                    Navigator.of(modalContext).pop();
+                    if (videoId != null && videoId.isNotEmpty) {
+                      await SharePlus.instance.share(
+                        ShareParams(
+                          text: 'https://music.youtube.com/watch?v=$videoId',
+                        ),
+                      );
+                    }
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.check_box_outlined),
+                  title: TranslatedText('select'),
+                  onTap: () {
+                    Navigator.of(modalContext).pop();
+                    _selectByKey(selectionKey);
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.info_outline),
+                  title: TranslatedText('song_info'),
+                  onTap: () async {
+                    Navigator.of(modalContext).pop();
+                    await _showSongInfo(item);
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildPlayTrailingButton(
+    YtMusicResult item, {
+    String? fallbackThumbUrl,
+    String? fallbackArtist,
+    List<YtMusicResult>? queueItems,
+    int? initialIndex,
+    bool playAsQueue = false,
+    String? queueSource,
+  }) {
+    return Container(
+      width: 40,
+      height: 40,
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.primary.withAlpha(20),
+        shape: BoxShape.circle,
+      ),
+      child: IconButton(
+        icon: const Icon(
+          Icons.play_arrow_rounded,
+          grade: 200,
+          fill: 1,
+        ),
+        tooltip: LocaleProvider.tr('play'),
+        onPressed: () async {
+          await _playInMainPlayer(
+            item,
+            fallbackThumbUrl: fallbackThumbUrl,
+            fallbackArtist: fallbackArtist,
+            queueItems: queueItems,
+            initialIndex: initialIndex,
+            playAsQueue: playAsQueue,
+            queueSource: queueSource,
+          );
+        },
+      ),
+    );
+  }
+
+  List<YtMusicResult> _getSelectedItems() {
+    return _selectedIndexes
         .map<YtMusicResult>((key) {
           if (key.startsWith('video-')) {
             final videoId = key.substring(6);
             return _videoResults.firstWhere(
               (item) => item.videoId == videoId,
-              orElse: () => YtMusicResult(
-                title: null,
-                artist: null,
-                thumbUrl: null,
-                videoId: null,
-              ),
+              orElse: () => YtMusicResult(),
             );
           } else if (key.startsWith('song-')) {
             final videoId = key.substring(5);
             return _songResults.firstWhere(
               (item) => item.videoId == videoId,
-              orElse: () => YtMusicResult(
-                title: null,
-                artist: null,
-                thumbUrl: null,
-                videoId: null,
-              ),
+              orElse: () => YtMusicResult(),
             );
           } else if (key.startsWith('album-')) {
             final videoId = key.substring(6);
             return _albumSongs.firstWhere(
               (item) => item.videoId == videoId,
-              orElse: () => YtMusicResult(
-                title: null,
-                artist: null,
-                thumbUrl: null,
-                videoId: null,
-              ),
+              orElse: () => YtMusicResult(),
             );
-          } else {
-            return YtMusicResult(
-              title: null,
-              artist: null,
-              thumbUrl: null,
-              videoId: null,
+          } else if (key.startsWith('playlist-')) {
+            final videoId = key.substring(9);
+            return _playlistSongs.firstWhere(
+              (item) => item.videoId == videoId,
+              orElse: () => YtMusicResult(),
             );
           }
+          return YtMusicResult();
         })
-        .where((item) => item.videoId != null)
+        .where((item) => item.videoId?.trim().isNotEmpty == true)
         .toList();
+  }
+
+  Future<void> _addSelectedToFavorites() async {
+    final items = _getSelectedItems();
+    if (items.isEmpty) return;
+    for (final item in items) {
+      await _addSongToFavorites(item);
+    }
+    _clearSelection();
+  }
+
+  Future<void> _addSelectedToPlaylist() async {
+    final items = _getSelectedItems();
+    if (items.isEmpty) return;
+    final allPlaylists = await PlaylistsDB().getAllPlaylists();
+    if (!mounted) return;
+    final textController = TextEditingController();
+
+    Future<void> addItemsToPlaylist(String playlistId) async {
+      for (final item in items) {
+        final videoId = item.videoId?.trim();
+        if (videoId == null || videoId.isEmpty) continue;
+        await PlaylistsDB().addSongPathToPlaylist(
+          playlistId,
+          'yt:$videoId',
+          title: item.title?.trim().isNotEmpty == true
+              ? item.title!.trim()
+              : LocaleProvider.tr('title_unknown'),
+          artist: item.artist?.trim().isNotEmpty == true
+              ? item.artist!.trim()
+              : LocaleProvider.tr('artist_unknown'),
+          videoId: videoId,
+          artUri: item.thumbUrl?.trim().isNotEmpty == true
+              ? item.thumbUrl!.trim()
+              : 'https://i.ytimg.com/vi/$videoId/hqdefault.jpg',
+        );
+      }
+      playlistsShouldReload.value = !playlistsShouldReload.value;
+      _clearSelection();
+    }
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+        final barColor = isDark
+            ? Theme.of(context).colorScheme.secondary.withValues(alpha: 0.06)
+            : Theme.of(context).colorScheme.secondary.withValues(alpha: 0.07);
+        return Container(
+          decoration: BoxDecoration(
+            color: Theme.of(context).scaffoldBackgroundColor,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          child: SafeArea(
+            child: Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+                left: 16,
+                right: 16,
+                top: 12,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    LocaleProvider.tr('save_to_playlist'),
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  if (allPlaylists.isNotEmpty)
+                    Flexible(
+                      child: ListView.builder(
+                        shrinkWrap: true,
+                        padding: EdgeInsets.zero,
+                        itemCount: allPlaylists.length,
+                        itemBuilder: (context, i) {
+                          final pl = allPlaylists[i];
+                          return Card(
+                            color: barColor,
+                            margin: EdgeInsets.only(
+                              bottom: i == allPlaylists.length - 1 ? 0 : 4,
+                            ),
+                            elevation: 0,
+                            child: ListTile(
+                              title: Text(pl.name),
+                              onTap: () async {
+                                await addItemsToPlaylist(pl.id);
+                                if (context.mounted) Navigator.of(context).pop();
+                              },
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: textController,
+                    decoration: InputDecoration(
+                      hintText: LocaleProvider.tr('new_playlist'),
+                      prefixIcon: const Icon(Icons.playlist_add),
+                      suffixIcon: IconButton(
+                        icon: const Icon(Icons.check_rounded),
+                        onPressed: () async {
+                          final name = textController.text.trim();
+                          if (name.isEmpty) return;
+                          final playlistId = await PlaylistsDB().createPlaylist(
+                            name,
+                          );
+                          await addItemsToPlaylist(playlistId);
+                          if (context.mounted) Navigator.of(context).pop();
+                        },
+                      ),
+                      filled: true,
+                      fillColor: barColor,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(20),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _downloadSelected() async {
+    final items = _getSelectedItems();
 
     for (final item in items) {
       if (item.videoId != null) {
@@ -2051,6 +2867,12 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
     final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final isSystem = colorSchemeNotifier.value == AppColorScheme.system;
+    final isAmoledTheme =
+        Theme.of(context).brightness == Brightness.dark &&
+        Theme.of(context).colorScheme.surface == Colors.black;
+    final menuColor = isAmoledTheme
+        ? Colors.grey.shade900
+        : Theme.of(context).colorScheme.surfaceContainerHigh;
 
     return Scaffold(
       appBar: AppBar(
@@ -2101,10 +2923,60 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
         actions: _isSelectionMode
             ? [
                 if (_selectedIndexes.isNotEmpty)
-                  IconButton(
-                    icon: const Icon(Icons.download),
-                    tooltip: LocaleProvider.tr('download_selected'),
-                    onPressed: _downloadSelected,
+                  PopupMenuButton<String>(
+                    icon: const Icon(Icons.more_vert),
+                    tooltip: LocaleProvider.tr('want_more_options'),
+                    color: menuColor,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    onSelected: (value) async {
+                      if (value == 'favorites') {
+                        await _addSelectedToFavorites();
+                      } else if (value == 'playlist') {
+                        await _addSelectedToPlaylist();
+                      } else if (value == 'download') {
+                        await _downloadSelected();
+                      }
+                    },
+                    itemBuilder: (context) => [
+                      PopupMenuItem<String>(
+                        value: 'favorites',
+                        child: Row(
+                          children: [
+                            const Icon(Icons.favorite_outline_rounded),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(LocaleProvider.tr('add_to_favorites')),
+                            ),
+                          ],
+                        ),
+                      ),
+                      PopupMenuItem<String>(
+                        value: 'playlist',
+                        child: Row(
+                          children: [
+                            const Icon(Icons.playlist_add_rounded),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(LocaleProvider.tr('add_to_playlist')),
+                            ),
+                          ],
+                        ),
+                      ),
+                      PopupMenuItem<String>(
+                        value: 'download',
+                        child: Row(
+                          children: [
+                            const Icon(Icons.download_rounded),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(LocaleProvider.tr('download')),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
               ]
             : [
@@ -2867,9 +3739,19 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                 borderRadius: borderRadius,
                                                 onLongPress: () {
                                                   HapticFeedback.selectionClick();
-                                                  _toggleSelection(
-                                                    idx,
-                                                    isVideo: false,
+                                                  final item = _songResults[idx];
+                                                  final videoId = item.videoId;
+                                                  if (videoId == null) return;
+                                                  if (_isSelectionMode) {
+                                                    _toggleSelection(
+                                                      idx,
+                                                      isVideo: false,
+                                                    );
+                                                    return;
+                                                  }
+                                                  _showSongActionsModal(
+                                                    item,
+                                                    selectionKey: 'song-$videoId',
                                                   );
                                                 },
                                                 onTap: () async {
@@ -3012,30 +3894,10 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                           : null,
                                                     ),
                                                   ),
-                                                  trailing: IconButton(
-                                                    style: IconButton.styleFrom(
-                                                      backgroundColor:
-                                                          Theme.of(context)
-                                                              .colorScheme
-                                                              .primary
-                                                              .withAlpha(20),
-                                                    ),
-                                                    icon: const Icon(
-                                                      Icons.link_rounded,
-                                                      size: 20,
-                                                    ),
-                                                    tooltip: LocaleProvider.tr(
-                                                      'copy_link',
-                                                    ),
-                                                    onPressed: () {
-                                                      Clipboard.setData(
-                                                        ClipboardData(
-                                                          text:
-                                                              'https://music.youtube.com/watch?v=${item.videoId}',
-                                                        ),
-                                                      );
-                                                    },
-                                                  ),
+                                                  trailing:
+                                                      _buildPlayTrailingButton(
+                                                        item,
+                                                      ),
                                                 ),
                                               ),
                                             ),
@@ -3166,9 +4028,19 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                 borderRadius: borderRadius,
                                                 onLongPress: () {
                                                   HapticFeedback.selectionClick();
-                                                  _toggleSelection(
-                                                    idx,
-                                                    isVideo: true,
+                                                  final item = _videoResults[idx];
+                                                  final videoId = item.videoId;
+                                                  if (videoId == null) return;
+                                                  if (_isSelectionMode) {
+                                                    _toggleSelection(
+                                                      idx,
+                                                      isVideo: true,
+                                                    );
+                                                    return;
+                                                  }
+                                                  _showSongActionsModal(
+                                                    item,
+                                                    selectionKey: 'video-$videoId',
                                                   );
                                                 },
                                                 onTap: () async {
@@ -3311,30 +4183,10 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                           : null,
                                                     ),
                                                   ),
-                                                  trailing: IconButton(
-                                                    style: IconButton.styleFrom(
-                                                      backgroundColor:
-                                                          Theme.of(context)
-                                                              .colorScheme
-                                                              .primary
-                                                              .withAlpha(20),
-                                                    ),
-                                                    icon: const Icon(
-                                                      Icons.link_rounded,
-                                                      size: 20,
-                                                    ),
-                                                    tooltip: LocaleProvider.tr(
-                                                      'copy_link',
-                                                    ),
-                                                    onPressed: () {
-                                                      Clipboard.setData(
-                                                        ClipboardData(
-                                                          text:
-                                                              'https://www.youtube.com/watch?v=${item.videoId}',
-                                                        ),
-                                                      );
-                                                    },
-                                                  ),
+                                                  trailing:
+                                                      _buildPlayTrailingButton(
+                                                        item,
+                                                      ),
                                                 ),
                                               ),
                                             ),
@@ -3827,6 +4679,20 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                       if (videoId == null) {
                                                         return;
                                                       }
+                                                      if (!_isSelectionMode) {
+                                                        _showSongActionsModal(
+                                                          _albumSongs[idx],
+                                                          selectionKey:
+                                                              'album-$videoId',
+                                                          fallbackThumbUrl:
+                                                              _currentAlbum?['thumbUrl']
+                                                                  as String?,
+                                                          fallbackArtist:
+                                                              _currentAlbum?['artist']
+                                                                  as String?,
+                                                        );
+                                                        return;
+                                                      }
                                                       setState(() {
                                                         final key =
                                                             'album-$videoId';
@@ -3882,6 +4748,14 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                               LocaleProvider.tr(
                                                                 'artist_unknown',
                                                               ),
+                                                          queueItems:
+                                                              _albumSongs,
+                                                          initialIndex: idx,
+                                                          playAsQueue: true,
+                                                          queueSource:
+                                                              _currentAlbum?['title']
+                                                                  ?.toString() ??
+                                                              'YouTube Music',
                                                         );
                                                       }
                                                     },
@@ -3926,83 +4800,38 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                                 });
                                                               },
                                                             ),
-                                                          ClipRRect(
-                                                            borderRadius:
-                                                                BorderRadius.circular(
-                                                                  8,
-                                                                ),
-                                                            child:
-                                                                (item.thumbUrl !=
-                                                                        null &&
-                                                                    item
-                                                                        .thumbUrl!
-                                                                        .isNotEmpty)
-                                                                ? _buildSafeNetworkImage(
-                                                                    item.thumbUrl!,
-                                                                    width: 50,
-                                                                    height: 50,
-                                                                    fit: BoxFit
-                                                                        .cover,
-                                                                  )
-                                                                : (_currentAlbum !=
-                                                                          null &&
-                                                                      _currentAlbum!['thumbUrl']
-                                                                          is String &&
-                                                                      (_currentAlbum!['thumbUrl']
-                                                                              as String)
-                                                                          .isNotEmpty)
-                                                                ? _buildSafeNetworkImage(
-                                                                    _currentAlbum!['thumbUrl']
-                                                                        as String,
-                                                                    width: 50,
-                                                                    height: 50,
-                                                                    fit: BoxFit
-                                                                        .cover,
-                                                                    fallback: Container(
-                                                                      width: 50,
-                                                                      height:
-                                                                          50,
-                                                                      decoration: BoxDecoration(
-                                                                        color:
-                                                                            isSystem
-                                                                            ? Theme.of(
-                                                                                context,
-                                                                              ).colorScheme.secondaryContainer
-                                                                            : Theme.of(
-                                                                                context,
-                                                                              ).colorScheme.surfaceContainer,
-                                                                        borderRadius:
-                                                                            BorderRadius.circular(
-                                                                              8,
-                                                                            ),
-                                                                      ),
-                                                                      child: const Icon(
-                                                                        Icons
-                                                                            .music_note,
-                                                                        size:
-                                                                            20,
-                                                                      ),
+                                                          SizedBox(
+                                                            width: 50,
+                                                            height: 50,
+                                                            child: Center(
+                                                              child: Text(
+                                                                '${idx + 1}',
+                                                                style: Theme.of(
+                                                                      context,
+                                                                    )
+                                                                    .textTheme
+                                                                    .titleMedium
+                                                                    ?.copyWith(
+                                                                      fontWeight:
+                                                                          FontWeight
+                                                                              .w600,
+                                                                      color: isAmoled
+                                                                          ? Colors
+                                                                                .white
+                                                                                .withValues(
+                                                                                  alpha:
+                                                                                      0.85,
+                                                                                )
+                                                                          : Theme.of(context)
+                                                                                .colorScheme
+                                                                                .onSurface
+                                                                                .withValues(
+                                                                                  alpha:
+                                                                                      0.8,
+                                                                                ),
                                                                     ),
-                                                                  )
-                                                                : Container(
-                                                                    width: 50,
-                                                                    height: 50,
-                                                                    decoration: BoxDecoration(
-                                                                      color: Colors
-                                                                          .grey[300],
-                                                                      borderRadius:
-                                                                          BorderRadius.circular(
-                                                                            8,
-                                                                          ),
-                                                                    ),
-                                                                    child: const Icon(
-                                                                      Icons
-                                                                          .music_note,
-                                                                      size: 20,
-                                                                      color: Colors
-                                                                          .grey,
-                                                                    ),
-                                                                  ),
+                                                              ),
+                                                            ),
                                                           ),
                                                         ],
                                                       ),
@@ -4041,33 +4870,10 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                               : null,
                                                         ),
                                                       ),
-                                                      trailing: IconButton(
-                                                        style: IconButton.styleFrom(
-                                                          backgroundColor:
-                                                              Theme.of(context)
-                                                                  .colorScheme
-                                                                  .primary
-                                                                  .withAlpha(
-                                                                    20,
-                                                                  ),
-                                                        ),
-                                                        icon: const Icon(
-                                                          Icons.link,
-                                                          size: 20,
-                                                        ),
-                                                        tooltip:
-                                                            LocaleProvider.tr(
-                                                              'copy_link',
-                                                            ),
-                                                        onPressed: () {
-                                                          Clipboard.setData(
-                                                            ClipboardData(
-                                                              text:
-                                                                  'https://music.youtube.com/watch?v=${item.videoId}',
-                                                            ),
-                                                          );
-                                                        },
-                                                      ),
+                                                      trailing:
+                                                          _buildPlayTrailingButton(
+                                                            item,
+                                                          ),
                                                     ),
                                                   ),
                                                 ),
@@ -4312,6 +5118,20 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                       if (videoId == null) {
                                                         return;
                                                       }
+                                                      if (!_isSelectionMode) {
+                                                        _showSongActionsModal(
+                                                          _playlistSongs[idx],
+                                                          selectionKey:
+                                                              'playlist-$videoId',
+                                                          fallbackThumbUrl:
+                                                              _currentPlaylist?['thumbUrl']
+                                                                  as String?,
+                                                          fallbackArtist:
+                                                              _currentPlaylist?['artist']
+                                                                  as String?,
+                                                        );
+                                                        return;
+                                                      }
                                                       setState(() {
                                                         final key =
                                                             'playlist-$videoId';
@@ -4366,6 +5186,14 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                               LocaleProvider.tr(
                                                                 'artist_unknown',
                                                               ),
+                                                          queueItems:
+                                                              _playlistSongs,
+                                                          initialIndex: idx,
+                                                          playAsQueue: true,
+                                                          queueSource:
+                                                              _currentPlaylist?['title']
+                                                                  ?.toString() ??
+                                                              'YouTube Music',
                                                         );
                                                       }
                                                     },
@@ -4513,33 +5341,24 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                               : null,
                                                         ),
                                                       ),
-                                                      trailing: IconButton(
-                                                        style: IconButton.styleFrom(
-                                                          backgroundColor:
-                                                              Theme.of(context)
-                                                                  .colorScheme
-                                                                  .primary
-                                                                  .withAlpha(
-                                                                    20,
-                                                                  ),
-                                                        ),
-                                                        icon: const Icon(
-                                                          Icons.link,
-                                                          size: 20,
-                                                        ),
-                                                        tooltip:
-                                                            LocaleProvider.tr(
-                                                              'copy_link',
-                                                            ),
-                                                        onPressed: () {
-                                                          Clipboard.setData(
-                                                            ClipboardData(
-                                                              text:
-                                                                  'https://music.youtube.com/watch?v=${item.videoId}',
-                                                            ),
-                                                          );
-                                                        },
-                                                      ),
+                                                      trailing:
+                                                          _buildPlayTrailingButton(
+                                                            item,
+                                                            fallbackThumbUrl:
+                                                                _currentPlaylist?['thumbUrl'],
+                                                            fallbackArtist:
+                                                                LocaleProvider.tr(
+                                                                  'artist_unknown',
+                                                                ),
+                                                            queueItems:
+                                                                _playlistSongs,
+                                                            initialIndex: idx,
+                                                            playAsQueue: true,
+                                                            queueSource:
+                                                                _currentPlaylist?['title']
+                                                                    ?.toString() ??
+                                                                'YouTube Music',
+                                                          ),
                                                     ),
                                                   ),
                                                 ),
@@ -5376,9 +6195,24 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                           borderRadius,
                                                       onLongPress: () {
                                                         HapticFeedback.selectionClick();
-                                                        _toggleSelection(
-                                                          index,
-                                                          isVideo: false,
+                                                        final item =
+                                                            _songResults[index];
+                                                        final videoId =
+                                                            item.videoId;
+                                                        if (videoId == null) {
+                                                          return;
+                                                        }
+                                                        if (_isSelectionMode) {
+                                                          _toggleSelection(
+                                                            index,
+                                                            isVideo: false,
+                                                          );
+                                                          return;
+                                                        }
+                                                        _showSongActionsModal(
+                                                          item,
+                                                          selectionKey:
+                                                              'song-$videoId',
                                                         );
                                                       },
                                                       onTap: () async {
@@ -5532,35 +6366,10 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                                 : null,
                                                           ),
                                                         ),
-                                                        trailing: IconButton(
-                                                          style: IconButton.styleFrom(
-                                                            backgroundColor:
-                                                                Theme.of(
-                                                                      context,
-                                                                    )
-                                                                    .colorScheme
-                                                                    .primary
-                                                                    .withAlpha(
-                                                                      20,
-                                                                    ),
-                                                          ),
-                                                          icon: const Icon(
-                                                            Icons.link_rounded,
-                                                            size: 20,
-                                                          ),
-                                                          tooltip:
-                                                              LocaleProvider.tr(
-                                                                'copy_link',
-                                                              ),
-                                                          onPressed: () {
-                                                            Clipboard.setData(
-                                                              ClipboardData(
-                                                                text:
-                                                                    'https://music.youtube.com/watch?v=${item.videoId}',
-                                                              ),
-                                                            );
-                                                          },
-                                                        ),
+                                                        trailing:
+                                                            _buildPlayTrailingButton(
+                                                              item,
+                                                            ),
                                                       ),
                                                     ),
                                                   ),
@@ -5726,9 +6535,24 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                           borderRadius,
                                                       onLongPress: () {
                                                         HapticFeedback.selectionClick();
-                                                        _toggleSelection(
-                                                          index,
-                                                          isVideo: true,
+                                                        final item =
+                                                            _videoResults[index];
+                                                        final videoId =
+                                                            item.videoId;
+                                                        if (videoId == null) {
+                                                          return;
+                                                        }
+                                                        if (_isSelectionMode) {
+                                                          _toggleSelection(
+                                                            index,
+                                                            isVideo: true,
+                                                          );
+                                                          return;
+                                                        }
+                                                        _showSongActionsModal(
+                                                          item,
+                                                          selectionKey:
+                                                              'video-$videoId',
                                                         );
                                                       },
                                                       onTap: () async {
@@ -5882,35 +6706,10 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                                 : null,
                                                           ),
                                                         ),
-                                                        trailing: IconButton(
-                                                          style: IconButton.styleFrom(
-                                                            backgroundColor:
-                                                                Theme.of(
-                                                                      context,
-                                                                    )
-                                                                    .colorScheme
-                                                                    .primary
-                                                                    .withAlpha(
-                                                                      20,
-                                                                    ),
-                                                          ),
-                                                          icon: const Icon(
-                                                            Icons.link_rounded,
-                                                            size: 20,
-                                                          ),
-                                                          tooltip:
-                                                              LocaleProvider.tr(
-                                                                'copy_link',
-                                                              ),
-                                                          onPressed: () {
-                                                            Clipboard.setData(
-                                                              ClipboardData(
-                                                                text:
-                                                                    'https://www.youtube.com/watch?v=${item.videoId}',
-                                                              ),
-                                                            );
-                                                          },
-                                                        ),
+                                                        trailing:
+                                                            _buildPlayTrailingButton(
+                                                              item,
+                                                            ),
                                                       ),
                                                     ),
                                                   ),
@@ -6522,6 +7321,10 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
     YtMusicResult item, {
     String? fallbackThumbUrl,
     String? fallbackArtist,
+    List<YtMusicResult>? queueItems,
+    int? initialIndex,
+    bool playAsQueue = false,
+    String? queueSource,
   }) async {
     final videoId = item.videoId?.trim();
     if (videoId == null || videoId.isEmpty) {
@@ -6569,59 +7372,107 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
         }
       });
 
-      final artworkFuture = _buildPlayerArtworkUri(
-        videoId,
-        preferredThumbUrl: item.thumbUrl,
-        fallbackThumbUrl: fallbackThumbUrl,
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+        'last_queue_source',
+        (queueSource?.trim().isNotEmpty ?? false)
+            ? queueSource!.trim()
+            : 'YouTube Music',
       );
 
-      final streamUrl = await StreamService.getBestAudioUrl(
-        videoId,
-      ).timeout(const Duration(seconds: 10));
-      if (streamUrl == null || streamUrl.isEmpty) {
-        throw Exception('No se pudo generar el stream de audio');
-      }
-
-      final artist = item.artist?.trim();
-      final fallbackArtistTrimmed = fallbackArtist?.trim();
-      final artworkUri = await artworkFuture.timeout(
-        const Duration(seconds: 6),
-        onTimeout: () => _buildPlayerArtworkFallbackUrl(
+      if (playAsQueue) {
+        final source = (queueItems ?? const <YtMusicResult>[])
+            .where((entry) => (entry.videoId?.trim().isNotEmpty ?? false))
+            .toList();
+        if (source.isEmpty) {
+          source.add(item);
+        }
+        final selectedQueueIndex = source.indexWhere(
+          (entry) => entry.videoId?.trim() == videoId,
+        );
+        final queueInitialIndex = selectedQueueIndex >= 0
+            ? selectedQueueIndex
+            : ((initialIndex != null &&
+                      initialIndex >= 0 &&
+                      initialIndex < source.length)
+                  ? initialIndex
+                  : 0);
+        final queuePayload = source.map((entry) {
+          final id = entry.videoId?.trim() ?? '';
+          return <String, dynamic>{
+            'videoId': id,
+            'title': (entry.title?.trim().isNotEmpty ?? false)
+                ? entry.title!.trim()
+                : LocaleProvider.tr('title_unknown'),
+            'artist': (entry.artist?.trim().isNotEmpty ?? false)
+                ? entry.artist!.trim()
+                : ((fallbackArtist?.trim().isNotEmpty ?? false)
+                      ? fallbackArtist!.trim()
+                      : LocaleProvider.tr('artist_unknown')),
+            'artUri': (entry.thumbUrl?.trim().isNotEmpty ?? false)
+                ? entry.thumbUrl!.trim()
+                : 'https://i.ytimg.com/vi/$id/hqdefault.jpg',
+          };
+        }).toList();
+        await handler
+            .customAction('playYtStreamQueue', {
+              'items': queuePayload,
+              'initialIndex': queueInitialIndex,
+              'autoPlay': true,
+            })
+            .timeout(const Duration(seconds: 15));
+      } else {
+        final artworkFuture = _buildPlayerArtworkUri(
           videoId,
           preferredThumbUrl: item.thumbUrl,
           fallbackThumbUrl: fallbackThumbUrl,
-        ),
-      );
-      final finalArtworkUri = artworkUri.trim().isNotEmpty
-          ? artworkUri
-          : _buildPlayerArtworkFallbackUrl(
-              videoId,
-              preferredThumbUrl: item.thumbUrl,
-              fallbackThumbUrl: fallbackThumbUrl,
-            );
+        );
 
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('last_queue_source', 'YouTube Music');
+        final streamUrl = await StreamService.getBestAudioUrl(
+          videoId,
+        ).timeout(const Duration(seconds: 10));
+        if (streamUrl == null || streamUrl.isEmpty) {
+          throw Exception('No se pudo generar el stream de audio');
+        }
 
-      await handler
-          .customAction('playYtStream', {
-            'streamUrl': streamUrl,
-            'videoId': videoId,
-            'mediaId': 'yt:$videoId',
-            'title': (item.title?.trim().isNotEmpty ?? false)
-                ? item.title!.trim()
-                : LocaleProvider.tr('title_unknown'),
-            'artist': (artist != null && artist.isNotEmpty)
-                ? artist
-                : ((fallbackArtistTrimmed != null &&
-                          fallbackArtistTrimmed.isNotEmpty)
-                      ? fallbackArtistTrimmed
-                      : LocaleProvider.tr('artist_unknown')),
-            'artUri': finalArtworkUri,
-            'radioMode': true,
-            'autoPlay': true,
-          })
-          .timeout(const Duration(seconds: 12));
+        final artist = item.artist?.trim();
+        final fallbackArtistTrimmed = fallbackArtist?.trim();
+        final artworkUri = await artworkFuture.timeout(
+          const Duration(seconds: 6),
+          onTimeout: () => _buildPlayerArtworkFallbackUrl(
+            videoId,
+            preferredThumbUrl: item.thumbUrl,
+            fallbackThumbUrl: fallbackThumbUrl,
+          ),
+        );
+        final finalArtworkUri = artworkUri.trim().isNotEmpty
+            ? artworkUri
+            : _buildPlayerArtworkFallbackUrl(
+                videoId,
+                preferredThumbUrl: item.thumbUrl,
+                fallbackThumbUrl: fallbackThumbUrl,
+              );
+
+        await handler
+            .customAction('playYtStream', {
+              'streamUrl': streamUrl,
+              'videoId': videoId,
+              'mediaId': 'yt:$videoId',
+              'title': (item.title?.trim().isNotEmpty ?? false)
+                  ? item.title!.trim()
+                  : LocaleProvider.tr('title_unknown'),
+              'artist': (artist != null && artist.isNotEmpty)
+                  ? artist
+                  : ((fallbackArtistTrimmed != null &&
+                            fallbackArtistTrimmed.isNotEmpty)
+                        ? fallbackArtistTrimmed
+                        : LocaleProvider.tr('artist_unknown')),
+              'artUri': finalArtworkUri,
+              'radioMode': true,
+              'autoPlay': true,
+            })
+            .timeout(const Duration(seconds: 12));
+      }
     } catch (_) {
       // Error silencioso por solicitud del usuario:
       // no mostrar popup aunque exista fallo transitorio en el arranque.
