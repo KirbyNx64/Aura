@@ -2806,6 +2806,107 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     queue.add(List<MediaItem>.from(_mediaQueue));
   }
 
+  Future<Map<String, dynamic>> _startStreamingRadioFromCurrent({
+    bool replaceQueue = true,
+  }) async {
+    if (_mediaQueue.isEmpty || !_isStreamingMediaItem(_mediaQueue.first)) {
+      return {'ok': false, 'reason': 'not_streaming_queue'};
+    }
+    if (_concat == null) {
+      return {'ok': false, 'reason': 'missing_concat'};
+    }
+
+    final currentIndex = (_player.currentIndex ?? 0).clamp(
+      0,
+      _mediaQueue.length - 1,
+    );
+    final currentItem = _mediaQueue[currentIndex];
+    final currentVideoId = currentItem.extras?['videoId']?.toString().trim();
+    if (currentVideoId == null || currentVideoId.isEmpty) {
+      return {'ok': false, 'reason': 'missing_video_id'};
+    }
+
+    final currentPosition = _player.position;
+
+    _resetStreamingSessionState(clearQueuedVideos: true);
+    _streamRadioEnabled = true;
+    _streamRadioSeedVideoId = currentVideoId;
+    _streamQueuedVideoIds.add(currentVideoId);
+
+    final normalizedCurrent = currentItem.copyWith(
+      extras: {
+        ...?currentItem.extras,
+        'isStreaming': true,
+        'radioMode': true,
+        'videoId': currentVideoId,
+        'displayArtUri': _resolveStreamingDisplayArtUri(
+          preferred: currentItem.extras?['displayArtUri']?.toString(),
+          artUri: currentItem.artUri,
+          videoId: currentVideoId,
+        ),
+      },
+    );
+
+    if (replaceQueue) {
+      try {
+        if (currentIndex + 1 < _mediaQueue.length) {
+          // ignore: deprecated_member_use
+          await _concat!.removeRange(currentIndex + 1, _mediaQueue.length);
+        }
+      } catch (_) {
+        // Fallback si removeRange no está disponible en la versión actual.
+        try {
+          // ignore: deprecated_member_use
+          for (int i = _mediaQueue.length - 1; i > currentIndex; i--) {
+            // ignore: deprecated_member_use
+            await _concat!.removeAt(i);
+          }
+        } catch (_) {}
+      }
+
+      // Conservar historial previo para no tocar el índice de reproducción
+      // en caliente; eliminar únicamente la cola "up next" anterior.
+      if (currentIndex >= 0 && currentIndex < _mediaQueue.length) {
+        _mediaQueue[currentIndex] = normalizedCurrent.copyWith(
+          extras: {...?normalizedCurrent.extras, 'queueIndex': currentIndex},
+        );
+      }
+      if (currentIndex + 1 < _mediaQueue.length) {
+        _mediaQueue.removeRange(currentIndex + 1, _mediaQueue.length);
+      }
+      for (int i = 0; i < _mediaQueue.length; i++) {
+        _mediaQueue[i] = _mediaQueue[i].copyWith(
+          extras: {...?_mediaQueue[i].extras, 'queueIndex': i},
+        );
+      }
+      queue.add(List<MediaItem>.from(_mediaQueue));
+      mediaItem.add(_mediaQueue[currentIndex]);
+      playbackState.add(
+        playbackState.value.copyWith(
+          queueIndex: currentIndex,
+          updatePosition: currentPosition,
+        ),
+      );
+    } else {
+      _mediaQueue[currentIndex] = normalizedCurrent.copyWith(
+        extras: {...?normalizedCurrent.extras, 'queueIndex': currentIndex},
+      );
+      queue.add(List<MediaItem>.from(_mediaQueue));
+      mediaItem.add(_mediaQueue[currentIndex]);
+    }
+
+    unawaited(() async {
+      try {
+        await _prefs?.setStringList(_kPrefQueuePaths, const []);
+        await _prefs?.setInt(_kPrefQueueIndex, currentIndex);
+        await _prefs?.setInt(_kPrefSongPositionSec, currentPosition.inSeconds);
+      } catch (_) {}
+    }());
+
+    _scheduleStreamingRadioQueueEnsure(force: true);
+    return {'ok': true};
+  }
+
   AudioPlayer get player => _player;
 
   AndroidEqualizer? get equalizer => _equalizer;
@@ -3899,10 +4000,23 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       await _saveSessionToPrefs();
       return {'ok': true};
     }
+    if (name == "startStreamingRadioFromCurrent" ||
+        extras?['action'] == 'startStreamingRadioFromCurrent') {
+      final replaceQueue = extras?['replaceQueue'] != false;
+      return _startStreamingRadioFromCurrent(replaceQueue: replaceQueue);
+    }
     if (name == "playYtStream" || extras?['action'] == 'playYtStream') {
       final streamUrl = extras?['streamUrl']?.toString().trim();
       if (streamUrl != null && streamUrl.isNotEmpty) {
         final radioMode = extras?['radioMode'] != false;
+        final rawInitialPositionMs = extras?['initialPositionMs'];
+        int initialPositionMs = 0;
+        if (rawInitialPositionMs is int) {
+          initialPositionMs = rawInitialPositionMs;
+        } else if (rawInitialPositionMs is String) {
+          initialPositionMs = int.tryParse(rawInitialPositionMs) ?? 0;
+        }
+        if (initialPositionMs < 0) initialPositionMs = 0;
         final rawDuration = extras?['durationMs'];
         int? durationMs;
         if (rawDuration is int) {
@@ -3952,6 +4066,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         await playSingleStream(
           streamUrl: streamUrl,
           item: streamMediaItem,
+          initialPosition: Duration(milliseconds: initialPositionMs),
           autoPlay: extras?['autoPlay'] != false,
         );
         return {'ok': true};

@@ -155,7 +155,7 @@ const Map<String, String> appLocalizationsEn = {
       'Automatically sync the database with device files',
   'restore_last_session_on_startup': 'Restore last session',
   'restore_last_session_on_startup_desc':
-      'When opening the app, restore the last playback queue and position',
+      'When opening the app, restore the last playback queue and position (Only local music)',
   'show_lyrics_on_cover': 'Show lyrics on cover',
   'show_lyrics_on_cover_desc':
       'Display song lyrics directly on the player cover',

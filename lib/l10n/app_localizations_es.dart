@@ -159,7 +159,7 @@ const Map<String, String> appLocalizationsEs = {
       'Sincroniza automáticamente la base de datos con los archivos del dispositivo',
   'restore_last_session_on_startup': 'Restaurar última sesión',
   'restore_last_session_on_startup_desc':
-      'Al abrir la app, restaura la última cola de reproducción y posición',
+      'Al abrir la app, restaura la última cola de reproducción y posición (Solo música local)',
   'show_lyrics_on_cover': 'Mostrar letra de canciones en carátula',
   'show_lyrics_on_cover_desc':
       'Muestra las letras de las canciones directamente en la carátula del reproductor',

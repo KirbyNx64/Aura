@@ -43,6 +43,7 @@ import 'package:music/widgets/sliding_up_panel/sliding_up_panel.dart'
 import 'package:music/screens/play/current_playlist_screen.dart';
 import 'package:music/screens/play/current_lyrics_screen.dart';
 import 'package:audio_session/audio_session.dart';
+import 'package:music/utils/yt_search/stream_provider.dart';
 
 enum PanelContent { playlist, lyrics }
 
@@ -1340,6 +1341,17 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                       ],
                                     ),
                                   ),
+                                  if (mediaItem.extras?['isStreaming'] == true)
+                                    ListTile(
+                                      leading: const Icon(Icons.sensors),
+                                      title: Text(
+                                        LocaleProvider.tr('start_radio'),
+                                      ),
+                                      onTap: () async {
+                                        Navigator.of(context).pop();
+                                        await _startRadioFromCurrent(mediaItem);
+                                      },
+                                    ),
                                   FutureBuilder<bool>(
                                     future: FavoritesDB().isFavorite(
                                       _favoritePathForMediaItem(mediaItem),
@@ -1534,9 +1546,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                       begin: begin,
                                                       end: end,
                                                     ).chain(
-                                                      CurveTween(
-                                                        curve: curve,
-                                                      ),
+                                                      CurveTween(curve: curve),
                                                     );
                                                 return SlideTransition(
                                                   position: animation.drive(
@@ -1893,6 +1903,80 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     }
 
     return null;
+  }
+
+  Future<void> _startRadioFromCurrent(MediaItem mediaItem) async {
+    if (mediaItem.extras?['isStreaming'] != true) return;
+
+    final fastResult = await audioHandler?.customAction(
+      'startStreamingRadioFromCurrent',
+      {'action': 'startStreamingRadioFromCurrent', 'replaceQueue': true},
+    );
+    if (fastResult is Map && fastResult['ok'] == true) {
+      return;
+    }
+
+    final rawVideoId = mediaItem.extras?['videoId']?.toString().trim();
+    String? videoId = (rawVideoId != null && rawVideoId.isNotEmpty)
+        ? rawVideoId
+        : null;
+
+    if (videoId == null) {
+      final historyItem = await DownloadHistoryHive.getDownloadByPath(
+        mediaItem.id,
+      );
+      final historyVideoId = historyItem?.videoId.trim();
+      if (historyVideoId != null && historyVideoId.isNotEmpty) {
+        videoId = historyVideoId;
+      }
+    }
+
+    String? streamUrl = mediaItem.extras?['streamUrl']?.toString().trim();
+    if ((streamUrl == null || streamUrl.isEmpty) &&
+        videoId != null &&
+        videoId.isNotEmpty) {
+      streamUrl = await StreamService.getBestAudioUrl(videoId);
+    }
+
+    if (streamUrl == null || streamUrl.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(LocaleProvider.tr('error_loading_audio'))),
+      );
+      return;
+    }
+
+    final displayArtUri = mediaItem.extras?['displayArtUri']?.toString().trim();
+    final artUri = (displayArtUri != null && displayArtUri.isNotEmpty)
+        ? displayArtUri
+        : mediaItem.artUri?.toString();
+    final playback = audioHandler?.playbackState.valueOrNull;
+    final initialPositionMs =
+        playback?.updatePosition.inMilliseconds.clamp(0, 1 << 31) ?? 0;
+    final wasPlaying = playback?.playing ?? true;
+
+    final result = await audioHandler?.customAction('playYtStream', {
+      'action': 'playYtStream',
+      'streamUrl': streamUrl,
+      'title': mediaItem.title,
+      'artist': mediaItem.artist,
+      'videoId': videoId,
+      'mediaId': (videoId != null && videoId.isNotEmpty)
+          ? 'yt:$videoId'
+          : mediaItem.id,
+      'artUri': artUri,
+      'displayArtUri': displayArtUri,
+      'playlistId': mediaItem.extras?['playlistId']?.toString().trim(),
+      'autoPlay': wasPlaying,
+      'radioMode': true,
+      'initialPositionMs': initialPositionMs,
+    });
+
+    if (result is Map && result['ok'] == false && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(LocaleProvider.tr('error_loading_audio'))),
+      );
+    }
   }
 
   Future<void> _queueStreamingDownload(
@@ -4089,59 +4173,53 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                             Navigator.of(
                                                               context,
                                                             );
-                                                        final route =
-                                                            PageRouteBuilder(
-                                                              pageBuilder:
-                                                                  (
-                                                                    context,
-                                                                    animation,
-                                                                    secondaryAnimation,
-                                                                  ) =>
-                                                                      ArtistScreen(
-                                                                        artistName:
-                                                                            name,
-                                                                      ),
-                                                              transitionsBuilder:
-                                                                  (
-                                                                    context,
-                                                                    animation,
-                                                                    secondaryAnimation,
-                                                                    child,
-                                                                  ) {
-                                                                    const begin =
-                                                                        Offset(
-                                                                          1.0,
-                                                                          0.0,
-                                                                        );
-                                                                    const end =
-                                                                        Offset
-                                                                            .zero;
-                                                                    const curve =
-                                                                        Curves
-                                                                            .ease;
-                                                                    final tween =
-                                                                        Tween(
-                                                                          begin:
-                                                                              begin,
-                                                                          end:
-                                                                              end,
-                                                                        ).chain(
-                                                                          CurveTween(
-                                                                            curve:
-                                                                                curve,
-                                                                          ),
-                                                                        );
-                                                                    return SlideTransition(
-                                                                      position:
-                                                                          animation
-                                                                              .drive(
-                                                                                tween,
-                                                                              ),
-                                                                      child:
-                                                                          child,
+                                                        final route = PageRouteBuilder(
+                                                          pageBuilder:
+                                                              (
+                                                                context,
+                                                                animation,
+                                                                secondaryAnimation,
+                                                              ) => ArtistScreen(
+                                                                artistName:
+                                                                    name,
+                                                              ),
+                                                          transitionsBuilder:
+                                                              (
+                                                                context,
+                                                                animation,
+                                                                secondaryAnimation,
+                                                                child,
+                                                              ) {
+                                                                const begin =
+                                                                    Offset(
+                                                                      1.0,
+                                                                      0.0,
                                                                     );
-                                                                  },
-                                                            );
+                                                                const end =
+                                                                    Offset.zero;
+                                                                const curve =
+                                                                    Curves.ease;
+                                                                final tween =
+                                                                    Tween(
+                                                                      begin:
+                                                                          begin,
+                                                                      end: end,
+                                                                    ).chain(
+                                                                      CurveTween(
+                                                                        curve:
+                                                                            curve,
+                                                                      ),
+                                                                    );
+                                                                return SlideTransition(
+                                                                  position:
+                                                                      animation
+                                                                          .drive(
+                                                                            tween,
+                                                                          ),
+                                                                  child: child,
+                                                                );
+                                                              },
+                                                        );
                                                         await _closePlayerBeforeArtistNavigation();
                                                         if (ArtistScreen
                                                             .hasActiveInstance) {
