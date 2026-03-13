@@ -364,6 +364,8 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   int? _lastSleepIndex;
   bool _stopAtEndOfSong = false;
   bool _isSkipping = false;
+  int _pendingStreamingSkipNext = 0;
+  int _pendingStreamingSkipPrevious = 0;
   bool _isPreloadingNext = false;
   bool _isInitialized = false;
   StreamSubscription<int?>? _currentIndexSubscription;
@@ -3249,6 +3251,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       moved = false;
     } finally {
       _isSkipping = false;
+      unawaited(_processPendingStreamingSkips());
     }
     return moved;
   }
@@ -3288,6 +3291,26 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       // Error silencioso para mantener responsive el skip.
     } finally {
       _isSkipping = false;
+      unawaited(_processPendingStreamingSkips());
+    }
+  }
+
+  Future<void> _processPendingStreamingSkips() async {
+    if (_isSkipping || _initializing || _isStreamingAdvancePending) return;
+    if (_mediaQueue.isEmpty || !_isStreamingMediaItem(_mediaQueue.first)) {
+      _pendingStreamingSkipNext = 0;
+      _pendingStreamingSkipPrevious = 0;
+      return;
+    }
+
+    if (_pendingStreamingSkipNext > 0) {
+      _pendingStreamingSkipNext = 0;
+      await _performSkipNext();
+      return;
+    }
+    if (_pendingStreamingSkipPrevious > 0) {
+      _pendingStreamingSkipPrevious = 0;
+      await _performSkipPrevious();
     }
   }
 
@@ -3306,18 +3329,10 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     if (_initializing || _isStreamingAdvancePending) return;
 
     // En streaming, si llega otro tap durante un skip en curso,
-    // intenta avanzar inmediatamente sin encolar acciones.
+    // coalescer taps para evitar seeks concurrentes que traban la UI.
     if (_isSkipping) {
       if (isStreamingQueue) {
-        unawaited(() async {
-          try {
-            await _player.seekToNext().timeout(
-              _streamingSkipSeekTimeout,
-              onTimeout: () {},
-            );
-            _updateSleepTimer();
-          } catch (_) {}
-        }());
+        _pendingStreamingSkipNext = 1;
       }
       return;
     }
@@ -3338,18 +3353,10 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     if (_initializing || _isStreamingAdvancePending) return;
 
     // En streaming, si llega otro tap durante un skip en curso,
-    // intenta retroceder inmediatamente sin encolar acciones.
+    // coalescer taps para evitar seeks concurrentes que traban la UI.
     if (_isSkipping) {
       if (isStreamingQueue) {
-        unawaited(() async {
-          try {
-            await _player.seekToPrevious().timeout(
-              _streamingSkipSeekTimeout,
-              onTimeout: () {},
-            );
-            _updateSleepTimer();
-          } catch (_) {}
-        }());
+        _pendingStreamingSkipPrevious = 1;
       }
       return;
     }
