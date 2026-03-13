@@ -2059,6 +2059,8 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
   Future<void> _showSongInfo(YtMusicResult item) async {
     final videoId = item.videoId?.trim();
     if (videoId == null || videoId.isEmpty) return;
+    final durationText = item.durationText?.trim();
+    final durationMs = item.durationMs;
     final mediaItem = MediaItem(
       id: 'yt:$videoId',
       title: item.title?.trim().isNotEmpty == true
@@ -2067,6 +2069,9 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
       artist: item.artist?.trim().isNotEmpty == true
           ? item.artist!.trim()
           : LocaleProvider.tr('artist_unknown'),
+      duration: (durationMs != null && durationMs > 0)
+          ? Duration(milliseconds: durationMs)
+          : null,
       artUri: Uri.tryParse(
         item.thumbUrl?.trim().isNotEmpty == true
             ? item.thumbUrl!.trim()
@@ -2076,6 +2081,9 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
         'data': 'yt:$videoId',
         'videoId': videoId,
         'isStreaming': true,
+        if (durationMs != null && durationMs > 0) 'durationMs': durationMs,
+        if (durationText != null && durationText.isNotEmpty)
+          'durationText': durationText,
         if (item.thumbUrl?.trim().isNotEmpty == true)
           'displayArtUri': item.thumbUrl!.trim(),
       },
@@ -2255,12 +2263,11 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
     final title = item.title?.trim().isNotEmpty == true
         ? item.title!.trim()
         : LocaleProvider.tr('title_unknown');
-    final artist = _artistWithDurationText(
-      artist: item.artist,
-      fallbackArtist: fallbackArtist,
-      durationText: item.durationText,
-      durationMs: item.durationMs,
-    );
+    final artist = item.artist?.trim().isNotEmpty == true
+        ? item.artist!.trim()
+        : (fallbackArtist?.trim().isNotEmpty == true
+              ? fallbackArtist!.trim()
+              : LocaleProvider.tr('artist_unknown'));
     final thumb = item.thumbUrl?.trim().isNotEmpty == true
         ? item.thumbUrl!.trim()
         : (fallbackThumbUrl?.trim().isNotEmpty == true

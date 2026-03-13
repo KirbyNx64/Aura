@@ -2723,14 +2723,6 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         additionalParamsNext: continuationForRequest,
       );
       if (sessionVersion != _streamSessionVersion) return;
-      if (kDebugMode) {
-        final provider = radioPayload['provider']?.toString() ?? 'unknown';
-        final count = (radioPayload['tracks'] as List?)?.length ?? 0;
-        debugPrint(
-          '🎵 [stream_radio] provider=$provider seed=$seedVideoId candidates=$count',
-        );
-      }
-
       final nextParams = radioPayload['additionalParamsForNext']
           ?.toString()
           .trim();

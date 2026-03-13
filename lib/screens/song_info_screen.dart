@@ -11,8 +11,25 @@ import 'package:music/utils/theme_preferences.dart';
 import 'package:music/utils/encoding_utils.dart';
 import 'package:music/utils/db/download_history_hive.dart';
 import 'package:music/utils/db/download_history_model.dart';
+import 'package:music/utils/db/favorites_db.dart';
+import 'package:music/utils/db/playlists_db.dart';
+import 'package:music/utils/db/recent_db.dart';
 
 import 'package:share_plus/share_plus.dart';
+
+class _StreamingMetadata {
+  final DownloadHistoryModel? history;
+  final String? videoId;
+  final int? durationMs;
+  final String? durationText;
+
+  const _StreamingMetadata({
+    this.history,
+    this.videoId,
+    this.durationMs,
+    this.durationText,
+  });
+}
 
 class SongInfoScreen extends StatefulWidget {
   final MediaItem mediaItem;
@@ -27,6 +44,10 @@ class _SongInfoScreenState extends State<SongInfoScreen> {
   final FlutterAudioToolkit _audioToolkit = FlutterAudioToolkit();
   AudioInfo? _audioInfo;
   DownloadHistoryModel? _downloadHistory;
+  bool _isStreaming = false;
+  String? _videoId;
+  int? _streamDurationMs;
+  String? _streamDurationText;
   bool _isLoading = true;
   String? _errorMessage;
 
@@ -37,40 +58,62 @@ class _SongInfoScreenState extends State<SongInfoScreen> {
   }
 
   Future<void> _shareFile() async {
-    final filePath = widget.mediaItem.extras?['data'] as String?;
-    if (filePath != null && filePath.isNotEmpty) {
-      try {
-        // ignore: deprecated_member_use
-        await Share.shareXFiles([
-          XFile(filePath),
-        ], text: fixUtf8Mojibake(widget.mediaItem.title));
-      } catch (e) {
-        // Fallback for older versions or if standard way fails but user wanted "StartPlus" style?
-        // But Share.shareXFiles is the standard.
-        // If the user insists on SharePlus.instance, I'll correct it.
-      }
+    final filePath = _mediaPath();
+    if (filePath.isEmpty || !_isLikelyLocalPath(filePath)) return;
+    try {
+      // ignore: deprecated_member_use
+      await Share.shareXFiles([
+        XFile(filePath),
+      ], text: fixUtf8Mojibake(widget.mediaItem.title));
+    } catch (_) {
+      // Ignorar errores de compartido.
     }
   }
 
   Future<void> _loadAudioInfo() async {
-    final filePath = widget.mediaItem.extras?['data'] as String?;
-    if (filePath == null || filePath.isEmpty) {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-      return;
-    }
+    final filePath = _mediaPath();
+    final isStreaming = _isStreamingMediaItem();
 
     try {
+      if (isStreaming) {
+        final metadata = await _resolveStreamingMetadata(filePath);
+        if (!mounted) return;
+        setState(() {
+          _isStreaming = true;
+          _downloadHistory = metadata.history;
+          _videoId = metadata.videoId;
+          _streamDurationMs = metadata.durationMs;
+          _streamDurationText = metadata.durationText;
+          _isLoading = false;
+        });
+        return;
+      }
+
+      if (filePath.isEmpty) {
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+          });
+        }
+        return;
+      }
+
       final info = await _audioToolkit.getAudioInfo(filePath);
-      final history = await DownloadHistoryHive.getDownloadByPath(filePath);
+      final extraVideoId = _normalizeText(widget.mediaItem.extras?['videoId']);
+      final historyByPath = await DownloadHistoryHive.getDownloadByPath(
+        filePath,
+      );
+      final historyByVideoId = extraVideoId != null
+          ? await DownloadHistoryHive.getDownloadByVideoId(extraVideoId)
+          : null;
+      final history = historyByPath ?? historyByVideoId;
 
       if (mounted) {
         setState(() {
+          _isStreaming = false;
           _audioInfo = info;
           _downloadHistory = history;
+          _videoId = _firstNonEmpty([extraVideoId, history?.videoId]);
           _isLoading = false;
         });
       }
@@ -82,6 +125,159 @@ class _SongInfoScreenState extends State<SongInfoScreen> {
         });
       }
     }
+  }
+
+  Future<_StreamingMetadata> _resolveStreamingMetadata(String rawPath) async {
+    final path = rawPath.trim();
+    final extraVideoId = _normalizeText(widget.mediaItem.extras?['videoId']);
+    final pathVideoId = _extractVideoIdFromPath(path);
+    final mediaIdVideoId = _extractVideoIdFromPath(widget.mediaItem.id);
+    final initialVideoId = _firstNonEmpty([
+      extraVideoId,
+      pathVideoId,
+      mediaIdVideoId,
+    ]);
+    final preferredPlaylistId = _normalizeText(
+      widget.mediaItem.extras?['playlistId'],
+    );
+    final canonicalPath = (initialVideoId != null && initialVideoId.isNotEmpty)
+        ? 'yt:$initialVideoId'
+        : null;
+
+    final favoritesMetaByPath = path.isNotEmpty
+        ? await FavoritesDB().getFavoriteMeta(path)
+        : null;
+    final recentsMetaByPath = path.isNotEmpty
+        ? await RecentsDB().getRecentMeta(path)
+        : null;
+    final favoritesMetaByCanonical =
+        (canonicalPath != null &&
+            canonicalPath.isNotEmpty &&
+            canonicalPath != path)
+        ? await FavoritesDB().getFavoriteMeta(canonicalPath)
+        : null;
+    final recentsMetaByCanonical =
+        (canonicalPath != null &&
+            canonicalPath.isNotEmpty &&
+            canonicalPath != path)
+        ? await RecentsDB().getRecentMeta(canonicalPath)
+        : null;
+    final playlistMeta = await _findPlaylistMetaForPathOrVideo(
+      path: path,
+      fallbackPath: canonicalPath,
+      videoId: initialVideoId,
+      preferredPlaylistId: preferredPlaylistId,
+    );
+
+    final resolvedVideoId = _firstNonEmpty([
+      initialVideoId,
+      favoritesMetaByPath?['videoId']?.toString(),
+      recentsMetaByPath?['videoId']?.toString(),
+      favoritesMetaByCanonical?['videoId']?.toString(),
+      recentsMetaByCanonical?['videoId']?.toString(),
+      playlistMeta?['videoId']?.toString(),
+    ]);
+
+    final historyByPath = path.isNotEmpty
+        ? await DownloadHistoryHive.getDownloadByPath(path)
+        : null;
+    final historyByVideoId =
+        (resolvedVideoId != null && resolvedVideoId.isNotEmpty)
+        ? await DownloadHistoryHive.getDownloadByVideoId(resolvedVideoId)
+        : null;
+    final history = historyByPath ?? historyByVideoId;
+
+    final metas = <Map<String, dynamic>?>[
+      playlistMeta,
+      favoritesMetaByPath,
+      recentsMetaByPath,
+      favoritesMetaByCanonical,
+      recentsMetaByCanonical,
+    ];
+
+    String? durationText;
+    int? durationMs;
+    for (final meta in metas) {
+      if (meta == null) continue;
+      durationText ??= _normalizeText(meta['durationText']);
+      durationMs ??=
+          _parsePositiveInt(meta['durationMs']) ??
+          _parseDurationTextToMs(_normalizeText(meta['durationText']));
+      if (durationMs != null && durationMs > 0 && durationText != null) {
+        break;
+      }
+    }
+
+    final historyDurationMs = (history != null && history.duration > 0)
+        ? history.duration * 1000
+        : null;
+    durationMs ??= historyDurationMs;
+    durationMs ??= _durationMsFromMediaItem(widget.mediaItem);
+    durationText ??= _durationTextFromMediaItem(widget.mediaItem);
+    if ((durationText == null || durationText.isEmpty) &&
+        durationMs != null &&
+        durationMs > 0) {
+      durationText = _formatDuration(durationMs);
+    }
+
+    return _StreamingMetadata(
+      history: history,
+      videoId: _firstNonEmpty([resolvedVideoId, history?.videoId]),
+      durationMs: durationMs,
+      durationText: durationText,
+    );
+  }
+
+  Future<Map<String, dynamic>?> _findPlaylistMetaForPathOrVideo({
+    required String path,
+    String? fallbackPath,
+    String? videoId,
+    String? preferredPlaylistId,
+  }) async {
+    final db = PlaylistsDB();
+    final normalizedPath = path.trim();
+    final normalizedFallbackPath = fallbackPath?.trim();
+    final normalizedVideoId = videoId?.trim();
+
+    final candidatePaths = <String>{
+      if (normalizedPath.isNotEmpty) normalizedPath,
+      if (normalizedFallbackPath != null && normalizedFallbackPath.isNotEmpty)
+        normalizedFallbackPath,
+    };
+
+    final preferredId = preferredPlaylistId?.trim();
+    if (preferredId != null && preferredId.isNotEmpty) {
+      for (final candidatePath in candidatePaths) {
+        final direct = await db.getPlaylistSongMeta(preferredId, candidatePath);
+        if (direct != null) return direct;
+      }
+    }
+
+    final mb = await db.metaBox;
+    for (final candidatePath in candidatePaths) {
+      final suffix = '::$candidatePath';
+      for (final key in mb.keys) {
+        if (key is! String || !key.endsWith(suffix)) continue;
+        final raw = mb.get(key);
+        if (raw is Map) {
+          return Map<String, dynamic>.from(raw);
+        }
+      }
+    }
+
+    if (normalizedVideoId != null && normalizedVideoId.isNotEmpty) {
+      for (final key in mb.keys) {
+        final raw = mb.get(key);
+        if (raw is! Map) continue;
+        final meta = Map<String, dynamic>.from(raw);
+        final metaVideoId = _normalizeText(meta['videoId']);
+        if (metaVideoId == normalizedVideoId) {
+          return meta;
+        }
+      }
+    }
+
+    return null;
   }
 
   String _displayText(String? value, String fallback) {
@@ -122,12 +318,157 @@ class _SongInfoScreenState extends State<SongInfoScreen> {
     return filePath.replaceFirst('/storage/emulated/0', '');
   }
 
+  String _mediaPath() {
+    final fromExtras = _normalizeText(widget.mediaItem.extras?['data']);
+    if (fromExtras != null) return fromExtras;
+    return widget.mediaItem.id.trim();
+  }
+
+  bool _isLikelyLocalPath(String path) {
+    final normalized = path.trim().toLowerCase();
+    if (path.startsWith('/')) return true;
+    if (normalized.startsWith('file://')) return true;
+    if (normalized.startsWith('content://')) return true;
+    if (RegExp(r'^[a-zA-Z]:\\').hasMatch(path)) return true;
+    return false;
+  }
+
+  bool _isStreamingMediaItem() {
+    if (widget.mediaItem.extras?['isStreaming'] == true) return true;
+
+    final mediaId = widget.mediaItem.id.trim();
+    if (mediaId.startsWith('yt:') || mediaId.startsWith('yt_stream_')) {
+      return true;
+    }
+
+    final path = _mediaPath();
+    if (path.isEmpty) return false;
+    if (path.startsWith('yt:')) return true;
+    return !_isLikelyLocalPath(path);
+  }
+
+  String? _normalizeText(dynamic value) {
+    final text = value?.toString().trim();
+    if (text == null || text.isEmpty || text.toLowerCase() == 'null') {
+      return null;
+    }
+    return text;
+  }
+
+  String? _firstNonEmpty(Iterable<String?> values) {
+    for (final value in values) {
+      final text = value?.trim();
+      if (text != null && text.isNotEmpty) return text;
+    }
+    return null;
+  }
+
+  int? _parsePositiveInt(dynamic raw) {
+    if (raw is int && raw > 0) return raw;
+    if (raw is num && raw > 0) return raw.toInt();
+    if (raw is String) {
+      final parsed = int.tryParse(raw.trim());
+      if (parsed != null && parsed > 0) return parsed;
+    }
+    return null;
+  }
+
+  int? _parseDurationTextToMs(String? durationText) {
+    final text = durationText?.trim();
+    if (text == null || text.isEmpty) return null;
+
+    final parts = text.split(':');
+    if (parts.length < 2 || parts.length > 3) return null;
+
+    final values = <int>[];
+    for (final part in parts) {
+      final parsed = int.tryParse(part.trim());
+      if (parsed == null || parsed < 0) return null;
+      values.add(parsed);
+    }
+
+    int totalSeconds = 0;
+    if (values.length == 2) {
+      totalSeconds = (values[0] * 60) + values[1];
+    } else {
+      totalSeconds = (values[0] * 3600) + (values[1] * 60) + values[2];
+    }
+
+    if (totalSeconds <= 0) return null;
+    return totalSeconds * 1000;
+  }
+
+  String? _extractVideoIdFromPath(String rawPath) {
+    final path = rawPath.trim();
+    if (path.isEmpty) return null;
+
+    if (path.startsWith('yt:')) {
+      final id = path.substring(3).trim();
+      return id.isEmpty ? null : id;
+    }
+
+    final uri = Uri.tryParse(path);
+    if (uri != null) {
+      final queryVideoId = uri.queryParameters['v']?.trim();
+      if (queryVideoId != null && queryVideoId.isNotEmpty) {
+        return queryVideoId;
+      }
+      if (uri.host.contains('youtu.be') && uri.pathSegments.isNotEmpty) {
+        final shortId = uri.pathSegments.first.trim();
+        if (shortId.isNotEmpty) {
+          return shortId;
+        }
+      }
+    }
+
+    final idLike = RegExp(r'^[a-zA-Z0-9_-]{11}$');
+    if (idLike.hasMatch(path)) {
+      return path;
+    }
+
+    return null;
+  }
+
+  int? _durationMsFromMediaItem(MediaItem mediaItem) {
+    final fromDuration = mediaItem.duration?.inMilliseconds;
+    if (fromDuration != null && fromDuration > 0) return fromDuration;
+
+    final raw =
+        mediaItem.extras?['durationMs'] ?? mediaItem.extras?['duration'];
+    return _parsePositiveInt(raw);
+  }
+
+  String? _durationTextFromMediaItem(MediaItem mediaItem) {
+    final raw = _normalizeText(mediaItem.extras?['durationText']);
+    if (raw != null) return raw;
+
+    final durationMs = _durationMsFromMediaItem(mediaItem);
+    if (durationMs == null || durationMs <= 0) return null;
+    return _formatDuration(durationMs);
+  }
+
+  String _streamingDurationValue() {
+    final text = _normalizeText(_streamDurationText);
+    if (text != null) return text;
+    final durationMs = _streamDurationMs;
+    if (durationMs != null && durationMs > 0) {
+      return _formatDuration(durationMs);
+    }
+    final mediaDurationMs = _durationMsFromMediaItem(widget.mediaItem);
+    if (mediaDurationMs != null && mediaDurationMs > 0) {
+      return _formatDuration(mediaDurationMs);
+    }
+    return '?';
+  }
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
-    final filePath = widget.mediaItem.extras?['data'] as String? ?? '';
+    final mediaPath = _mediaPath();
+    final resolvedVideoId = _normalizeText(_videoId);
+    final hasVideoId = resolvedVideoId != null && resolvedVideoId.isNotEmpty;
 
     return Scaffold(
       appBar: AppBar(
@@ -266,74 +607,80 @@ class _SongInfoScreenState extends State<SongInfoScreen> {
                             context,
                             icon: Icons.timer,
                             label: LocaleProvider.tr('duration'),
-                            value: _audioInfo?.durationMs != null
-                                ? _formatDuration(_audioInfo!.durationMs!)
-                                : (widget.mediaItem.duration != null
-                                      ? _formatDuration(
-                                          widget
-                                              .mediaItem
-                                              .duration!
-                                              .inMilliseconds,
-                                        )
-                                      : "?"),
+                            value: _isStreaming
+                                ? _streamingDurationValue()
+                                : (_audioInfo?.durationMs != null
+                                      ? _formatDuration(_audioInfo!.durationMs!)
+                                      : (widget.mediaItem.duration != null
+                                            ? _formatDuration(
+                                                widget
+                                                    .mediaItem
+                                                    .duration!
+                                                    .inMilliseconds,
+                                              )
+                                            : "?")),
                             width: cardWidth,
                             color: iconColor,
                           ),
-                          _buildPropertyCard(
-                            context,
-                            icon: Icons.save,
-                            label: LocaleProvider.tr('file_size'),
-                            value: _audioInfo?.fileSize != null
-                                ? _formatFileSize(_audioInfo!.fileSize!)
-                                : 'N/A',
-                            width: cardWidth,
-                            color: iconColor,
-                          ),
-                          _buildPropertyCard(
-                            context,
-                            icon: Icons.speaker,
-                            label: LocaleProvider.tr('channels'),
-                            value: _audioInfo?.channels != null
-                                ? '${_audioInfo!.channels}'
-                                : 'N/A',
-                            width: cardWidth,
-                            color: iconColor,
-                          ),
-                          _buildPropertyCard(
-                            context,
-                            icon: Icons.audio_file,
-                            label: LocaleProvider.tr('audio_format'),
-                            value: _getAudioFormat(filePath),
-                            width: cardWidth,
-                            color: iconColor,
-                          ),
-                          _buildPropertyCard(
-                            context,
-                            icon: Icons.speed,
-                            label: LocaleProvider.tr('original_bitrate'),
-                            value: _audioInfo?.bitRate != null
-                                ? '${_audioInfo!.bitRate} ${LocaleProvider.tr('kbps')}'
-                                : 'N/A',
-                            width: width, // Full width
-                            color: iconColor,
-                          ),
-                          _buildPropertyCard(
-                            context,
-                            icon: Icons.graphic_eq,
-                            label: LocaleProvider.tr('original_sample_rate'),
-                            value: _audioInfo?.sampleRate != null
-                                ? '${_audioInfo!.sampleRate} ${LocaleProvider.tr('hz')}'
-                                : 'N/A',
-                            width: width, // Full width
-                            color: iconColor,
-                          ),
-                          if (_downloadHistory != null &&
-                              _downloadHistory!.videoId.isNotEmpty)
+                          if (!_isStreaming)
+                            _buildPropertyCard(
+                              context,
+                              icon: Icons.save,
+                              label: LocaleProvider.tr('file_size'),
+                              value: _audioInfo?.fileSize != null
+                                  ? _formatFileSize(_audioInfo!.fileSize!)
+                                  : 'N/A',
+                              width: cardWidth,
+                              color: iconColor,
+                            ),
+                          if (!_isStreaming)
+                            _buildPropertyCard(
+                              context,
+                              icon: Icons.speaker,
+                              label: LocaleProvider.tr('channels'),
+                              value: _audioInfo?.channels != null
+                                  ? '${_audioInfo!.channels}'
+                                  : 'N/A',
+                              width: cardWidth,
+                              color: iconColor,
+                            ),
+                          if (!_isStreaming)
+                            _buildPropertyCard(
+                              context,
+                              icon: Icons.audio_file,
+                              label: LocaleProvider.tr('audio_format'),
+                              value: _getAudioFormat(mediaPath),
+                              width: cardWidth,
+                              color: iconColor,
+                            ),
+                          if (!_isStreaming)
+                            _buildPropertyCard(
+                              context,
+                              icon: Icons.speed,
+                              label: LocaleProvider.tr('original_bitrate'),
+                              value: _audioInfo?.bitRate != null
+                                  ? '${_audioInfo!.bitRate} ${LocaleProvider.tr('kbps')}'
+                                  : 'N/A',
+                              width: width, // Full width
+                              color: iconColor,
+                            ),
+                          if (!_isStreaming)
+                            _buildPropertyCard(
+                              context,
+                              icon: Icons.graphic_eq,
+                              label: LocaleProvider.tr('original_sample_rate'),
+                              value: _audioInfo?.sampleRate != null
+                                  ? '${_audioInfo!.sampleRate} ${LocaleProvider.tr('hz')}'
+                                  : 'N/A',
+                              width: width, // Full width
+                              color: iconColor,
+                            ),
+                          if (!_isStreaming && hasVideoId)
                             _buildPropertyCard(
                               context,
                               icon: Icons.link,
                               label: 'Video ID',
-                              value: _downloadHistory!.videoId,
+                              value: resolvedVideoId,
                               width: width,
                               color: iconColor,
                               trailing: IconButton(
@@ -515,7 +862,7 @@ class _SongInfoScreenState extends State<SongInfoScreen> {
                   Row(
                     children: [
                       Icon(
-                        Icons.folder_open,
+                        _isStreaming ? Icons.link : Icons.folder_open,
                         size: 20,
                         color: colorScheme.primary,
                       ),
@@ -550,7 +897,9 @@ class _SongInfoScreenState extends State<SongInfoScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          LocaleProvider.tr('file_path'),
+                          _isStreaming
+                              ? 'Video ID'
+                              : LocaleProvider.tr('file_path'),
                           style: Theme.of(context).textTheme.labelMedium
                               ?.copyWith(color: colorScheme.onSurfaceVariant),
                         ),
@@ -559,7 +908,9 @@ class _SongInfoScreenState extends State<SongInfoScreen> {
                           children: [
                             Expanded(
                               child: Text(
-                                _cleanFilePath(filePath),
+                                _isStreaming
+                                    ? (resolvedVideoId ?? 'N/A')
+                                    : _cleanFilePath(mediaPath),
                                 style: Theme.of(context).textTheme.bodyMedium
                                     ?.copyWith(fontFamily: 'monospace'),
                               ),
@@ -567,8 +918,12 @@ class _SongInfoScreenState extends State<SongInfoScreen> {
                             IconButton(
                               icon: const Icon(Icons.copy, size: 20),
                               onPressed: () {
+                                final valueToCopy = _isStreaming
+                                    ? (resolvedVideoId ?? '')
+                                    : mediaPath;
+                                if (valueToCopy.isEmpty) return;
                                 Clipboard.setData(
-                                  ClipboardData(text: filePath),
+                                  ClipboardData(text: valueToCopy),
                                 );
                               },
                               style: IconButton.styleFrom(
@@ -669,7 +1024,7 @@ class _SongInfoScreenState extends State<SongInfoScreen> {
     // If songId not in extras, try parsing from MediaItem id
     songId ??= int.tryParse(widget.mediaItem.id);
 
-    final filePath = widget.mediaItem.extras?['data'] as String? ?? '';
+    final filePath = _mediaPath();
 
     // If we have valid songId and path, use ArtworkListTile which handles caching/loading
     if (songId != null && filePath.isNotEmpty) {
