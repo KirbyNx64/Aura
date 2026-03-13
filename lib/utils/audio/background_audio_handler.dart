@@ -398,7 +398,6 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   // Control de pausa automática durante cambios de canción
   Timer? _songChangeResumeTimer;
 
-  static const Duration _songChangeDelay = Duration(milliseconds: 800);
   static const Duration _streamingSkipSeekTimeout = Duration(milliseconds: 125);
 
   // Claves de SharedPreferences
@@ -3194,28 +3193,6 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     // Cancelar timer anterior si existe
     _songChangeResumeTimer?.cancel();
     _songChangeResumeTimer = null;
-
-    final isStreamingQueue =
-        _mediaQueue.isNotEmpty && _isStreamingMediaItem(_mediaQueue.first);
-
-    // En streaming no forzamos pausa+delay para evitar sensación de lentitud
-    // al pasar a la siguiente canción.
-    if (isStreamingQueue) return;
-
-    // Si está reproduciéndose, pausar momentáneamente para un cambio suave
-    if (_player.playing) {
-      _player.pause();
-    }
-
-    // Configurar timer para reanudar después del delay
-    _songChangeResumeTimer = Timer(_songChangeDelay, () {
-      // Siempre reanudar/iniciar la reproducción después de un skip manual
-      // (cumpliendo con la solicitud del usuario de que inicie la canción aunque esté en pausa)
-      if (!_player.playing) {
-        _player.play();
-      }
-      _songChangeResumeTimer = null; // Limpiar referencia al timer
-    });
   }
 
   Future<bool> _performSkipNext() async {
@@ -3228,6 +3205,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
     final int? beforeIndex = _player.currentIndex;
     var moved = false;
+    final bool wasPlayingBeforeSkip = _player.playing;
     _isSkipping = true;
     try {
       _handleSongChangePause();
@@ -3263,6 +3241,9 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       await _player.seekToNext().timeout(seekTimeout, onTimeout: () {});
       _updateSleepTimer();
       moved = (_player.currentIndex ?? -1) != (beforeIndex ?? -1);
+      if (moved && !wasPlayingBeforeSkip && !_player.playing) {
+        await _player.play();
+      }
     } catch (_) {
       // Error silencioso para mantener responsive el skip.
       moved = false;
@@ -3276,6 +3257,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     if (_initializing || _isSkipping || _mediaQueue.isEmpty) return;
 
     _isSkipping = true;
+    final bool wasPlayingBeforeSkip = _player.playing;
     try {
       _handleSongChangePause();
       _pendingArtworkOperations.clear();
@@ -3299,6 +3281,9 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         );
       }
       _updateSleepTimer();
+      if (!wasPlayingBeforeSkip && !_player.playing) {
+        await _player.play();
+      }
     } catch (_) {
       // Error silencioso para mantener responsive el skip.
     } finally {
