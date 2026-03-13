@@ -433,6 +433,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   final List<Map<String, dynamic>> _streamQueuePendingItems =
       <Map<String, dynamic>>[];
   final List<MediaItem> _streamQueueVisualMetadata = <MediaItem>[];
+  int _streamQueueVisualPlaybackOffset = 0;
   int _streamQueuePendingCursor = 0;
   bool _streamQueueTailResolveInProgress = false;
   int _streamQueueOperationVersion = 0;
@@ -1053,6 +1054,13 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     AudioServiceShuffleMode shuffleMode = _player.shuffleModeEnabled
         ? AudioServiceShuffleMode.all
         : AudioServiceShuffleMode.none;
+    int? queueIndex = event.currentIndex;
+    if (queueIndex != null &&
+        _mediaQueue.isNotEmpty &&
+        _isStreamingMediaItem(_mediaQueue.first) &&
+        _streamQueueVisualMetadata.isNotEmpty) {
+      queueIndex = _streamVisualIndexFromPlaybackIndex(queueIndex);
+    }
 
     return PlaybackState(
       controls: [
@@ -1085,7 +1093,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       updatePosition: _player.position,
       bufferedPosition: _player.bufferedPosition,
       speed: _player.speed,
-      queueIndex: event.currentIndex,
+      queueIndex: queueIndex,
       repeatMode: repeatMode,
       shuffleMode: shuffleMode,
     );
@@ -1990,15 +1998,12 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       if (desiredIndex < 0 || desiredIndex >= normalizedItems.length) {
         desiredIndex = 0;
       }
-      // Reordenar para que la reproducción siempre inicie en el elemento
-      // seleccionado y solo se resuelvan inmediatamente "actual + siguiente".
-      final playbackOrderedItems = <Map<String, dynamic>>[];
-      if (desiredIndex > 0) {
-        playbackOrderedItems.addAll(normalizedItems.sublist(desiredIndex));
-        playbackOrderedItems.addAll(normalizedItems.sublist(0, desiredIndex));
-      } else {
-        playbackOrderedItems.addAll(normalizedItems);
-      }
+      final int visualPlaybackOffset = desiredIndex;
+      // Reproducción desde la selección hacia adelante (sin wrap al inicio)
+      // para mantener el orden real de la lista.
+      final playbackOrderedItems = <Map<String, dynamic>>[
+        ...normalizedItems.sublist(desiredIndex),
+      ];
       desiredIndex = 0;
 
       final targetEntry = playbackOrderedItems[desiredIndex];
@@ -2027,9 +2032,9 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         targetEntry['streamUrl'] = resolvedTargetStreamUrl;
       }
       final visualMetadataQueue = <MediaItem>[
-        for (int i = 0; i < playbackOrderedItems.length; i++)
+        for (int i = 0; i < normalizedItems.length; i++)
           _buildStreamingMetadataItemFromNormalizedEntry(
-            playbackOrderedItems[i],
+            normalizedItems[i],
             radioMode: false,
             queueIndex: i,
           ),
@@ -2106,6 +2111,9 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       _streamQueueVisualMetadata
         ..clear()
         ..addAll(visualMetadataQueue);
+      if (visualMetadataQueue.isNotEmpty) {
+        _streamQueueVisualPlaybackOffset = visualPlaybackOffset;
+      }
       if (playbackOrderedItems.length > bootstrapCount) {
         _streamQueuePendingItems.addAll(
           playbackOrderedItems
@@ -2162,10 +2170,13 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       if (playLoadingNotifier.value) {
         playLoadingNotifier.value = false;
       }
+      final visualTargetIndex = _streamVisualIndexFromPlaybackIndex(
+        targetIndex,
+      );
 
       playbackState.add(
         playbackState.value.copyWith(
-          queueIndex: targetIndex,
+          queueIndex: visualTargetIndex,
           updatePosition: Duration.zero,
         ),
       );
@@ -2173,7 +2184,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       unawaited(() async {
         try {
           await _prefs?.setStringList(_kPrefQueuePaths, const []);
-          await _prefs?.setInt(_kPrefQueueIndex, targetIndex);
+          await _prefs?.setInt(_kPrefQueueIndex, visualTargetIndex);
           await _prefs?.setInt(_kPrefSongPositionSec, 0);
         } catch (_) {}
       }());
@@ -2454,6 +2465,55 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     }
   }
 
+  Future<bool> _rebuildStreamingQueueFromVisualIndex(
+    int visualIndex, {
+    bool autoPlay = true,
+  }) async {
+    if (_streamQueueVisualMetadata.isEmpty) return false;
+    if (visualIndex < 0 || visualIndex >= _streamQueueVisualMetadata.length) {
+      return false;
+    }
+
+    final rawItems = <Map<String, dynamic>>[];
+    for (final item in _streamQueueVisualMetadata) {
+      final extraVideoId = item.extras?['videoId']?.toString().trim();
+      final mediaIdVideoId = item.id.replaceFirst('yt:', '').trim();
+      final videoId = (extraVideoId != null && extraVideoId.isNotEmpty)
+          ? extraVideoId
+          : mediaIdVideoId;
+      if (videoId.isEmpty) continue;
+
+      final durationMs = _durationMsFromMediaItem(item);
+      final durationText = _durationTextFromMediaItem(item);
+      final artUri = item.artUri?.toString().trim();
+      final displayArtUri = item.extras?['displayArtUri']?.toString().trim();
+      final cachedStreamUrl = item.extras?['streamUrl']?.toString().trim();
+
+      rawItems.add({
+        'videoId': videoId,
+        'title': item.title,
+        if (item.artist != null) 'artist': item.artist,
+        if (artUri != null && artUri.isNotEmpty) 'artUri': artUri,
+        if (displayArtUri != null && displayArtUri.isNotEmpty)
+          'displayArtUri': displayArtUri,
+        if (durationMs != null && durationMs > 0) 'durationMs': durationMs,
+        if (durationText != null && durationText.isNotEmpty)
+          'durationText': durationText,
+        if (cachedStreamUrl != null && cachedStreamUrl.isNotEmpty)
+          'streamUrl': cachedStreamUrl,
+      });
+    }
+
+    if (rawItems.isEmpty) return false;
+
+    await playStreamingQueue(
+      rawItems: rawItems,
+      initialIndex: visualIndex,
+      autoPlay: autoPlay,
+    );
+    return true;
+  }
+
   String? _fallbackStreamingDisplayArtUri(String? videoId) {
     final id = videoId?.trim();
     if (id == null || id.isEmpty) return null;
@@ -2496,6 +2556,44 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     return _fallbackStreamingDisplayArtUri(videoId);
   }
 
+  int _streamPlaybackIndexFromVisualIndex(int visualIndex) {
+    final int length = _streamQueueVisualMetadata.isNotEmpty
+        ? _streamQueueVisualMetadata.length
+        : _mediaQueue.length;
+    if (length <= 0) return visualIndex;
+
+    int normalizedVisual = visualIndex;
+    if (normalizedVisual < 0) {
+      normalizedVisual = 0;
+    } else if (normalizedVisual >= length) {
+      normalizedVisual = length - 1;
+    }
+
+    if (normalizedVisual < _streamQueueVisualPlaybackOffset) {
+      return -1;
+    }
+    return normalizedVisual - _streamQueueVisualPlaybackOffset;
+  }
+
+  int _streamVisualIndexFromPlaybackIndex(int playbackIndex) {
+    final int length = _streamQueueVisualMetadata.isNotEmpty
+        ? _streamQueueVisualMetadata.length
+        : _mediaQueue.length;
+    if (length <= 0) return playbackIndex;
+
+    int normalizedPlayback = playbackIndex;
+    if (normalizedPlayback < 0) {
+      normalizedPlayback = 0;
+    } else if (normalizedPlayback >= length) {
+      normalizedPlayback = length - 1;
+    }
+
+    final int mapped = normalizedPlayback + _streamQueueVisualPlaybackOffset;
+    if (mapped < 0) return 0;
+    if (mapped >= length) return length - 1;
+    return mapped;
+  }
+
   void _resetStreamingSessionState({bool clearQueuedVideos = false}) {
     _streamSessionVersion++;
     _streamQueueOperationVersion++;
@@ -2515,6 +2613,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     _pendingStreamUrlPrefetchIds.clear();
     _streamQueuePendingItems.clear();
     _streamQueueVisualMetadata.clear();
+    _streamQueueVisualPlaybackOffset = 0;
     _streamQueuePendingCursor = 0;
     _streamArtworkPreloadTasks.clear();
     if (clearQueuedVideos) {
@@ -4099,6 +4198,27 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       final bool isStreamingQueue =
           _mediaQueue.isNotEmpty && _isStreamingMediaItem(_mediaQueue.first);
       if (isStreamingQueue) {
+        final int currentPlaybackIndex = (_player.currentIndex ?? 0).clamp(
+          0,
+          _mediaQueue.length - 1,
+        );
+        final bool canJumpToPreviousVisualTrack =
+            !_streamRadioEnabled &&
+            _streamQueueVisualMetadata.isNotEmpty &&
+            currentPlaybackIndex <= 0 &&
+            _streamQueueVisualPlaybackOffset > 0;
+        if (canJumpToPreviousVisualTrack) {
+          final targetVisualIndex = _streamQueueVisualPlaybackOffset - 1;
+          final rebuilt = await _rebuildStreamingQueueFromVisualIndex(
+            targetVisualIndex,
+            autoPlay: true,
+          );
+          if (rebuilt) {
+            _updateSleepTimer();
+            return;
+          }
+        }
+
         _nextStreamQueueOperationVersion();
         await _player.seekToPrevious().timeout(
           _streamingSkipSeekTimeout,
@@ -4209,6 +4329,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         (isStreamingQueue && _streamQueueVisualMetadata.isNotEmpty)
         ? _streamQueueVisualMetadata.length
         : _mediaQueue.length;
+    int playbackTargetIndex = index;
     final int streamQueueOperationVersion = isStreamingQueue
         ? _nextStreamQueueOperationVersion()
         : _streamQueueOperationVersion;
@@ -4221,10 +4342,26 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     }
 
     if (isStreamingQueue &&
-        index >= _mediaQueue.length &&
+        _streamQueueVisualMetadata.isNotEmpty &&
+        index >= 0 &&
+        index < visualQueueLength) {
+      playbackTargetIndex = _streamPlaybackIndexFromVisualIndex(index);
+    }
+
+    if (isStreamingQueue &&
+        _streamQueueVisualMetadata.isNotEmpty &&
+        playbackTargetIndex < 0 &&
+        index >= 0 &&
+        index < visualQueueLength) {
+      await _rebuildStreamingQueueFromVisualIndex(index, autoPlay: true);
+      return;
+    }
+
+    if (isStreamingQueue &&
+        playbackTargetIndex >= _mediaQueue.length &&
         index < visualQueueLength) {
       await _ensureStreamingQueueIndexReady(
-        index,
+        playbackTargetIndex,
         operationVersion: streamQueueOperationVersion,
       );
     }
@@ -4234,7 +4371,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       return;
     }
 
-    if (index >= 0 && index < _mediaQueue.length) {
+    if (playbackTargetIndex >= 0 && playbackTargetIndex < _mediaQueue.length) {
       try {
         // Cancelar operaciones pendientes antes de cambiar
         _pendingArtworkOperations.clear();
@@ -4252,7 +4389,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
               return;
             }
             await _player
-                .seek(Duration.zero, index: index)
+                .seek(Duration.zero, index: playbackTargetIndex)
                 .timeout(const Duration(seconds: 3));
             if (isStreamingQueue &&
                 !_isCurrentStreamQueueOperation(streamQueueOperationVersion)) {
@@ -4363,18 +4500,31 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     _lastShuffleToggle = now;
     if (_mediaQueue.isEmpty) return;
 
+    void emitQueueRefresh() {
+      if (_mediaQueue.isEmpty) return;
+      // Disparar rebuild de la UI aunque _mediaQueue no cambie,
+      // para que effectiveQueue refleje el nuevo orden aleatorio.
+      queue.add(List<MediaItem>.from(_mediaQueue));
+    }
+
     try {
       if (enable) {
-        isShuffleNotifier.value = true;
-
         // Usar el shuffle nativo de just_audio - sin pausas de audio
         await _player.setShuffleModeEnabled(true);
         await _player.shuffle();
+        isShuffleNotifier.value = _player.shuffleModeEnabled;
+        emitQueueRefresh();
+        unawaited(() async {
+          await Future<void>.delayed(const Duration(milliseconds: 120));
+          emitQueueRefresh();
+        }());
 
         // Actualizar el estado de audio_service con ambos modos para sincronización completa
         playbackState.add(
           playbackState.value.copyWith(
-            shuffleMode: AudioServiceShuffleMode.all,
+            shuffleMode: isShuffleNotifier.value
+                ? AudioServiceShuffleMode.all
+                : AudioServiceShuffleMode.none,
             repeatMode: _player.loopMode == LoopMode.one
                 ? AudioServiceRepeatMode.one
                 : _player.loopMode == LoopMode.all
@@ -4383,15 +4533,17 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
           ),
         );
       } else {
-        isShuffleNotifier.value = false;
-
         // Desactivar shuffle nativo de just_audio
         await _player.setShuffleModeEnabled(false);
+        isShuffleNotifier.value = _player.shuffleModeEnabled;
+        emitQueueRefresh();
 
         // Actualizar el estado de audio_service con ambos modos para sincronización completa
         playbackState.add(
           playbackState.value.copyWith(
-            shuffleMode: AudioServiceShuffleMode.none,
+            shuffleMode: isShuffleNotifier.value
+                ? AudioServiceShuffleMode.all
+                : AudioServiceShuffleMode.none,
             repeatMode: _player.loopMode == LoopMode.one
                 ? AudioServiceRepeatMode.one
                 : _player.loopMode == LoopMode.all
@@ -4404,12 +4556,13 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       // Persistir flag de shuffle
       unawaited(() async {
         try {
-          await _prefs?.setBool(_kPrefShuffleEnabled, enable);
+          await _prefs?.setBool(_kPrefShuffleEnabled, isShuffleNotifier.value);
         } catch (_) {}
       }());
     } catch (e) {
       // En caso de error, revertir el estado
       isShuffleNotifier.value = !enable;
+      emitQueueRefresh();
       playbackState.add(
         playbackState.value.copyWith(
           shuffleMode: enable
