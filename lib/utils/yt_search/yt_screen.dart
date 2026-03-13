@@ -1889,7 +1889,8 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
       context: context,
       videoId: videoId,
       title: item.title ?? 'Sin título',
-      artist: item.artist?.replaceFirst(RegExp(r' - Topic$'), '') ??
+      artist:
+          item.artist?.replaceFirst(RegExp(r' - Topic$'), '') ??
           LocaleProvider.tr('artist_unknown'),
     );
     _showMessage(
@@ -2338,16 +2339,18 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                 fallback: Container(
                                   width: 60,
                                   height: 60,
-                                  color:
-                                      Theme.of(context).colorScheme.surfaceContainer,
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.surfaceContainer,
                                   child: const Icon(Icons.music_note_rounded),
                                 ),
                               )
                             : Container(
                                 width: 60,
                                 height: 60,
-                                color:
-                                    Theme.of(context).colorScheme.surfaceContainer,
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.surfaceContainer,
                                 child: const Icon(Icons.music_note_rounded),
                               ),
                       ),
@@ -2386,10 +2389,12 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                             vertical: 8,
                           ),
                           decoration: BoxDecoration(
-                            color: Theme.of(context).brightness ==
-                                    Brightness.dark
+                            color:
+                                Theme.of(context).brightness == Brightness.dark
                                 ? Theme.of(context).colorScheme.primary
-                                : Theme.of(context).colorScheme.onPrimaryContainer
+                                : Theme.of(context)
+                                      .colorScheme
+                                      .onPrimaryContainer
                                       .withValues(alpha: 0.7),
                             borderRadius: BorderRadius.circular(12),
                           ),
@@ -2460,12 +2465,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                               (context, animation, secondaryAnimation) =>
                                   ArtistScreen(artistName: name),
                           transitionsBuilder:
-                              (
-                                context,
-                                animation,
-                                secondaryAnimation,
-                                child,
-                              ) {
+                              (context, animation, secondaryAnimation, child) {
                                 const begin = Offset(1.0, 0.0);
                                 const end = Offset.zero;
                                 const curve = Curves.ease;
@@ -2545,11 +2545,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
         shape: BoxShape.circle,
       ),
       child: IconButton(
-        icon: const Icon(
-          Icons.play_arrow_rounded,
-          grade: 200,
-          fill: 1,
-        ),
+        icon: const Icon(Icons.play_arrow_rounded, grade: 200, fill: 1),
         tooltip: LocaleProvider.tr('play'),
         onPressed: () async {
           await _playInMainPlayer(
@@ -2689,7 +2685,9 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                               title: Text(pl.name),
                               onTap: () async {
                                 await addItemsToPlaylist(pl.id);
-                                if (context.mounted) Navigator.of(context).pop();
+                                if (context.mounted) {
+                                  Navigator.of(context).pop();
+                                }
                               },
                             ),
                           );
@@ -2947,7 +2945,9 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                             const Icon(Icons.favorite_outline_rounded),
                             const SizedBox(width: 12),
                             Expanded(
-                              child: Text(LocaleProvider.tr('add_to_favorites')),
+                              child: Text(
+                                LocaleProvider.tr('add_to_favorites'),
+                              ),
                             ),
                           ],
                         ),
@@ -3739,7 +3739,8 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                 borderRadius: borderRadius,
                                                 onLongPress: () {
                                                   HapticFeedback.selectionClick();
-                                                  final item = _songResults[idx];
+                                                  final item =
+                                                      _songResults[idx];
                                                   final videoId = item.videoId;
                                                   if (videoId == null) return;
                                                   if (_isSelectionMode) {
@@ -3751,7 +3752,8 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                   }
                                                   _showSongActionsModal(
                                                     item,
-                                                    selectionKey: 'song-$videoId',
+                                                    selectionKey:
+                                                        'song-$videoId',
                                                   );
                                                 },
                                                 onTap: () async {
@@ -4028,7 +4030,8 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                 borderRadius: borderRadius,
                                                 onLongPress: () {
                                                   HapticFeedback.selectionClick();
-                                                  final item = _videoResults[idx];
+                                                  final item =
+                                                      _videoResults[idx];
                                                   final videoId = item.videoId;
                                                   if (videoId == null) return;
                                                   if (_isSelectionMode) {
@@ -4040,7 +4043,8 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                   }
                                                   _showSongActionsModal(
                                                     item,
-                                                    selectionKey: 'video-$videoId',
+                                                    selectionKey:
+                                                        'video-$videoId',
                                                   );
                                                 },
                                                 onTap: () async {
@@ -4806,30 +4810,23 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                             child: Center(
                                                               child: Text(
                                                                 '${idx + 1}',
-                                                                style: Theme.of(
-                                                                      context,
-                                                                    )
-                                                                    .textTheme
-                                                                    .titleMedium
-                                                                    ?.copyWith(
-                                                                      fontWeight:
-                                                                          FontWeight
-                                                                              .w600,
-                                                                      color: isAmoled
-                                                                          ? Colors
-                                                                                .white
-                                                                                .withValues(
-                                                                                  alpha:
-                                                                                      0.85,
-                                                                                )
-                                                                          : Theme.of(context)
-                                                                                .colorScheme
-                                                                                .onSurface
-                                                                                .withValues(
-                                                                                  alpha:
-                                                                                      0.8,
-                                                                                ),
-                                                                    ),
+                                                                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .w600,
+                                                                  color:
+                                                                      isAmoled
+                                                                      ? Colors.white.withValues(
+                                                                          alpha:
+                                                                              0.85,
+                                                                        )
+                                                                      : Theme.of(
+                                                                          context,
+                                                                        ).colorScheme.onSurface.withValues(
+                                                                          alpha:
+                                                                              0.8,
+                                                                        ),
+                                                                ),
                                                               ),
                                                             ),
                                                           ),
@@ -5341,24 +5338,23 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                               : null,
                                                         ),
                                                       ),
-                                                      trailing:
-                                                          _buildPlayTrailingButton(
-                                                            item,
-                                                            fallbackThumbUrl:
-                                                                _currentPlaylist?['thumbUrl'],
-                                                            fallbackArtist:
-                                                                LocaleProvider.tr(
-                                                                  'artist_unknown',
-                                                                ),
-                                                            queueItems:
-                                                                _playlistSongs,
-                                                            initialIndex: idx,
-                                                            playAsQueue: true,
-                                                            queueSource:
-                                                                _currentPlaylist?['title']
-                                                                    ?.toString() ??
-                                                                'YouTube Music',
-                                                          ),
+                                                      trailing: _buildPlayTrailingButton(
+                                                        item,
+                                                        fallbackThumbUrl:
+                                                            _currentPlaylist?['thumbUrl'],
+                                                        fallbackArtist:
+                                                            LocaleProvider.tr(
+                                                              'artist_unknown',
+                                                            ),
+                                                        queueItems:
+                                                            _playlistSongs,
+                                                        initialIndex: idx,
+                                                        playAsQueue: true,
+                                                        queueSource:
+                                                            _currentPlaylist?['title']
+                                                                ?.toString() ??
+                                                            'YouTube Music',
+                                                      ),
                                                     ),
                                                   ),
                                                 ),
@@ -7468,6 +7464,8 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                         ? fallbackArtistTrimmed
                         : LocaleProvider.tr('artist_unknown')),
               'artUri': finalArtworkUri,
+              if (item.thumbUrl?.trim().isNotEmpty == true)
+                'displayArtUri': item.thumbUrl!.trim(),
               'radioMode': true,
               'autoPlay': true,
             })
@@ -7491,18 +7489,17 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
     final normalizedPreferred = preferredThumbUrl?.trim();
     final normalizedFallback = fallbackThumbUrl?.trim();
 
-    // Usar miniatura oficial en alta calidad para el reproductor principal.
-    // hqdefault (480x360) está disponible de forma consistente.
-    if (videoId.isNotEmpty) {
-      return 'https://i.ytimg.com/vi/$videoId/hqdefault.jpg';
-    }
-
     if (normalizedPreferred != null && normalizedPreferred.isNotEmpty) {
       return normalizedPreferred;
     }
 
     if (normalizedFallback != null && normalizedFallback.isNotEmpty) {
       return normalizedFallback;
+    }
+
+    // Último fallback: miniatura oficial de YouTube.
+    if (videoId.isNotEmpty) {
+      return 'https://i.ytimg.com/vi/$videoId/hqdefault.jpg';
     }
 
     return '';
@@ -7532,7 +7529,8 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
 
     try {
       final tempDir = await getTemporaryDirectory();
-      final coverFile = File('${tempDir.path}/yt_stream_cover_$videoId.jpg');
+      // v2: fuerza regeneración para evitar reutilizar miniaturas antiguas sin recorte.
+      final coverFile = File('${tempDir.path}/yt_stream_cover_v2_$videoId.jpg');
       if (await coverFile.exists() && await coverFile.length() > 500) {
         return Uri.file(coverFile.path).toString();
       }
@@ -7544,14 +7542,34 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
           'https://img.youtube.com/vi/$videoId/maxresdefault.jpg';
       final coverUrlSD = 'https://img.youtube.com/vi/$videoId/sddefault.jpg';
       final coverUrlHQ = 'https://img.youtube.com/vi/$videoId/hqdefault.jpg';
+      final normalizedPreferred = preferredThumbUrl?.trim();
+      final normalizedFallback = fallbackThumbUrl?.trim();
 
-      final List<String> urlsToTry = switch (quality) {
+      final List<String> urlsToTry = [];
+      void addCandidate(String? url) {
+        final value = url?.trim();
+        if (value == null || value.isEmpty) return;
+        if (!urlsToTry.contains(value)) {
+          urlsToTry.add(value);
+        }
+      }
+
+      // Priorizar miniatura propia de YT Music para mantener carátula recortada.
+      addCandidate(normalizedPreferred);
+
+      for (final url in switch (quality) {
         'high' => [coverUrlMax, coverUrlSD, coverUrlHQ],
         'medium' => [coverUrlSD, coverUrlHQ],
         _ => [coverUrlHQ],
-      };
+      }) {
+        addCandidate(url);
+      }
+
+      addCandidate(normalizedFallback);
+      addCandidate(fallbackUri);
 
       Uint8List? bytes;
+      String? selectedUrl;
 
       for (final url in urlsToTry) {
         try {
@@ -7560,19 +7578,8 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
               .timeout(const Duration(seconds: 4));
           if (response.statusCode == 200 && response.bodyBytes.isNotEmpty) {
             bytes = response.bodyBytes;
+            selectedUrl = url;
             break;
-          }
-        } catch (_) {}
-      }
-
-      if (bytes == null && fallbackUri.isNotEmpty) {
-        try {
-          final fallbackResponse = await http
-              .get(Uri.parse(fallbackUri), headers: headers)
-              .timeout(const Duration(seconds: 4));
-          if (fallbackResponse.statusCode == 200 &&
-              fallbackResponse.bodyBytes.isNotEmpty) {
-            bytes = fallbackResponse.bodyBytes;
           }
         } catch (_) {}
       }
@@ -7581,8 +7588,21 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
         return fallbackUri;
       }
 
-      // No recortar físicamente la imagen de streaming para evitar latencia.
-      // El recorte visual se hace en el Player con BoxFit.cover (centrado).
+      final sourceUrl = selectedUrl?.toLowerCase() ?? '';
+      final isVideoThumbnail =
+          sourceUrl.contains('i.ytimg.com/vi/') ||
+          sourceUrl.contains('img.youtube.com/vi/');
+      if (isVideoThumbnail) {
+        final cropFn =
+            sourceUrl.contains('hqdefault') || sourceUrl.contains('sddefault')
+            ? decodeAndCropImageHQ
+            : decodeAndCropImage;
+        final cropped = await compute(cropFn, bytes);
+        if (cropped != null && cropped.isNotEmpty) {
+          bytes = cropped;
+        }
+      }
+
       await coverFile.writeAsBytes(bytes, flush: true);
       return Uri.file(coverFile.path).toString();
     } catch (_) {

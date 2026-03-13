@@ -4732,6 +4732,98 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                           },
                                                         ),
 
+                                                        // Botón descargar
+                                                        if (currentMediaItem
+                                                                .extras?['isStreaming'] ==
+                                                            true)
+                                                          ValueListenableBuilder<
+                                                            bool
+                                                          >(
+                                                            valueListenable:
+                                                                playLoadingNotifier,
+                                                            builder: (context, isLoading, _) {
+                                                              return AnimatedTapButton(
+                                                                onTap: isLoading
+                                                                    ? () {}
+                                                                    : () async {
+                                                                        if (!context
+                                                                            .mounted) {
+                                                                          return;
+                                                                        }
+                                                                        await _queueStreamingDownload(
+                                                                          context,
+                                                                          currentMediaItem,
+                                                                        );
+                                                                      },
+                                                                child: Container(
+                                                                  decoration: BoxDecoration(
+                                                                    color: Theme.of(context)
+                                                                        .colorScheme
+                                                                        .primary
+                                                                        .withValues(
+                                                                          alpha:
+                                                                              0.08,
+                                                                        ),
+                                                                    borderRadius:
+                                                                        BorderRadius.circular(
+                                                                          26,
+                                                                        ),
+                                                                  ),
+                                                                  padding: EdgeInsets.symmetric(
+                                                                    horizontal:
+                                                                        isSmall
+                                                                        ? 12
+                                                                        : 14,
+                                                                    vertical: 6,
+                                                                  ),
+                                                                  margin: EdgeInsets.only(
+                                                                    right:
+                                                                        isSmall
+                                                                        ? 8
+                                                                        : 12,
+                                                                  ),
+                                                                  child: Row(
+                                                                    children: [
+                                                                      Icon(
+                                                                        Icons
+                                                                            .download_rounded,
+                                                                        color: Theme.of(
+                                                                          context,
+                                                                        ).colorScheme.onSurface,
+                                                                        size:
+                                                                            isSmall
+                                                                            ? 20
+                                                                            : 24,
+                                                                      ),
+                                                                      SizedBox(
+                                                                        width:
+                                                                            isSmall
+                                                                            ? 6
+                                                                            : 8,
+                                                                      ),
+                                                                      Text(
+                                                                        LocaleProvider.tr(
+                                                                          'download',
+                                                                        ),
+                                                                        style: TextStyle(
+                                                                          color: Theme.of(
+                                                                            context,
+                                                                          ).colorScheme.onSurface,
+                                                                          fontWeight:
+                                                                              FontWeight.w600,
+                                                                          fontSize:
+                                                                              isSmall
+                                                                              ? 12
+                                                                              : 14,
+                                                                        ),
+                                                                      ),
+                                                                    ],
+                                                                  ),
+                                                                ),
+                                                              );
+                                                            },
+                                                          ),
+
                                                         // Botón Guardar
                                                         ValueListenableBuilder<
                                                           bool
