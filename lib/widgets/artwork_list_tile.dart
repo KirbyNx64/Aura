@@ -185,7 +185,6 @@ class _ArtworkListTileState extends State<ArtworkListTile> {
           placeholder: (context, url) => _buildFallbackIcon(w, h),
           // Decodificar cerca del tamaño final reduce trabajo en scroll.
           memCacheWidth: cacheW,
-          memCacheHeight: cacheW,
           errorWidget: (context, url, error) => _buildFallbackIcon(w, h),
         ),
       );

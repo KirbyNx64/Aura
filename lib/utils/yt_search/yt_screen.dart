@@ -100,6 +100,24 @@ String _formatDurationFromMilliseconds(int durationMs) {
   return '$minutes:$seconds';
 }
 
+int? _parseDurationTextToMilliseconds(String? text) {
+  final value = text?.trim();
+  if (value == null || value.isEmpty) return null;
+
+  final parts = value.split(':');
+  if (parts.isEmpty || parts.length > 3) return null;
+
+  int totalSeconds = 0;
+  for (final part in parts) {
+    final parsed = int.tryParse(part.trim());
+    if (parsed == null) return null;
+    totalSeconds = totalSeconds * 60 + parsed;
+  }
+
+  if (totalSeconds <= 0) return null;
+  return totalSeconds * 1000;
+}
+
 String _artistWithDurationText({
   String? artist,
   String? fallbackArtist,
@@ -7455,6 +7473,11 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                   : 0);
         final queuePayload = source.map((entry) {
           final id = entry.videoId?.trim() ?? '';
+          final entryDurationText = entry.durationText?.trim();
+          final entryDurationMs =
+              (entry.durationMs != null && entry.durationMs! > 0)
+              ? entry.durationMs
+              : _parseDurationTextToMilliseconds(entryDurationText);
           return <String, dynamic>{
             'videoId': id,
             'title': (entry.title?.trim().isNotEmpty ?? false)
@@ -7468,6 +7491,10 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
             'artUri': (entry.thumbUrl?.trim().isNotEmpty ?? false)
                 ? entry.thumbUrl!.trim()
                 : 'https://i.ytimg.com/vi/$id/hqdefault.jpg',
+            if (entryDurationMs != null && entryDurationMs > 0)
+              'durationMs': entryDurationMs,
+            if (entryDurationText != null && entryDurationText.isNotEmpty)
+              'durationText': entryDurationText,
           };
         }).toList();
         await handler
@@ -7494,6 +7521,11 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
 
         final artist = item.artist?.trim();
         final fallbackArtistTrimmed = fallbackArtist?.trim();
+        final durationText = item.durationText?.trim();
+        final durationMs =
+            (item.durationMs != null && item.durationMs! > 0)
+            ? item.durationMs
+            : _parseDurationTextToMilliseconds(durationText);
         final artworkUri = await artworkFuture.timeout(
           const Duration(seconds: 6),
           onTimeout: () => _buildPlayerArtworkFallbackUrl(
@@ -7527,6 +7559,10 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
               'artUri': finalArtworkUri,
               if (item.thumbUrl?.trim().isNotEmpty == true)
                 'displayArtUri': item.thumbUrl!.trim(),
+              if (durationMs != null && durationMs > 0)
+                'durationMs': durationMs,
+              if (durationText != null && durationText.isNotEmpty)
+                'durationText': durationText,
               'radioMode': true,
               'autoPlay': true,
             })

@@ -1200,6 +1200,11 @@ class _ArtistScreenState extends State<ArtistScreen> {
         );
         final queuePayload = queueItems.map((entry) {
           final id = entry.videoId?.trim() ?? '';
+          final entryDurationText = entry.durationText?.trim();
+          final entryDurationMs =
+              (entry.durationMs != null && entry.durationMs! > 0)
+              ? entry.durationMs
+              : _parseYtDurationTextMs(entryDurationText);
           return <String, dynamic>{
             'videoId': id,
             'title': entry.title?.trim().isNotEmpty == true
@@ -1211,6 +1216,10 @@ class _ArtistScreenState extends State<ArtistScreen> {
             'artUri': entry.thumbUrl?.trim().isNotEmpty == true
                 ? entry.thumbUrl!.trim()
                 : 'https://i.ytimg.com/vi/$id/hqdefault.jpg',
+            if (entryDurationMs != null && entryDurationMs > 0)
+              'durationMs': entryDurationMs,
+            if (entryDurationText != null && entryDurationText.isNotEmpty)
+              'durationText': entryDurationText,
           };
         }).toList();
         await handler
@@ -1236,6 +1245,11 @@ class _ArtistScreenState extends State<ArtistScreen> {
         final artist = selected.artist?.trim().isNotEmpty == true
             ? selected.artist!.trim()
             : LocaleProvider.tr('artist_unknown');
+        final durationText = selected.durationText?.trim();
+        final durationMs =
+            (selected.durationMs != null && selected.durationMs! > 0)
+            ? selected.durationMs
+            : _parseYtDurationTextMs(durationText);
 
         await handler
             .customAction('playYtStream', {
@@ -1245,6 +1259,10 @@ class _ArtistScreenState extends State<ArtistScreen> {
               'title': title,
               'artist': artist,
               'artUri': artUri,
+              if (durationMs != null && durationMs > 0)
+                'durationMs': durationMs,
+              if (durationText != null && durationText.isNotEmpty)
+                'durationText': durationText,
               'radioMode': true,
               'autoPlay': true,
             })
