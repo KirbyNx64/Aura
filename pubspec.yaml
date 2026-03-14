@@ -51,8 +51,6 @@ dependencies:
   flutter_svg: ^2.2.4
   flutter_audio_toolkit: ^1.0.0
   fading_edge_scrollview: ^4.1.1
-  sqflite: ^2.4.2
-  sqflite_android: ^2.4.2+3
   dynamic_color: ^1.8.1
   flutter_sharing_intent: ^1.1.1
   like_button: ^2.1.0

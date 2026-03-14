@@ -1,280 +1,207 @@
-import 'package:sqflite/sqflite.dart';
-import 'package:path/path.dart';
+import 'package:hive_ce_flutter/hive_ce_flutter.dart';
 import '../models/download_record.dart';
 
 class DownloadHistoryService {
-  static final DownloadHistoryService _instance = DownloadHistoryService._internal();
+  static final DownloadHistoryService _instance =
+      DownloadHistoryService._internal();
   factory DownloadHistoryService() => _instance;
   DownloadHistoryService._internal();
 
-  static Database? _database;
-  static Future<Database>? _initializationFuture;
+  static Box<Map>? _recordsBox;
+  static Box<int>? _metaBox;
+  static Future<void>? _initializationFuture;
+  static const String _recordsBoxName = 'download_history_records_box';
+  static const String _metaBoxName = 'download_history_meta_box';
+  static const String _nextIdKey = 'next_id';
 
   /// Pre-inicializa la base de datos para evitar lag en la primera apertura
   Future<void> preInitialize() async {
-    final db = await database;
-    // Asegurar que la columna viewed existe
-    await _ensureViewedColumnExists(db);
+    await _ensureInitialized();
   }
 
-  /// Asegura que la columna viewed existe en la tabla
-  Future<void> _ensureViewedColumnExists(Database db) async {
-    try {
-      if (!await _columnExists(db, 'download_history', 'viewed')) {
-        await db.execute('ALTER TABLE download_history ADD COLUMN viewed INTEGER DEFAULT 0');
-        // print('✅ Columna viewed agregada exitosamente');
-      }
-    } catch (e) {
-      // print('⚠️ Error al verificar/agregar columna viewed: $e');
+  Future<void> _ensureInitialized() async {
+    if (_recordsBox != null &&
+        _recordsBox!.isOpen &&
+        _metaBox != null &&
+        _metaBox!.isOpen) {
+      return;
     }
-  }
 
-  Future<Database> get database async {
-    // Si ya existe la base de datos, devolverla inmediatamente
-    if (_database != null) return _database!;
-    
-    // Si ya hay una inicialización en proceso, esperar a que termine
     if (_initializationFuture != null) {
-      return await _initializationFuture!;
+      await _initializationFuture!;
+      return;
     }
-    
-    // Iniciar nueva inicialización
-    _initializationFuture = _initDatabase();
-    _database = await _initializationFuture!;
+
+    _initializationFuture = _openBoxes();
+    await _initializationFuture!;
     _initializationFuture = null;
-    
-    return _database!;
   }
 
-  Future<Database> _initDatabase() async {
-    String path = join(await getDatabasesPath(), 'download_history.db');
-    return await openDatabase(
-      path,
-      version: 2,
-      onCreate: _onCreate,
-      onUpgrade: _onUpgrade,
-    );
+  Future<void> _openBoxes() async {
+    _recordsBox = await Hive.openBox<Map>(_recordsBoxName);
+    _metaBox = await Hive.openBox<int>(_metaBoxName);
+    _metaBox!.put(_nextIdKey, _computeNextIdIfNeeded());
   }
 
-  Future<void> _onCreate(Database db, int version) async {
-    await db.execute('''
-      CREATE TABLE download_history(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        title TEXT NOT NULL,
-        artist TEXT NOT NULL,
-        file_path TEXT NOT NULL,
-        file_name TEXT NOT NULL,
-        file_size INTEGER NOT NULL,
-        download_url TEXT NOT NULL,
-        thumbnail_url TEXT NOT NULL,
-        download_date INTEGER NOT NULL,
-        status TEXT NOT NULL,
-        error_message TEXT,
-        viewed INTEGER DEFAULT 0
-      )
-    ''');
-  }
+  int _computeNextIdIfNeeded() {
+    final explicitNextId = _metaBox!.get(_nextIdKey);
+    if (explicitNextId != null && explicitNextId > 0) return explicitNextId;
 
-  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
-    if (oldVersion < 2) {
-      // Verificar si la columna 'viewed' ya existe antes de intentar agregarla
-      try {
-        await db.execute('ALTER TABLE download_history ADD COLUMN viewed INTEGER DEFAULT 0');
-      } catch (e) {
-        // Si la columna ya existe, ignorar el error
-        // print('La columna viewed ya existe o error al agregarla: $e');
-      }
+    int maxId = 0;
+    for (final key in _recordsBox!.keys) {
+      final id = _asInt(key);
+      if (id != null && id > maxId) maxId = id;
     }
-  }
-
-  /// Verifica si la columna viewed existe en la tabla
-  Future<bool> _columnExists(Database db, String tableName, String columnName) async {
-    final result = await db.rawQuery('PRAGMA table_info($tableName)');
-    return result.any((column) => column['name'] == columnName);
+    return maxId + 1;
   }
 
   Future<int> insertDownload(DownloadRecord download) async {
-    try {
-      final db = await database;
-      
-      // Verificar si la columna viewed existe antes de insertar
-      if (!await _columnExists(db, 'download_history', 'viewed')) {
-        try {
-          await db.execute('ALTER TABLE download_history ADD COLUMN viewed INTEGER DEFAULT 0');
-        } catch (e) {
-          // Si falla, continuar e intentar insertar de todas formas
-        }
-      }
-      
-      return await db.insert('download_history', download.toMap());
-    } catch (e) {
-      // Si falla al insertar con la columna viewed, intentar sin ella
-      try {
-        final db = await database;
-        final map = download.toMap();
-        map.remove('viewed'); // Remover la columna viewed si causa problemas
-        return await db.insert('download_history', map);
-      } catch (e2) {
-        rethrow;
-      }
+    await _ensureInitialized();
+    final records = _recordsBox!;
+    final meta = _metaBox!;
+
+    final map = Map<String, dynamic>.from(download.toMap());
+    final nextId = meta.get(_nextIdKey) ?? _computeNextIdIfNeeded();
+    final id = download.id ?? nextId;
+    map['id'] = id;
+    map['viewed'] = (map['viewed'] ?? 0) == 1 ? 1 : 0;
+
+    await records.put(id, map);
+    if (id >= nextId) {
+      await meta.put(_nextIdKey, id + 1);
     }
+    return id;
   }
 
   Future<List<DownloadRecord>> getAllDownloads() async {
-    final db = await database;
-    final List<Map<String, dynamic>> maps = await db.query(
-      'download_history',
-      orderBy: 'download_date DESC',
+    await _ensureInitialized();
+    final maps = _recordsBox!.values.map(_normalizeRecordMap).toList();
+    maps.sort(
+      (a, b) => (_asInt(b['download_date']) ?? 0).compareTo(
+        _asInt(a['download_date']) ?? 0,
+      ),
     );
-    return List.generate(maps.length, (i) => DownloadRecord.fromMap(maps[i]));
+    return maps.map(DownloadRecord.fromMap).toList();
   }
 
   Future<List<DownloadRecord>> getCompletedDownloads() async {
-    final db = await database;
-    final List<Map<String, dynamic>> maps = await db.query(
-      'download_history',
-      where: 'status = ?',
-      whereArgs: ['completed'],
-      orderBy: 'download_date DESC',
+    await _ensureInitialized();
+    final maps = _recordsBox!.values
+        .map(_normalizeRecordMap)
+        .where((m) => m['status'] == 'completed')
+        .toList();
+    maps.sort(
+      (a, b) => (_asInt(b['download_date']) ?? 0).compareTo(
+        _asInt(a['download_date']) ?? 0,
+      ),
     );
-    return List.generate(maps.length, (i) => DownloadRecord.fromMap(maps[i]));
+    return maps.map(DownloadRecord.fromMap).toList();
   }
 
   Future<DownloadRecord?> getDownloadById(int id) async {
-    final db = await database;
-    final List<Map<String, dynamic>> maps = await db.query(
-      'download_history',
-      where: 'id = ?',
-      whereArgs: [id],
-    );
-    if (maps.isNotEmpty) {
-      return DownloadRecord.fromMap(maps.first);
-    }
-    return null;
+    await _ensureInitialized();
+    final map = _recordsBox!.get(id);
+    if (map == null) return null;
+    return DownloadRecord.fromMap(_normalizeRecordMap(map));
   }
 
   Future<int> updateDownload(DownloadRecord download) async {
-    try {
-      final db = await database;
-      
-      // Verificar si la columna viewed existe antes de actualizar
-      if (!await _columnExists(db, 'download_history', 'viewed')) {
-        try {
-          await db.execute('ALTER TABLE download_history ADD COLUMN viewed INTEGER DEFAULT 0');
-        } catch (e) {
-          // Si falla, continuar e intentar actualizar de todas formas
-        }
-      }
-      
-      return await db.update(
-        'download_history',
-        download.toMap(),
-        where: 'id = ?',
-        whereArgs: [download.id],
-      );
-    } catch (e) {
-      // Si falla al actualizar con la columna viewed, intentar sin ella
-      try {
-        final db = await database;
-        final map = download.toMap();
-        map.remove('viewed'); // Remover la columna viewed si causa problemas
-        return await db.update(
-          'download_history',
-          map,
-          where: 'id = ?',
-          whereArgs: [download.id],
-        );
-      } catch (e2) {
-        rethrow;
-      }
-    }
+    await _ensureInitialized();
+    final id = download.id;
+    if (id == null) return 0;
+    if (!_recordsBox!.containsKey(id)) return 0;
+
+    final map = Map<String, dynamic>.from(download.toMap());
+    map['id'] = id;
+    map['viewed'] = (map['viewed'] ?? 0) == 1 ? 1 : 0;
+    await _recordsBox!.put(id, map);
+    return 1;
   }
 
   Future<int> deleteDownload(int id) async {
-    final db = await database;
-    return await db.delete(
-      'download_history',
-      where: 'id = ?',
-      whereArgs: [id],
-    );
+    await _ensureInitialized();
+    final existed = _recordsBox!.containsKey(id);
+    await _recordsBox!.delete(id);
+    return existed ? 1 : 0;
   }
 
   Future<int> deleteAllDownloads() async {
-    final db = await database;
-    return await db.delete('download_history');
+    await _ensureInitialized();
+    final count = _recordsBox!.length;
+    await _recordsBox!.clear();
+    await _metaBox!.put(_nextIdKey, 1);
+    return count;
   }
 
   Future<int> getDownloadCount() async {
-    final db = await database;
-    final result = await db.rawQuery('SELECT COUNT(*) as count FROM download_history');
-    return Sqflite.firstIntValue(result) ?? 0;
+    await _ensureInitialized();
+    return _recordsBox!.length;
   }
 
   Future<int> getCompletedDownloadCount() async {
-    final db = await database;
-    final result = await db.rawQuery(
-      'SELECT COUNT(*) as count FROM download_history WHERE status = ?',
-      ['completed']
-    );
-    return Sqflite.firstIntValue(result) ?? 0;
+    await _ensureInitialized();
+    var count = 0;
+    for (final row in _recordsBox!.values) {
+      if (row['status'] == 'completed') count++;
+    }
+    return count;
   }
 
   /// Verifica si hay descargas sin ver
   Future<bool> hasUnviewedDownloads() async {
-    try {
-      final db = await database;
-      
-      // Verificar si la columna existe
-      if (!await _columnExists(db, 'download_history', 'viewed')) {
-        // Si la columna no existe, intentar agregarla
-        try {
-          await db.execute('ALTER TABLE download_history ADD COLUMN viewed INTEGER DEFAULT 0');
-        } catch (e) {
-          // Si falla, retornar false (no hay descargas sin ver)
-          return false;
-        }
+    await _ensureInitialized();
+    for (final row in _recordsBox!.values) {
+      if (row['status'] == 'completed' && (_asInt(row['viewed']) ?? 0) == 0) {
+        return true;
       }
-      
-      final result = await db.rawQuery(
-        'SELECT COUNT(*) as count FROM download_history WHERE status = ? AND viewed = 0',
-        ['completed']
-      );
-      return (Sqflite.firstIntValue(result) ?? 0) > 0;
-    } catch (e) {
-      // En caso de error, asumir que no hay descargas sin ver
-      return false;
     }
+    return false;
   }
 
   /// Marca todas las descargas como vistas
   Future<int> markAllAsViewed() async {
-    try {
-      final db = await database;
-      
-      // Verificar si la columna existe
-      if (!await _columnExists(db, 'download_history', 'viewed')) {
-        // Si la columna no existe, intentar agregarla
-        try {
-          await db.execute('ALTER TABLE download_history ADD COLUMN viewed INTEGER DEFAULT 0');
-        } catch (e) {
-          // Si falla, retornar 0 (ninguna fila actualizada)
-          return 0;
-        }
+    await _ensureInitialized();
+    int updated = 0;
+
+    for (final key in _recordsBox!.keys) {
+      final row = _recordsBox!.get(key);
+      if (row == null) continue;
+
+      if ((_asInt(row['viewed']) ?? 0) == 0) {
+        row['viewed'] = 1;
+        await _recordsBox!.put(key, row);
+        updated++;
       }
-      
-      return await db.update(
-        'download_history',
-        {'viewed': 1},
-        where: 'viewed = 0',
-      );
-    } catch (e) {
-      // En caso de error, retornar 0
-      return 0;
     }
+    return updated;
   }
 
   Future<void> close() async {
-    final db = await database;
-    await db.close();
+    if (_recordsBox != null && _recordsBox!.isOpen) {
+      await _recordsBox!.close();
+    }
+    if (_metaBox != null && _metaBox!.isOpen) {
+      await _metaBox!.close();
+    }
+    _recordsBox = null;
+    _metaBox = null;
+    _initializationFuture = null;
+  }
+
+  Map<String, dynamic> _normalizeRecordMap(Map map) {
+    final normalized = Map<String, dynamic>.from(map);
+    normalized['id'] = _asInt(normalized['id']);
+    normalized['file_size'] = _asInt(normalized['file_size']) ?? 0;
+    normalized['download_date'] = _asInt(normalized['download_date']) ?? 0;
+    normalized['viewed'] = (_asInt(normalized['viewed']) ?? 0) == 1 ? 1 : 0;
+    return normalized;
+  }
+
+  int? _asInt(dynamic value) {
+    if (value == null) return null;
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    if (value is String) return int.tryParse(value);
+    return null;
   }
 }

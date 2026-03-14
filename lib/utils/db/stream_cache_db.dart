@@ -1,14 +1,11 @@
-import 'package:sqflite/sqflite.dart';
-import 'package:path/path.dart';
+import 'package:hive_ce_flutter/hive_ce_flutter.dart';
 import 'dart:io';
 
 class StreamCacheDB {
-  static Database? _database;
-  static const String _tableName = 'stream_cache';
-  static const String _dbName = 'stream_cache.db';
-  static const int _dbVersion = 1;
+  static Box<Map>? _box;
+  static const String _boxName = 'stream_cache_box';
 
-  // Columnas de la tabla
+  // Keys del registro en Hive
   static const String _columnId = 'id';
   static const String _columnVideoId = 'video_id';
   static const String _columnStreamUrl = 'stream_url';
@@ -26,59 +23,10 @@ class StreamCacheDB {
   // Tiempo de expiración por defecto (24 horas)
   static const Duration _defaultExpiration = Duration(hours: 24);
 
-  Future<Database> get database async {
-    if (_database != null) return _database!;
-    _database = await _initDatabase();
-    return _database!;
-  }
-
-  Future<Database> _initDatabase() async {
-    final databasesPath = await getDatabasesPath();
-    final path = join(databasesPath, _dbName);
-
-    return await openDatabase(
-      path,
-      version: _dbVersion,
-      onCreate: _onCreate,
-      onUpgrade: _onUpgrade,
-    );
-  }
-
-  Future<void> _onCreate(Database db, int version) async {
-    await db.execute('''
-      CREATE TABLE $_tableName (
-        $_columnId INTEGER PRIMARY KEY AUTOINCREMENT,
-        $_columnVideoId TEXT NOT NULL UNIQUE,
-        $_columnStreamUrl TEXT NOT NULL,
-        $_columnItag INTEGER,
-        $_columnCodec TEXT,
-        $_columnBitrate INTEGER,
-        $_columnSize INTEGER,
-        $_columnDuration INTEGER,
-        $_columnLoudnessDb REAL,
-        $_columnCreatedAt INTEGER NOT NULL,
-        $_columnLastUsed INTEGER NOT NULL,
-        $_columnIsValid INTEGER NOT NULL DEFAULT 1,
-        $_columnExpiresAt INTEGER NOT NULL
-      )
-    ''');
-
-    // Crear índices para mejorar el rendimiento
-    await db.execute('''
-      CREATE INDEX idx_video_id ON $_tableName($_columnVideoId)
-    ''');
-    
-    await db.execute('''
-      CREATE INDEX idx_expires_at ON $_tableName($_columnExpiresAt)
-    ''');
-    
-    await db.execute('''
-      CREATE INDEX idx_is_valid ON $_tableName($_columnIsValid)
-    ''');
-  }
-
-  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
-    // Implementar migraciones si es necesario en el futuro
+  Future<Box<Map>> get box async {
+    if (_box != null && _box!.isOpen) return _box!;
+    _box = await Hive.openBox<Map>(_boxName);
+    return _box!;
   }
 
   /// Guarda un stream en el cache
@@ -93,78 +41,80 @@ class StreamCacheDB {
     double? loudnessDb,
     Duration? expiration,
   }) async {
-    final db = await database;
+    final b = await box;
+    final normalizedVideoId = videoId.trim();
+    if (normalizedVideoId.isEmpty) return;
+
     final now = DateTime.now().millisecondsSinceEpoch;
     final expiresAt = now + (expiration ?? _defaultExpiration).inMilliseconds;
 
-    await db.insert(
-      _tableName,
-      {
-        _columnVideoId: videoId,
-        _columnStreamUrl: streamUrl,
-        _columnItag: itag,
-        _columnCodec: codec,
-        _columnBitrate: bitrate,
-        _columnSize: size,
-        _columnDuration: duration,
-        _columnLoudnessDb: loudnessDb,
-        _columnCreatedAt: now,
-        _columnLastUsed: now,
-        _columnIsValid: 1,
-        _columnExpiresAt: expiresAt,
-      },
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    final previous = b.get(normalizedVideoId);
+    final createdAt = _asInt(previous?[_columnCreatedAt]) ?? now;
+
+    await b.put(normalizedVideoId, {
+      _columnId: _asInt(previous?[_columnId]) ?? now,
+      _columnVideoId: normalizedVideoId,
+      _columnStreamUrl: streamUrl,
+      _columnItag: itag,
+      _columnCodec: codec,
+      _columnBitrate: bitrate,
+      _columnSize: size,
+      _columnDuration: duration,
+      _columnLoudnessDb: loudnessDb,
+      _columnCreatedAt: createdAt,
+      _columnLastUsed: now,
+      _columnIsValid: 1,
+      _columnExpiresAt: expiresAt,
+    });
   }
 
   /// Obtiene un stream del cache si es válido
   Future<CachedStream?> getStream(String videoId) async {
-    final db = await database;
+    final b = await box;
+    final normalizedVideoId = videoId.trim();
+    if (normalizedVideoId.isEmpty) return null;
+
     final now = DateTime.now().millisecondsSinceEpoch;
+    final row = b.get(normalizedVideoId);
 
-    final result = await db.query(
-      _tableName,
-      where: '$_columnVideoId = ? AND $_columnIsValid = 1 AND $_columnExpiresAt > ?',
-      whereArgs: [videoId, now],
-      limit: 1,
-    );
+    if (row == null) return null;
+    final isValid = _asInt(row[_columnIsValid]) ?? 0;
+    final expiresAt = _asInt(row[_columnExpiresAt]) ?? 0;
+    if (isValid != 1 || expiresAt <= now) return null;
 
-    if (result.isEmpty) return null;
-
-    final row = result.first;
-    
-    // Actualizar last_used
-    await db.update(
-      _tableName,
-      {_columnLastUsed: now},
-      where: '$_columnId = ?',
-      whereArgs: [row[_columnId]],
-    );
+    row[_columnLastUsed] = now;
+    await b.put(normalizedVideoId, row);
 
     return CachedStream(
-      videoId: row[_columnVideoId] as String,
-      streamUrl: row[_columnStreamUrl] as String,
-      itag: row[_columnItag] as int?,
+      videoId: row[_columnVideoId] as String? ?? normalizedVideoId,
+      streamUrl: row[_columnStreamUrl] as String? ?? '',
+      itag: _asInt(row[_columnItag]),
       codec: row[_columnCodec] as String?,
-      bitrate: row[_columnBitrate] as int?,
-      size: row[_columnSize] as int?,
-      duration: row[_columnDuration] as int?,
-      loudnessDb: row[_columnLoudnessDb] as double?,
-      createdAt: DateTime.fromMillisecondsSinceEpoch(row[_columnCreatedAt] as int),
-      lastUsed: DateTime.fromMillisecondsSinceEpoch(row[_columnLastUsed] as int),
-      expiresAt: DateTime.fromMillisecondsSinceEpoch(row[_columnExpiresAt] as int),
+      bitrate: _asInt(row[_columnBitrate]),
+      size: _asInt(row[_columnSize]),
+      duration: _asInt(row[_columnDuration]),
+      loudnessDb: _asDouble(row[_columnLoudnessDb]),
+      createdAt: DateTime.fromMillisecondsSinceEpoch(
+        _asInt(row[_columnCreatedAt]) ?? now,
+      ),
+      lastUsed: DateTime.fromMillisecondsSinceEpoch(
+        _asInt(row[_columnLastUsed]) ?? now,
+      ),
+      expiresAt: DateTime.fromMillisecondsSinceEpoch(expiresAt),
     );
   }
 
   /// Marca un stream como inválido
   Future<void> invalidateStream(String videoId) async {
-    final db = await database;
-    await db.update(
-      _tableName,
-      {_columnIsValid: 0},
-      where: '$_columnVideoId = ?',
-      whereArgs: [videoId],
-    );
+    final b = await box;
+    final normalizedVideoId = videoId.trim();
+    if (normalizedVideoId.isEmpty) return;
+
+    final row = b.get(normalizedVideoId);
+    if (row == null) return;
+
+    row[_columnIsValid] = 0;
+    await b.put(normalizedVideoId, row);
   }
 
   /// Valida si un stream sigue siendo válido haciendo una petición HEAD
@@ -175,10 +125,10 @@ class StreamCacheDB {
       final request = await client.headUrl(Uri.parse(streamUrl));
       final response = await request.close();
       client.close();
-      
+
       final isValid = response.statusCode >= 200 && response.statusCode < 300;
       // print('🔍 [CACHE_DB] Stream ${isValid ? 'válido' : 'inválido'} (Status: ${response.statusCode})');
-      
+
       // Considerar válido si el status code es 200-299
       return isValid;
     } catch (e) {
@@ -198,7 +148,7 @@ class StreamCacheDB {
     // print('🔍 [CACHE_DB] Stream encontrado en cache para videoId: $videoId');
     // print('🔍 [CACHE_DB] Creado: ${cached.createdAt}');
     // print('🔍 [CACHE_DB] Expira: ${cached.expiresAt}');
-    
+
     // Validar el stream
     final isValid = await validateStream(cached.streamUrl);
     if (!isValid) {
@@ -214,50 +164,83 @@ class StreamCacheDB {
 
   /// Limpia streams expirados
   Future<int> cleanExpiredStreams() async {
-    final db = await database;
+    final b = await box;
     final now = DateTime.now().millisecondsSinceEpoch;
-    
-    return await db.delete(
-      _tableName,
-      where: '$_columnExpiresAt < ? OR $_columnIsValid = 0',
-      whereArgs: [now],
-    );
+
+    final keysToDelete = <dynamic>[];
+    for (final key in b.keys) {
+      final row = b.get(key);
+      if (row == null) continue;
+
+      final isValid = _asInt(row[_columnIsValid]) ?? 0;
+      final expiresAt = _asInt(row[_columnExpiresAt]) ?? 0;
+      if (isValid == 0 || expiresAt < now) {
+        keysToDelete.add(key);
+      }
+    }
+
+    if (keysToDelete.isNotEmpty) {
+      await b.deleteAll(keysToDelete);
+    }
+
+    return keysToDelete.length;
   }
 
   /// Obtiene estadísticas del cache
   Future<CacheStats> getCacheStats() async {
-    final db = await database;
-    
-    final totalResult = await db.rawQuery('SELECT COUNT(*) as count FROM $_tableName');
-    final validResult = await db.rawQuery(
-      'SELECT COUNT(*) as count FROM $_tableName WHERE $_columnIsValid = 1 AND $_columnExpiresAt > ?',
-      [DateTime.now().millisecondsSinceEpoch],
-    );
-    final expiredResult = await db.rawQuery(
-      'SELECT COUNT(*) as count FROM $_tableName WHERE $_columnExpiresAt <= ?',
-      [DateTime.now().millisecondsSinceEpoch],
-    );
+    final b = await box;
+    final now = DateTime.now().millisecondsSinceEpoch;
+
+    int validStreams = 0;
+    int expiredStreams = 0;
+
+    for (final row in b.values) {
+      final isValid = _asInt(row[_columnIsValid]) ?? 0;
+      final expiresAt = _asInt(row[_columnExpiresAt]) ?? 0;
+
+      if (isValid == 1 && expiresAt > now) {
+        validStreams++;
+      } else if (expiresAt <= now) {
+        expiredStreams++;
+      }
+    }
 
     return CacheStats(
-      totalStreams: totalResult.first['count'] as int,
-      validStreams: validResult.first['count'] as int,
-      expiredStreams: expiredResult.first['count'] as int,
+      totalStreams: b.length,
+      validStreams: validStreams,
+      expiredStreams: expiredStreams,
     );
   }
 
   /// Limpia todo el cache
   Future<void> clearCache() async {
-    final db = await database;
-    await db.delete(_tableName);
+    final b = await box;
+    await b.clear();
   }
 
   /// Cierra la base de datos
   Future<void> close() async {
-    final db = _database;
-    if (db != null) {
-      await db.close();
-      _database = null;
+    final b = _box;
+    if (b != null && b.isOpen) {
+      await b.close();
+      _box = null;
     }
+  }
+
+  int? _asInt(dynamic value) {
+    if (value == null) return null;
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    if (value is String) return int.tryParse(value);
+    return null;
+  }
+
+  double? _asDouble(dynamic value) {
+    if (value == null) return null;
+    if (value is double) return value;
+    if (value is num) return value.toDouble();
+    if (value is String) return double.tryParse(value);
+    return null;
   }
 }
 

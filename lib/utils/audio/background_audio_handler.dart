@@ -3405,7 +3405,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       cancelAllArtworkLoads();
 
       if (_deferredStreamingQueueMode) {
-        final shouldPlayAfterManualSkip = !_player.playing;
+        final shouldPlayAfterManualSkip = _player.playing;
         final nextIndex = _nextDeferredQueueIndex();
         if (nextIndex == null) {
           if (_streamRadioEnabled) {
@@ -3491,7 +3491,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       cancelAllArtworkLoads();
 
       if (_deferredStreamingQueueMode) {
-        final shouldPlayAfterManualSkip = !_player.playing;
+        final shouldPlayAfterManualSkip = _player.playing;
         if (_player.position.inMilliseconds > 5000) {
           await _player
               .seek(Duration.zero)
@@ -3622,7 +3622,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     if (_initializing) return;
     if (index >= 0 && index < _mediaQueue.length) {
       if (_deferredStreamingQueueMode) {
-        _scheduleStreamingSkip(index, playAfterResolve: !_player.playing);
+        _scheduleStreamingSkip(index, playAfterResolve: _player.playing);
         return;
       }
       try {

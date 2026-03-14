@@ -1,48 +1,13 @@
-import 'package:sqflite/sqflite.dart';
-import 'package:path/path.dart';
+import 'package:hive_ce_flutter/hive_ce_flutter.dart';
 
 class ArtistImagesCacheDB {
-  static Database? _database;
-  static const String _tableName = 'artist_images_cache';
-  
-  static Future<Database> get database async {
-    if (_database != null) return _database!;
-    _database = await _initDatabase();
-    return _database!;
-  }
+  static const String _boxName = 'artist_images_cache_box';
+  static Box<Map>? _box;
 
-  static Future<Database> _initDatabase() async {
-    final databasesPath = await getDatabasesPath();
-    final path = join(databasesPath, 'artist_images_cache.db');
-
-    return await openDatabase(
-      path,
-      version: 1,
-      onCreate: _onCreate,
-    );
-  }
-
-  static Future<void> _onCreate(Database db, int version) async {
-    await db.execute('''
-      CREATE TABLE $_tableName (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        artist_name TEXT NOT NULL UNIQUE,
-        thumb_url TEXT,
-        browse_id TEXT,
-        subscribers TEXT,
-        cached_at INTEGER NOT NULL,
-        expires_at INTEGER NOT NULL
-      )
-    ''');
-    
-    // Crear índice para búsquedas rápidas
-    await db.execute('''
-      CREATE INDEX idx_artist_name ON $_tableName(artist_name)
-    ''');
-    
-    await db.execute('''
-      CREATE INDEX idx_expires_at ON $_tableName(expires_at)
-    ''');
+  static Future<Box<Map>> get _cacheBox async {
+    if (_box != null && _box!.isOpen) return _box!;
+    _box = await Hive.openBox<Map>(_boxName);
+    return _box!;
   }
 
   // Guardar imagen de artista en cache
@@ -53,109 +18,129 @@ class ArtistImagesCacheDB {
     String? subscribers,
     Duration cacheDuration = const Duration(days: 7),
   }) async {
-    final db = await database;
+    final box = await _cacheBox;
+    final normalizedName = artistName.trim();
+    if (normalizedName.isEmpty) return;
+
     final now = DateTime.now().millisecondsSinceEpoch;
     final expiresAt = now + cacheDuration.inMilliseconds;
 
-    await db.insert(
-      _tableName,
-      {
-        'artist_name': artistName,
-        'thumb_url': thumbUrl,
-        'browse_id': browseId,
-        'subscribers': subscribers,
-        'cached_at': now,
-        'expires_at': expiresAt,
-      },
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    await box.put(normalizedName, {
+      'artist_name': normalizedName,
+      'thumb_url': thumbUrl,
+      'browse_id': browseId,
+      'subscribers': subscribers,
+      'cached_at': now,
+      'expires_at': expiresAt,
+    });
   }
 
   // Obtener imagen de artista desde cache
-  static Future<Map<String, dynamic>?> getCachedArtistImage(String artistName) async {
-    final db = await database;
-    final now = DateTime.now().millisecondsSinceEpoch;
-    
-    final result = await db.query(
-      _tableName,
-      where: 'artist_name = ? AND expires_at > ?',
-      whereArgs: [artistName, now],
-      limit: 1,
-    );
+  static Future<Map<String, dynamic>?> getCachedArtistImage(
+    String artistName,
+  ) async {
+    final box = await _cacheBox;
+    final normalizedName = artistName.trim();
+    if (normalizedName.isEmpty) return null;
 
-    if (result.isNotEmpty) {
-      return {
-        'name': result.first['artist_name'],
-        'thumbUrl': result.first['thumb_url'],
-        'browseId': result.first['browse_id'],
-        'subscribers': result.first['subscribers'],
-        'cachedAt': result.first['cached_at'],
-        'expiresAt': result.first['expires_at'],
-      };
+    final now = DateTime.now().millisecondsSinceEpoch;
+
+    final row = box.get(normalizedName);
+    if (row == null) return null;
+
+    final expiresAt = _asInt(row['expires_at']) ?? 0;
+    if (expiresAt <= now) {
+      await box.delete(normalizedName);
+      return null;
     }
 
-    return null;
-  }
-
-  // Obtener múltiples imágenes de artistas desde cache
-  static Future<List<Map<String, dynamic>>> getCachedArtistImages(List<String> artistNames) async {
-    if (artistNames.isEmpty) return [];
-    
-    final db = await database;
-    final now = DateTime.now().millisecondsSinceEpoch;
-    
-    final placeholders = artistNames.map((_) => '?').join(',');
-    final result = await db.query(
-      _tableName,
-      where: 'artist_name IN ($placeholders) AND expires_at > ?',
-      whereArgs: [...artistNames, now],
-    );
-
-    return result.map((row) => {
+    return {
       'name': row['artist_name'],
       'thumbUrl': row['thumb_url'],
       'browseId': row['browse_id'],
       'subscribers': row['subscribers'],
-      'cachedAt': row['cached_at'],
-      'expiresAt': row['expires_at'],
-    }).toList();
+      'cachedAt': _asInt(row['cached_at']),
+      'expiresAt': expiresAt,
+    };
+  }
+
+  // Obtener múltiples imágenes de artistas desde cache
+  static Future<List<Map<String, dynamic>>> getCachedArtistImages(
+    List<String> artistNames,
+  ) async {
+    if (artistNames.isEmpty) return [];
+    final box = await _cacheBox;
+    final now = DateTime.now().millisecondsSinceEpoch;
+
+    final results = <Map<String, dynamic>>[];
+    for (final rawName in artistNames) {
+      final artistName = rawName.trim();
+      if (artistName.isEmpty) continue;
+
+      final row = box.get(artistName);
+      if (row == null) continue;
+
+      final expiresAt = _asInt(row['expires_at']) ?? 0;
+      if (expiresAt <= now) continue;
+
+      results.add({
+        'name': row['artist_name'],
+        'thumbUrl': row['thumb_url'],
+        'browseId': row['browse_id'],
+        'subscribers': row['subscribers'],
+        'cachedAt': _asInt(row['cached_at']),
+        'expiresAt': expiresAt,
+      });
+    }
+
+    return results;
   }
 
   // Limpiar cache expirado
   static Future<int> cleanExpiredCache() async {
-    final db = await database;
+    final box = await _cacheBox;
     final now = DateTime.now().millisecondsSinceEpoch;
-    
-    return await db.delete(
-      _tableName,
-      where: 'expires_at <= ?',
-      whereArgs: [now],
-    );
+
+    final keysToDelete = <dynamic>[];
+    for (final key in box.keys) {
+      final row = box.get(key);
+      if (row == null) continue;
+
+      final expiresAt = _asInt(row['expires_at']) ?? 0;
+      if (expiresAt <= now) {
+        keysToDelete.add(key);
+      }
+    }
+
+    if (keysToDelete.isNotEmpty) {
+      await box.deleteAll(keysToDelete);
+    }
+
+    return keysToDelete.length;
   }
 
   // Limpiar todo el cache
   static Future<void> clearAllCache() async {
-    final db = await database;
-    await db.delete(_tableName);
+    final box = await _cacheBox;
+    await box.clear();
   }
 
   // Obtener estadísticas del cache
   static Future<Map<String, int>> getCacheStats() async {
-    final db = await database;
+    final box = await _cacheBox;
     final now = DateTime.now().millisecondsSinceEpoch;
-    
-    final total = Sqflite.firstIntValue(await db.rawQuery('SELECT COUNT(*) FROM $_tableName')) ?? 0;
-    final expired = Sqflite.firstIntValue(await db.rawQuery(
-      'SELECT COUNT(*) FROM $_tableName WHERE expires_at <= ?',
-      [now]
-    )) ?? 0;
+
+    final total = box.length;
+    int expired = 0;
+
+    for (final row in box.values) {
+      final expiresAt = _asInt(row['expires_at']) ?? 0;
+      if (expiresAt <= now) expired++;
+    }
+
     final valid = total - expired;
-    
-    return {
-      'total': total,
-      'valid': valid,
-      'expired': expired,
-    };
+
+    return {'total': total, 'valid': valid, 'expired': expired};
   }
 
   // Verificar si un artista está en cache y es válido
@@ -165,13 +150,26 @@ class ArtistImagesCacheDB {
   }
 
   // Actualizar solo la URL de imagen de un artista existente
-  static Future<void> updateArtistImageUrl(String artistName, String thumbUrl) async {
-    final db = await database;
-    await db.update(
-      _tableName,
-      {'thumb_url': thumbUrl},
-      where: 'artist_name = ?',
-      whereArgs: [artistName],
-    );
+  static Future<void> updateArtistImageUrl(
+    String artistName,
+    String thumbUrl,
+  ) async {
+    final box = await _cacheBox;
+    final normalizedName = artistName.trim();
+    if (normalizedName.isEmpty) return;
+
+    final row = box.get(normalizedName);
+    if (row == null) return;
+
+    row['thumb_url'] = thumbUrl;
+    await box.put(normalizedName, row);
+  }
+
+  static int? _asInt(dynamic value) {
+    if (value == null) return null;
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    if (value is String) return int.tryParse(value);
+    return null;
   }
 }
