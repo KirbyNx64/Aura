@@ -20,7 +20,7 @@ dependencies:
   audio_service: ^0.18.18
   path: ^1.9.1
   shared_preferences: ^2.5.4
-  shared_preferences_android: ^2.4.20
+  shared_preferences_android: ^2.4.21
   path_provider: ^2.1.5
   permission_handler: ^12.0.1
 # audio_info: ^0.0.3  # Temporalmente comentado por incompatibilidad con Java 17
@@ -37,8 +37,9 @@ dependencies:
   audiotags:
     path: ./audiotags/audiotags
   url_launcher: ^6.3.2
+  url_launcher_android: ^6.3.28
   device_info_plus: ^12.3.0
-  dio: ^5.9.1
+  dio: ^5.9.2
   open_file: ^3.5.11
   smooth_page_indicator: ^2.0.1
   android_intent_plus: ^6.0.0
@@ -46,12 +47,12 @@ dependencies:
   ota_update: ^7.1.0
   scroll_to_index: ^3.0.1
   mini_music_visualizer: ^1.1.4
-  flutter_local_notifications: ^20.1.0
-  flutter_svg: ^2.2.3
+  flutter_local_notifications: ^21.0.0
+  flutter_svg: ^2.2.4
   flutter_audio_toolkit: ^1.0.0
   fading_edge_scrollview: ^4.1.1
   sqflite: ^2.4.2
-  sqflite_android: ^2.4.2+2
+  sqflite_android: ^2.4.2+3
   dynamic_color: ^1.8.1
   flutter_sharing_intent: ^1.1.1
   like_button: ^2.1.0
@@ -63,9 +64,9 @@ dependencies:
   flutter_m3shapes: ^1.0.0+2
   material_symbols_icons: ^4.2906.0
   sliding_up_panel: ^2.0.0+1
-  open_settings_plus: ^0.4.0
+  open_settings_plus: ^0.4.2
   palette_generator_master: ^1.0.1
-  wakelock_plus: ^1.4.0
+  wakelock_plus: ^1.5.1
   android_nav_setting: ^0.0.2+2
   material_new_shapes: ^1.0.0
   progress_indicator_m3e: ^0.1.1
