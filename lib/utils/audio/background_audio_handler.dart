@@ -2033,13 +2033,20 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   Future<bool> _resolveAndPlayDeferredStreamingIndex(
     int targetIndex, {
     bool playAfterResolve = false,
+    int? expectedGeneration,
   }) async {
     if (!_deferredStreamingQueueMode) return false;
     if (targetIndex < 0 || targetIndex >= _mediaQueue.length) return false;
 
     // Capturar la generación actual. Si el usuario salta de nuevo antes de que
     // terminemos, _resolveGeneration habrá cambiado y abortamos gracefully.
-    _resolveGeneration++;
+    // Cuando viene de un skip manual, expectedGeneration ya fue incrementada
+    // antes para cancelar de inmediato cualquier carga en curso.
+    if (expectedGeneration == null) {
+      _resolveGeneration++;
+    } else if (expectedGeneration != _resolveGeneration) {
+      return false;
+    }
     _artworkGeneration++;
     final myGeneration = _resolveGeneration;
 
@@ -3405,7 +3412,6 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       cancelAllArtworkLoads();
 
       if (_deferredStreamingQueueMode) {
-        final shouldPlayAfterManualSkip = _player.playing;
         final nextIndex = _nextDeferredQueueIndex();
         if (nextIndex == null) {
           if (_streamRadioEnabled) {
@@ -3415,7 +3421,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
               if (fetchedNextIndex != null) {
                 await _resolveAndPlayDeferredStreamingIndex(
                   fetchedNextIndex,
-                  playAfterResolve: shouldPlayAfterManualSkip,
+                  playAfterResolve: true,
                 );
                 _updateSleepTimer();
               }
@@ -3425,10 +3431,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         }
         _isSkipping = false;
         _consumeQueuedSkip();
-        _scheduleStreamingSkip(
-          nextIndex,
-          playAfterResolve: shouldPlayAfterManualSkip,
-        );
+        _scheduleStreamingSkip(nextIndex, playAfterResolve: true);
         return;
       }
 
@@ -3491,7 +3494,6 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       cancelAllArtworkLoads();
 
       if (_deferredStreamingQueueMode) {
-        final shouldPlayAfterManualSkip = _player.playing;
         if (_player.position.inMilliseconds > 5000) {
           await _player
               .seek(Duration.zero)
@@ -3501,10 +3503,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
           if (previousIndex != null) {
             _isSkipping = false;
             _consumeQueuedSkip();
-            _scheduleStreamingSkip(
-              previousIndex,
-              playAfterResolve: shouldPlayAfterManualSkip,
-            );
+            _scheduleStreamingSkip(previousIndex, playAfterResolve: true);
             return;
           } else {
             await _player
@@ -3555,6 +3554,13 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     if (!_deferredStreamingQueueMode) return;
     if (targetIndex < 0 || targetIndex >= _mediaQueue.length) return;
 
+    // Cancelar inmediatamente cualquier resolución previa en curso.
+    _resolveGeneration++;
+    final requestGeneration = _resolveGeneration;
+    // Refuerzo en capa de servicio: cancelar resolución de DB/red en curso
+    // y reiniciar el cliente de youtube_explode_dart para abortar requests viejas.
+    StreamService.cancelPendingResolves(resetClient: true);
+
     // Incrementar generación de artwork para cancelar descargas intermedias.
     _artworkGeneration++;
 
@@ -3591,6 +3597,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       await _resolveAndPlayDeferredStreamingIndex(
         targetIndex,
         playAfterResolve: playAfterResolve,
+        expectedGeneration: requestGeneration,
       );
       _updateSleepTimer();
     }());
@@ -3622,7 +3629,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     if (_initializing) return;
     if (index >= 0 && index < _mediaQueue.length) {
       if (_deferredStreamingQueueMode) {
-        _scheduleStreamingSkip(index, playAfterResolve: _player.playing);
+        _scheduleStreamingSkip(index, playAfterResolve: true);
         return;
       }
       try {

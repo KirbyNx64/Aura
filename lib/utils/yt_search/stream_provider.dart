@@ -9,6 +9,7 @@ class StreamService {
   static final Map<String, String> _lastResolveErrorCodeByVideoId = {};
   static StreamCacheDB? _cacheDB;
   static YoutubeExplode? _ytInstance;
+  static int _resolveGeneration = 0;
   static const int _maxPrefetchConcurrency = 8;
   static const Duration _urlExpirySafetyMargin = Duration(minutes: 5);
 
@@ -138,11 +139,13 @@ class StreamService {
     bool fastFail = false,
   }) async {
     await _initCache();
+    final int requestGeneration = _resolveGeneration;
     final normalizedVideoId = videoId.trim();
     if (normalizedVideoId.isEmpty) return null;
     if (forceRefresh) {
       await invalidateCachedStream(normalizedVideoId);
     }
+    if (_isResolveCancelled(requestGeneration)) return null;
 
     // Cache en memoria (fast path)
     final memoryCached = _urlCache[normalizedVideoId];
@@ -159,6 +162,7 @@ class StreamService {
       final pending = _inFlightRequests[normalizedVideoId];
       if (pending != null) {
         final resolvedPending = await pending;
+        if (_isResolveCancelled(requestGeneration)) return null;
         if (resolvedPending == null || resolvedPending.isEmpty) {
           _reportResolveErrorIfNeeded(
             normalizedVideoId,
@@ -174,10 +178,12 @@ class StreamService {
     final request = _resolveBestAudioUrl(
       normalizedVideoId,
       fastFail: fastFail || reportError,
+      requestGeneration: requestGeneration,
     );
     _inFlightRequests[normalizedVideoId] = request;
     try {
       final resolved = await request;
+      if (_isResolveCancelled(requestGeneration)) return null;
       if (resolved == null || resolved.isEmpty) {
         _reportResolveErrorIfNeeded(
           normalizedVideoId,
@@ -195,10 +201,13 @@ class StreamService {
   static Future<String?> _resolveBestAudioUrl(
     String videoId, {
     bool fastFail = false,
+    required int requestGeneration,
   }) async {
+    if (_isResolveCancelled(requestGeneration)) return null;
     // En cola "Up next" priorizamos latencia: usar cache persistente sin HEAD.
     // Si el stream expiró antes de tiempo, fallará al reproducir y se regenerará.
     final cachedStream = await _cacheDB!.getStream(videoId);
+    if (_isResolveCancelled(requestGeneration)) return null;
     if (cachedStream != null &&
         cachedStream.streamUrl.isNotEmpty &&
         !cachedStream.isExpired &&
@@ -215,7 +224,9 @@ class StreamService {
     final streamInfo = await _getBestAudioStreamInfo(
       videoId,
       fastFail: fastFail,
+      requestGeneration: requestGeneration,
     );
+    if (_isResolveCancelled(requestGeneration)) return null;
     if (streamInfo == null) {
       _setLastResolveErrorCode(
         videoId,
@@ -241,6 +252,7 @@ class StreamService {
       duration: streamInfo['duration'],
       loudnessDb: streamInfo['loudnessDb'],
     );
+    if (_isResolveCancelled(requestGeneration)) return null;
 
     _urlCache[videoId] = streamUrl;
     _clearLastResolveErrorCode(videoId);
@@ -294,12 +306,15 @@ class StreamService {
   static Future<Map<String, dynamic>?> _getBestAudioStreamInfo(
     String videoId, {
     bool fastFail = false,
+    required int requestGeneration,
   }) async {
     final maxAttempts = fastFail ? 1 : 2;
     for (int attempt = 0; attempt < maxAttempts; attempt++) {
+      if (_isResolveCancelled(requestGeneration)) return null;
       try {
         final yt = _getYoutubeExplode();
         final manifest = await yt.videos.streamsClient.getManifest(videoId);
+        if (_isResolveCancelled(requestGeneration)) return null;
         final audio =
             manifest.audioOnly
                 .where(
@@ -328,6 +343,7 @@ class StreamService {
               0.0, // YouTube no proporciona esta información directamente
         };
       } catch (e) {
+        if (_isResolveCancelled(requestGeneration)) return null;
         final classified = _classifyResolveError(e);
         _setLastResolveErrorCode(videoId, classified);
         if (!fastFail && attempt == 0 && _shouldRecreateClient(e)) {
@@ -387,6 +403,19 @@ class StreamService {
       _ytInstance?.close();
     } catch (_) {}
     _ytInstance = null;
+  }
+
+  /// Cancela resoluciones en curso (DB/red) y opcionalmente fuerza recrear cliente HTTP.
+  static void cancelPendingResolves({bool resetClient = true}) {
+    _resolveGeneration++;
+    _inFlightRequests.clear();
+    if (resetClient) {
+      _recreateYoutubeExplode();
+    }
+  }
+
+  static bool _isResolveCancelled(int requestGeneration) {
+    return requestGeneration != _resolveGeneration;
   }
 
   static int? _extractExpireEpochSeconds(String streamUrl) {
