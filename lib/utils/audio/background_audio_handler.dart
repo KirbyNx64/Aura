@@ -538,6 +538,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
       // Cargar preferencias de volume boost
       await _loadVolumeBoostPreference();
+      await _applyEqualizerSettingsFromPrefs();
 
       // Cancelar suscripciones anteriores si existen
       await _disposeListeners();
@@ -3060,6 +3061,8 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   // Variable para almacenar el nivel de volume boost
   double _volumeBoost = 1.0;
   final ValueNotifier<double> _volumeBoostNotifier = ValueNotifier<double>(1.0);
+  bool _equalizerSettingsApplied = false;
+  Future<void>? _equalizerApplyTask;
 
   // Getter para obtener el volume boost actual
   double get volumeBoost => _volumeBoost;
@@ -3142,6 +3145,48 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     }
   }
 
+  Future<void> _applyEqualizerSettingsFromPrefs() async {
+    if (!Platform.isAndroid || _equalizer == null) return;
+    if (_equalizerApplyTask != null) {
+      await _equalizerApplyTask;
+      return;
+    }
+
+    final task = () async {
+      try {
+        _prefs ??= await SharedPreferences.getInstance();
+        final parameters = await _equalizer!.parameters.timeout(
+          const Duration(seconds: 2),
+          onTimeout: () => throw TimeoutException(
+            'Timeout obteniendo parámetros del equalizer',
+          ),
+        );
+
+        for (int i = 0; i < parameters.bands.length; i++) {
+          final gain = _prefs?.getDouble('equalizer_band_$i') ?? 0.0;
+          try {
+            await parameters.bands[i].setGain(gain);
+          } catch (_) {
+            // Ignorar errores puntuales de banda para no bloquear la reproducción.
+          }
+        }
+
+        final enabled = _prefs?.getBool('equalizer_enabled') ?? false;
+        await _equalizer!.setEnabled(enabled);
+        _equalizerSettingsApplied = true;
+      } catch (_) {
+        // No bloquear el arranque por errores del ecualizador.
+      }
+    }();
+
+    _equalizerApplyTask = task;
+    try {
+      await task;
+    } finally {
+      _equalizerApplyTask = null;
+    }
+  }
+
   // Guardar preferencia de volume boost
   Future<void> _saveVolumeBoostPreference() async {
     try {
@@ -3177,6 +3222,9 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         // El equalizer mantiene su configuración, solo asegurar que esté habilitado
         _equalizer!.setEnabled(true);
       }
+      if (!_equalizerSettingsApplied) {
+        unawaited(_applyEqualizerSettingsFromPrefs());
+      }
     } catch (e) {
       // Error silencioso - continuar reproducción
     }
@@ -3211,6 +3259,9 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       // Restaurar configuración de audio proactivamente al reanudar
       // Esto asegura que el volumen sea correcto después de estar en segundo plano
       _restoreAudioConfiguration();
+      if (!_equalizerSettingsApplied) {
+        await _applyEqualizerSettingsFromPrefs();
+      }
 
       // Si la lista terminó (estado completed), reiniciar la canción actual
       if (_player.processingState == ProcessingState.completed) {
@@ -4062,12 +4113,13 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     try {
       await _player.stop();
       await _player.dispose();
-
-      final newPlayer = AudioPlayer();
-      _player = newPlayer;
+      _initializePlayerWithEnhancer();
+      _equalizerSettingsApplied = false;
+      await _applyEqualizerSettingsFromPrefs();
       await _init();
     } catch (e) {
       _player = AudioPlayer();
+      _bindPlayerStreams();
     }
   }
 
