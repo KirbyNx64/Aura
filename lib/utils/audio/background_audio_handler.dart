@@ -2653,18 +2653,17 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       return;
     }
     final int sessionVersion = _streamSessionVersion;
-    final int missingItems = _streamRadioFixedQueueSize - _mediaQueue.length;
-    if (missingItems <= 0) {
-      _streamRadioInitialBatchLoaded = true;
-      return;
-    }
-
     final int currentIndex =
         (_deferredStreamingQueueMode
                 ? _deferredStreamingQueueIndex
                 : (_player.currentIndex ?? 0))
             .clamp(0, _mediaQueue.length - 1);
     final int remaining = (_mediaQueue.length - 1) - currentIndex;
+    final int missingItems = _streamRadioFixedQueueSize - remaining;
+    if (missingItems <= 0) {
+      _streamRadioInitialBatchLoaded = true;
+      return;
+    }
     if (!force && remaining > _streamRadioPrefetchThreshold) return;
 
     final currentItem = _mediaQueue[currentIndex];
