@@ -405,14 +405,18 @@ class _PlaylistListViewState extends State<PlaylistListView>
 
   @override
   Widget build(BuildContext context) {
-    final filteredQueue = _searchQuery.isEmpty
-        ? widget.queue
-        : widget.queue.where((item) {
-            final title = item.title.toLowerCase();
-            final artist = (item.artist ?? '').toLowerCase();
-            return title.contains(_searchQuery) ||
-                artist.contains(_searchQuery);
-          }).toList();
+    final indexedQueue = widget.queue.asMap().entries.toList(growable: false);
+    final filteredEntries = _searchQuery.isEmpty
+        ? indexedQueue
+        : indexedQueue
+              .where((entry) {
+                final item = entry.value;
+                final title = item.title.toLowerCase();
+                final artist = (item.artist ?? '').toLowerCase();
+                return title.contains(_searchQuery) ||
+                    artist.contains(_searchQuery);
+              })
+              .toList(growable: false);
 
     return Column(
       children: [
@@ -625,18 +629,28 @@ class _PlaylistListViewState extends State<PlaylistListView>
                   padding: EdgeInsets.only(
                     bottom: MediaQuery.of(context).padding.bottom,
                   ),
-                  itemCount: filteredQueue.length,
+                  itemCount: filteredEntries.length,
                   itemBuilder: (context, index) {
-                    final item = filteredQueue[index];
-                    final realIndex = widget.queue.indexOf(item);
-                    final isCurrent = item.id == widget.currentMediaItem?.id;
+                    final entry = filteredEntries[index];
+                    final realIndex = entry.key;
+                    final item = entry.value;
+                    final liveQueueIndex =
+                        audioHandler?.playbackState.valueOrNull?.queueIndex;
+                    final hasValidLiveQueueIndex =
+                        liveQueueIndex != null &&
+                        liveQueueIndex >= 0 &&
+                        liveQueueIndex < widget.queue.length;
+                    final activeIndex = hasValidLiveQueueIndex
+                        ? liveQueueIndex
+                        : widget.currentIndex;
+                    final isCurrent = realIndex == activeIndex;
                     final isAmoledTheme =
                         colorSchemeNotifier.value == AppColorScheme.amoled;
                     final songId = item.extras?['songId'] ?? 0;
                     final songPath = item.extras?['data'] ?? '';
 
                     final isFirstItem = index == 0;
-                    final isLastItem = index == filteredQueue.length - 1;
+                    final isLastItem = index == filteredEntries.length - 1;
 
                     final isDark =
                         Theme.of(context).brightness == Brightness.dark;
@@ -651,7 +665,7 @@ class _PlaylistListViewState extends State<PlaylistListView>
                           ).colorScheme.secondary.withValues(alpha: 0.07);
 
                     BorderRadius borderRadius;
-                    if (filteredQueue.length == 1) {
+                    if (filteredEntries.length == 1) {
                       borderRadius = BorderRadius.circular(16);
                     } else if (isFirstItem) {
                       borderRadius = const BorderRadius.only(
@@ -672,7 +686,7 @@ class _PlaylistListViewState extends State<PlaylistListView>
                     }
 
                     return Padding(
-                      key: ValueKey(item.id),
+                      key: ValueKey('${item.id}#$realIndex'),
                       padding: EdgeInsets.only(
                         left: 16,
                         right: 16,

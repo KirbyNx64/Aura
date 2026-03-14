@@ -584,6 +584,8 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     if (videoId == null || videoId.isEmpty) return;
     if (playLoadingNotifier.value) return;
 
+    final loaderStartedAt = DateTime.now();
+    const minLoaderVisible = Duration(milliseconds: 320);
     playLoadingNotifier.value = true;
     openPlayerPanelNotifier.value = true;
     var loadingReleased = false;
@@ -592,11 +594,20 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     void releaseLoading() {
       if (loadingReleased) return;
       loadingReleased = true;
-      playLoadingNotifier.value = false;
       loadingGuard?.cancel();
       loadingGuard = null;
       playbackWatchSub?.cancel();
       playbackWatchSub = null;
+
+      final elapsed = DateTime.now().difference(loaderStartedAt);
+      if (elapsed >= minLoaderVisible) {
+        playLoadingNotifier.value = false;
+      } else {
+        final remaining = minLoaderVisible - elapsed;
+        Timer(remaining, () {
+          playLoadingNotifier.value = false;
+        });
+      }
     }
 
     loadingGuard = Timer(const Duration(seconds: 8), releaseLoading);
@@ -697,6 +708,8 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     if (videoId == null || videoId.isEmpty) return;
     if (playLoadingNotifier.value) return;
 
+    final loaderStartedAt = DateTime.now();
+    const minLoaderVisible = Duration(milliseconds: 320);
     playLoadingNotifier.value = true;
     openPlayerPanelNotifier.value = true;
     try {
@@ -729,6 +742,10 @@ class _FavoritesScreenState extends State<FavoritesScreen>
         'autoPlay': true,
       });
     } finally {
+      final elapsed = DateTime.now().difference(loaderStartedAt);
+      if (elapsed < minLoaderVisible) {
+        await Future<void>.delayed(minLoaderVisible - elapsed);
+      }
       playLoadingNotifier.value = false;
     }
   }

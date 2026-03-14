@@ -596,33 +596,31 @@ class _CurrentPlaylistScreenState extends State<CurrentPlaylistScreen>
                                             ? Colors.white
                                             : primaryColor;
 
-                                        // Mapa id->índice real para evitar indexOf(O(n)) en cada item
-                                        final indexMap = <String, int>{};
-                                        for (
-                                          var i = 0;
-                                          i < widget.queue.length;
-                                          i++
-                                        ) {
-                                          indexMap[widget.queue[i].id] = i;
-                                        }
-
-                                        // Filtrar la cola según la búsqueda
-                                        final filteredQueue =
+                                        // Mantener índice original para evitar ambigüedad
+                                        // cuando hay IDs repetidos en radio.
+                                        final indexedQueue = widget.queue
+                                            .asMap()
+                                            .entries
+                                            .toList(growable: false);
+                                        final filteredEntries =
                                             _searchQuery.isEmpty
-                                            ? widget.queue
-                                            : widget.queue.where((item) {
-                                                final title = item.title
-                                                    .toLowerCase();
-                                                final artist =
-                                                    (item.artist ?? '')
+                                            ? indexedQueue
+                                            : indexedQueue
+                                                  .where((entry) {
+                                                    final item = entry.value;
+                                                    final title = item.title
                                                         .toLowerCase();
-                                                return title.contains(
-                                                      _searchQuery,
-                                                    ) ||
-                                                    artist.contains(
-                                                      _searchQuery,
-                                                    );
-                                              }).toList();
+                                                    final artist =
+                                                        (item.artist ?? '')
+                                                            .toLowerCase();
+                                                    return title.contains(
+                                                          _searchQuery,
+                                                        ) ||
+                                                        artist.contains(
+                                                          _searchQuery,
+                                                        );
+                                                  })
+                                                  .toList(growable: false);
 
                                         return ListView.builder(
                                           controller: _scrollController,
@@ -637,16 +635,40 @@ class _CurrentPlaylistScreenState extends State<CurrentPlaylistScreen>
                                               context,
                                             ).padding.bottom,
                                           ),
-                                          itemCount: filteredQueue.length,
+                                          itemCount: filteredEntries.length,
                                           itemBuilder: (context, index) {
-                                            final item = filteredQueue[index];
-                                            // Índice real en O(1)
-                                            final realIndex =
-                                                indexMap[item.id] ?? index;
-                                            final isCurrent =
-                                                item.id ==
-                                                    liveCurrentMediaItem?.id ||
-                                                realIndex == liveQueueIndex;
+                                            final entry =
+                                                filteredEntries[index];
+                                            final realIndex = entry.key;
+                                            final item = entry.value;
+                                            final mediaId =
+                                                liveCurrentMediaItem?.id;
+                                            final hasValidLiveQueueIndex =
+                                                liveQueueIndex != null &&
+                                                liveQueueIndex >= 0 &&
+                                                liveQueueIndex <
+                                                    widget.queue.length;
+                                            final queueIndexMatchesMediaId =
+                                                hasValidLiveQueueIndex &&
+                                                    mediaId != null
+                                                ? widget
+                                                          .queue[liveQueueIndex]
+                                                          .id ==
+                                                      mediaId
+                                                : false;
+
+                                            final bool isCurrent;
+                                            if (hasValidLiveQueueIndex &&
+                                                (mediaId == null ||
+                                                    queueIndexMatchesMediaId)) {
+                                              isCurrent =
+                                                  realIndex == liveQueueIndex;
+                                            } else {
+                                              // Fallback cuando queueIndex llega desfasado.
+                                              isCurrent =
+                                                  mediaId != null &&
+                                                  item.id == mediaId;
+                                            }
                                             final songId =
                                                 item.extras?['songId'] ?? 0;
                                             final songPath =
@@ -663,10 +685,10 @@ class _CurrentPlaylistScreenState extends State<CurrentPlaylistScreen>
                                             final bool isFirst = index == 0;
                                             final bool isLast =
                                                 index ==
-                                                filteredQueue.length -
+                                                filteredEntries.length -
                                                     1; // Usando filteredQueue.length aquí porque es lo que se muestra
                                             final bool isOnly =
-                                                filteredQueue.length == 1;
+                                                filteredEntries.length == 1;
 
                                             BorderRadius borderRadius;
                                             if (isOnly) {
@@ -707,7 +729,7 @@ class _CurrentPlaylistScreenState extends State<CurrentPlaylistScreen>
 
                                             return Padding(
                                               key: ValueKey(
-                                                item.id,
+                                                '${item.id}#$realIndex',
                                               ), // Key única para evitar intercambio de carátulas
                                               padding: EdgeInsets.only(
                                                 left: 16,

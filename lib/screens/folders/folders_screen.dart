@@ -1753,6 +1753,8 @@ class _FoldersScreenState extends State<FoldersScreen>
     final targetVideoId = item.videoId?.trim();
     if (targetVideoId == null || targetVideoId.isEmpty) return;
 
+    final loaderStartedAt = DateTime.now();
+    const minLoaderVisible = Duration(milliseconds: 650);
     playLoadingNotifier.value = true;
     openPlayerPanelNotifier.value = true;
     var loadingReleased = false;
@@ -1761,11 +1763,20 @@ class _FoldersScreenState extends State<FoldersScreen>
     void releaseLoading() {
       if (loadingReleased) return;
       loadingReleased = true;
-      playLoadingNotifier.value = false;
       loadingGuard?.cancel();
       loadingGuard = null;
       playbackWatchSub?.cancel();
       playbackWatchSub = null;
+
+      final elapsed = DateTime.now().difference(loaderStartedAt);
+      if (elapsed >= minLoaderVisible) {
+        playLoadingNotifier.value = false;
+      } else {
+        final remaining = minLoaderVisible - elapsed;
+        Timer(remaining, () {
+          playLoadingNotifier.value = false;
+        });
+      }
     }
 
     loadingGuard = Timer(const Duration(seconds: 8), releaseLoading);

@@ -6673,9 +6673,17 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
 
                         final currentMediaItem =
                             audioHandler?.mediaItem.valueOrNull;
-                        final currentIndex = queue.indexWhere(
-                          (item) => item.id == currentMediaItem?.id,
-                        );
+                        final playbackQueueIndex =
+                            audioHandler?.playbackState.valueOrNull?.queueIndex;
+                        final hasValidPlaybackQueueIndex =
+                            playbackQueueIndex != null &&
+                            playbackQueueIndex >= 0 &&
+                            playbackQueueIndex < queue.length;
+                        final currentIndex = hasValidPlaybackQueueIndex
+                            ? playbackQueueIndex
+                            : queue.indexWhere(
+                                (item) => item.id == currentMediaItem?.id,
+                              );
 
                         return CurrentPlaylistScreen(
                           key: ValueKey('playlist_$_playlistResetCounter'),

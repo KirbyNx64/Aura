@@ -2440,6 +2440,8 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (videoId == null || videoId.isEmpty) return;
     if (playLoadingNotifier.value) return;
 
+    final loaderStartedAt = DateTime.now();
+    const minLoaderVisible = Duration(milliseconds: 650);
     playLoadingNotifier.value = true;
     openPlayerPanelNotifier.value = true;
     var loadingReleased = false;
@@ -2448,11 +2450,20 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     void releaseLoading() {
       if (loadingReleased) return;
       loadingReleased = true;
-      playLoadingNotifier.value = false;
       loadingGuard?.cancel();
       loadingGuard = null;
       playbackWatchSub?.cancel();
       playbackWatchSub = null;
+
+      final elapsed = DateTime.now().difference(loaderStartedAt);
+      if (elapsed >= minLoaderVisible) {
+        playLoadingNotifier.value = false;
+      } else {
+        final remaining = minLoaderVisible - elapsed;
+        Timer(remaining, () {
+          playLoadingNotifier.value = false;
+        });
+      }
     }
 
     loadingGuard = Timer(const Duration(seconds: 8), releaseLoading);
@@ -4424,6 +4435,16 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                             item.title,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
+                            style: isCurrent
+                                ? Theme.of(
+                                    context,
+                                  ).textTheme.titleMedium?.copyWith(
+                                    color: isAmoledTheme
+                                        ? Colors.white
+                                        : Theme.of(context).colorScheme.primary,
+                                    fontWeight: FontWeight.bold,
+                                  )
+                                : Theme.of(context).textTheme.titleMedium,
                           ),
                           subtitle: Text(
                             _formatStreamingArtistWithDuration(item),
