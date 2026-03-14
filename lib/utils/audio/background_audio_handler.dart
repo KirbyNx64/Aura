@@ -424,6 +424,12 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   final Map<String, Future<Uri?>> _streamArtworkPreloadTasks = {};
   final LinkedHashMap<String, Uri> _streamArtworkFileCache = LinkedHashMap();
   int _streamSessionVersion = 0;
+  int _resolveGeneration =
+      0; // Se incrementa en cada skip para cancelar resoluciones anteriores.
+  int _artworkGeneration =
+      0; // Se incrementa en cada skip para cancelar descargas de carátulas intermedias.
+  int _activeArtworkDownloads = 0; // Contador de descargas concurrentes activas.
+  static const int _maxConcurrentArtworkDownloads = 2;
   static const int _streamRadioPrefetchThreshold = 2;
   static const int _streamRadioBatchSize = 20;
   static const int _streamArtworkPrefetchCount = 1;
@@ -1739,8 +1745,6 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
     try {
       final requestedRadioMode = item.extras?['radioMode'] != false;
-      _deferredStreamingQueueMode = requestedRadioMode;
-      _deferredStreamingQueueIndex = 0;
       final rawSeedVideoId = item.extras?['videoId']?.toString().trim();
       final seedVideoId = (rawSeedVideoId != null && rawSeedVideoId.isNotEmpty)
           ? rawSeedVideoId
@@ -1764,6 +1768,9 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       );
 
       _resetStreamingSessionState(clearQueuedVideos: true);
+      // Asignar DESPUÉS del reset para que no se sobreescriban
+      _deferredStreamingQueueMode = requestedRadioMode;
+      _deferredStreamingQueueIndex = 0;
       _streamRadioEnabled = requestedRadioMode;
       if (seedVideoId.isNotEmpty) {
         _streamRadioSeedVideoId = seedVideoId;
@@ -1905,6 +1912,8 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
   void _resetStreamingSessionState({bool clearQueuedVideos = false}) {
     _streamSessionVersion++;
+    _artworkGeneration++; // Cancelar descargas de carátulas en vuelo.
+    _activeArtworkDownloads = 0;
     _streamRadioEnabled = false;
     _streamRadioSeedVideoId = null;
     _streamRadioContinuationParams = null;
@@ -1912,6 +1921,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     _deferredStreamingQueueMode = false;
     _deferredStreamingQueueIndex = 0;
     _streamArtworkPreloadTasks.clear();
+    _streamUrlPrefetchTasks.clear();
     if (clearQueuedVideos) {
       _streamQueuedVideoIds.clear();
       _streamArtworkFileCache.clear();
@@ -1924,6 +1934,15 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   }) async {
     if (!_deferredStreamingQueueMode) return false;
     if (targetIndex < 0 || targetIndex >= _mediaQueue.length) return false;
+
+    // Capturar la generación actual. Si el usuario salta de nuevo antes de que
+    // terminemos, _resolveGeneration habrá cambiado y abortamos gracefully.
+    _resolveGeneration++;
+    _artworkGeneration++;
+    final myGeneration = _resolveGeneration;
+
+    bool isSuperseded() =>
+        myGeneration != _resolveGeneration || !_deferredStreamingQueueMode;
 
     final currentItem = _mediaQueue[targetIndex];
 
@@ -1942,6 +1961,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         index: targetIndex,
         currentMediaItem: currentItem,
         currentSongId: currentItem.id,
+        trackGeneration: true,
       ),
     );
 
@@ -1954,10 +1974,25 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
     var streamUrl = currentItem.extras?['streamUrl']?.toString().trim();
     if (streamUrl == null || streamUrl.isEmpty) {
-      streamUrl = await StreamService.getBestAudioUrl(
-        videoId,
-      ).timeout(const Duration(seconds: 3), onTimeout: () => null);
+      // Reusar prefetch en curso si lo hay, para no lanzar una petición de red duplicada.
+      final inFlight = _streamUrlPrefetchTasks[videoId];
+      if (inFlight != null) {
+        streamUrl = await inFlight.timeout(
+          const Duration(seconds: 5),
+          onTimeout: () => null,
+        );
+      }
+      // Si el prefetch no tenía nada o no había empezado, resolver ahora.
+      if (streamUrl == null || streamUrl.isEmpty) {
+        streamUrl = await StreamService.getBestAudioUrl(
+          videoId,
+        ).timeout(const Duration(seconds: 5), onTimeout: () => null);
+      }
     }
+
+    // Verificar que no hayamos sido superados mientras esperábamos la URL.
+    if (isSuperseded()) return false;
+
     if (streamUrl == null || streamUrl.isEmpty) {
       playLoadingNotifier.value = false;
       return false;
@@ -1977,14 +2012,23 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
     mediaItem.add(updatedItem);
 
-    await _player
-        .setUrl(streamUrl, initialPosition: Duration.zero)
-        .timeout(
-          const Duration(seconds: 4),
-          onTimeout: () {
-            throw Exception('Timeout al cargar stream diferido');
-          },
-        );
+    try {
+      // Verificar una última vez antes de cargar el audio en el player.
+      if (isSuperseded()) return false;
+      await _player
+          .setUrl(streamUrl, initialPosition: Duration.zero)
+          .timeout(const Duration(seconds: 6));
+    } on PlayerInterruptedException {
+      // El player fue interrumpido por un skip más reciente — es esperado, ignorar.
+      return false;
+    } catch (_) {
+      // Timeout, error de red u otro fallo al cargar el stream — no relanzar
+      // porque esta función se llama con unawaited y causaría una excepción no capturada.
+      return false;
+    }
+
+    // Verificar nuevamente después del setUrl.
+    if (isSuperseded()) return false;
 
     // En cola streaming diferida, liberar loader después de enlazar el stream
     // para evitar que se apague antes de que PlayerScreen llegue a pintarlo.
@@ -2021,8 +2065,24 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
   Future<void> _prefetchDeferredNextStreamUrl(int currentIndex) async {
     if (!_deferredStreamingQueueMode) return;
-    final nextIndex = currentIndex + 1;
+    final myGeneration = _resolveGeneration;
+    // Prefetchear las 2 siguientes canciones para reducir esperas al saltar rápido.
+    for (int offset = 1; offset <= 2; offset++) {
+      // Si el usuario saltó de nuevo, abortar prefetch.
+      if (myGeneration != _resolveGeneration) return;
+      final nextIndex = currentIndex + offset;
+      if (nextIndex < 0 || nextIndex >= _mediaQueue.length) break;
+      unawaited(_prefetchSingleDeferredStreamUrl(nextIndex, myGeneration));
+    }
+  }
+
+  Future<void> _prefetchSingleDeferredStreamUrl(
+    int nextIndex,
+    int generation,
+  ) async {
+    if (!_deferredStreamingQueueMode) return;
     if (nextIndex < 0 || nextIndex >= _mediaQueue.length) return;
+    if (generation != _resolveGeneration) return;
 
     final nextItem = _mediaQueue[nextIndex];
     final existingUrl = nextItem.extras?['streamUrl']?.toString().trim();
@@ -2038,11 +2098,13 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
     final task = StreamService.getBestAudioUrl(
       videoId,
-    ).timeout(const Duration(seconds: 3), onTimeout: () => null);
+    ).timeout(const Duration(seconds: 8), onTimeout: () => null);
     _streamUrlPrefetchTasks[videoId] = task;
 
     try {
       final prefetchedUrl = await task;
+      // Verificar que la generación no cambió mientras esperábamos.
+      if (generation != _resolveGeneration) return;
       if (prefetchedUrl == null || prefetchedUrl.isEmpty) return;
       if (nextIndex < 0 || nextIndex >= _mediaQueue.length) return;
 
@@ -2066,6 +2128,8 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     if (_streamArtworkPrefetchCount <= 0) return;
     if (_mediaQueue.isEmpty) return;
     if (!_isStreamingMediaItem(_mediaQueue.first)) return;
+    // No precargar si ya hay descargas activas al máximo — evitar saturar.
+    if (_activeArtworkDownloads >= _maxConcurrentArtworkDownloads) return;
 
     for (int offset = 1; offset <= _streamArtworkPrefetchCount; offset++) {
       final idx = currentIndex + offset;
@@ -2085,6 +2149,9 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
           : item.id.replaceFirst('yt:', '').trim();
       if (videoId.isEmpty) continue;
 
+      // Verificar si ya está cacheada — si no, no forzar descarga aquí.
+      if (_streamArtworkFileCache.containsKey(videoId)) continue;
+
       unawaited(() async {
         final localUri = await _getOrCacheStreamingArtwork(videoId, artUri);
         if (localUri == null) return;
@@ -2100,6 +2167,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     required int index,
     required MediaItem currentMediaItem,
     required String currentSongId,
+    bool trackGeneration = false,
   }) async {
     if (index < 0 || index >= _mediaQueue.length) return;
     final artUri = currentMediaItem.artUri;
@@ -2115,7 +2183,12 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     if (videoId.isEmpty) return;
 
     // Para notificación: usar versión local recortada cuando esté disponible.
-    final localUri = await _getOrCacheStreamingArtwork(videoId, artUri);
+    // Pasar la generación actual para que descargas obsoletas se cancelen.
+    final localUri = await _getOrCacheStreamingArtwork(
+      videoId,
+      artUri,
+      artworkGen: trackGeneration ? _artworkGeneration : null,
+    );
 
     if (!mounted || index >= _mediaQueue.length) return;
     final current = _mediaQueue[index];
@@ -2133,8 +2206,13 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
   Future<Uri?> _getOrCacheStreamingArtwork(
     String videoId,
-    Uri remoteUri,
-  ) async {
+    Uri remoteUri, {
+    int? artworkGen,
+  }) async {
+    // Función para verificar si esta operación fue superada por un skip más reciente.
+    bool isStale() =>
+        artworkGen != null && artworkGen != _artworkGeneration;
+
     final cachedUri = _streamArtworkFileCache[videoId];
     if (cachedUri != null) {
       try {
@@ -2147,6 +2225,9 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       }
     }
 
+    // Abortar si ya no es la canción actual.
+    if (isStale()) return null;
+
     // Migración puntual desde cache legado (v1) a v3 recortado.
     try {
       final tempDir = await getTemporaryDirectory();
@@ -2156,6 +2237,8 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         _streamArtworkFileCache[videoId] = uri;
         return uri;
       }
+
+      if (isStale()) return null;
 
       final legacyFile = File('${tempDir.path}/yt_stream_art_$videoId.jpg');
       if (await legacyFile.exists() && await legacyFile.length() > 0) {
@@ -2177,12 +2260,25 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       }
     } catch (_) {}
 
+    // Abortar antes de iniciar descarga de red si ya es obsoleta.
+    if (isStale()) return null;
+
     final pending = _streamArtworkPreloadTasks[videoId];
     if (pending != null) {
       return await pending;
     }
 
-    final future = _downloadStreamingArtworkToFile(videoId, remoteUri);
+    // Limitar descargas concurrentes para evitar saturar red e I/O.
+    if (_activeArtworkDownloads >= _maxConcurrentArtworkDownloads) {
+      return null;
+    }
+
+    _activeArtworkDownloads++;
+    final future = _downloadStreamingArtworkToFile(
+      videoId,
+      remoteUri,
+      artworkGen: artworkGen,
+    );
     _streamArtworkPreloadTasks[videoId] = future;
     try {
       final result = await future;
@@ -2195,6 +2291,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       }
       return result;
     } finally {
+      _activeArtworkDownloads--;
       _streamArtworkPreloadTasks.remove(videoId);
     }
   }
@@ -2240,10 +2337,17 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
   Future<Uri?> _downloadStreamingArtworkToFile(
     String videoId,
-    Uri remoteUri,
-  ) async {
+    Uri remoteUri, {
+    int? artworkGen,
+  }) async {
+    // Verificar si esta descarga sigue siendo relevante.
+    bool isStale() =>
+        artworkGen != null && artworkGen != _artworkGeneration;
+
     HttpClient? client;
     try {
+      if (isStale()) return null;
+
       client = HttpClient()..connectionTimeout = const Duration(seconds: 4);
       final request = await client.getUrl(remoteUri);
       request.followRedirects = true;
@@ -2254,13 +2358,21 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         return null;
       }
 
+      // Verificar antes de descargar bytes completos.
+      if (isStale()) return null;
+
       final bytes = await consolidateHttpClientResponseBytes(response);
       if (bytes.isEmpty) return null;
+
+      // Verificar antes de procesamiento de imagen (CPU-intensivo).
+      if (isStale()) return null;
 
       List<int> outputBytes = bytes;
       try {
         final decoded = img.decodeImage(bytes);
         if (decoded != null) {
+          // Último check antes de la operación más costosa (crop + encode).
+          if (isStale()) return null;
           final square = _buildStreamingSquareCrop(
             image: decoded,
             imageUrl: remoteUri.toString(),
@@ -2270,6 +2382,8 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       } catch (_) {
         outputBytes = bytes;
       }
+
+      if (isStale()) return null;
 
       final tempDir = await getTemporaryDirectory();
       // v3 invalida archivos previos no recortados que Android pudo cachear.
@@ -2800,8 +2914,9 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
           }
           return;
         }
-        await _resolveAndPlayDeferredStreamingIndex(nextIndex, autoPlay: true);
-        _updateSleepTimer();
+        _isSkipping = false;
+        _consumeQueuedSkip();
+        _scheduleStreamingSkip(nextIndex);
         return;
       }
 
@@ -2866,10 +2981,10 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         } else {
           final previousIndex = _deferredStreamingQueueIndex - 1;
           if (previousIndex >= 0) {
-            await _resolveAndPlayDeferredStreamingIndex(
-              previousIndex,
-              autoPlay: true,
-            );
+            _isSkipping = false;
+            _consumeQueuedSkip();
+            _scheduleStreamingSkip(previousIndex);
+            return;
           } else {
             await _player
                 .seek(Duration.zero)
@@ -2900,6 +3015,53 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     }
   }
 
+  /// Actualiza la UI inmediatamente y resuelve el stream de la canción destino.
+  /// Si el usuario salta de nuevo, la resolución anterior se cancela
+  /// automáticamente por el sistema de generación (_resolveGeneration).
+  void _scheduleStreamingSkip(int targetIndex) {
+    if (!_deferredStreamingQueueMode) return;
+    if (targetIndex < 0 || targetIndex >= _mediaQueue.length) return;
+
+    // Incrementar generación de artwork para cancelar descargas intermedias.
+    _artworkGeneration++;
+
+    // 1) Actualizar UI instantáneamente: índice, metadata y estado de carga.
+    _deferredStreamingQueueIndex = targetIndex;
+    final item = _mediaQueue[targetIndex];
+    mediaItem.add(item);
+    playbackState.add(
+      playbackState.value.copyWith(
+        queueIndex: targetIndex,
+        processingState: AudioProcessingState.loading,
+      ),
+    );
+
+    // Usar carátula cacheada localmente si existe para UI instantánea.
+    final rawVideoId = item.extras?['videoId']?.toString().trim();
+    final videoId = (rawVideoId != null && rawVideoId.isNotEmpty)
+        ? rawVideoId
+        : item.id.replaceFirst('yt:', '').trim();
+    if (videoId.isNotEmpty) {
+      final cachedUri = _streamArtworkFileCache[videoId];
+      if (cachedUri != null) {
+        final updated = item.copyWith(artUri: cachedUri);
+        _mediaQueue[targetIndex] = updated;
+        mediaItem.add(updated);
+      }
+    }
+
+    // 2) Resolver y reproducir inmediatamente.
+    //    Si el usuario salta de nuevo, _resolveGeneration cambiará y
+    //    la resolución en curso abortará via isSuperseded().
+    unawaited(() async {
+      await _resolveAndPlayDeferredStreamingIndex(
+        targetIndex,
+        autoPlay: true,
+      );
+      _updateSleepTimer();
+    }());
+  }
+
   void _consumeQueuedSkip() {
     if (_isSkipping || _initializing) return;
 
@@ -2926,8 +3088,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     if (_initializing) return;
     if (index >= 0 && index < _mediaQueue.length) {
       if (_deferredStreamingQueueMode) {
-        await _resolveAndPlayDeferredStreamingIndex(index, autoPlay: true);
-        _updateSleepTimer();
+        _scheduleStreamingSkip(index);
         return;
       }
       try {
