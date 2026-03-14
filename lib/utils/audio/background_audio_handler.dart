@@ -974,6 +974,115 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     return await FavoritesDB().isFavorite(songId);
   }
 
+  String _favoritePathForMediaItem(MediaItem item) {
+    final dataPath = item.extras?['data']?.toString().trim();
+    if (dataPath != null && dataPath.isNotEmpty) {
+      return dataPath;
+    }
+    final videoId = item.extras?['videoId']?.toString().trim();
+    if (videoId != null && videoId.isNotEmpty) {
+      return 'yt:$videoId';
+    }
+    return item.id.trim();
+  }
+
+  String? _streamingVideoIdForMediaItem(MediaItem item) {
+    final rawVideoId = item.extras?['videoId']?.toString().trim();
+    if (rawVideoId != null && rawVideoId.isNotEmpty) {
+      return rawVideoId;
+    }
+    if (item.id.startsWith('yt:')) {
+      final id = item.id.replaceFirst('yt:', '').trim();
+      if (id.isNotEmpty) return id;
+    }
+    return null;
+  }
+
+  String? _extractVideoIdFromFavoritePath(String rawPath) {
+    final path = rawPath.trim();
+    if (path.isEmpty) return null;
+
+    if (path.startsWith('yt:')) {
+      final id = path.substring(3).trim();
+      return id.isEmpty ? null : id;
+    }
+
+    final uri = Uri.tryParse(path);
+    if (uri != null) {
+      final queryVideoId = uri.queryParameters['v']?.trim();
+      if (queryVideoId != null && queryVideoId.isNotEmpty) {
+        return queryVideoId;
+      }
+      if (uri.host.contains('youtu.be') && uri.pathSegments.isNotEmpty) {
+        final shortId = uri.pathSegments.first.trim();
+        if (shortId.isNotEmpty) {
+          return shortId;
+        }
+      }
+    }
+
+    final idLike = RegExp(r'^[a-zA-Z0-9_-]{11}$');
+    if (idLike.hasMatch(path)) {
+      return path;
+    }
+
+    return null;
+  }
+
+  Future<String?> _findExistingFavoriteStorageKey(MediaItem item) async {
+    final canonicalPath = _favoritePathForMediaItem(item);
+    if (canonicalPath.isNotEmpty &&
+        await FavoritesDB().isFavorite(canonicalPath)) {
+      return canonicalPath;
+    }
+
+    final videoId = _streamingVideoIdForMediaItem(item);
+    if (videoId == null || videoId.isEmpty) return null;
+
+    final favoritePaths = await FavoritesDB().getFavoritePaths();
+    for (final raw in favoritePaths) {
+      final path = raw.trim();
+      if (path.isEmpty) continue;
+      if (path == 'yt:$videoId' || path == videoId) {
+        return path;
+      }
+    }
+
+    for (final raw in favoritePaths) {
+      final path = raw.trim();
+      if (path.isEmpty) continue;
+
+      final meta = await FavoritesDB().getFavoriteMeta(path);
+      final metaVideoId = meta?['videoId']?.toString().trim();
+      if (metaVideoId != null && metaVideoId.isNotEmpty && metaVideoId == videoId) {
+        return path;
+      }
+
+      final extractedVideoId = _extractVideoIdFromFavoritePath(path);
+      if (extractedVideoId != null && extractedVideoId == videoId) {
+        return path;
+      }
+    }
+
+    return null;
+  }
+
+  Future<void> _syncFavoriteFlagForItem(
+    MediaItem item, {
+    bool notifyPlaybackState = true,
+  }) async {
+    final favoriteKey = await _findExistingFavoriteStorageKey(item);
+    if (favoriteKey != null) {
+      _favoriteIds.add(item.id);
+    } else {
+      _favoriteIds.remove(item.id);
+    }
+    if (notifyPlaybackState) {
+      // Refresca el control custom de favorito en la notificación.
+      playbackState.add(_transformPlaybackEvent(_player.playbackEvent));
+    }
+  }
+
   /// Transform a just_audio event into an audio_service state.
   /// Sigue exactamente el patrón de la documentación oficial de audio_service
   PlaybackState _transformPlaybackEvent(PlaybackEvent event) {
@@ -1047,18 +1156,9 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     if (index < 0 || index >= _mediaQueue.length) return;
 
     var currentMediaItem = _mediaQueue[index];
-    final songPath = currentMediaItem.extras?['data'] as String?;
-    if (songPath != null) {
-      FavoritesDB().isFavorite(songPath).then((isFav) {
-        if (isFav) {
-          _favoriteIds.add(currentMediaItem.id);
-        } else {
-          _favoriteIds.remove(currentMediaItem.id);
-        }
-        // Actualiza el estado para que el icono de favorito cambie en la notificación
-        playbackState.add(_transformPlaybackEvent(_player.playbackEvent));
-      });
-    }
+    final songPath = currentMediaItem.extras?['data']?.toString().trim();
+    unawaited(_syncFavoriteFlagForItem(currentMediaItem));
+
     final songId = currentMediaItem.extras?['songId'] as int?;
     final currentSongId = currentMediaItem.id;
 
@@ -1627,6 +1727,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
             }
 
             mediaItem.add(finalSelectedItem);
+            unawaited(_syncFavoriteFlagForItem(finalSelectedItem));
             playbackState.add(
               playbackState.value.copyWith(queueIndex: initialIndex),
             );
@@ -1798,6 +1899,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         ..add(streamItem);
       queue.add(List<MediaItem>.from(_mediaQueue));
       mediaItem.add(streamItem);
+      unawaited(_syncFavoriteFlagForItem(streamItem));
       unawaited(
         _updateCurrentStreamingArtwork(
           index: 0,
@@ -1952,6 +2054,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     // 1) Publicar metadatos de inmediato para que la UI cambie instantáneamente.
     _deferredStreamingQueueIndex = targetIndex;
     mediaItem.add(currentItem);
+    unawaited(_syncFavoriteFlagForItem(currentItem));
     playbackState.add(
       playbackState.value.copyWith(
         queueIndex: targetIndex,
@@ -2619,6 +2722,242 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     }
   }
 
+  Future<Map<String, dynamic>> _startStreamingRadioFromCurrent({
+    bool replaceQueue = true,
+  }) async {
+    if (_mediaQueue.isEmpty) {
+      return {'ok': false, 'reason': 'empty_queue'};
+    }
+
+    final int currentIndex =
+        (_deferredStreamingQueueMode
+                ? _deferredStreamingQueueIndex
+                : (_player.currentIndex ?? 0))
+            .clamp(0, _mediaQueue.length - 1);
+    final currentItem = _mediaQueue[currentIndex];
+    if (!_isStreamingMediaItem(currentItem)) {
+      return {'ok': false, 'reason': 'not_streaming'};
+    }
+
+    final rawVideoId = currentItem.extras?['videoId']?.toString().trim();
+    final seedVideoId = (rawVideoId != null && rawVideoId.isNotEmpty)
+        ? rawVideoId
+        : (currentItem.id.startsWith('yt:')
+              ? currentItem.id.replaceFirst('yt:', '').trim()
+              : '');
+    if (seedVideoId.isEmpty) {
+      return {'ok': false, 'reason': 'missing_video_id'};
+    }
+
+    _streamSessionVersion++;
+    _resolveGeneration++;
+    _artworkGeneration++;
+    _activeArtworkDownloads = 0;
+    _streamRadioAppendInProgress = false;
+    _streamRadioInitialBatchLoaded = false;
+    _streamRadioEnabled = true;
+    _streamRadioSeedVideoId = seedVideoId;
+    _streamRadioContinuationParams = null;
+    _streamArtworkPreloadTasks.clear();
+    _streamUrlPrefetchTasks.clear();
+
+    if (replaceQueue && currentIndex < _mediaQueue.length - 1) {
+      _mediaQueue.removeRange(currentIndex + 1, _mediaQueue.length);
+    }
+
+    _deferredStreamingQueueMode = true;
+    _deferredStreamingQueueIndex = currentIndex;
+
+    _streamQueuedVideoIds.clear();
+    for (int i = 0; i < _mediaQueue.length; i++) {
+      final item = _mediaQueue[i];
+      if (!_isStreamingMediaItem(item)) {
+        continue;
+      }
+
+      final itemRawVideoId = item.extras?['videoId']?.toString().trim();
+      final itemVideoId = (itemRawVideoId != null && itemRawVideoId.isNotEmpty)
+          ? itemRawVideoId
+          : (item.id.startsWith('yt:')
+                ? item.id.replaceFirst('yt:', '').trim()
+                : '');
+      final resolvedDisplayArtUri = _resolveStreamingDisplayArtUri(
+        preferred: item.extras?['displayArtUri']?.toString(),
+        artUri: item.artUri,
+        videoId: itemVideoId,
+      );
+      if (itemVideoId.isNotEmpty) {
+        _streamQueuedVideoIds.add(itemVideoId);
+      }
+
+      final normalizedExtras = <String, dynamic>{
+        ...?item.extras,
+        'isStreaming': true,
+        'radioMode': true,
+        'queueIndex': i,
+        if (itemVideoId.isNotEmpty) 'videoId': itemVideoId,
+        'displayArtUri': resolvedDisplayArtUri,
+      };
+      _mediaQueue[i] = item.copyWith(
+        artUri: Uri.tryParse(resolvedDisplayArtUri ?? ''),
+        extras: normalizedExtras,
+      );
+    }
+
+    _streamQueuedVideoIds.add(seedVideoId);
+
+    queue.add(List<MediaItem>.from(_mediaQueue));
+    mediaItem.add(_mediaQueue[currentIndex]);
+    unawaited(_syncFavoriteFlagForItem(_mediaQueue[currentIndex]));
+    playbackState.add(playbackState.value.copyWith(queueIndex: currentIndex));
+
+    await _ensureStreamingRadioQueue(force: true);
+    return {'ok': true, 'queue_size': _mediaQueue.length};
+  }
+
+  Future<Map<String, dynamic>> _addYtStreamToQueue(
+    Map<String, dynamic>? extras,
+  ) async {
+    final videoId = extras?['videoId']?.toString().trim();
+    if (videoId == null || videoId.isEmpty) {
+      return {'ok': false, 'reason': 'missing_video_id'};
+    }
+
+    final alreadyQueued = _mediaQueue.any((queuedItem) {
+      final queuedVideoId = queuedItem.extras?['videoId']?.toString().trim();
+      if (queuedVideoId != null && queuedVideoId.isNotEmpty) {
+        return queuedVideoId == videoId;
+      }
+      return queuedItem.id == 'yt:$videoId';
+    });
+    if (alreadyQueued) {
+      return {'ok': true, 'queued': false, 'reason': 'already_in_queue'};
+    }
+
+    final rawDuration = extras?['durationMs'];
+    int? durationMs;
+    if (rawDuration is int) {
+      durationMs = rawDuration;
+    } else if (rawDuration is String) {
+      durationMs = int.tryParse(rawDuration);
+    }
+
+    final artUriRaw = extras?['artUri']?.toString().trim();
+    final resolvedDisplayArtUri = _resolveStreamingDisplayArtUri(
+      preferred: extras?['displayArtUri']?.toString(),
+      artUri: artUriRaw != null && artUriRaw.isNotEmpty
+          ? Uri.tryParse(artUriRaw)
+          : null,
+      videoId: videoId,
+    );
+    final title = extras?['title']?.toString().trim();
+    final artist = extras?['artist']?.toString().trim();
+    var streamUrl = extras?['streamUrl']?.toString().trim();
+
+    MediaItem buildQueueItem({
+      required int queueIndex,
+      String? effectiveStreamUrl,
+    }) {
+      return MediaItem(
+        id: 'yt:$videoId',
+        title: (title != null && title.isNotEmpty) ? title : 'Unknown title',
+        artist: (artist != null && artist.isNotEmpty) ? artist : null,
+        duration: (durationMs != null && durationMs > 0)
+            ? Duration(milliseconds: durationMs)
+            : null,
+        artUri: Uri.tryParse(resolvedDisplayArtUri ?? ''),
+        extras: {
+          'videoId': videoId,
+          'isStreaming': true,
+          'radioMode': _streamRadioEnabled,
+          'streamUrl': effectiveStreamUrl,
+          'displayArtUri': resolvedDisplayArtUri,
+          'queueIndex': queueIndex,
+        },
+      );
+    }
+
+    if (_mediaQueue.isEmpty) {
+      _resetStreamingSessionState(clearQueuedVideos: true);
+      _deferredStreamingQueueMode = true;
+      _deferredStreamingQueueIndex = 0;
+      _streamRadioEnabled = false;
+      _streamRadioInitialBatchLoaded = false;
+
+      final firstItem = buildQueueItem(queueIndex: 0);
+      _mediaQueue
+        ..clear()
+        ..add(firstItem);
+      _streamQueuedVideoIds
+        ..clear()
+        ..add(videoId);
+      queue.add(List<MediaItem>.from(_mediaQueue));
+      mediaItem.add(firstItem);
+      unawaited(_syncFavoriteFlagForItem(firstItem));
+
+      final ok = await _resolveAndPlayDeferredStreamingIndex(0, autoPlay: false);
+      if (!ok) {
+        return {'ok': false, 'reason': 'missing_stream_url'};
+      }
+      return {'ok': true, 'queued': true, 'queueIndex': 0};
+    }
+
+    if (_deferredStreamingQueueMode) {
+      final queueIndex = _mediaQueue.length;
+      final newItem = buildQueueItem(queueIndex: queueIndex);
+      _mediaQueue.add(newItem);
+      _streamQueuedVideoIds.add(videoId);
+      queue.add(List<MediaItem>.from(_mediaQueue));
+
+      final currentIndex = _deferredStreamingQueueIndex.clamp(
+        0,
+        _mediaQueue.length - 1,
+      );
+      unawaited(_prefetchDeferredNextStreamUrl(currentIndex));
+      _preloadNextStreamingArtworks(currentIndex);
+      return {'ok': true, 'queued': true, 'queueIndex': queueIndex};
+    }
+
+    // En colas no diferidas, anexamos como AudioSource real al concatenating
+    // para que quede disponible en la navegación normal del reproductor.
+    if (streamUrl == null || streamUrl.isEmpty) {
+      streamUrl = await StreamService.getBestAudioUrl(
+        videoId,
+      ).timeout(const Duration(seconds: 6), onTimeout: () => null);
+    }
+    if (streamUrl == null || streamUrl.isEmpty) {
+      return {'ok': false, 'reason': 'missing_stream_url'};
+    }
+    if (_concat == null) {
+      return {'ok': false, 'reason': 'missing_concat'};
+    }
+
+    try {
+      // ignore: deprecated_member_use
+      await _concat!.add(AudioSource.uri(Uri.parse(streamUrl)));
+    } catch (_) {
+      return {'ok': false, 'reason': 'append_failed'};
+    }
+
+    final queueIndex = _mediaQueue.length;
+    final newItem = buildQueueItem(
+      queueIndex: queueIndex,
+      effectiveStreamUrl: streamUrl,
+    );
+    _mediaQueue.add(newItem);
+    _streamQueuedVideoIds.add(videoId);
+    queue.add(List<MediaItem>.from(_mediaQueue));
+
+    unawaited(() async {
+      try {
+        final paths = _mediaQueue.map((m) => m.id).toList();
+        await _prefs?.setStringList(_kPrefQueuePaths, paths);
+      } catch (_) {}
+    }());
+
+    return {'ok': true, 'queued': true, 'queueIndex': queueIndex};
+  }
+
   AudioPlayer get player => _player;
 
   AndroidEqualizer? get equalizer => _equalizer;
@@ -3057,6 +3396,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     _deferredStreamingQueueIndex = targetIndex;
     final item = _mediaQueue[targetIndex];
     mediaItem.add(item);
+    unawaited(_syncFavoriteFlagForItem(item));
     playbackState.add(
       playbackState.value.copyWith(
         queueIndex: targetIndex,
@@ -3738,6 +4078,15 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       await _saveSessionToPrefs();
       return {'ok': true};
     }
+    if (name == 'addYtStreamToQueue' ||
+        extras?['action'] == 'addYtStreamToQueue') {
+      return _addYtStreamToQueue(extras);
+    }
+    if (name == 'startStreamingRadioFromCurrent' ||
+        extras?['action'] == 'startStreamingRadioFromCurrent') {
+      final replaceQueue = extras?['replaceQueue'] != false;
+      return _startStreamingRadioFromCurrent(replaceQueue: replaceQueue);
+    }
     if (name == 'playYtStreamQueue' ||
         extras?['action'] == 'playYtStreamQueue') {
       final rawItems = extras?['items'];
@@ -3837,6 +4186,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         ..addAll(queueItems);
       queue.add(List<MediaItem>.from(_mediaQueue));
       mediaItem.add(_mediaQueue[initialIndex]);
+      unawaited(_syncFavoriteFlagForItem(_mediaQueue[initialIndex]));
 
       final ok = await _resolveAndPlayDeferredStreamingIndex(
         initialIndex,
@@ -3905,29 +4255,50 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     }
     if (name == "favorite" || extras?['action'] == 'favorite') {
       final item = mediaItem.value;
-      final songPath =
-          item?.extras?['data']?.toString().trim().isNotEmpty == true
-          ? item!.extras!['data'].toString().trim()
-          : item?.id;
-      if (songPath != null &&
-          songPath.isNotEmpty &&
-          !songPath.startsWith('yt:')) {
-        final isFav = _favoriteIds.contains(item?.id);
-        if (isFav) {
-          await FavoritesDB().removeFavorite(songPath);
-          if (item?.id != null) {
-            _favoriteIds.remove(item!.id);
-          }
-        } else {
-          await FavoritesDB().addFavoritePath(songPath);
-          if (item?.id != null) {
-            _favoriteIds.add(item!.id);
-          }
-        }
-        playbackState.add(_transformPlaybackEvent(_player.playbackEvent));
-        favoritesShouldReload.value = !favoritesShouldReload.value;
+      if (item == null) {
+        return {'ok': false, 'reason': 'no_media_item'};
       }
-      return {'ok': true};
+
+      final favoritePath = _favoritePathForMediaItem(item);
+      if (favoritePath.isEmpty) {
+        return {'ok': false, 'reason': 'missing_favorite_path'};
+      }
+
+      final existingFavoriteKey = await _findExistingFavoriteStorageKey(item);
+      final isFav = _favoriteIds.contains(item.id) || existingFavoriteKey != null;
+      if (isFav) {
+        final keyToRemove = existingFavoriteKey ?? favoritePath;
+        await FavoritesDB().removeFavorite(keyToRemove);
+        _favoriteIds.remove(item.id);
+      } else {
+        if (item.extras?['isStreaming'] == true) {
+          final videoId = item.extras?['videoId']?.toString().trim();
+          final displayArtUri = item.extras?['displayArtUri']
+              ?.toString()
+              .trim();
+          final artUri = (displayArtUri != null && displayArtUri.isNotEmpty)
+              ? displayArtUri
+              : item.artUri?.toString();
+          final durationMs = item.duration?.inMilliseconds;
+          await FavoritesDB().addFavoritePath(
+            favoritePath,
+            title: item.title,
+            artist: item.artist,
+            videoId: videoId,
+            artUri: artUri,
+            durationMs: (durationMs != null && durationMs > 0)
+                ? durationMs
+                : null,
+          );
+        } else {
+          await FavoritesDB().addFavoritePath(favoritePath);
+        }
+        _favoriteIds.add(item.id);
+      }
+
+      playbackState.add(_transformPlaybackEvent(_player.playbackEvent));
+      favoritesShouldReload.value = !favoritesShouldReload.value;
+      return {'ok': true, 'isFavorite': _favoriteIds.contains(item.id)};
     }
     return super.customAction(name, extras);
   }

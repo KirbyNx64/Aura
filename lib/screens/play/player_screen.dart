@@ -2032,6 +2032,11 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     if (fastResult is Map && fastResult['ok'] == true) {
       return;
     }
+    if (fastResult is Map) {
+      // El handler respondió y no pudo iniciar radio sin reiniciar.
+      // Evitar fallback que reinicia la reproducción actual.
+      return;
+    }
 
     final rawVideoId = mediaItem.extras?['videoId']?.toString().trim();
     String? videoId = (rawVideoId != null && rawVideoId.isNotEmpty)
