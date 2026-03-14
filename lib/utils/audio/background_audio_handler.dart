@@ -429,7 +429,8 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       0; // Se incrementa en cada skip para cancelar resoluciones anteriores.
   int _artworkGeneration =
       0; // Se incrementa en cada skip para cancelar descargas de carátulas intermedias.
-  int _activeArtworkDownloads = 0; // Contador de descargas concurrentes activas.
+  int _activeArtworkDownloads =
+      0; // Contador de descargas concurrentes activas.
   static const int _maxConcurrentArtworkDownloads = 2;
   static const int _streamRadioPrefetchThreshold = 2;
   static const int _streamRadioFixedQueueSize = 50;
@@ -1054,7 +1055,9 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
       final meta = await FavoritesDB().getFavoriteMeta(path);
       final metaVideoId = meta?['videoId']?.toString().trim();
-      if (metaVideoId != null && metaVideoId.isNotEmpty && metaVideoId == videoId) {
+      if (metaVideoId != null &&
+          metaVideoId.isNotEmpty &&
+          metaVideoId == videoId) {
         return path;
       }
 
@@ -2316,8 +2319,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     int? artworkGen,
   }) async {
     // Función para verificar si esta operación fue superada por un skip más reciente.
-    bool isStale() =>
-        artworkGen != null && artworkGen != _artworkGeneration;
+    bool isStale() => artworkGen != null && artworkGen != _artworkGeneration;
 
     final cachedUri = _streamArtworkFileCache[videoId];
     if (cachedUri != null) {
@@ -2447,8 +2449,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     int? artworkGen,
   }) async {
     // Verificar si esta descarga sigue siendo relevante.
-    bool isStale() =>
-        artworkGen != null && artworkGen != _artworkGeneration;
+    bool isStale() => artworkGen != null && artworkGen != _artworkGeneration;
 
     HttpClient? client;
     try {
@@ -2895,7 +2896,10 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       mediaItem.add(firstItem);
       unawaited(_syncFavoriteFlagForItem(firstItem));
 
-      final ok = await _resolveAndPlayDeferredStreamingIndex(0, autoPlay: false);
+      final ok = await _resolveAndPlayDeferredStreamingIndex(
+        0,
+        autoPlay: false,
+      );
       if (!ok) {
         return {'ok': false, 'reason': 'missing_stream_url'};
       }
@@ -3306,8 +3310,13 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         unawaited(_ensureStreamingRadioQueue());
       }
 
+      final shouldAutoPlayLocal = !isStreamingQueue && !_player.playing;
+
       // En reproducción local (o colas no diferidas), avanzar índice real.
       await _player.seekToNext().timeout(const Duration(milliseconds: 300));
+      if (shouldAutoPlayLocal && !_player.playing) {
+        await _player.play();
+      }
       _updateSleepTimer();
 
       // La nueva carátula se cargará automáticamente por el currentIndexStream listener
@@ -3362,6 +3371,12 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         return;
       }
 
+      final bool isStreamingQueue =
+          _streamRadioEnabled &&
+          _mediaQueue.isNotEmpty &&
+          _isStreamingMediaItem(_mediaQueue.first);
+      final shouldAutoPlayLocal = !isStreamingQueue && !_player.playing;
+
       if (_player.position.inMilliseconds > 5000) {
         await _player
             .seek(Duration.zero)
@@ -3370,6 +3385,9 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         await _player.seekToPrevious().timeout(
           const Duration(milliseconds: 650),
         );
+      }
+      if (shouldAutoPlayLocal && !_player.playing) {
+        await _player.play();
       }
       _updateSleepTimer();
 
@@ -3422,10 +3440,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     //    Si el usuario salta de nuevo, _resolveGeneration cambiará y
     //    la resolución en curso abortará via isSuperseded().
     unawaited(() async {
-      await _resolveAndPlayDeferredStreamingIndex(
-        targetIndex,
-        autoPlay: true,
-      );
+      await _resolveAndPlayDeferredStreamingIndex(targetIndex, autoPlay: true);
       _updateSleepTimer();
     }());
   }
@@ -4265,7 +4280,8 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       }
 
       final existingFavoriteKey = await _findExistingFavoriteStorageKey(item);
-      final isFav = _favoriteIds.contains(item.id) || existingFavoriteKey != null;
+      final isFav =
+          _favoriteIds.contains(item.id) || existingFavoriteKey != null;
       if (isFav) {
         final keyToRemove = existingFavoriteKey ?? favoritePath;
         await FavoritesDB().removeFavorite(keyToRemove);
