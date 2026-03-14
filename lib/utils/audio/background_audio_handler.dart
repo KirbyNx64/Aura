@@ -417,6 +417,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   String? _streamRadioSeedVideoId;
   String? _streamRadioContinuationParams;
   bool _streamRadioAppendInProgress = false;
+  bool _streamRadioInitialBatchLoaded = false;
   bool _deferredStreamingQueueMode = false;
   int _deferredStreamingQueueIndex = 0;
   final Set<String> _streamQueuedVideoIds = <String>{};
@@ -431,7 +432,8 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   int _activeArtworkDownloads = 0; // Contador de descargas concurrentes activas.
   static const int _maxConcurrentArtworkDownloads = 2;
   static const int _streamRadioPrefetchThreshold = 2;
-  static const int _streamRadioBatchSize = 20;
+  static const int _streamRadioFixedQueueSize = 50;
+  static const int _streamRadioOverscanCount = 12;
   static const int _streamArtworkPrefetchCount = 1;
   static const int _streamArtworkCacheMaxEntries = 120;
 
@@ -1848,7 +1850,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       isQueueTransitioning.value = false;
 
       if (_streamRadioEnabled) {
-        unawaited(_ensureStreamingRadioQueue(force: true));
+        await _ensureStreamingRadioQueue(force: true);
       }
 
       if (autoPlay) {
@@ -1915,6 +1917,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     _artworkGeneration++; // Cancelar descargas de carátulas en vuelo.
     _activeArtworkDownloads = 0;
     _streamRadioEnabled = false;
+    _streamRadioInitialBatchLoaded = false;
     _streamRadioSeedVideoId = null;
     _streamRadioContinuationParams = null;
     _streamRadioAppendInProgress = false;
@@ -2446,11 +2449,20 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   }
 
   Future<void> _ensureStreamingRadioQueue({bool force = false}) async {
-    if (!_streamRadioEnabled || _streamRadioAppendInProgress) return;
+    if (!_streamRadioEnabled ||
+        _streamRadioAppendInProgress ||
+        _streamRadioInitialBatchLoaded) {
+      return;
+    }
     if (_mediaQueue.isEmpty || !_isStreamingMediaItem(_mediaQueue.first)) {
       return;
     }
     final int sessionVersion = _streamSessionVersion;
+    final int missingItems = _streamRadioFixedQueueSize - _mediaQueue.length;
+    if (missingItems <= 0) {
+      _streamRadioInitialBatchLoaded = true;
+      return;
+    }
 
     final int currentIndex =
         (_deferredStreamingQueueMode
@@ -2477,10 +2489,13 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     }
 
     _streamRadioAppendInProgress = true;
+    // En modo radio fijo, hacemos un único intento de carga para esta sesión.
+    var shouldLockRadioQueue = force;
     try {
+      final requestLimit = missingItems + _streamRadioOverscanCount;
       final radioPayload = await yt_service.getWatchRadioTracks(
         videoId: seedVideoId,
-        limit: _streamRadioBatchSize + 8,
+        limit: requestLimit,
         additionalParamsNext: continuationForRequest,
       );
       if (sessionVersion != _streamSessionVersion) return;
@@ -2492,12 +2507,15 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       }
 
       final rawTracks = radioPayload['tracks'];
-      if (rawTracks is! List || rawTracks.isEmpty) return;
+      if (rawTracks is! List || rawTracks.isEmpty) {
+        shouldLockRadioQueue = true;
+        return;
+      }
 
       final List<Map<String, dynamic>> candidates = <Map<String, dynamic>>[];
       final Set<String> scheduledVideoIds = <String>{};
       for (final rawTrack in rawTracks) {
-        if (candidates.length >= _streamRadioBatchSize) break;
+        if (candidates.length >= missingItems) break;
         if (rawTrack is! Map) continue;
 
         final videoId = rawTrack['videoId']?.toString().trim();
@@ -2507,7 +2525,10 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
         candidates.add(Map<String, dynamic>.from(rawTrack));
       }
-      if (candidates.isEmpty) return;
+      if (candidates.isEmpty) {
+        shouldLockRadioQueue = true;
+        return;
+      }
 
       final resolvedCandidates = <Map<String, dynamic>>[];
       for (int i = 0; i < candidates.length; i++) {
@@ -2519,7 +2540,10 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         resolvedCandidates.add(<String, dynamic>{'order': i, ...resolved});
       }
 
-      if (resolvedCandidates.isEmpty) return;
+      if (resolvedCandidates.isEmpty) {
+        shouldLockRadioQueue = true;
+        return;
+      }
       if (sessionVersion != _streamSessionVersion) return;
 
       resolvedCandidates.sort(
@@ -2545,9 +2569,13 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
           sessionVersion: sessionVersion,
         );
       }
+      shouldLockRadioQueue = true;
     } catch (_) {
       // Mantener la reproducción estable ante errores de red/parsing.
     } finally {
+      if (shouldLockRadioQueue && sessionVersion == _streamSessionVersion) {
+        _streamRadioInitialBatchLoaded = true;
+      }
       _streamRadioAppendInProgress = false;
     }
   }
