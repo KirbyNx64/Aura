@@ -4973,6 +4973,54 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  Map<String, dynamic>? _toSerializableMetaMap(dynamic rawMeta) {
+    if (rawMeta is! Map) return null;
+    final meta = <String, dynamic>{};
+    rawMeta.forEach((key, value) {
+      if (key == null) return;
+      meta[key.toString()] = value;
+    });
+    return meta.isEmpty ? null : meta;
+  }
+
+  String? _asTrimmedString(dynamic value) {
+    final text = value?.toString().trim();
+    if (text == null || text.isEmpty) return null;
+    return text;
+  }
+
+  int? _asPositiveInt(dynamic value) {
+    if (value is int) {
+      return value > 0 ? value : null;
+    }
+    final parsed = int.tryParse(value?.toString() ?? '');
+    if (parsed == null || parsed <= 0) return null;
+    return parsed;
+  }
+
+  String? _extractPathFromBackupItem(dynamic item) {
+    if (item is String) {
+      final path = item.trim();
+      return path.isEmpty ? null : path;
+    }
+    if (item is Map) {
+      final path = item['path']?.toString().trim();
+      if (path == null || path.isEmpty) return null;
+      return path;
+    }
+    return null;
+  }
+
+  Map<String, dynamic>? _extractMetaFromBackupItem(dynamic item) {
+    if (item is! Map) return null;
+    return _toSerializableMetaMap(item['meta']);
+  }
+
+  Map<String, dynamic>? _metaFromLookupByPath(dynamic lookup, String path) {
+    if (lookup is! Map) return null;
+    return _toSerializableMetaMap(lookup[path]);
+  }
+
   Future<void> _exportBackup() async {
     final options = await _showBackupSelectionDialog(true);
     if (options == null) return;
@@ -4981,13 +5029,39 @@ class _SettingsScreenState extends State<SettingsScreen> {
       final backup = <String, dynamic>{};
 
       if (options['favorites'] == true) {
-        final favorites = await FavoritesDB().getFavorites();
-        backup['favorites'] = favorites.map((s) => s.data).toList();
+        final favoritesBox = await FavoritesDB().box;
+        final favoritesMetaBox = await FavoritesDB().metaBox;
+        final favoritePaths = favoritesBox.values
+            .map((p) => p.trim())
+            .where((p) => p.isNotEmpty)
+            .toList()
+            .reversed
+            .toList();
+        final favoritesMeta = <String, dynamic>{};
+        for (final path in favoritePaths) {
+          final rawMeta = favoritesMetaBox.get(path);
+          final meta = _toSerializableMetaMap(rawMeta);
+          if (meta != null && meta.isNotEmpty) {
+            favoritesMeta[path] = meta;
+          }
+        }
+        backup['favorites'] = favoritePaths;
+        backup['favorites_meta'] = favoritesMeta;
       }
 
       if (options['recents'] == true) {
         final recents = await RecentsDB().getRecentPaths();
+        final recentsMetaBox = await RecentsDB().metaBox;
+        final recentsMeta = <String, dynamic>{};
+        for (final path in recents) {
+          final rawMeta = recentsMetaBox.get(path);
+          final meta = _toSerializableMetaMap(rawMeta);
+          if (meta != null && meta.isNotEmpty) {
+            recentsMeta[path] = meta;
+          }
+        }
         backup['recents'] = recents;
+        backup['recents_meta'] = recentsMeta;
       }
 
       if (options['mostPlayed'] == true) {
@@ -4997,13 +5071,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
       if (options['playlists'] == true) {
         final playlistsRaw = await PlaylistsDB().getAllPlaylists();
+        final playlistsMetaBox = await PlaylistsDB().metaBox;
         final playlists = <Map<String, dynamic>>[];
         for (final pl in playlistsRaw) {
-          final songs = await PlaylistsDB().getSongsFromPlaylist(pl.id);
+          final songPaths = pl.songPaths
+              .map((p) => p.trim())
+              .where((p) => p.isNotEmpty)
+              .toList();
+          final songsMeta = <String, dynamic>{};
+          for (final path in songPaths) {
+            final rawMeta = playlistsMetaBox.get('${pl.id}::$path');
+            final meta = _toSerializableMetaMap(rawMeta);
+            if (meta != null && meta.isNotEmpty) {
+              songsMeta[path] = meta;
+            }
+          }
           playlists.add({
             'id': pl.id,
             'name': pl.name,
-            'songs': songs.map((s) => s.data).toList(),
+            'songs': songPaths,
+            'songs_meta': songsMeta,
           });
         }
         backup['playlists'] = playlists;
@@ -5011,7 +5098,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
       if (options['dislikes'] == true) {
         final dislikesBox = await DislikesDB().box;
-        backup['dislikes'] = dislikesBox.values.toList();
+        final dislikesMetaBox = await DislikesDB().metaBox;
+        final dislikePaths = dislikesBox.values
+            .map((p) => p.trim())
+            .where((p) => p.isNotEmpty)
+            .toList();
+        final dislikesMeta = <String, dynamic>{};
+        for (final path in dislikePaths) {
+          final rawMeta = dislikesMetaBox.get(path);
+          final meta = _toSerializableMetaMap(rawMeta);
+          if (meta != null && meta.isNotEmpty) {
+            dislikesMeta[path] = meta;
+          }
+        }
+        backup['dislikes'] = dislikePaths;
+        backup['dislikes_meta'] = dislikesMeta;
       }
 
       if (options['shortcuts'] == true) {
@@ -5329,12 +5430,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
       // Limpiar bases de datos y restaurar según opciones
       if (options['favorites'] == true) {
         final boxFav = await FavoritesDB().box;
+        final boxFavMeta = await FavoritesDB().metaBox;
         await boxFav.clear();
+        await boxFavMeta.clear();
         if (data['favorites'] is List) {
-          for (final path in data['favorites']) {
-            if (!boxFav.values.contains(path)) {
-              await boxFav.add(path);
-            }
+          for (final item in data['favorites']) {
+            final path = _extractPathFromBackupItem(item);
+            if (path == null) continue;
+            final itemMeta = _extractMetaFromBackupItem(item);
+            final backupMeta = _metaFromLookupByPath(
+              data['favorites_meta'],
+              path,
+            );
+            final mergedMeta = itemMeta ?? backupMeta;
+            await FavoritesDB().addFavoritePath(
+              path,
+              title: _asTrimmedString(mergedMeta?['title']),
+              artist: _asTrimmedString(mergedMeta?['artist']),
+              videoId: _asTrimmedString(mergedMeta?['videoId']),
+              artUri: _asTrimmedString(mergedMeta?['artUri']),
+              durationText: _asTrimmedString(mergedMeta?['durationText']),
+              durationMs: _asPositiveInt(mergedMeta?['durationMs']),
+            );
           }
         }
       }
@@ -5342,8 +5459,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (options['recents'] == true) {
         await RecentsDB().clearAll();
         if (data['recents'] is List) {
-          for (final path in data['recents']) {
-            await RecentsDB().addRecentPath(path.toString());
+          for (final item in data['recents']) {
+            final path = _extractPathFromBackupItem(item);
+            if (path == null) continue;
+            final itemMeta = _extractMetaFromBackupItem(item);
+            final backupMeta = _metaFromLookupByPath(
+              data['recents_meta'],
+              path,
+            );
+            final mergedMeta = itemMeta ?? backupMeta;
+            await RecentsDB().addRecentPath(
+              path,
+              title: _asTrimmedString(mergedMeta?['title']),
+              artist: _asTrimmedString(mergedMeta?['artist']),
+              videoId: _asTrimmedString(mergedMeta?['videoId']),
+              artUri: _asTrimmedString(mergedMeta?['artUri']),
+              durationText: _asTrimmedString(mergedMeta?['durationText']),
+              durationMs: _asPositiveInt(mergedMeta?['durationMs']),
+            );
           }
         }
       }
@@ -5360,32 +5493,69 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
       if (options['playlists'] == true) {
         final boxPl = await PlaylistsDB().box;
+        final boxPlMeta = await PlaylistsDB().metaBox;
         await boxPl.clear();
+        await boxPlMeta.clear();
         if (data['playlists'] is List) {
           for (final pl in data['playlists']) {
             final id =
                 pl['id']?.toString() ??
                 DateTime.now().millisecondsSinceEpoch.toString();
             final name = pl['name'] as String;
-            final songPaths = (pl['songs'] as List)
-                .map((e) => e.toString())
-                .toList();
             final playlist = hive_model.PlaylistModel(
               id: id,
               name: name,
-              songPaths: songPaths,
+              songPaths: [],
             );
             await boxPl.put(id, playlist);
+
+            final songs = pl['songs'];
+            final songsMetaLookup = pl['songs_meta'];
+            if (songs is List) {
+              for (final songItem in songs) {
+                final path = _extractPathFromBackupItem(songItem);
+                if (path == null) continue;
+                final itemMeta = _extractMetaFromBackupItem(songItem);
+                final backupMeta = _metaFromLookupByPath(songsMetaLookup, path);
+                final mergedMeta = itemMeta ?? backupMeta;
+                await PlaylistsDB().addSongPathToPlaylist(
+                  id,
+                  path,
+                  title: _asTrimmedString(mergedMeta?['title']),
+                  artist: _asTrimmedString(mergedMeta?['artist']),
+                  videoId: _asTrimmedString(mergedMeta?['videoId']),
+                  artUri: _asTrimmedString(mergedMeta?['artUri']),
+                  durationText: _asTrimmedString(mergedMeta?['durationText']),
+                  durationMs: _asPositiveInt(mergedMeta?['durationMs']),
+                );
+              }
+            }
           }
         }
       }
 
       if (options['dislikes'] == true) {
         final boxDis = await DislikesDB().box;
+        final boxDisMeta = await DislikesDB().metaBox;
         await boxDis.clear();
+        await boxDisMeta.clear();
         if (data['dislikes'] is List) {
-          for (final path in data['dislikes']) {
-            await DislikesDB().addDislikePath(path.toString());
+          for (final item in data['dislikes']) {
+            final path = _extractPathFromBackupItem(item);
+            if (path == null) continue;
+            final itemMeta = _extractMetaFromBackupItem(item);
+            final backupMeta = _metaFromLookupByPath(
+              data['dislikes_meta'],
+              path,
+            );
+            final mergedMeta = itemMeta ?? backupMeta;
+            await DislikesDB().addDislikePath(
+              path,
+              title: _asTrimmedString(mergedMeta?['title']),
+              artist: _asTrimmedString(mergedMeta?['artist']),
+              videoId: _asTrimmedString(mergedMeta?['videoId']),
+              artUri: _asTrimmedString(mergedMeta?['artUri']),
+            );
           }
         }
       }
@@ -5751,7 +5921,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
       // Borrar todas las bases de datos
       final boxFav = await FavoritesDB().box;
+      final boxFavMeta = await FavoritesDB().metaBox;
       await boxFav.clear();
+      await boxFavMeta.clear();
 
       await RecentsDB().clearAll();
 
@@ -5759,13 +5931,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
       await boxMost.clear();
 
       final boxPl = await PlaylistsDB().box;
+      final boxPlMeta = await PlaylistsDB().metaBox;
       await boxPl.clear();
+      await boxPlMeta.clear();
 
       final boxShortcuts = await ShortcutsDB().box;
       await boxShortcuts.clear();
 
       final boxDislikes = await DislikesDB().box;
+      final boxDislikesMeta = await DislikesDB().metaBox;
       await boxDislikes.clear();
+      await boxDislikesMeta.clear();
 
       final boxSongs = await SongsIndexDB().box;
       await boxSongs.clear();
