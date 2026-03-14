@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:android_nav_setting/android_nav_setting.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:music/widgets/title_marquee.dart';
 import 'package:music/main.dart';
 import 'package:share_plus/share_plus.dart';
@@ -140,6 +141,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
   static const Duration _sourceBounceGuardDuration = Duration(
     milliseconds: 850,
   );
+  final Set<String> _artworkDiskPreloadGuard = <String>{};
 
   // Control de indicadores de doble toque
   bool _showDoubleTapIndicators = false;
@@ -375,15 +377,6 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
             fadeInDuration: Duration.zero,
             fadeOutDuration: Duration.zero,
             errorWidget: (context, url, error) => _defaultArtwork(size),
-            placeholder: (context, url) => Container(
-              width: size,
-              height: size,
-              alignment: Alignment.center,
-              child: const CircularProgressIndicator(
-                strokeWidth: 3,
-                color: Colors.transparent,
-              ),
-            ),
             // Decodificar al tamaño objetivo reduce trabajo de render.
             memCacheWidth: cacheSize,
             memCacheHeight: cacheSize,
@@ -1154,14 +1147,30 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     final currentIndex = queue.indexWhere((item) => item.id == currentItem.id);
     if (currentIndex != -1 && currentIndex < queue.length - 1) {
       final nextItem = queue[currentIndex + 1];
-      final artUri = nextItem.artUri;
+      final artUri = _displayArtUriFor(nextItem);
 
       if (artUri != null) {
         ImageProvider provider;
         if (artUri.scheme == 'file') {
           provider = FileImage(File(artUri.toFilePath()));
         } else if (artUri.scheme == 'http' || artUri.scheme == 'https') {
-          provider = CachedNetworkImageProvider(artUri.toString());
+          final url = artUri.toString();
+          provider = CachedNetworkImageProvider(url);
+          if (_artworkDiskPreloadGuard.add(url)) {
+            // Fuerza guardar en cache de disco para que la siguiente canción
+            // abra su carátula instantáneamente incluso tras rebuilds.
+            unawaited(() async {
+              try {
+                await DefaultCacheManager().downloadFile(url);
+              } catch (_) {
+                // Error silencioso durante precarga.
+              } finally {
+                if (_artworkDiskPreloadGuard.length > 60) {
+                  _artworkDiskPreloadGuard.clear();
+                }
+              }
+            }());
+          }
         } else {
           return;
         }

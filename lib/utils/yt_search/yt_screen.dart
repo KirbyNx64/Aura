@@ -151,6 +151,81 @@ class TabItem {
   TabItem(this.label, this.id);
 }
 
+class _YtStreamingArtwork extends StatefulWidget {
+  final List<String> sources;
+  final Color backgroundColor;
+  final Color iconColor;
+
+  const _YtStreamingArtwork({
+    required this.sources,
+    required this.backgroundColor,
+    required this.iconColor,
+  });
+
+  @override
+  State<_YtStreamingArtwork> createState() => _YtStreamingArtworkState();
+}
+
+class _YtStreamingArtworkState extends State<_YtStreamingArtwork> {
+  int _sourceIndex = 0;
+
+  void _tryNextSource() {
+    if (_sourceIndex >= widget.sources.length - 1) return;
+    if (!mounted) return;
+    setState(() {
+      _sourceIndex++;
+    });
+  }
+
+  Widget _buildFallback() {
+    return Container(
+      color: Colors.transparent,
+      child: Icon(Icons.music_note_rounded, color: Colors.transparent),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.sources.isEmpty || _sourceIndex >= widget.sources.length) {
+      return _buildFallback();
+    }
+
+    final currentSource = widget.sources[_sourceIndex];
+    final lower = currentSource.toLowerCase();
+
+    if (lower.startsWith('file://') || currentSource.startsWith('/')) {
+      final filePath = lower.startsWith('file://')
+          ? (Uri.tryParse(currentSource)?.toFilePath() ?? '')
+          : currentSource;
+      if (filePath.isEmpty) {
+        _tryNextSource();
+        return _buildFallback();
+      }
+
+      return Image.file(
+        File(filePath),
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) {
+          _tryNextSource();
+          return _buildFallback();
+        },
+      );
+    }
+
+    return CachedNetworkImage(
+      imageUrl: currentSource,
+      fit: BoxFit.cover,
+      fadeInDuration: Duration.zero,
+      fadeOutDuration: Duration.zero,
+      placeholder: (context, url) => _buildFallback(),
+      errorWidget: (context, url, error) {
+        _tryNextSource();
+        return _buildFallback();
+      },
+    );
+  }
+}
+
 class YtSearchTestScreen extends StatefulWidget {
   final String? initialQuery;
   const YtSearchTestScreen({super.key, this.initialQuery});
@@ -668,6 +743,23 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
     );
   }
 
+  List<String> _playlistArtworkSources(YtMusicResult item) {
+    final sources = <String>[];
+    final rawArt = item.thumbUrl?.trim();
+    if (rawArt != null && rawArt.isNotEmpty && rawArt != 'null') {
+      sources.add(rawArt);
+    }
+    final id = item.videoId?.trim();
+    if (id != null && id.isNotEmpty) {
+      sources.addAll([
+        'https://i.ytimg.com/vi/$id/hqdefault.jpg',
+        'https://img.youtube.com/vi/$id/sddefault.jpg',
+        'https://img.youtube.com/vi/$id/maxresdefault.jpg',
+      ]);
+    }
+    return sources.toSet().toList();
+  }
+
   @override
   void didChangeMetrics() {
     final viewInsets =
@@ -990,7 +1082,6 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
 
   // Función para construir la UI del resultado de la playlist
   Widget _buildUrlPlaylistResult() {
-    final isSystem = colorSchemeNotifier.value == AppColorScheme.system;
     final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
     // Determine theme brightness
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -1208,29 +1299,17 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                               ),
                               leading: ClipRRect(
                                 borderRadius: BorderRadius.circular(8),
-                                child: _buildSafeNetworkImage(
-                                  item.thumbUrl ??
-                                      'https://img.youtube.com/vi/${item.videoId}/maxresdefault.jpg',
+                                child: SizedBox(
                                   width: 50,
                                   height: 50,
-                                  fit: BoxFit.cover,
-                                  fallback: Container(
-                                    width: 50,
-                                    height: 50,
-                                    decoration: BoxDecoration(
-                                      color: isSystem
-                                          ? Theme.of(
-                                              context,
-                                            ).colorScheme.secondaryContainer
-                                          : Theme.of(
-                                              context,
-                                            ).colorScheme.surfaceContainer,
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: const Icon(
-                                      Icons.music_note,
-                                      color: Colors.grey,
-                                    ),
+                                  child: _YtStreamingArtwork(
+                                    sources: _playlistArtworkSources(item),
+                                    backgroundColor: Theme.of(
+                                      context,
+                                    ).colorScheme.surfaceContainerHigh,
+                                    iconColor: Theme.of(
+                                      context,
+                                    ).colorScheme.onSurfaceVariant,
                                   ),
                                 ),
                               ),
