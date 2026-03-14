@@ -25,6 +25,7 @@ const Map<String, String> appLocalizationsEn = {
   'delete': 'Delete',
   'remove': 'Remove',
   'ok': 'OK',
+  'retry': 'Retry',
   'information': 'Information',
   'yes': 'Yes',
   'no': 'No',
@@ -102,12 +103,10 @@ const Map<String, String> appLocalizationsEn = {
   'volume_boost_set_to': 'Volume boost set to',
   'error_applying_volume_boost': 'Error applying volume boost',
   'error_audiohandler_not_available': 'Error: AudioHandler not available',
-  'error_loading_audio':
-      'Could not load the audio stream. Please try another song.',
-  'error_loading_audio_restricted':
-      'This audio is unavailable due to copyright or YouTube restrictions.',
+  'error_loading_audio': 'Could not load the content. Please try another song.',
+  'error_loading_audio_restricted': 'This content may not be available.',
   'error_loading_audio_network':
-      'Could not load the audio stream. Check your internet connection.',
+      'Could not load the content. Check your internet connection.',
   'equalizer': 'Equalizer',
   'equalizer_desc': 'Adjust sound with the audio equalizer',
   'equalizer_not_prossessing': 'No current playback',

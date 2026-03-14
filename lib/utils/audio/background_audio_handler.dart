@@ -2097,6 +2097,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       if (streamUrl == null || streamUrl.isEmpty) {
         streamUrl = await StreamService.getBestAudioUrl(
           videoId,
+          reportError: true,
         ).timeout(const Duration(seconds: 5), onTimeout: () => null);
       }
     }
@@ -2135,6 +2136,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     } catch (_) {
       // Timeout, error de red u otro fallo al cargar el stream — no relanzar
       // porque esta función se llama con unawaited y causaría una excepción no capturada.
+      reportStreamPlaybackError('unknown', videoId: videoId);
       return false;
     }
 
@@ -3021,6 +3023,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     if (streamUrl == null || streamUrl.isEmpty) {
       streamUrl = await StreamService.getBestAudioUrl(
         videoId,
+        reportError: true,
       ).timeout(const Duration(seconds: 6), onTimeout: () => null);
     }
     if (streamUrl == null || streamUrl.isEmpty) {
@@ -3419,7 +3422,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
               await _ensureStreamingRadioQueue(force: true);
               final fetchedNextIndex = _nextDeferredQueueIndex();
               if (fetchedNextIndex != null) {
-                await _resolveAndPlayDeferredStreamingIndex(
+                _scheduleStreamingSkip(
                   fetchedNextIndex,
                   playAfterResolve: true,
                 );
@@ -3560,6 +3563,8 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     // Refuerzo en capa de servicio: cancelar resolución de DB/red en curso
     // y reiniciar el cliente de youtube_explode_dart para abortar requests viejas.
     StreamService.cancelPendingResolves(resetClient: true);
+    // Evitar reutilizar prefetch en curso durante cambios rápidos manuales.
+    _streamUrlPrefetchTasks.clear();
 
     // Incrementar generación de artwork para cancelar descargas intermedias.
     _artworkGeneration++;
@@ -4382,6 +4387,75 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         await play();
       }
       return {'ok': true};
+    }
+    if (name == 'retryCurrentStream' ||
+        extras?['action'] == 'retryCurrentStream') {
+      final explicitVideoId = extras?['videoId']?.toString().trim();
+      final forcedStreamUrl = extras?['streamUrl']?.toString().trim();
+      final currentItem = mediaItem.value;
+      final currentVideoId = currentItem?.extras?['videoId']?.toString().trim();
+      final videoId = (explicitVideoId != null && explicitVideoId.isNotEmpty)
+          ? explicitVideoId
+          : (currentVideoId ?? '');
+
+      if (videoId.isEmpty) {
+        return {'ok': false, 'reason': 'missing_video_id'};
+      }
+
+      var streamUrl = (forcedStreamUrl != null && forcedStreamUrl.isNotEmpty)
+          ? forcedStreamUrl
+          : null;
+      streamUrl ??= await StreamService.getBestAudioUrl(
+        videoId,
+        forceRefresh: true,
+        reportError: true,
+        fastFail: true,
+      );
+
+      if (streamUrl == null || streamUrl.isEmpty) {
+        return {'ok': false, 'reason': 'missing_stream_url'};
+      }
+
+      if (_deferredStreamingQueueMode && _mediaQueue.isNotEmpty) {
+        int targetIndex = _deferredStreamingQueueIndex.clamp(
+          0,
+          _mediaQueue.length - 1,
+        );
+
+        for (int i = 0; i < _mediaQueue.length; i++) {
+          final queuedVideoId = _mediaQueue[i].extras?['videoId']
+              ?.toString()
+              .trim();
+          if (queuedVideoId == videoId) {
+            targetIndex = i;
+            break;
+          }
+        }
+
+        final targetItem = _mediaQueue[targetIndex];
+        final updatedItem = targetItem.copyWith(
+          extras: {
+            ...?targetItem.extras,
+            'videoId': videoId,
+            'streamUrl': streamUrl,
+            'isStreaming': true,
+          },
+        );
+        _mediaQueue[targetIndex] = updatedItem;
+        queue.add(List<MediaItem>.from(_mediaQueue));
+        _scheduleStreamingSkip(targetIndex, playAfterResolve: true);
+        return {'ok': true, 'mode': 'deferred', 'queueIndex': targetIndex};
+      }
+
+      try {
+        await _player
+            .setUrl(streamUrl, initialPosition: Duration.zero)
+            .timeout(const Duration(seconds: 6));
+        await _player.play();
+        return {'ok': true, 'mode': 'direct'};
+      } catch (_) {
+        return {'ok': false, 'reason': 'set_url_failed'};
+      }
     }
     if (name == "playYtStream" || extras?['action'] == 'playYtStream') {
       final streamUrl = extras?['streamUrl']?.toString().trim();

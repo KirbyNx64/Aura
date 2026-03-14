@@ -42,6 +42,8 @@ bool _audioHandlerInitialized = false;
 bool _audioHandlerInitializing = false;
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+final GlobalKey<ScaffoldMessengerState> rootScaffoldMessengerKey =
+    GlobalKey<ScaffoldMessengerState>();
 
 /// Notifier para indicar cuando el AudioService está listo
 final ValueNotifier<bool> audioServiceReady = ValueNotifier<bool>(false);
@@ -443,6 +445,7 @@ void main() async {
   if (!permisosOk && !isFirstRun) {
     runApp(
       MaterialApp(
+        scaffoldMessengerKey: rootScaffoldMessengerKey,
         home: PermisosScreen(),
         localizationsDelegates: const [
           GlobalMaterialLocalizations.delegate,
@@ -634,6 +637,9 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
   bool _isLoading = true;
   bool _showOnboarding = false;
   int? _lastShownStreamErrorId;
+  bool _isShowingStreamErrorDialog = false;
+  final GlobalKey<NavigatorState> _appNavigatorKey =
+      GlobalKey<NavigatorState>();
 
   // Variables para mantener los colores dinámicos actuales
   ColorScheme? _currentLightDynamic;
@@ -953,6 +959,7 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
     // Mostrar pantalla de carga mientras se cargan las preferencias
     if (_isLoading) {
       return MaterialApp(
+        scaffoldMessengerKey: rootScaffoldMessengerKey,
         localizationsDelegates: const [
           GlobalMaterialLocalizations.delegate,
           GlobalWidgetsLocalizations.delegate,
@@ -989,6 +996,8 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
                     return MaterialApp(
                       title: 'Aura',
                       themeAnimationDuration: Duration.zero,
+                      navigatorKey: _appNavigatorKey,
+                      scaffoldMessengerKey: rootScaffoldMessengerKey,
                       builder: (context, child) {
                         return ValueListenableBuilder<
                           StreamPlaybackErrorEvent?
@@ -1000,20 +1009,213 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
                               _lastShownStreamErrorId = streamError.id;
                               WidgetsBinding.instance.addPostFrameCallback((_) {
                                 if (!mounted) return;
-                                final messenger = ScaffoldMessenger.maybeOf(
-                                  context,
-                                );
-                                if (messenger == null) return;
-                                messenger.hideCurrentSnackBar();
-                                messenger.showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                      _streamErrorMessageForCode(
-                                        streamError.code,
-                                      ),
-                                    ),
-                                  ),
-                                );
+                                if (_isShowingStreamErrorDialog) return;
+
+                                final dialogContext =
+                                    _appNavigatorKey.currentContext ?? context;
+                                final isAmoled =
+                                    colorSchemeNotifier.value ==
+                                    AppColorScheme.amoled;
+                                final isDark =
+                                    Theme.of(dialogContext).brightness ==
+                                    Brightness.dark;
+                                final primaryColor = Theme.of(
+                                  dialogContext,
+                                ).colorScheme.primary;
+
+                                _isShowingStreamErrorDialog = true;
+                                try {
+                                  showDialog<void>(
+                                    context: dialogContext,
+                                    useRootNavigator: true,
+                                    builder: (dialogBuilderContext) {
+                                      return AlertDialog(
+                                        backgroundColor: isAmoled && isDark
+                                            ? Colors.black
+                                            : Theme.of(
+                                                dialogBuilderContext,
+                                              ).colorScheme.surface,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            28,
+                                          ),
+                                          side: isAmoled && isDark
+                                              ? const BorderSide(
+                                                  color: Colors.white24,
+                                                  width: 1,
+                                                )
+                                              : BorderSide.none,
+                                        ),
+                                        surfaceTintColor: Colors.transparent,
+                                        contentPadding:
+                                            const EdgeInsets.fromLTRB(
+                                              0,
+                                              24,
+                                              0,
+                                              8,
+                                            ),
+                                        content: ConstrainedBox(
+                                          constraints: BoxConstraints(
+                                            maxWidth: 400,
+                                            maxHeight:
+                                                MediaQuery.of(
+                                                  dialogBuilderContext,
+                                                ).size.height *
+                                                0.8,
+                                          ),
+                                          child: Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(
+                                                Icons.error_outline_rounded,
+                                                size: 32,
+                                                color: Theme.of(
+                                                  dialogBuilderContext,
+                                                ).colorScheme.onSurface,
+                                              ),
+                                              const SizedBox(height: 16),
+                                              Text(
+                                                LocaleProvider.tr('error'),
+                                                style: TextStyle(
+                                                  fontSize: 20,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: Theme.of(
+                                                    dialogBuilderContext,
+                                                  ).colorScheme.onSurface,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 16),
+                                              Padding(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 24,
+                                                    ),
+                                                child: Text(
+                                                  _streamErrorMessageForCode(
+                                                    streamError.code,
+                                                  ),
+                                                  style: TextStyle(
+                                                    fontSize: 14,
+                                                    color:
+                                                        Theme.of(
+                                                              dialogBuilderContext,
+                                                            )
+                                                            .colorScheme
+                                                            .onSurface
+                                                            .withAlpha(180),
+                                                  ),
+                                                  textAlign: TextAlign.center,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 24),
+                                              Padding(
+                                                padding: const EdgeInsets.only(
+                                                  right: 24,
+                                                  bottom: 8,
+                                                ),
+                                                child: Align(
+                                                  alignment:
+                                                      Alignment.centerRight,
+                                                  child: Row(
+                                                    mainAxisSize:
+                                                        MainAxisSize.min,
+                                                    children: [
+                                                      if (streamError.videoId !=
+                                                              null &&
+                                                          streamError
+                                                              .videoId!
+                                                              .isNotEmpty)
+                                                        TextButton(
+                                                          onPressed: () async {
+                                                            Navigator.of(
+                                                              dialogBuilderContext,
+                                                            ).pop();
+                                                            final videoId =
+                                                                streamError
+                                                                    .videoId!
+                                                                    .trim();
+                                                            if (videoId
+                                                                .isEmpty) {
+                                                              return;
+                                                            }
+                                                            try {
+                                                              await StreamService.invalidateCachedStream(
+                                                                videoId,
+                                                              );
+                                                              final refreshedUrl =
+                                                                  await StreamService.getBestAudioUrl(
+                                                                    videoId,
+                                                                    forceRefresh:
+                                                                        true,
+                                                                    reportError:
+                                                                        true,
+                                                                    fastFail:
+                                                                        true,
+                                                                  );
+                                                              if (refreshedUrl ==
+                                                                      null ||
+                                                                  refreshedUrl
+                                                                      .isEmpty) {
+                                                                return;
+                                                              }
+                                                              await audioHandler
+                                                                  ?.customAction(
+                                                                    'retryCurrentStream',
+                                                                    {
+                                                                      'videoId':
+                                                                          videoId,
+                                                                      'streamUrl':
+                                                                          refreshedUrl,
+                                                                    },
+                                                                  );
+                                                            } catch (_) {}
+                                                          },
+                                                          child: Text(
+                                                            LocaleProvider.tr(
+                                                              'retry',
+                                                            ),
+                                                            style: TextStyle(
+                                                              color:
+                                                                  primaryColor,
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .bold,
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      TextButton(
+                                                        onPressed: () =>
+                                                            Navigator.of(
+                                                              dialogBuilderContext,
+                                                            ).pop(),
+                                                        child: Text(
+                                                          LocaleProvider.tr(
+                                                            'ok',
+                                                          ),
+                                                          style: TextStyle(
+                                                            color: primaryColor,
+                                                            fontWeight:
+                                                                FontWeight.bold,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ).whenComplete(() {
+                                    if (mounted) {
+                                      _isShowingStreamErrorDialog = false;
+                                    }
+                                  });
+                                } catch (_) {
+                                  _isShowingStreamErrorDialog = false;
+                                }
                               });
                             }
                             return child ?? const SizedBox.shrink();
