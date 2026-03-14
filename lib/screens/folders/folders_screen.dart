@@ -3579,6 +3579,9 @@ class _FoldersScreenState extends State<FoldersScreen>
           ),
           actions: [
             PopupMenuButton<String>(
+              color: isAmoled
+                  ? Colors.grey.shade900
+                  : Theme.of(context).colorScheme.surfaceContainerHigh,
               icon: const Icon(Icons.more_vert),
               tooltip: LocaleProvider.tr('want_more_options'),
               shape: RoundedRectangleBorder(

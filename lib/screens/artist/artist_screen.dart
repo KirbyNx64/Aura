@@ -1327,6 +1327,31 @@ class _ArtistScreenState extends State<ArtistScreen> {
     );
   }
 
+  Future<void> _downloadSongsToQueue(List<YtMusicResult> items) async {
+    final validItems = items
+        .where((item) => item.videoId?.trim().isNotEmpty == true)
+        .toList();
+    if (validItems.isEmpty) return;
+
+    final downloadQueue = DownloadQueue();
+    for (final song in validItems) {
+      await downloadQueue.addToQueue(
+        context: context,
+        videoId: song.videoId ?? '',
+        title: song.title ?? 'Sin título',
+        artist:
+            song.artist?.replaceFirst(RegExp(r' - Topic$'), '') ??
+            'Artista desconocido',
+      );
+    }
+
+    if (!mounted) return;
+    _showMessage(
+      LocaleProvider.tr('success'),
+      '${validItems.length} ${LocaleProvider.tr('songs_added_to_queue')}',
+    );
+  }
+
   Future<void> _addSongToQueue(
     YtMusicResult item, {
     String? fallbackArtist,
@@ -1395,6 +1420,25 @@ class _ArtistScreenState extends State<ArtistScreen> {
       durationMs: item.durationMs,
     );
     favoritesShouldReload.value = !favoritesShouldReload.value;
+  }
+
+  Future<void> _addSongsToFavorites(
+    List<YtMusicResult> items, {
+    String? fallbackArtist,
+    String? fallbackThumbUrl,
+  }) async {
+    final validItems = items
+        .where((item) => item.videoId?.trim().isNotEmpty == true)
+        .toList();
+    if (validItems.isEmpty) return;
+
+    for (final item in validItems) {
+      await _addSongToFavorites(
+        item,
+        fallbackArtist: fallbackArtist,
+        fallbackThumbUrl: fallbackThumbUrl,
+      );
+    }
   }
 
   Future<void> _showSongInfo(
@@ -1601,6 +1645,141 @@ class _ArtistScreenState extends State<ArtistScreen> {
                       await addToPlaylist(playlistId);
                       if (context.mounted) Navigator.of(context).pop();
                     },
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _showAddMultipleSongsToPlaylistDialog(
+    List<YtMusicResult> items, {
+    String? fallbackArtist,
+    String? fallbackThumbUrl,
+  }) async {
+    final validItems = items
+        .where((item) => item.videoId?.trim().isNotEmpty == true)
+        .toList();
+    if (validItems.isEmpty) return;
+    final allPlaylists = await PlaylistsDB().getAllPlaylists();
+    final textController = TextEditingController();
+    if (!mounted) return;
+
+    Future<void> addItemsToPlaylist(String playlistId) async {
+      for (final item in validItems) {
+        final videoId = item.videoId?.trim();
+        if (videoId == null || videoId.isEmpty) continue;
+        await PlaylistsDB().addSongPathToPlaylist(
+          playlistId,
+          'yt:$videoId',
+          title: item.title?.trim().isNotEmpty == true
+              ? item.title!.trim()
+              : LocaleProvider.tr('title_unknown'),
+          artist: item.artist?.trim().isNotEmpty == true
+              ? item.artist!.trim()
+              : (fallbackArtist?.trim().isNotEmpty == true
+                    ? fallbackArtist!.trim()
+                    : LocaleProvider.tr('artist_unknown')),
+          videoId: videoId,
+          artUri: item.thumbUrl?.trim().isNotEmpty == true
+              ? item.thumbUrl!.trim()
+              : (fallbackThumbUrl?.trim().isNotEmpty == true
+                    ? fallbackThumbUrl!.trim()
+                    : 'https://i.ytimg.com/vi/$videoId/hqdefault.jpg'),
+          durationText: item.durationText,
+          durationMs: item.durationMs,
+        );
+      }
+      playlistsShouldReload.value = !playlistsShouldReload.value;
+    }
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+        final barColor = isDark
+            ? Theme.of(context).colorScheme.secondary.withValues(alpha: 0.06)
+            : Theme.of(context).colorScheme.secondary.withValues(alpha: 0.07);
+        return Container(
+          decoration: BoxDecoration(
+            color: Theme.of(context).scaffoldBackgroundColor,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          child: SafeArea(
+            child: Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+                left: 16,
+                right: 16,
+                top: 12,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    LocaleProvider.tr('save_to_playlist'),
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  if (allPlaylists.isNotEmpty)
+                    Flexible(
+                      child: ListView.builder(
+                        shrinkWrap: true,
+                        padding: EdgeInsets.zero,
+                        itemCount: allPlaylists.length,
+                        itemBuilder: (context, i) {
+                          final pl = allPlaylists[i];
+                          return Card(
+                            color: barColor,
+                            margin: EdgeInsets.only(
+                              bottom: i == allPlaylists.length - 1 ? 0 : 4,
+                            ),
+                            elevation: 0,
+                            child: ListTile(
+                              title: Text(pl.name),
+                              onTap: () async {
+                                await addItemsToPlaylist(pl.id);
+                                if (context.mounted) {
+                                  Navigator.of(context).pop();
+                                }
+                              },
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: textController,
+                    decoration: InputDecoration(
+                      hintText: LocaleProvider.tr('new_playlist'),
+                      prefixIcon: const Icon(Icons.playlist_add),
+                      suffixIcon: IconButton(
+                        icon: const Icon(Icons.check_rounded),
+                        onPressed: () async {
+                          final name = textController.text.trim();
+                          if (name.isEmpty) return;
+                          final playlistId = await PlaylistsDB().createPlaylist(
+                            name,
+                          );
+                          await addItemsToPlaylist(playlistId);
+                          if (context.mounted) Navigator.of(context).pop();
+                        },
+                      ),
+                      filled: true,
+                      fillColor: barColor,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(20),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -3910,42 +4089,125 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                         ),
                                       ),
                                       const SizedBox(width: 8),
-                                      IconButton.filled(
-                                        icon: Icon(
-                                          Icons.download,
-                                          size: 24,
-                                          color: isAmoled && isDark
-                                              ? Colors.black
-                                              : null,
+                                      Container(
+                                        width: 40,
+                                        height: 40,
+                                        decoration: BoxDecoration(
+                                          color: Theme.of(
+                                            context,
+                                          ).colorScheme.primary,
+                                          shape: BoxShape.circle,
                                         ),
-                                        tooltip: LocaleProvider.tr(
-                                          'download_entire_album',
-                                        ),
-                                        onPressed: () async {
-                                          if (_albumSongs.isNotEmpty) {
-                                            final downloadQueue =
-                                                DownloadQueue();
-                                            for (final song in _albumSongs) {
-                                              await downloadQueue.addToQueue(
-                                                context: context,
-                                                videoId: song.videoId ?? '',
-                                                title:
-                                                    song.title ?? 'Sin título',
-                                                artist:
-                                                    song.artist?.replaceFirst(
-                                                      RegExp(r' - Topic$'),
-                                                      '',
-                                                    ) ??
-                                                    'Artista desconocido',
+                                        child: PopupMenuButton<String>(
+                                          tooltip: LocaleProvider.tr(
+                                            'want_more_options',
+                                          ),
+                                          padding: EdgeInsets.zero,
+                                          icon: Icon(
+                                            Icons.more_vert,
+                                            size: 22,
+                                            color: isAmoled && isDark
+                                                ? Colors.black
+                                                : Theme.of(
+                                                    context,
+                                                  ).colorScheme.onPrimary,
+                                          ),
+                                          color: isAmoled
+                                              ? Colors.grey.shade900
+                                              : Theme.of(context)
+                                                    .colorScheme
+                                                    .surfaceContainerHigh,
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(
+                                              16,
+                                            ),
+                                          ),
+                                          onSelected: (value) async {
+                                            if (_albumSongs.isEmpty) return;
+                                            if (value == 'favorites') {
+                                              await _addSongsToFavorites(
+                                                _albumSongs,
+                                                fallbackArtist:
+                                                    _currentAlbum?['artist']
+                                                        ?.toString(),
+                                                fallbackThumbUrl:
+                                                    _currentAlbum?['thumbUrl']
+                                                        ?.toString(),
+                                              );
+                                            } else if (value == 'playlist') {
+                                              await _showAddMultipleSongsToPlaylistDialog(
+                                                _albumSongs,
+                                                fallbackArtist:
+                                                    _currentAlbum?['artist']
+                                                        ?.toString(),
+                                                fallbackThumbUrl:
+                                                    _currentAlbum?['thumbUrl']
+                                                        ?.toString(),
+                                              );
+                                            } else if (value == 'download') {
+                                              await _downloadSongsToQueue(
+                                                _albumSongs,
                                               );
                                             }
-                                            if (!mounted) return;
-                                            _showMessage(
-                                              LocaleProvider.tr('success'),
-                                              '${_albumSongs.length} ${LocaleProvider.tr('songs_added_to_queue')}',
-                                            );
-                                          }
-                                        },
+                                          },
+                                          itemBuilder: (context) => [
+                                            PopupMenuItem<String>(
+                                              value: 'favorites',
+                                              child: Row(
+                                                children: [
+                                                  const Icon(
+                                                    Icons
+                                                        .favorite_outline_rounded,
+                                                  ),
+                                                  const SizedBox(width: 12),
+                                                  Expanded(
+                                                    child: Text(
+                                                      LocaleProvider.tr(
+                                                        'add_to_favorites',
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                            PopupMenuItem<String>(
+                                              value: 'playlist',
+                                              child: Row(
+                                                children: [
+                                                  const Icon(
+                                                    Icons.playlist_add_rounded,
+                                                  ),
+                                                  const SizedBox(width: 12),
+                                                  Expanded(
+                                                    child: Text(
+                                                      LocaleProvider.tr(
+                                                        'add_to_playlist',
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                            PopupMenuItem<String>(
+                                              value: 'download',
+                                              child: Row(
+                                                children: [
+                                                  const Icon(
+                                                    Icons.download_rounded,
+                                                  ),
+                                                  const SizedBox(width: 12),
+                                                  Expanded(
+                                                    child: Text(
+                                                      LocaleProvider.tr(
+                                                        'download',
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ],
+                                        ),
                                       ),
                                     ],
                                   ],
