@@ -5,6 +5,7 @@ import 'package:on_audio_query/on_audio_query.dart';
 import 'dart:io';
 import 'dart:async';
 import 'dart:collection';
+import 'dart:math';
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as img;
@@ -420,6 +421,9 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   bool _streamRadioInitialBatchLoaded = false;
   bool _deferredStreamingQueueMode = false;
   int _deferredStreamingQueueIndex = 0;
+  final Random _random = Random();
+  List<int> _deferredShuffleOrder = const <int>[];
+  int _deferredShuffleCursor = 0;
   final Set<String> _streamQueuedVideoIds = <String>{};
   final Map<String, Future<String?>> _streamUrlPrefetchTasks = {};
   final Map<String, Future<Uri?>> _streamArtworkPreloadTasks = {};
@@ -557,13 +561,8 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
           // Si se completó y es la última canción de la lista, pausar automáticamente
           if (event.processingState == ProcessingState.completed) {
             if (_deferredStreamingQueueMode && _mediaQueue.isNotEmpty) {
-              final currentDeferredIndex = _deferredStreamingQueueIndex.clamp(
-                0,
-                _mediaQueue.length - 1,
-              );
-
-              if (_player.loopMode == LoopMode.all) {
-                final nextIdx = (currentDeferredIndex + 1) % _mediaQueue.length;
+              final nextIdx = _nextDeferredQueueIndex();
+              if (nextIdx != null) {
                 unawaited(
                   _resolveAndPlayDeferredStreamingIndex(
                     nextIdx,
@@ -573,22 +572,13 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
                 return;
               }
 
-              if (currentDeferredIndex < _mediaQueue.length - 1) {
-                unawaited(
-                  _resolveAndPlayDeferredStreamingIndex(
-                    currentDeferredIndex + 1,
-                    autoPlay: true,
-                  ),
-                );
-                return;
-              }
-
               if (_streamRadioEnabled) {
                 unawaited(() async {
                   await _ensureStreamingRadioQueue(force: true);
-                  if (_deferredStreamingQueueIndex < _mediaQueue.length - 1) {
+                  final fetchedNextIndex = _nextDeferredQueueIndex();
+                  if (fetchedNextIndex != null) {
                     await _resolveAndPlayDeferredStreamingIndex(
-                      _deferredStreamingQueueIndex + 1,
+                      fetchedNextIndex,
                       autoPlay: true,
                     );
                     return;
@@ -1110,8 +1100,11 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         break;
     }
 
-    // Determinar el modo shuffle basado en el estado del player
-    AudioServiceShuffleMode shuffleMode = _player.shuffleModeEnabled
+    // En streaming diferido no dependemos del shuffle nativo del player.
+    final bool shuffleEnabled = _deferredStreamingQueueMode
+        ? isShuffleNotifier.value
+        : _player.shuffleModeEnabled;
+    final AudioServiceShuffleMode shuffleMode = shuffleEnabled
         ? AudioServiceShuffleMode.all
         : AudioServiceShuffleMode.none;
 
@@ -1892,14 +1885,10 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       _currentSongList.clear();
       _originalSongList = null;
 
-      isShuffleNotifier.value = false;
-      try {
-        await _player.setShuffleModeEnabled(false);
-      } catch (_) {}
-
       _mediaQueue
         ..clear()
         ..add(streamItem);
+      _ensureDeferredShuffleOrder(currentIndex: 0);
       queue.add(List<MediaItem>.from(_mediaQueue));
       mediaItem.add(streamItem);
       unawaited(_syncFavoriteFlagForItem(streamItem));
@@ -2028,6 +2017,8 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     _streamRadioAppendInProgress = false;
     _deferredStreamingQueueMode = false;
     _deferredStreamingQueueIndex = 0;
+    _deferredShuffleOrder = const <int>[];
+    _deferredShuffleCursor = 0;
     _streamArtworkPreloadTasks.clear();
     _streamUrlPrefetchTasks.clear();
     if (clearQueuedVideos) {
@@ -2056,6 +2047,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
     // 1) Publicar metadatos de inmediato para que la UI cambie instantáneamente.
     _deferredStreamingQueueIndex = targetIndex;
+    _ensureDeferredShuffleOrder(currentIndex: targetIndex);
     mediaItem.add(currentItem);
     unawaited(_syncFavoriteFlagForItem(currentItem));
     playbackState.add(
@@ -2231,6 +2223,102 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     } finally {
       _streamUrlPrefetchTasks.remove(videoId);
     }
+  }
+
+  void _ensureDeferredShuffleOrder({int? currentIndex}) {
+    if (!_deferredStreamingQueueMode || !isShuffleNotifier.value) {
+      _deferredShuffleOrder = const <int>[];
+      _deferredShuffleCursor = 0;
+      return;
+    }
+    if (_mediaQueue.isEmpty) {
+      _deferredShuffleOrder = const <int>[];
+      _deferredShuffleCursor = 0;
+      return;
+    }
+
+    final fallback = _deferredStreamingQueueIndex.clamp(
+      0,
+      _mediaQueue.length - 1,
+    );
+    final effectiveCurrent = (currentIndex ?? fallback).clamp(
+      0,
+      _mediaQueue.length - 1,
+    );
+    final needsRebuild =
+        _deferredShuffleOrder.length != _mediaQueue.length ||
+        !_deferredShuffleOrder.contains(effectiveCurrent);
+
+    if (needsRebuild) {
+      final rest = List<int>.generate(_mediaQueue.length, (i) => i)
+        ..remove(effectiveCurrent)
+        ..shuffle(_random);
+      _deferredShuffleOrder = <int>[effectiveCurrent, ...rest];
+      _deferredShuffleCursor = 0;
+      return;
+    }
+
+    final currentPos = _deferredShuffleOrder.indexOf(effectiveCurrent);
+    if (currentPos >= 0) {
+      _deferredShuffleCursor = currentPos;
+    }
+  }
+
+  int? _nextDeferredQueueIndex() {
+    if (_mediaQueue.isEmpty) return null;
+    final current = _deferredStreamingQueueIndex.clamp(
+      0,
+      _mediaQueue.length - 1,
+    );
+
+    if (!isShuffleNotifier.value) {
+      if (current < _mediaQueue.length - 1) return current + 1;
+      if (_player.loopMode == LoopMode.all && _mediaQueue.isNotEmpty) return 0;
+      return null;
+    }
+
+    _ensureDeferredShuffleOrder(currentIndex: current);
+    if (_deferredShuffleOrder.isEmpty) return null;
+
+    if (_deferredShuffleCursor < _deferredShuffleOrder.length - 1) {
+      _deferredShuffleCursor++;
+      return _deferredShuffleOrder[_deferredShuffleCursor];
+    }
+
+    if (_player.loopMode != LoopMode.all) return null;
+
+    final currentIndex = _deferredShuffleOrder[_deferredShuffleCursor];
+    final rest = List<int>.generate(_mediaQueue.length, (i) => i)
+      ..remove(currentIndex)
+      ..shuffle(_random);
+    _deferredShuffleOrder = <int>[currentIndex, ...rest];
+    _deferredShuffleCursor = _deferredShuffleOrder.length > 1 ? 1 : 0;
+
+    if (_deferredShuffleOrder.length > 1) {
+      return _deferredShuffleOrder[_deferredShuffleCursor];
+    }
+    return null;
+  }
+
+  int? _previousDeferredQueueIndex() {
+    if (_mediaQueue.isEmpty) return null;
+    final current = _deferredStreamingQueueIndex.clamp(
+      0,
+      _mediaQueue.length - 1,
+    );
+
+    if (!isShuffleNotifier.value) {
+      if (current > 0) return current - 1;
+      return null;
+    }
+
+    _ensureDeferredShuffleOrder(currentIndex: current);
+    if (_deferredShuffleOrder.isEmpty) return null;
+    if (_deferredShuffleCursor > 0) {
+      _deferredShuffleCursor--;
+      return _deferredShuffleOrder[_deferredShuffleCursor];
+    }
+    return null;
   }
 
   void _preloadNextStreamingArtworks(int currentIndex) {
@@ -3268,13 +3356,13 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       cancelAllArtworkLoads();
 
       if (_deferredStreamingQueueMode) {
-        final nextIndex = _deferredStreamingQueueIndex + 1;
-        if (nextIndex >= _mediaQueue.length) {
+        final nextIndex = _nextDeferredQueueIndex();
+        if (nextIndex == null) {
           if (_streamRadioEnabled) {
             unawaited(() async {
               await _ensureStreamingRadioQueue(force: true);
-              final fetchedNextIndex = _deferredStreamingQueueIndex + 1;
-              if (fetchedNextIndex < _mediaQueue.length) {
+              final fetchedNextIndex = _nextDeferredQueueIndex();
+              if (fetchedNextIndex != null) {
                 await _resolveAndPlayDeferredStreamingIndex(
                   fetchedNextIndex,
                   autoPlay: true,
@@ -3355,8 +3443,8 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
               .seek(Duration.zero)
               .timeout(const Duration(milliseconds: 650));
         } else {
-          final previousIndex = _deferredStreamingQueueIndex - 1;
-          if (previousIndex >= 0) {
+          final previousIndex = _previousDeferredQueueIndex();
+          if (previousIndex != null) {
             _isSkipping = false;
             _consumeQueuedSkip();
             _scheduleStreamingSkip(previousIndex);
@@ -3553,6 +3641,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
   /// Sincroniza el estado del isShuffleNotifier con el estado real del player
   void _syncShuffleState() {
+    if (_deferredStreamingQueueMode) return;
     isShuffleNotifier.value = _player.shuffleModeEnabled;
   }
 
@@ -3563,6 +3652,15 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     // Si shuffle NO está activo, devolver la cola original
     if (!isShuffleNotifier.value) {
       return List<MediaItem>.from(_mediaQueue);
+    }
+
+    if (_deferredStreamingQueueMode) {
+      _ensureDeferredShuffleOrder();
+      if (_deferredShuffleOrder.isEmpty ||
+          _deferredShuffleOrder.length != _mediaQueue.length) {
+        return List<MediaItem>.from(_mediaQueue);
+      }
+      return _deferredShuffleOrder.map((i) => _mediaQueue[i]).toList();
     }
 
     try {
@@ -3590,9 +3688,15 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       if (enable) {
         isShuffleNotifier.value = true;
 
-        // Usar el shuffle nativo de just_audio - sin pausas de audio
-        await _player.setShuffleModeEnabled(true);
-        await _player.shuffle();
+        if (_deferredStreamingQueueMode) {
+          _ensureDeferredShuffleOrder(
+            currentIndex: _deferredStreamingQueueIndex,
+          );
+        } else {
+          // Usar el shuffle nativo de just_audio - sin pausas de audio
+          await _player.setShuffleModeEnabled(true);
+          await _player.shuffle();
+        }
 
         // Actualizar el estado de audio_service con ambos modos para sincronización completa
         playbackState.add(
@@ -3607,6 +3711,8 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         );
       } else {
         isShuffleNotifier.value = false;
+        _deferredShuffleOrder = const <int>[];
+        _deferredShuffleCursor = 0;
 
         // Desactivar shuffle nativo de just_audio
         await _player.setShuffleModeEnabled(false);
@@ -4191,14 +4297,10 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       _currentSongList.clear();
       _originalSongList = null;
 
-      isShuffleNotifier.value = false;
-      try {
-        await _player.setShuffleModeEnabled(false);
-      } catch (_) {}
-
       _mediaQueue
         ..clear()
         ..addAll(queueItems);
+      _ensureDeferredShuffleOrder(currentIndex: initialIndex);
       queue.add(List<MediaItem>.from(_mediaQueue));
       mediaItem.add(_mediaQueue[initialIndex]);
       unawaited(_syncFavoriteFlagForItem(_mediaQueue[initialIndex]));

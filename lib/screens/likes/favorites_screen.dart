@@ -243,10 +243,10 @@ class _FavoritesScreenState extends State<FavoritesScreen>
       _mediaItemDebounce?.cancel();
       _mediaItemDebounce = Timer(const Duration(milliseconds: 80), () {
         if (!mounted) return;
-        if (!_matchesVisibleSource(mediaItem)) return;
-        final newPath = _pathFromMediaItem(mediaItem);
+        final visibleItem = _matchesVisibleSource(mediaItem) ? mediaItem : null;
+        final newPath = _pathFromMediaItem(visibleItem);
         if (_pathFromMediaItem(_currentMediaItemNotifier.value) != newPath) {
-          _currentMediaItemNotifier.value = mediaItem;
+          _currentMediaItemNotifier.value = visibleItem;
         }
       });
     });
