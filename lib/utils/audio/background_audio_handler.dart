@@ -550,6 +550,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
           // Si se completó y está en loop one, lanza el seek/play en segundo plano
           if (event.processingState == ProcessingState.completed &&
+              !_stopAtEndOfSong &&
               _player.loopMode == LoopMode.one) {
             unawaited(_player.seek(Duration.zero));
             unawaited(_player.play());
@@ -560,15 +561,17 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
           // Si se completó y es la última canción de la lista, pausar automáticamente
           if (event.processingState == ProcessingState.completed) {
+            if (_stopAtEndOfSong) {
+              unawaited(() async {
+                await pause();
+                cancelSleepTimer();
+              }());
+              return;
+            }
             if (_deferredStreamingQueueMode && _mediaQueue.isNotEmpty) {
               final nextIdx = _nextDeferredQueueIndex();
               if (nextIdx != null) {
-                unawaited(
-                  _resolveAndPlayDeferredStreamingIndex(
-                    nextIdx,
-                    autoPlay: true,
-                  ),
-                );
+                unawaited(_resolveAndPlayDeferredStreamingIndex(nextIdx));
                 return;
               }
 
@@ -579,7 +582,6 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
                   if (fetchedNextIndex != null) {
                     await _resolveAndPlayDeferredStreamingIndex(
                       fetchedNextIndex,
-                      autoPlay: true,
                     );
                     return;
                   }
@@ -2029,7 +2031,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
   Future<bool> _resolveAndPlayDeferredStreamingIndex(
     int targetIndex, {
-    bool autoPlay = true,
+    bool playAfterResolve = false,
   }) async {
     if (!_deferredStreamingQueueMode) return false;
     if (targetIndex < 0 || targetIndex >= _mediaQueue.length) return false;
@@ -2154,7 +2156,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       ),
     );
 
-    if (autoPlay) {
+    if (playAfterResolve) {
       await _player.play();
     }
 
@@ -2984,10 +2986,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       mediaItem.add(firstItem);
       unawaited(_syncFavoriteFlagForItem(firstItem));
 
-      final ok = await _resolveAndPlayDeferredStreamingIndex(
-        0,
-        autoPlay: false,
-      );
+      final ok = await _resolveAndPlayDeferredStreamingIndex(0);
       if (!ok) {
         return {'ok': false, 'reason': 'missing_stream_url'};
       }
@@ -3356,6 +3355,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       cancelAllArtworkLoads();
 
       if (_deferredStreamingQueueMode) {
+        final shouldPlayAfterManualSkip = !_player.playing;
         final nextIndex = _nextDeferredQueueIndex();
         if (nextIndex == null) {
           if (_streamRadioEnabled) {
@@ -3365,7 +3365,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
               if (fetchedNextIndex != null) {
                 await _resolveAndPlayDeferredStreamingIndex(
                   fetchedNextIndex,
-                  autoPlay: true,
+                  playAfterResolve: shouldPlayAfterManualSkip,
                 );
                 _updateSleepTimer();
               }
@@ -3375,7 +3375,10 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         }
         _isSkipping = false;
         _consumeQueuedSkip();
-        _scheduleStreamingSkip(nextIndex);
+        _scheduleStreamingSkip(
+          nextIndex,
+          playAfterResolve: shouldPlayAfterManualSkip,
+        );
         return;
       }
 
@@ -3438,6 +3441,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       cancelAllArtworkLoads();
 
       if (_deferredStreamingQueueMode) {
+        final shouldPlayAfterManualSkip = !_player.playing;
         if (_player.position.inMilliseconds > 5000) {
           await _player
               .seek(Duration.zero)
@@ -3447,7 +3451,10 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
           if (previousIndex != null) {
             _isSkipping = false;
             _consumeQueuedSkip();
-            _scheduleStreamingSkip(previousIndex);
+            _scheduleStreamingSkip(
+              previousIndex,
+              playAfterResolve: shouldPlayAfterManualSkip,
+            );
             return;
           } else {
             await _player
@@ -3491,7 +3498,10 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   /// Actualiza la UI inmediatamente y resuelve el stream de la canción destino.
   /// Si el usuario salta de nuevo, la resolución anterior se cancela
   /// automáticamente por el sistema de generación (_resolveGeneration).
-  void _scheduleStreamingSkip(int targetIndex) {
+  void _scheduleStreamingSkip(
+    int targetIndex, {
+    bool playAfterResolve = false,
+  }) {
     if (!_deferredStreamingQueueMode) return;
     if (targetIndex < 0 || targetIndex >= _mediaQueue.length) return;
 
@@ -3528,7 +3538,10 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     //    Si el usuario salta de nuevo, _resolveGeneration cambiará y
     //    la resolución en curso abortará via isSuperseded().
     unawaited(() async {
-      await _resolveAndPlayDeferredStreamingIndex(targetIndex, autoPlay: true);
+      await _resolveAndPlayDeferredStreamingIndex(
+        targetIndex,
+        playAfterResolve: playAfterResolve,
+      );
       _updateSleepTimer();
     }());
   }
@@ -3559,7 +3572,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     if (_initializing) return;
     if (index >= 0 && index < _mediaQueue.length) {
       if (_deferredStreamingQueueMode) {
-        _scheduleStreamingSkip(index);
+        _scheduleStreamingSkip(index, playAfterResolve: !_player.playing);
         return;
       }
       try {
@@ -4305,11 +4318,12 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       mediaItem.add(_mediaQueue[initialIndex]);
       unawaited(_syncFavoriteFlagForItem(_mediaQueue[initialIndex]));
 
-      final ok = await _resolveAndPlayDeferredStreamingIndex(
-        initialIndex,
-        autoPlay: extras?['autoPlay'] != false,
-      );
-      return ok ? {'ok': true} : {'ok': false, 'reason': 'missing_stream_url'};
+      final ok = await _resolveAndPlayDeferredStreamingIndex(initialIndex);
+      if (!ok) return {'ok': false, 'reason': 'missing_stream_url'};
+      if (extras?['autoPlay'] != false) {
+        await play();
+      }
+      return {'ok': true};
     }
     if (name == "playYtStream" || extras?['action'] == 'playYtStream') {
       final streamUrl = extras?['streamUrl']?.toString().trim();
