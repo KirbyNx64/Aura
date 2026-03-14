@@ -750,6 +750,34 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     }
   }
 
+  Future<void> _addStreamingFavoriteToQueue(_StreamingFavoriteItem item) async {
+    final videoId = item.videoId?.trim();
+    if (videoId == null || videoId.isEmpty) return;
+
+    if (!audioServiceReady.value || audioHandler == null) {
+      await initializeAudioServiceSafely();
+    }
+
+    final artUri = item.artUri?.trim().isNotEmpty == true
+        ? item.artUri!.trim()
+        : 'https://i.ytimg.com/vi/$videoId/hqdefault.jpg';
+
+    await audioHandler.myHandler?.customAction('addYtStreamToQueue', {
+      'videoId': videoId,
+      'title': item.title.trim().isNotEmpty
+          ? item.title.trim()
+          : LocaleProvider.tr('title_unknown'),
+      'artist': item.artist.trim().isNotEmpty
+          ? item.artist.trim()
+          : LocaleProvider.tr('artist_unknown'),
+      'artUri': artUri,
+      if (item.durationMs != null && item.durationMs! > 0)
+        'durationMs': item.durationMs,
+      if (item.durationText != null && item.durationText!.trim().isNotEmpty)
+        'durationText': item.durationText!.trim(),
+    });
+  }
+
   Future<void> _loadOrderFilter() async {
     final prefs = await SharedPreferences.getInstance();
     final int? savedIndex = prefs.getInt(_orderPrefsKey);
@@ -1502,6 +1530,14 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                 onTap: () async {
                   Navigator.of(context).pop();
                   await _startStreamingRadioFavorite(item);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.queue_music),
+                title: const TranslatedText('add_to_queue'),
+                onTap: () async {
+                  Navigator.of(context).pop();
+                  await _addStreamingFavoriteToQueue(item);
                 },
               ),
               ListTile(

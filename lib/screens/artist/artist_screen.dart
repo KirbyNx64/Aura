@@ -1327,6 +1327,44 @@ class _ArtistScreenState extends State<ArtistScreen> {
     );
   }
 
+  Future<void> _addSongToQueue(
+    YtMusicResult item, {
+    String? fallbackArtist,
+    String? fallbackThumbUrl,
+  }) async {
+    final videoId = item.videoId?.trim();
+    if (videoId == null || videoId.isEmpty) return;
+
+    if (!audioServiceReady.value || audioHandler == null) {
+      await initializeAudioServiceSafely();
+    }
+
+    final title = item.title?.trim().isNotEmpty == true
+        ? item.title!.trim()
+        : LocaleProvider.tr('title_unknown');
+    final artist = item.artist?.trim().isNotEmpty == true
+        ? item.artist!.trim()
+        : (fallbackArtist?.trim().isNotEmpty == true
+              ? fallbackArtist!.trim()
+              : LocaleProvider.tr('artist_unknown'));
+    final artUri = item.thumbUrl?.trim().isNotEmpty == true
+        ? item.thumbUrl!.trim()
+        : (fallbackThumbUrl?.trim().isNotEmpty == true
+              ? fallbackThumbUrl!.trim()
+              : 'https://i.ytimg.com/vi/$videoId/hqdefault.jpg');
+
+    await audioHandler?.customAction('addYtStreamToQueue', {
+      'videoId': videoId,
+      'title': title,
+      'artist': artist,
+      'artUri': artUri,
+      if (item.durationMs != null && item.durationMs! > 0)
+        'durationMs': item.durationMs,
+      if (item.durationText != null && item.durationText!.trim().isNotEmpty)
+        'durationText': item.durationText!.trim(),
+    });
+  }
+
   Future<void> _addSongToFavorites(
     YtMusicResult item, {
     String? fallbackArtist,
@@ -1880,6 +1918,18 @@ class _ArtistScreenState extends State<ArtistScreen> {
                       ),
                     ],
                   ),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.queue_music),
+                  title: const TranslatedText('add_to_queue'),
+                  onTap: () async {
+                    Navigator.of(modalContext).pop();
+                    await _addSongToQueue(
+                      item,
+                      fallbackArtist: fallbackArtist,
+                      fallbackThumbUrl: fallbackThumbUrl,
+                    );
+                  },
                 ),
                 ListTile(
                   leading: const Icon(Icons.favorite_outline_rounded),
