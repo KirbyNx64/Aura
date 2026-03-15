@@ -217,6 +217,14 @@ const Map<String, String> appLocalizationsEs = {
   'lyrics_deleted': 'Letras eliminadas',
   'lyrics_deleted_desc':
       'Las letras de canciones se han eliminado correctamente.',
+  'delete_audio_links': 'Eliminar enlaces de audio streaming',
+  'delete_audio_links_desc':
+      'Borra todos los enlaces temporales guardados para reproducir audio streamming.\n\nEstos enlaces se borran automáticamente después de un tiempo, pero puedes usar esta opción para eliminarlos manualmente si tienes problemas de reproducción.',
+  'delete_audio_links_confirm':
+      'Se eliminarán todos los enlaces de audio streaming temporales guardados por la app.',
+  'audio_links_deleted': 'Limpieza completada',
+  'audio_links_deleted_desc':
+      'Se eliminaron todos los enlaces de audio streaming guardados.',
   'clear_artwork_cache': 'Limpiar caché de carátulas',
   'clear_artwork_cache_desc':
       'Elimina las imágenes de carátulas almacenadas en caché',
