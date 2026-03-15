@@ -57,14 +57,28 @@ class _SongInfoScreenState extends State<SongInfoScreen> {
     _loadAudioInfo();
   }
 
-  Future<void> _shareFile() async {
-    final filePath = _mediaPath();
-    if (filePath.isEmpty || !_isLikelyLocalPath(filePath)) return;
+  Future<void> _shareMedia() async {
     try {
-      // ignore: deprecated_member_use
-      await Share.shareXFiles([
-        XFile(filePath),
-      ], text: fixUtf8Mojibake(widget.mediaItem.title));
+      if (_isStreaming || _isStreamingMediaItem()) {
+        final youtubeUrl = _streamingYoutubeUrl();
+        if (youtubeUrl == null) return;
+        await SharePlus.instance.share(
+          ShareParams(
+            text: youtubeUrl,
+            subject: fixUtf8Mojibake(widget.mediaItem.title),
+          ),
+        );
+        return;
+      }
+
+      final filePath = _mediaPath();
+      if (filePath.isEmpty || !_isLikelyLocalPath(filePath)) return;
+      await SharePlus.instance.share(
+        ShareParams(
+          text: fixUtf8Mojibake(widget.mediaItem.title),
+          files: [XFile(filePath)],
+        ),
+      );
     } catch (_) {
       // Ignorar errores de compartido.
     }
@@ -429,6 +443,16 @@ class _SongInfoScreenState extends State<SongInfoScreen> {
     return null;
   }
 
+  String? _streamingYoutubeUrl() {
+    final videoId = _firstNonEmpty([
+      _normalizeText(_videoId),
+      _extractVideoIdFromPath(_mediaPath()),
+      _extractVideoIdFromPath(widget.mediaItem.id),
+    ]);
+    if (videoId == null || videoId.isEmpty) return null;
+    return 'https://www.youtube.com/watch?v=$videoId';
+  }
+
   int? _durationMsFromMediaItem(MediaItem mediaItem) {
     final fromDuration = mediaItem.duration?.inMilliseconds;
     if (fromDuration != null && fromDuration > 0) return fromDuration;
@@ -508,7 +532,7 @@ class _SongInfoScreenState extends State<SongInfoScreen> {
         actions: [
           IconButton(
             icon: Icon(Icons.share),
-            onPressed: _shareFile,
+            onPressed: _shareMedia,
             tooltip: LocaleProvider.tr('share'),
           ),
         ],

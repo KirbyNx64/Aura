@@ -2440,50 +2440,15 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (videoId == null || videoId.isEmpty) return;
     if (playLoadingNotifier.value) return;
 
-    final loaderStartedAt = DateTime.now();
-    const minLoaderVisible = Duration(milliseconds: 650);
     playLoadingNotifier.value = true;
     openPlayerPanelNotifier.value = true;
-    var loadingReleased = false;
-    StreamSubscription<PlaybackState>? playbackWatchSub;
-    Timer? loadingGuard;
-    void releaseLoading() {
-      if (loadingReleased) return;
-      loadingReleased = true;
-      loadingGuard?.cancel();
-      loadingGuard = null;
-      playbackWatchSub?.cancel();
-      playbackWatchSub = null;
-
-      final elapsed = DateTime.now().difference(loaderStartedAt);
-      if (elapsed >= minLoaderVisible) {
-        playLoadingNotifier.value = false;
-      } else {
-        final remaining = minLoaderVisible - elapsed;
-        Timer(remaining, () {
-          playLoadingNotifier.value = false;
-        });
-      }
-    }
-
-    loadingGuard = Timer(const Duration(seconds: 8), releaseLoading);
 
     try {
       final handler = await getAudioServiceSafely();
-      if (handler == null) return;
-
-      playbackWatchSub = handler.playbackState.listen((playbackState) {
-        if (loadingReleased) return;
-        final currentMedia = handler.mediaItem.value;
-        final currentVideoId = currentMedia?.extras?['videoId']
-            ?.toString()
-            .trim();
-        if (playbackState.playing &&
-            currentVideoId == videoId &&
-            playbackState.updatePosition > Duration.zero) {
-          releaseLoading();
-        }
-      });
+      if (handler == null) {
+        playLoadingNotifier.value = false;
+        return;
+      }
 
       final visibleList = _searchRecentsController.text.isNotEmpty
           ? _filteredStreamingRecents
@@ -2540,14 +2505,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           .timeout(const Duration(seconds: 20));
     } catch (_) {
       // Ignorar para no mostrar error si inició correctamente entre transiciones.
-      releaseLoading();
-    } finally {
-      if (loadingReleased) {
-        loadingGuard?.cancel();
-        loadingGuard = null;
-        await playbackWatchSub?.cancel();
-        playbackWatchSub = null;
-      }
+      playLoadingNotifier.value = false;
     }
   }
 

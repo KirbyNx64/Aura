@@ -2080,6 +2080,11 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       ),
     );
 
+    // Pequeño margen para que la UI pinte metadatos/caratula inicial
+    // antes de iniciar la resolución y carga del stream.
+    await Future.delayed(const Duration(milliseconds: 100));
+    if (isSuperseded()) return false;
+
     // 2) Resolver stream URL y cargar audio después.
     final rawVideoId = currentItem.extras?['videoId']?.toString().trim();
     final videoId = (rawVideoId != null && rawVideoId.isNotEmpty)
@@ -4504,6 +4509,74 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       } catch (_) {
         return {'ok': false, 'reason': 'set_url_failed'};
       }
+    }
+    if (name == 'refreshCurrentStreamArtwork' ||
+        extras?['action'] == 'refreshCurrentStreamArtwork') {
+      final rawArtUri = extras?['artUri']?.toString().trim();
+      if (rawArtUri == null || rawArtUri.isEmpty) {
+        return {'ok': false, 'reason': 'missing_art_uri'};
+      }
+
+      final currentItem = mediaItem.value;
+      if (currentItem == null) {
+        return {'ok': false, 'reason': 'no_media_item'};
+      }
+
+      final targetVideoId = extras?['videoId']?.toString().trim();
+      final currentVideoId = currentItem.extras?['videoId']?.toString().trim();
+      if ((targetVideoId?.isNotEmpty ?? false) &&
+          targetVideoId != currentVideoId) {
+        return {'ok': false, 'reason': 'video_mismatch'};
+      }
+
+      final resolvedDisplayArtUri = _resolveStreamingDisplayArtUri(
+        preferred: extras?['displayArtUri']?.toString(),
+        artUri: Uri.tryParse(rawArtUri),
+        videoId: (targetVideoId?.isNotEmpty ?? false)
+            ? targetVideoId
+            : currentVideoId,
+      );
+
+      final updatedCurrentItem = currentItem.copyWith(
+        artUri: Uri.tryParse(rawArtUri),
+        extras: {
+          ...?currentItem.extras,
+          'displayArtUri': resolvedDisplayArtUri,
+        },
+      );
+      mediaItem.add(updatedCurrentItem);
+      unawaited(_syncFavoriteFlagForItem(updatedCurrentItem));
+
+      if (_mediaQueue.isNotEmpty) {
+        int queueIndex = playbackState.value.queueIndex ?? 0;
+        if (queueIndex < 0 || queueIndex >= _mediaQueue.length) {
+          queueIndex = _deferredStreamingQueueIndex.clamp(
+            0,
+            _mediaQueue.length - 1,
+          );
+        }
+
+        if (queueIndex >= 0 && queueIndex < _mediaQueue.length) {
+          final queueItem = _mediaQueue[queueIndex];
+          final queueVideoId = queueItem.extras?['videoId']?.toString().trim();
+          final shouldUpdateQueue =
+              !(targetVideoId?.isNotEmpty ?? false) ||
+              queueVideoId == targetVideoId;
+
+          if (shouldUpdateQueue) {
+            _mediaQueue[queueIndex] = queueItem.copyWith(
+              artUri: Uri.tryParse(rawArtUri),
+              extras: {
+                ...?queueItem.extras,
+                'displayArtUri': resolvedDisplayArtUri,
+              },
+            );
+            queue.add(List<MediaItem>.from(_mediaQueue));
+          }
+        }
+      }
+
+      return {'ok': true};
     }
     if (name == "playYtStream" || extras?['action'] == 'playYtStream') {
       final streamUrl = extras?['streamUrl']?.toString().trim();

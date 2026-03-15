@@ -17,7 +17,6 @@ import 'package:music/utils/theme_preferences.dart';
 import 'package:music/utils/notifiers.dart';
 import 'package:music/utils/notification_service.dart';
 import 'package:music/utils/simple_yt_download.dart';
-import 'package:music/utils/yt_search/stream_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:music/widgets/animated_tap_button.dart';
 import 'package:music/widgets/now_playing_overlay.dart';
@@ -1153,40 +1152,16 @@ class _ArtistScreenState extends State<ArtistScreen> {
         _overlayPanelController.open();
       }
     });
-    var loadingReleased = false;
-    StreamSubscription<PlaybackState>? playbackWatchSub;
-    Timer? loadingGuard;
-    void releaseLoading() {
-      if (loadingReleased) return;
-      loadingReleased = true;
-      playLoadingNotifier.value = false;
-      loadingGuard?.cancel();
-      loadingGuard = null;
-      playbackWatchSub?.cancel();
-      playbackWatchSub = null;
-    }
-
-    loadingGuard = Timer(const Duration(seconds: 8), releaseLoading);
 
     try {
       if (!audioServiceReady.value || audioHandler == null) {
         await initializeAudioServiceSafely();
       }
       final handler = audioHandler;
-      if (handler == null) return;
-
-      playbackWatchSub = handler.playbackState.listen((playbackState) {
-        if (loadingReleased) return;
-        final currentMedia = handler.mediaItem.value;
-        final currentVideoId = currentMedia?.extras?['videoId']
-            ?.toString()
-            .trim();
-        if (playbackState.playing &&
-            currentVideoId == targetVideoId &&
-            playbackState.updatePosition > Duration.zero) {
-          releaseLoading();
-        }
-      });
+      if (handler == null) {
+        playLoadingNotifier.value = false;
+        return;
+      }
 
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('last_queue_source', queueSource);
@@ -1231,11 +1206,6 @@ class _ArtistScreenState extends State<ArtistScreen> {
             .timeout(const Duration(seconds: 20));
       } else {
         final selected = results[tappedIndex];
-        final streamUrl = await StreamService.getBestAudioUrl(
-          targetVideoId,
-          reportError: true,
-        ).timeout(const Duration(seconds: 6));
-        if (streamUrl == null || streamUrl.isEmpty) return;
         final artUri = selected.thumbUrl?.trim().isNotEmpty == true
             ? selected.thumbUrl!.trim()
             : 'https://i.ytimg.com/vi/$targetVideoId/hqdefault.jpg';
@@ -1252,32 +1222,32 @@ class _ArtistScreenState extends State<ArtistScreen> {
             : _parseYtDurationTextMs(durationText);
 
         await handler
-            .customAction('playYtStream', {
-              'streamUrl': streamUrl,
-              'videoId': targetVideoId,
-              'mediaId': 'yt:$targetVideoId',
-              'title': title,
-              'artist': artist,
-              'artUri': artUri,
-              if (durationMs != null && durationMs > 0)
-                'durationMs': durationMs,
-              if (durationText != null && durationText.isNotEmpty)
-                'durationText': durationText,
-              'radioMode': true,
+            .customAction('playYtStreamQueue', {
+              'items': [
+                {
+                  'videoId': targetVideoId,
+                  'title': title,
+                  'artist': artist,
+                  'artUri': artUri,
+                  if (durationMs != null && durationMs > 0)
+                    'durationMs': durationMs,
+                  if (durationText != null && durationText.isNotEmpty)
+                    'durationText': durationText,
+                },
+              ],
+              'initialIndex': 0,
               'autoPlay': true,
             })
             .timeout(const Duration(seconds: 20));
+
+        // Reproducción individual desde artista debe continuar en radio mode.
+        await handler.customAction('startStreamingRadioFromCurrent', {
+          'replaceQueue': true,
+        });
       }
     } catch (_) {
       // Ignorar para no mostrar error si inició correctamente entre transiciones.
-      releaseLoading();
-    } finally {
-      if (loadingReleased) {
-        loadingGuard?.cancel();
-        loadingGuard = null;
-        await playbackWatchSub?.cancel();
-        playbackWatchSub = null;
-      }
+      playLoadingNotifier.value = false;
     }
   }
 

@@ -7940,20 +7940,12 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
     if (playLoadingNotifier.value) return;
     playLoadingNotifier.value = true;
     openPlayerPanelNotifier.value = true;
-    var loadingReleased = false;
-    void releaseLoading() {
-      if (loadingReleased) return;
-      loadingReleased = true;
-      playLoadingNotifier.value = false;
-    }
-
-    StreamSubscription<PlaybackState>? playbackWatchSub;
-    final loadingGuard = Timer(const Duration(seconds: 8), releaseLoading);
 
     try {
       final List<ConnectivityResult> connectivity = await Connectivity()
           .checkConnectivity();
       if (connectivity.contains(ConnectivityResult.none)) {
+        playLoadingNotifier.value = false;
         _showMessage('Error', LocaleProvider.tr('no_internet_retry'));
         return;
       }
@@ -7965,17 +7957,6 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
       if (handler == null) {
         throw Exception('AudioService no disponible');
       }
-
-      playbackWatchSub = handler.playbackState.listen((playbackState) {
-        if (loadingReleased) return;
-        final currentMedia = handler.mediaItem.value;
-        final currentVideoId = currentMedia?.extras?['videoId']
-            ?.toString()
-            .trim();
-        if (playbackState.playing && currentVideoId == videoId) {
-          releaseLoading();
-        }
-      });
 
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(
@@ -8036,76 +8017,117 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
             })
             .timeout(const Duration(seconds: 15));
       } else {
-        final artworkFuture = _buildPlayerArtworkUri(
-          videoId,
-          preferredThumbUrl: item.thumbUrl,
-          fallbackThumbUrl: fallbackThumbUrl,
-        );
-
-        final streamUrl = await StreamService.getBestAudioUrl(
-          videoId,
-          reportError: true,
-        ).timeout(const Duration(seconds: 6));
-        if (streamUrl == null || streamUrl.isEmpty) {
-          throw Exception('No se pudo generar el stream de audio');
-        }
-
         final artist = item.artist?.trim();
         final fallbackArtistTrimmed = fallbackArtist?.trim();
         final durationText = item.durationText?.trim();
         final durationMs = (item.durationMs != null && item.durationMs! > 0)
             ? item.durationMs
             : _parseDurationTextToMilliseconds(durationText);
-        final artworkUri = await artworkFuture.timeout(
-          const Duration(seconds: 6),
-          onTimeout: () => _buildPlayerArtworkFallbackUrl(
-            videoId,
+        final fallbackArtworkUri = _buildPlayerArtworkFallbackUrl(
+          videoId,
+          preferredThumbUrl: item.thumbUrl,
+          fallbackThumbUrl: fallbackThumbUrl,
+        );
+        final cachedArtworkUri = await _readCachedPlayerArtworkUri(videoId);
+        final immediateArtworkUri = (cachedArtworkUri != null &&
+                cachedArtworkUri.trim().isNotEmpty)
+            ? cachedArtworkUri
+            : fallbackArtworkUri;
+
+        // Abrir el reproductor con metadatos inmediatos; el stream se resuelve
+        // dentro del handler para evitar bloquear la navegación del panel.
+        await handler
+            .customAction('playYtStreamQueue', {
+              'items': [
+                {
+                  'videoId': videoId,
+                  'title': (item.title?.trim().isNotEmpty ?? false)
+                      ? item.title!.trim()
+                      : LocaleProvider.tr('title_unknown'),
+                  'artist': (artist != null && artist.isNotEmpty)
+                      ? artist
+                      : ((fallbackArtistTrimmed != null &&
+                                fallbackArtistTrimmed.isNotEmpty)
+                            ? fallbackArtistTrimmed
+                            : LocaleProvider.tr('artist_unknown')),
+                  'artUri': immediateArtworkUri,
+                  if (item.thumbUrl?.trim().isNotEmpty == true)
+                    'displayArtUri': item.thumbUrl!.trim(),
+                  if (durationMs != null && durationMs > 0)
+                    'durationMs': durationMs,
+                  if (durationText != null && durationText.isNotEmpty)
+                    'durationText': durationText,
+                },
+              ],
+              'initialIndex': 0,
+              'autoPlay': true,
+            })
+            .timeout(const Duration(seconds: 15));
+
+        // En reproducción individual desde YT Search, activar modo radio
+        // para anexar canciones relacionadas después de resolver el stream.
+        await handler.customAction('startStreamingRadioFromCurrent', {
+          'replaceQueue': true,
+        });
+
+        unawaited(
+          _refreshPlayerArtworkInBackground(
+            handler: handler,
+            videoId: videoId,
             preferredThumbUrl: item.thumbUrl,
             fallbackThumbUrl: fallbackThumbUrl,
           ),
         );
-        final finalArtworkUri = artworkUri.trim().isNotEmpty
-            ? artworkUri
-            : _buildPlayerArtworkFallbackUrl(
-                videoId,
-                preferredThumbUrl: item.thumbUrl,
-                fallbackThumbUrl: fallbackThumbUrl,
-              );
-
-        await handler
-            .customAction('playYtStream', {
-              'streamUrl': streamUrl,
-              'videoId': videoId,
-              'mediaId': 'yt:$videoId',
-              'title': (item.title?.trim().isNotEmpty ?? false)
-                  ? item.title!.trim()
-                  : LocaleProvider.tr('title_unknown'),
-              'artist': (artist != null && artist.isNotEmpty)
-                  ? artist
-                  : ((fallbackArtistTrimmed != null &&
-                            fallbackArtistTrimmed.isNotEmpty)
-                        ? fallbackArtistTrimmed
-                        : LocaleProvider.tr('artist_unknown')),
-              'artUri': finalArtworkUri,
-              if (item.thumbUrl?.trim().isNotEmpty == true)
-                'displayArtUri': item.thumbUrl!.trim(),
-              if (durationMs != null && durationMs > 0)
-                'durationMs': durationMs,
-              if (durationText != null && durationText.isNotEmpty)
-                'durationText': durationText,
-              'radioMode': true,
-              'autoPlay': true,
-            })
-            .timeout(const Duration(seconds: 12));
       }
     } catch (_) {
+      playLoadingNotifier.value = false;
       // Error silencioso por solicitud del usuario:
       // no mostrar popup aunque exista fallo transitorio en el arranque.
-    } finally {
-      await playbackWatchSub?.cancel();
-      loadingGuard.cancel();
-      releaseLoading();
     }
+  }
+
+  Future<String?> _readCachedPlayerArtworkUri(String videoId) async {
+    if (videoId.trim().isEmpty) return null;
+    try {
+      final tempDir = await getTemporaryDirectory();
+      final coverFile = File('${tempDir.path}/yt_stream_cover_v2_$videoId.jpg');
+      if (await coverFile.exists() && await coverFile.length() > 500) {
+        return Uri.file(coverFile.path).toString();
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  Future<void> _refreshPlayerArtworkInBackground({
+    required AudioHandler handler,
+    required String videoId,
+    String? preferredThumbUrl,
+    String? fallbackThumbUrl,
+  }) async {
+    final artworkUri = await _buildPlayerArtworkUri(
+      videoId,
+      preferredThumbUrl: preferredThumbUrl,
+      fallbackThumbUrl: fallbackThumbUrl,
+    ).timeout(
+      const Duration(seconds: 8),
+      onTimeout: () => _buildPlayerArtworkFallbackUrl(
+        videoId,
+        preferredThumbUrl: preferredThumbUrl,
+        fallbackThumbUrl: fallbackThumbUrl,
+      ),
+    );
+
+    final normalizedArtwork = artworkUri.trim();
+    if (normalizedArtwork.isEmpty) return;
+
+    try {
+      await handler.customAction('refreshCurrentStreamArtwork', {
+        'videoId': videoId,
+        'artUri': normalizedArtwork,
+        if (preferredThumbUrl?.trim().isNotEmpty == true)
+          'displayArtUri': preferredThumbUrl!.trim(),
+      });
+    } catch (_) {}
   }
 
   String _buildPlayerArtworkFallbackUrl(

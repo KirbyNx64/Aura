@@ -21,7 +21,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:music/utils/db/shortcuts_db.dart';
 import 'package:music/utils/db/songs_index_db.dart';
 import 'package:music/utils/db/download_history_hive.dart';
-import 'package:music/utils/yt_search/stream_provider.dart';
 import 'package:music/utils/simple_yt_download.dart';
 import 'package:mini_music_visualizer/mini_music_visualizer.dart';
 import 'package:music/utils/db/playlist_model.dart' as hive_model;
@@ -708,44 +707,56 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     if (videoId == null || videoId.isEmpty) return;
     if (playLoadingNotifier.value) return;
 
-    final loaderStartedAt = DateTime.now();
-    const minLoaderVisible = Duration(milliseconds: 320);
     playLoadingNotifier.value = true;
     openPlayerPanelNotifier.value = true;
     try {
-      final streamUrl = await StreamService.getBestAudioUrl(
-        videoId,
-        reportError: true,
-      ).timeout(const Duration(seconds: 6));
-      if (streamUrl == null || streamUrl.isEmpty) return;
+      if (!audioServiceReady.value || audioHandler == null) {
+        await initializeAudioServiceSafely();
+      }
+      final handler = audioHandler;
+      if (handler == null) {
+        playLoadingNotifier.value = false;
+        return;
+      }
 
       final artUri = item.artUri?.trim().isNotEmpty == true
           ? item.artUri!.trim()
           : 'https://i.ytimg.com/vi/$videoId/hqdefault.jpg';
 
-      await audioHandler.myHandler?.customAction('playYtStream', {
-        'streamUrl': streamUrl,
-        'videoId': videoId,
-        'mediaId': 'yt:$videoId',
-        'title': item.title.trim().isNotEmpty
-            ? item.title.trim()
-            : LocaleProvider.tr('title_unknown'),
-        'artist': item.artist.trim().isNotEmpty
-            ? item.artist.trim()
-            : LocaleProvider.tr('artist_unknown'),
-        'artUri': artUri,
-        if (item.durationMs != null && item.durationMs! > 0)
-          'durationMs': item.durationMs,
-        if (item.durationText != null && item.durationText!.trim().isNotEmpty)
-          'durationText': item.durationText!.trim(),
-        'radioMode': true,
-        'autoPlay': true,
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+        'last_queue_source',
+        LocaleProvider.tr('favorites_title'),
+      );
+
+      await handler
+          .customAction('playYtStreamQueue', {
+            'items': [
+              {
+                'videoId': videoId,
+                'title': item.title.trim().isNotEmpty
+                    ? item.title.trim()
+                    : LocaleProvider.tr('title_unknown'),
+                'artist': item.artist.trim().isNotEmpty
+                    ? item.artist.trim()
+                    : LocaleProvider.tr('artist_unknown'),
+                'artUri': artUri,
+                if (item.durationMs != null && item.durationMs! > 0)
+                  'durationMs': item.durationMs,
+                if (item.durationText != null &&
+                    item.durationText!.trim().isNotEmpty)
+                  'durationText': item.durationText!.trim(),
+              },
+            ],
+            'initialIndex': 0,
+            'autoPlay': true,
+          })
+          .timeout(const Duration(seconds: 20));
+
+      await handler.customAction('startStreamingRadioFromCurrent', {
+        'replaceQueue': true,
       });
-    } finally {
-      final elapsed = DateTime.now().difference(loaderStartedAt);
-      if (elapsed < minLoaderVisible) {
-        await Future<void>.delayed(minLoaderVisible - elapsed);
-      }
+    } catch (_) {
       playLoadingNotifier.value = false;
     }
   }
