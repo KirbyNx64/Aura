@@ -39,6 +39,7 @@ import 'package:material_loading_indicator/loading_indicator.dart';
 import 'package:music/utils/db/playlist_model.dart' as hive_model;
 import 'package:music/utils/db/songs_index_db.dart';
 import 'package:music/utils/theme_controller.dart';
+import 'package:music/widgets/artwork_list_tile.dart';
 import 'package:music/widgets/sliding_up_panel/sliding_up_panel.dart'
     as standard_panel;
 import 'package:music/screens/play/current_playlist_screen.dart';
@@ -49,6 +50,76 @@ import 'package:music/utils/yt_search/stream_provider.dart';
 enum PanelContent { playlist, lyrics }
 
 final OnAudioQuery _audioQuery = OnAudioQuery();
+
+class _PlaylistStreamingArtwork extends StatefulWidget {
+  final List<String> sources;
+
+  const _PlaylistStreamingArtwork({required this.sources});
+
+  @override
+  State<_PlaylistStreamingArtwork> createState() =>
+      _PlaylistStreamingArtworkState();
+}
+
+class _PlaylistStreamingArtworkState extends State<_PlaylistStreamingArtwork> {
+  int _sourceIndex = 0;
+
+  void _tryNextSource() {
+    if (_sourceIndex >= widget.sources.length - 1) return;
+    if (!mounted) return;
+    setState(() {
+      _sourceIndex++;
+    });
+  }
+
+  Widget _buildFallback() {
+    return Container(
+      color: Colors.transparent,
+      child: const Icon(Icons.music_note_rounded, color: Colors.transparent),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.sources.isEmpty || _sourceIndex >= widget.sources.length) {
+      return _buildFallback();
+    }
+
+    final currentSource = widget.sources[_sourceIndex];
+    final lower = currentSource.toLowerCase();
+
+    if (lower.startsWith('file://') || currentSource.startsWith('/')) {
+      final filePath = lower.startsWith('file://')
+          ? (Uri.tryParse(currentSource)?.toFilePath() ?? '')
+          : currentSource;
+      if (filePath.isEmpty) {
+        _tryNextSource();
+        return _buildFallback();
+      }
+
+      return Image.file(
+        File(filePath),
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) {
+          _tryNextSource();
+          return _buildFallback();
+        },
+      );
+    }
+
+    return CachedNetworkImage(
+      imageUrl: currentSource,
+      fit: BoxFit.cover,
+      fadeInDuration: Duration.zero,
+      fadeOutDuration: Duration.zero,
+      placeholder: (context, url) => _buildFallback(),
+      errorWidget: (context, url, error) {
+        _tryNextSource();
+        return _buildFallback();
+      },
+    );
+  }
+}
 
 // Future<String?> fetchLyrics(String artist, String title) async {
 //   try {
@@ -2251,7 +2322,9 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     BuildContext safeContext,
     MediaItem mediaItem,
   ) async {
-    final isStreamingTarget = mediaItem.extras?['isStreaming'] == true;
+    final mediaPath = _favoritePathForMediaItem(mediaItem);
+    final isStreamingTarget =
+        mediaItem.extras?['isStreaming'] == true || _isStreamingPath(mediaPath);
     final allPlaylists = await PlaylistsDB().getAllPlaylists();
     final playlists = allPlaylists
         .where(
@@ -2260,6 +2333,9 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
         )
         .toList();
     final allSongs = await SongsIndexDB().getIndexedSongs();
+    final playlistArtworkSourcesCache = await _buildPlaylistArtworkSourcesCache(
+      playlists,
+    );
     final TextEditingController controller = TextEditingController();
 
     if (!safeContext.mounted) return;
@@ -2442,11 +2518,12 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                               shape: RoundedRectangleBorder(
                                                 borderRadius: borderRadius,
                                               ),
-                                              leading:
-                                                  _buildPlaylistArtworkGrid(
-                                                    pl,
-                                                    allSongs,
-                                                  ),
+                                              leading: _buildPlaylistArtworkGrid(
+                                                pl,
+                                                allSongs,
+                                                streamingArtworkCache:
+                                                    playlistArtworkSourcesCache,
+                                              ),
                                               title: Text(
                                                 pl.name,
                                                 maxLines: 1,
@@ -2607,107 +2684,171 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
   /// Generar cuadrícula de carátulas para una playlist
   Widget _buildPlaylistArtworkGrid(
     hive_model.PlaylistModel playlist,
-    List<SongModel> allSongs,
-  ) {
-    final rawList = playlist.songPaths;
-    // Filtra solo rutas válidas
-    final filtered = rawList.where((e) => e.isNotEmpty).toList();
+    List<SongModel> allSongs, {
+    Map<String, List<String>> streamingArtworkCache =
+        const <String, List<String>>{},
+  }) {
+    final filtered = playlist.songPaths
+        .where((path) => path.trim().isNotEmpty)
+        .toList();
+    final latestPaths = filtered.reversed.take(4).toList();
 
-    // Obtener las canciones reales que existen en el índice cargado
-    final List<SongModel> validSongs = [];
-    for (final songPath in filtered) {
-      final songIndex = allSongs.indexWhere((s) => s.data == songPath);
-      if (songIndex != -1) {
-        validSongs.add(allSongs[songIndex]);
-        if (validSongs.length >= 4) break; // Máximo 4 para el grid
+    final List<Widget> artworks = latestPaths.map((path) {
+      final normalizedPath = path.trim();
+      if (_isStreamingPath(normalizedPath)) {
+        return _PlaylistStreamingArtwork(
+          sources: _streamingPlaylistArtworkSources(
+            playlist.id,
+            normalizedPath,
+            streamingArtworkCache,
+          ),
+        );
       }
-    }
+
+      final songIndex = allSongs.indexWhere(
+        (song) => song.data == normalizedPath,
+      );
+      if (songIndex == -1) {
+        return Container(
+          color: Theme.of(context).colorScheme.surfaceContainer,
+          child: Center(
+            child: Icon(
+              Icons.music_note,
+              color: Theme.of(context).colorScheme.onSurface,
+              size: 20,
+            ),
+          ),
+        );
+      }
+      final song = allSongs[songIndex];
+      return ArtworkListTile(
+        songId: song.id,
+        songPath: song.data,
+        borderRadius: BorderRadius.zero,
+      );
+    }).toList();
 
     return SizedBox(
-      width: 40,
-      height: 40,
+      width: 48,
+      height: 48,
       child: ClipRRect(
         borderRadius: BorderRadius.circular(8),
-        child: _buildArtworkLayout(validSongs),
+        child: _buildArtworkLayout(artworks),
       ),
     );
   }
 
-  Widget _buildArtworkLayout(List<SongModel> songs) {
-    switch (songs.length) {
+  String? _extractVideoIdFromPath(String rawPath) {
+    final path = rawPath.trim();
+    if (path.isEmpty) return null;
+
+    if (path.startsWith('yt:')) {
+      final id = path.substring(3).trim();
+      return id.isEmpty ? null : id;
+    }
+
+    final uri = Uri.tryParse(path);
+    if (uri != null) {
+      final queryVideoId = uri.queryParameters['v']?.trim();
+      if (queryVideoId != null && queryVideoId.isNotEmpty) {
+        return queryVideoId;
+      }
+      if (uri.host.contains('youtu.be') && uri.pathSegments.isNotEmpty) {
+        final shortId = uri.pathSegments.first.trim();
+        if (shortId.isNotEmpty) {
+          return shortId;
+        }
+      }
+    }
+
+    final idLike = RegExp(r'^[a-zA-Z0-9_-]{11}$');
+    if (idLike.hasMatch(path)) return path;
+    return null;
+  }
+
+  List<String> _streamingPlaylistArtworkSources(
+    String playlistId,
+    String path,
+    Map<String, List<String>> streamingArtworkCache,
+  ) {
+    final cacheKey = '$playlistId::$path';
+    final cached = streamingArtworkCache[cacheKey];
+    if (cached != null && cached.isNotEmpty) return cached;
+
+    final videoId = _extractVideoIdFromPath(path);
+    if (videoId == null || videoId.isEmpty) return const [];
+    return [
+      'https://img.youtube.com/vi/$videoId/maxresdefault.jpg',
+      'https://img.youtube.com/vi/$videoId/sddefault.jpg',
+      'https://i.ytimg.com/vi/$videoId/hqdefault.jpg',
+    ];
+  }
+
+  Future<Map<String, List<String>>> _buildPlaylistArtworkSourcesCache(
+    List<hive_model.PlaylistModel> playlists,
+  ) async {
+    final cache = <String, List<String>>{};
+    for (final playlist in playlists) {
+      final paths = playlist.songPaths
+          .where((p) => p.trim().isNotEmpty)
+          .toList()
+          .reversed
+          .take(4);
+      for (final rawPath in paths) {
+        final path = rawPath.trim();
+        if (!_isStreamingPath(path)) continue;
+        final meta = await PlaylistsDB().getPlaylistSongMeta(playlist.id, path);
+        final metaArtUri = meta?['artUri']?.toString().trim();
+        final metaVideoId = meta?['videoId']?.toString().trim();
+        final videoId = (metaVideoId != null && metaVideoId.isNotEmpty)
+            ? metaVideoId
+            : _extractVideoIdFromPath(path);
+
+        final sources = <String>[];
+        if (metaArtUri != null &&
+            metaArtUri.isNotEmpty &&
+            metaArtUri != 'null') {
+          sources.add(metaArtUri);
+        }
+        if (videoId != null && videoId.isNotEmpty) {
+          sources.addAll([
+            'https://img.youtube.com/vi/$videoId/maxresdefault.jpg',
+            'https://img.youtube.com/vi/$videoId/sddefault.jpg',
+            'https://i.ytimg.com/vi/$videoId/hqdefault.jpg',
+          ]);
+        }
+        if (sources.isNotEmpty) {
+          cache['${playlist.id}::$path'] = sources.toSet().toList();
+        }
+      }
+    }
+    return cache;
+  }
+
+  Widget _buildArtworkLayout(List<Widget> artworks) {
+    switch (artworks.length) {
       case 0:
         return Container(
-          color: Theme.of(context).colorScheme.primaryContainer.withAlpha(100),
+          color: Theme.of(context).colorScheme.surfaceContainer,
           child: Center(
             child: Icon(
-              Icons.queue_music_rounded,
-              color: Theme.of(context).colorScheme.primary,
+              Icons.music_note,
+              color: Theme.of(context).colorScheme.onSurface,
               size: 20,
             ),
           ),
         );
 
       case 1:
-        return QueryArtworkWidget(
-          id: songs[0].id,
-          type: ArtworkType.AUDIO,
-          artworkHeight: 40,
-          artworkWidth: 40,
-          keepOldArtwork: true,
-          artworkBorder: BorderRadius.zero,
-          nullArtworkWidget: Container(
-            color: Theme.of(context).colorScheme.surfaceContainer,
-            child: Center(
-              child: Icon(
-                Icons.music_note,
-                color: Theme.of(context).colorScheme.onSurface,
-                size: 20,
-              ),
-            ),
-          ),
-        );
+        return artworks[0];
 
       case 2:
       case 3:
         // Caso 2 y 3: mostramos 2 (lado a lado)
         return Row(
           children: [
-            Expanded(
-              child: QueryArtworkWidget(
-                id: songs[0].id,
-                type: ArtworkType.AUDIO,
-                artworkHeight: 40,
-                artworkWidth: 20,
-                keepOldArtwork: true,
-                artworkBorder: BorderRadius.zero,
-                nullArtworkWidget: Container(
-                  color: Theme.of(context).colorScheme.surfaceContainer,
-                  child: Icon(
-                    Icons.music_note,
-                    color: Theme.of(context).colorScheme.onSurface,
-                    size: 10,
-                  ),
-                ),
-              ),
-            ),
-            Expanded(
-              child: QueryArtworkWidget(
-                id: songs[1].id,
-                type: ArtworkType.AUDIO,
-                artworkHeight: 40,
-                artworkWidth: 20,
-                keepOldArtwork: true,
-                artworkBorder: BorderRadius.zero,
-                nullArtworkWidget: Container(
-                  color: Theme.of(context).colorScheme.surfaceContainer,
-                  child: Icon(
-                    Icons.music_note,
-                    color: Theme.of(context).colorScheme.onSurface,
-                    size: 10,
-                  ),
-                ),
-              ),
-            ),
+            Expanded(child: artworks[0]),
+            Expanded(child: artworks[1]),
           ],
         );
 
@@ -2718,84 +2859,16 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
             Expanded(
               child: Row(
                 children: [
-                  Expanded(
-                    child: QueryArtworkWidget(
-                      id: songs[0].id,
-                      type: ArtworkType.AUDIO,
-                      artworkHeight: 20,
-                      artworkWidth: 20,
-                      keepOldArtwork: true,
-                      artworkBorder: BorderRadius.zero,
-                      nullArtworkWidget: Container(
-                        color: Theme.of(context).colorScheme.surfaceContainer,
-                        child: Icon(
-                          Icons.music_note,
-                          color: Theme.of(context).colorScheme.onSurface,
-                          size: 10,
-                        ),
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    child: QueryArtworkWidget(
-                      id: songs[1].id,
-                      type: ArtworkType.AUDIO,
-                      artworkHeight: 20,
-                      artworkWidth: 20,
-                      keepOldArtwork: true,
-                      artworkBorder: BorderRadius.zero,
-                      nullArtworkWidget: Container(
-                        color: Theme.of(context).colorScheme.surfaceContainer,
-                        child: Icon(
-                          Icons.music_note,
-                          color: Theme.of(context).colorScheme.onSurface,
-                          size: 10,
-                        ),
-                      ),
-                    ),
-                  ),
+                  Expanded(child: artworks[0]),
+                  Expanded(child: artworks[1]),
                 ],
               ),
             ),
             Expanded(
               child: Row(
                 children: [
-                  Expanded(
-                    child: QueryArtworkWidget(
-                      id: songs[2].id,
-                      type: ArtworkType.AUDIO,
-                      artworkHeight: 20,
-                      artworkWidth: 20,
-                      keepOldArtwork: true,
-                      artworkBorder: BorderRadius.zero,
-                      nullArtworkWidget: Container(
-                        color: Theme.of(context).colorScheme.surfaceContainer,
-                        child: Icon(
-                          Icons.music_note,
-                          color: Theme.of(context).colorScheme.onSurface,
-                          size: 10,
-                        ),
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    child: QueryArtworkWidget(
-                      id: songs[3].id,
-                      type: ArtworkType.AUDIO,
-                      artworkHeight: 20,
-                      artworkWidth: 20,
-                      keepOldArtwork: true,
-                      artworkBorder: BorderRadius.zero,
-                      nullArtworkWidget: Container(
-                        color: Theme.of(context).colorScheme.surfaceContainer,
-                        child: Icon(
-                          Icons.music_note,
-                          color: Theme.of(context).colorScheme.onSurface,
-                          size: 10,
-                        ),
-                      ),
-                    ),
-                  ),
+                  Expanded(child: artworks[2]),
+                  Expanded(child: artworks[3]),
                 ],
               ),
             ),
@@ -2813,9 +2886,10 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     if (name.isEmpty) return;
 
     final playlistId = await PlaylistsDB().createPlaylist(name);
-    final isStreaming = mediaItem.extras?['isStreaming'] == true;
+    final path = _favoritePathForMediaItem(mediaItem);
+    final isStreaming =
+        mediaItem.extras?['isStreaming'] == true || _isStreamingPath(path);
     if (isStreaming) {
-      final path = _favoritePathForMediaItem(mediaItem);
       final videoId = mediaItem.extras?['videoId']?.toString().trim();
       final displayArtUri = mediaItem.extras?['displayArtUri']
           ?.toString()

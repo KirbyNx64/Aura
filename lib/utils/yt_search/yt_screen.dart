@@ -30,7 +30,11 @@ import 'package:music/screens/artist/artist_screen.dart';
 import 'package:music/screens/download/download_history_screen.dart';
 import 'package:music/utils/db/favorites_db.dart';
 import 'package:music/utils/db/playlists_db.dart';
+import 'package:music/utils/db/playlist_model.dart' as hive_model;
+import 'package:music/utils/db/songs_index_db.dart';
 import 'package:music/utils/song_info_dialog.dart';
+import 'package:music/widgets/artwork_list_tile.dart';
+import 'package:on_audio_query/on_audio_query.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import 'package:buttons_tabbar/buttons_tabbar.dart';
 import 'package:material_loading_indicator/loading_indicator.dart';
@@ -758,6 +762,212 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
       ]);
     }
     return sources.toSet().toList();
+  }
+
+  bool _isStreamingPlaylistPath(String path) {
+    final normalized = path.trim().toLowerCase();
+    if (normalized.isEmpty) return false;
+    if (normalized.startsWith('/')) return false;
+    if (normalized.startsWith('file://')) return false;
+    if (normalized.startsWith('content://')) return false;
+    return true;
+  }
+
+  bool _playlistMatchesStreamingSource(hive_model.PlaylistModel playlist) {
+    if (playlist.songPaths.isEmpty) return true;
+    return playlist.songPaths.any(_isStreamingPlaylistPath);
+  }
+
+  String? _extractVideoIdFromPlaylistPath(String rawPath) {
+    final path = rawPath.trim();
+    if (path.isEmpty) return null;
+
+    if (path.startsWith('yt:')) {
+      final id = path.substring(3).trim();
+      return id.isEmpty ? null : id;
+    }
+
+    final uri = Uri.tryParse(path);
+    if (uri != null) {
+      final queryVideoId = uri.queryParameters['v']?.trim();
+      if (queryVideoId != null && queryVideoId.isNotEmpty) {
+        return queryVideoId;
+      }
+      if (uri.host.contains('youtu.be') && uri.pathSegments.isNotEmpty) {
+        final shortId = uri.pathSegments.first.trim();
+        if (shortId.isNotEmpty) {
+          return shortId;
+        }
+      }
+    }
+
+    final idLike = RegExp(r'^[a-zA-Z0-9_-]{11}$');
+    if (idLike.hasMatch(path)) return path;
+    return null;
+  }
+
+  List<String> _streamingPlaylistArtworkSources(
+    String playlistId,
+    String path,
+    Map<String, List<String>> streamingArtworkCache,
+  ) {
+    final cacheKey = '$playlistId::$path';
+    final cached = streamingArtworkCache[cacheKey];
+    if (cached != null && cached.isNotEmpty) return cached;
+
+    final videoId = _extractVideoIdFromPlaylistPath(path);
+    if (videoId == null || videoId.isEmpty) return const [];
+    return [
+      'https://img.youtube.com/vi/$videoId/maxresdefault.jpg',
+      'https://img.youtube.com/vi/$videoId/sddefault.jpg',
+      'https://i.ytimg.com/vi/$videoId/hqdefault.jpg',
+    ];
+  }
+
+  Future<Map<String, List<String>>> _buildPlaylistArtworkSourcesCache(
+    List<hive_model.PlaylistModel> playlists,
+  ) async {
+    final cache = <String, List<String>>{};
+    for (final playlist in playlists) {
+      final paths = playlist.songPaths
+          .where((p) => p.trim().isNotEmpty)
+          .toList()
+          .reversed
+          .take(4);
+      for (final rawPath in paths) {
+        final path = rawPath.trim();
+        if (!_isStreamingPlaylistPath(path)) continue;
+        final meta = await PlaylistsDB().getPlaylistSongMeta(playlist.id, path);
+        final metaArtUri = meta?['artUri']?.toString().trim();
+        final metaVideoId = meta?['videoId']?.toString().trim();
+        final videoId = (metaVideoId != null && metaVideoId.isNotEmpty)
+            ? metaVideoId
+            : _extractVideoIdFromPlaylistPath(path);
+
+        final sources = <String>[];
+        if (metaArtUri != null &&
+            metaArtUri.isNotEmpty &&
+            metaArtUri != 'null') {
+          sources.add(metaArtUri);
+        }
+        if (videoId != null && videoId.isNotEmpty) {
+          sources.addAll([
+            'https://img.youtube.com/vi/$videoId/maxresdefault.jpg',
+            'https://img.youtube.com/vi/$videoId/sddefault.jpg',
+            'https://i.ytimg.com/vi/$videoId/hqdefault.jpg',
+          ]);
+        }
+        if (sources.isNotEmpty) {
+          cache['${playlist.id}::$path'] = sources.toSet().toList();
+        }
+      }
+    }
+    return cache;
+  }
+
+  Widget _buildModalPlaylistArtworkGrid(
+    hive_model.PlaylistModel playlist,
+    List<SongModel> allSongs, {
+    Map<String, List<String>> streamingArtworkCache =
+        const <String, List<String>>{},
+  }) {
+    final filtered = playlist.songPaths
+        .where((path) => path.trim().isNotEmpty)
+        .toList();
+    final latestPaths = filtered.reversed.take(4).toList();
+
+    final List<Widget> artworks = latestPaths.map((path) {
+      final normalizedPath = path.trim();
+      if (_isStreamingPlaylistPath(normalizedPath)) {
+        return _YtStreamingArtwork(
+          sources: _streamingPlaylistArtworkSources(
+            playlist.id,
+            normalizedPath,
+            streamingArtworkCache,
+          ),
+          backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
+          iconColor: Theme.of(context).colorScheme.onSurfaceVariant,
+        );
+      }
+
+      final songIndex = allSongs.indexWhere(
+        (song) => song.data == normalizedPath,
+      );
+      if (songIndex == -1) {
+        return Container(
+          color: Theme.of(context).colorScheme.surfaceContainer,
+          child: Center(
+            child: Icon(
+              Icons.music_note,
+              color: Theme.of(context).colorScheme.onSurface,
+              size: 20,
+            ),
+          ),
+        );
+      }
+      final song = allSongs[songIndex];
+      return ArtworkListTile(
+        songId: song.id,
+        songPath: song.data,
+        borderRadius: BorderRadius.zero,
+      );
+    }).toList();
+
+    return SizedBox(
+      width: 48,
+      height: 48,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: _buildPlaylistArtworkLayout(artworks),
+      ),
+    );
+  }
+
+  Widget _buildPlaylistArtworkLayout(List<Widget> artworks) {
+    switch (artworks.length) {
+      case 0:
+        return Container(
+          color: Theme.of(context).colorScheme.surfaceContainer,
+          child: Center(
+            child: Icon(
+              Icons.music_note,
+              color: Theme.of(context).colorScheme.onSurface,
+              size: 20,
+            ),
+          ),
+        );
+      case 1:
+        return artworks[0];
+      case 2:
+      case 3:
+        return Row(
+          children: [
+            Expanded(child: artworks[0]),
+            Expanded(child: artworks[1]),
+          ],
+        );
+      default:
+        return Column(
+          children: [
+            Expanded(
+              child: Row(
+                children: [
+                  Expanded(child: artworks[0]),
+                  Expanded(child: artworks[1]),
+                ],
+              ),
+            ),
+            Expanded(
+              child: Row(
+                children: [
+                  Expanded(child: artworks[2]),
+                  Expanded(child: artworks[3]),
+                ],
+              ),
+            ),
+          ],
+        );
+    }
   }
 
   @override
@@ -2355,7 +2565,13 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
   Future<void> _showAddSongToPlaylistDialog(YtMusicResult item) async {
     final videoId = item.videoId?.trim();
     if (videoId == null || videoId.isEmpty) return;
-    final allPlaylists = await PlaylistsDB().getAllPlaylists();
+    final allPlaylists = (await PlaylistsDB().getAllPlaylists())
+        .where(_playlistMatchesStreamingSource)
+        .toList();
+    final allSongs = await SongsIndexDB().getIndexedSongs();
+    final playlistArtworkSourcesCache = await _buildPlaylistArtworkSourcesCache(
+      allPlaylists,
+    );
     final textController = TextEditingController();
     if (!mounted) return;
 
@@ -2453,10 +2669,19 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                 margin: EdgeInsets.zero,
                                 elevation: 0,
                                 child: ListTile(
+                                  leading: _buildModalPlaylistArtworkGrid(
+                                    pl,
+                                    allSongs,
+                                    streamingArtworkCache:
+                                        playlistArtworkSourcesCache,
+                                  ),
                                   title: Text(
                                     pl.name,
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.titleMedium,
                                   ),
                                   onTap: () async {
                                     await addToPlaylist(pl.id);
@@ -2523,7 +2748,13 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
         .toList();
     if (validItems.isEmpty) return;
 
-    final allPlaylists = await PlaylistsDB().getAllPlaylists();
+    final allPlaylists = (await PlaylistsDB().getAllPlaylists())
+        .where(_playlistMatchesStreamingSource)
+        .toList();
+    final allSongs = await SongsIndexDB().getIndexedSongs();
+    final playlistArtworkSourcesCache = await _buildPlaylistArtworkSourcesCache(
+      allPlaylists,
+    );
     if (!mounted) return;
     final textController = TextEditingController();
 
@@ -2598,6 +2829,12 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                             ),
                             elevation: 0,
                             child: ListTile(
+                              leading: _buildModalPlaylistArtworkGrid(
+                                pl,
+                                allSongs,
+                                streamingArtworkCache:
+                                    playlistArtworkSourcesCache,
+                              ),
                               title: Text(pl.name),
                               onTap: () async {
                                 await addItemsToPlaylist(pl.id);
@@ -2651,6 +2888,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
     String? fallbackThumbUrl,
     String? fallbackArtist,
   }) async {
+    final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
     final title = item.title?.trim().isNotEmpty == true
         ? item.title!.trim()
         : LocaleProvider.tr('title_unknown');
@@ -2722,7 +2960,12 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                               artist,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context).textTheme.bodyMedium,
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: isAmoled
+                                    ? Colors.white.withValues(alpha: 0.85)
+                                    : null,
+                              ),
                             ),
                           ],
                         ),
@@ -2967,7 +3210,13 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
   Future<void> _addSelectedToPlaylist() async {
     final items = _getSelectedItems();
     if (items.isEmpty) return;
-    final allPlaylists = await PlaylistsDB().getAllPlaylists();
+    final allPlaylists = (await PlaylistsDB().getAllPlaylists())
+        .where(_playlistMatchesStreamingSource)
+        .toList();
+    final allSongs = await SongsIndexDB().getIndexedSongs();
+    final playlistArtworkSourcesCache = await _buildPlaylistArtworkSourcesCache(
+      allPlaylists,
+    );
     if (!mounted) return;
     final textController = TextEditingController();
 
@@ -3043,6 +3292,12 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                             ),
                             elevation: 0,
                             child: ListTile(
+                              leading: _buildModalPlaylistArtworkGrid(
+                                pl,
+                                allSongs,
+                                streamingArtworkCache:
+                                    playlistArtworkSourcesCache,
+                              ),
                               title: Text(pl.name),
                               onTap: () async {
                                 await addItemsToPlaylist(pl.id);
@@ -8029,8 +8284,8 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
           fallbackThumbUrl: fallbackThumbUrl,
         );
         final cachedArtworkUri = await _readCachedPlayerArtworkUri(videoId);
-        final immediateArtworkUri = (cachedArtworkUri != null &&
-                cachedArtworkUri.trim().isNotEmpty)
+        final immediateArtworkUri =
+            (cachedArtworkUri != null && cachedArtworkUri.trim().isNotEmpty)
             ? cachedArtworkUri
             : fallbackArtworkUri;
 
@@ -8104,18 +8359,19 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
     String? preferredThumbUrl,
     String? fallbackThumbUrl,
   }) async {
-    final artworkUri = await _buildPlayerArtworkUri(
-      videoId,
-      preferredThumbUrl: preferredThumbUrl,
-      fallbackThumbUrl: fallbackThumbUrl,
-    ).timeout(
-      const Duration(seconds: 8),
-      onTimeout: () => _buildPlayerArtworkFallbackUrl(
-        videoId,
-        preferredThumbUrl: preferredThumbUrl,
-        fallbackThumbUrl: fallbackThumbUrl,
-      ),
-    );
+    final artworkUri =
+        await _buildPlayerArtworkUri(
+          videoId,
+          preferredThumbUrl: preferredThumbUrl,
+          fallbackThumbUrl: fallbackThumbUrl,
+        ).timeout(
+          const Duration(seconds: 8),
+          onTimeout: () => _buildPlayerArtworkFallbackUrl(
+            videoId,
+            preferredThumbUrl: preferredThumbUrl,
+            fallbackThumbUrl: fallbackThumbUrl,
+          ),
+        );
 
     final normalizedArtwork = artworkUri.trim();
     if (normalizedArtwork.isEmpty) return;

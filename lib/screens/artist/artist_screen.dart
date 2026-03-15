@@ -19,15 +19,96 @@ import 'package:music/utils/notification_service.dart';
 import 'package:music/utils/simple_yt_download.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:music/widgets/animated_tap_button.dart';
+import 'package:music/widgets/artwork_list_tile.dart';
 import 'package:music/widgets/now_playing_overlay.dart';
 import 'package:music/utils/db/favorites_db.dart';
+import 'package:music/utils/db/playlist_model.dart' as hive_model;
 import 'package:music/utils/db/playlists_db.dart';
+import 'package:music/utils/db/songs_index_db.dart';
 import 'package:music/utils/song_info_dialog.dart';
+import 'package:on_audio_query/on_audio_query.dart';
 import 'package:music/screens/play/player_screen.dart' as player_screen;
 import 'package:music/widgets/sliding_up_panel/sliding_up_panel_overlay.dart'
     as overlay_panel;
 import 'package:material_loading_indicator/loading_indicator.dart';
 import 'package:share_plus/share_plus.dart';
+import 'dart:io';
+
+class _ArtistStreamingArtwork extends StatefulWidget {
+  final List<String> sources;
+  final Color backgroundColor;
+  final Color iconColor;
+
+  const _ArtistStreamingArtwork({
+    required this.sources,
+    required this.backgroundColor,
+    required this.iconColor,
+  });
+
+  @override
+  State<_ArtistStreamingArtwork> createState() =>
+      _ArtistStreamingArtworkState();
+}
+
+class _ArtistStreamingArtworkState extends State<_ArtistStreamingArtwork> {
+  int _sourceIndex = 0;
+
+  void _tryNextSource() {
+    if (_sourceIndex >= widget.sources.length - 1) return;
+    if (!mounted) return;
+    setState(() {
+      _sourceIndex++;
+    });
+  }
+
+  Widget _buildFallback() {
+    return Container(
+      color: Colors.transparent,
+      child: const Icon(Icons.music_note_rounded, color: Colors.transparent),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.sources.isEmpty || _sourceIndex >= widget.sources.length) {
+      return _buildFallback();
+    }
+
+    final currentSource = widget.sources[_sourceIndex];
+    final lower = currentSource.toLowerCase();
+
+    if (lower.startsWith('file://') || currentSource.startsWith('/')) {
+      final filePath = lower.startsWith('file://')
+          ? (Uri.tryParse(currentSource)?.toFilePath() ?? '')
+          : currentSource;
+      if (filePath.isEmpty) {
+        _tryNextSource();
+        return _buildFallback();
+      }
+
+      return Image.file(
+        File(filePath),
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) {
+          _tryNextSource();
+          return _buildFallback();
+        },
+      );
+    }
+
+    return CachedNetworkImage(
+      imageUrl: currentSource,
+      fit: BoxFit.cover,
+      fadeInDuration: Duration.zero,
+      fadeOutDuration: Duration.zero,
+      placeholder: (context, url) => _buildFallback(),
+      errorWidget: (context, url, error) {
+        _tryNextSource();
+        return _buildFallback();
+      },
+    );
+  }
+}
 
 class ArtistScreen extends StatefulWidget {
   final String artistName;
@@ -197,6 +278,213 @@ class _ArtistScreenState extends State<ArtistScreen> {
 
     if (totalSeconds <= 0) return null;
     return totalSeconds * 1000;
+  }
+
+  bool _isStreamingPlaylistPath(String path) {
+    final normalized = path.trim().toLowerCase();
+    if (normalized.isEmpty) return false;
+    if (normalized.startsWith('/')) return false;
+    if (normalized.startsWith('file://')) return false;
+    if (normalized.startsWith('content://')) return false;
+    return true;
+  }
+
+  bool _playlistMatchesStreamingSource(dynamic playlist) {
+    final List<dynamic> songPaths = (playlist.songPaths as List?) ?? const [];
+    if (songPaths.isEmpty) return true;
+    return songPaths.any((path) => _isStreamingPlaylistPath('$path'));
+  }
+
+  String? _extractVideoIdFromPlaylistPath(String rawPath) {
+    final path = rawPath.trim();
+    if (path.isEmpty) return null;
+
+    if (path.startsWith('yt:')) {
+      final id = path.substring(3).trim();
+      return id.isEmpty ? null : id;
+    }
+
+    final uri = Uri.tryParse(path);
+    if (uri != null) {
+      final queryVideoId = uri.queryParameters['v']?.trim();
+      if (queryVideoId != null && queryVideoId.isNotEmpty) {
+        return queryVideoId;
+      }
+      if (uri.host.contains('youtu.be') && uri.pathSegments.isNotEmpty) {
+        final shortId = uri.pathSegments.first.trim();
+        if (shortId.isNotEmpty) {
+          return shortId;
+        }
+      }
+    }
+
+    final idLike = RegExp(r'^[a-zA-Z0-9_-]{11}$');
+    if (idLike.hasMatch(path)) return path;
+    return null;
+  }
+
+  List<String> _streamingPlaylistArtworkSources(
+    String playlistId,
+    String path,
+    Map<String, List<String>> streamingArtworkCache,
+  ) {
+    final cacheKey = '$playlistId::$path';
+    final cached = streamingArtworkCache[cacheKey];
+    if (cached != null && cached.isNotEmpty) return cached;
+
+    final videoId = _extractVideoIdFromPlaylistPath(path);
+    if (videoId == null || videoId.isEmpty) return const [];
+    return [
+      'https://img.youtube.com/vi/$videoId/maxresdefault.jpg',
+      'https://img.youtube.com/vi/$videoId/sddefault.jpg',
+      'https://i.ytimg.com/vi/$videoId/hqdefault.jpg',
+    ];
+  }
+
+  Future<Map<String, List<String>>> _buildPlaylistArtworkSourcesCache(
+    List<hive_model.PlaylistModel> playlists,
+  ) async {
+    final cache = <String, List<String>>{};
+    for (final playlist in playlists) {
+      final paths = playlist.songPaths
+          .where((p) => p.trim().isNotEmpty)
+          .toList()
+          .reversed
+          .take(4);
+      for (final rawPath in paths) {
+        final path = rawPath.trim();
+        if (!_isStreamingPlaylistPath(path)) continue;
+        final meta = await PlaylistsDB().getPlaylistSongMeta(playlist.id, path);
+        final metaArtUri = meta?['artUri']?.toString().trim();
+        final metaVideoId = meta?['videoId']?.toString().trim();
+        final videoId = (metaVideoId != null && metaVideoId.isNotEmpty)
+            ? metaVideoId
+            : _extractVideoIdFromPlaylistPath(path);
+
+        final sources = <String>[];
+        if (metaArtUri != null &&
+            metaArtUri.isNotEmpty &&
+            metaArtUri != 'null') {
+          sources.add(metaArtUri);
+        }
+        if (videoId != null && videoId.isNotEmpty) {
+          sources.addAll([
+            'https://img.youtube.com/vi/$videoId/maxresdefault.jpg',
+            'https://img.youtube.com/vi/$videoId/sddefault.jpg',
+            'https://i.ytimg.com/vi/$videoId/hqdefault.jpg',
+          ]);
+        }
+        if (sources.isNotEmpty) {
+          cache['${playlist.id}::$path'] = sources.toSet().toList();
+        }
+      }
+    }
+    return cache;
+  }
+
+  Widget _buildModalPlaylistArtworkGrid(
+    hive_model.PlaylistModel playlist,
+    List<SongModel> allSongs, {
+    Map<String, List<String>> streamingArtworkCache =
+        const <String, List<String>>{},
+  }) {
+    final filtered = playlist.songPaths
+        .where((path) => path.trim().isNotEmpty)
+        .toList();
+    final latestPaths = filtered.reversed.take(4).toList();
+
+    final List<Widget> artworks = latestPaths.map((path) {
+      final normalizedPath = path.trim();
+      if (_isStreamingPlaylistPath(normalizedPath)) {
+        return _ArtistStreamingArtwork(
+          sources: _streamingPlaylistArtworkSources(
+            playlist.id,
+            normalizedPath,
+            streamingArtworkCache,
+          ),
+          backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
+          iconColor: Theme.of(context).colorScheme.onSurfaceVariant,
+        );
+      }
+
+      final songIndex = allSongs.indexWhere(
+        (song) => song.data == normalizedPath,
+      );
+      if (songIndex == -1) {
+        return Container(
+          color: Theme.of(context).colorScheme.surfaceContainer,
+          child: Center(
+            child: Icon(
+              Icons.music_note,
+              color: Theme.of(context).colorScheme.onSurface,
+              size: 20,
+            ),
+          ),
+        );
+      }
+      final song = allSongs[songIndex];
+      return ArtworkListTile(
+        songId: song.id,
+        songPath: song.data,
+        borderRadius: BorderRadius.zero,
+      );
+    }).toList();
+
+    return SizedBox(
+      width: 48,
+      height: 48,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: _buildPlaylistArtworkLayout(artworks),
+      ),
+    );
+  }
+
+  Widget _buildPlaylistArtworkLayout(List<Widget> artworks) {
+    switch (artworks.length) {
+      case 0:
+        return Container(
+          color: Theme.of(context).colorScheme.surfaceContainer,
+          child: Center(
+            child: Icon(
+              Icons.music_note,
+              color: Theme.of(context).colorScheme.onSurface,
+              size: 20,
+            ),
+          ),
+        );
+      case 1:
+        return artworks[0];
+      case 2:
+      case 3:
+        return Row(
+          children: [
+            Expanded(child: artworks[0]),
+            Expanded(child: artworks[1]),
+          ],
+        );
+      default:
+        return Column(
+          children: [
+            Expanded(
+              child: Row(
+                children: [
+                  Expanded(child: artworks[0]),
+                  Expanded(child: artworks[1]),
+                ],
+              ),
+            ),
+            Expanded(
+              child: Row(
+                children: [
+                  Expanded(child: artworks[2]),
+                  Expanded(child: artworks[3]),
+                ],
+              ),
+            ),
+          ],
+        );
+    }
   }
 
   String? _extractYtDurationTextFromRenderer(dynamic renderer) {
@@ -1461,7 +1749,14 @@ class _ArtistScreenState extends State<ArtistScreen> {
   }) async {
     final videoId = item.videoId?.trim();
     if (videoId == null || videoId.isEmpty) return;
-    final allPlaylists = await PlaylistsDB().getAllPlaylists();
+    final allPlaylists = (await PlaylistsDB().getAllPlaylists())
+        .where(_playlistMatchesStreamingSource)
+        .toList()
+        .cast<hive_model.PlaylistModel>();
+    final allSongs = await SongsIndexDB().getIndexedSongs();
+    final playlistArtworkSourcesCache = await _buildPlaylistArtworkSourcesCache(
+      allPlaylists,
+    );
     final textController = TextEditingController();
     if (!mounted) return;
 
@@ -1563,10 +1858,19 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                 margin: EdgeInsets.zero,
                                 elevation: 0,
                                 child: ListTile(
+                                  leading: _buildModalPlaylistArtworkGrid(
+                                    pl,
+                                    allSongs,
+                                    streamingArtworkCache:
+                                        playlistArtworkSourcesCache,
+                                  ),
                                   title: Text(
                                     pl.name,
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.titleMedium,
                                   ),
                                   onTap: () async {
                                     await addToPlaylist(pl.id);
@@ -1634,7 +1938,14 @@ class _ArtistScreenState extends State<ArtistScreen> {
         .where((item) => item.videoId?.trim().isNotEmpty == true)
         .toList();
     if (validItems.isEmpty) return;
-    final allPlaylists = await PlaylistsDB().getAllPlaylists();
+    final allPlaylists = (await PlaylistsDB().getAllPlaylists())
+        .where(_playlistMatchesStreamingSource)
+        .toList()
+        .cast<hive_model.PlaylistModel>();
+    final allSongs = await SongsIndexDB().getIndexedSongs();
+    final playlistArtworkSourcesCache = await _buildPlaylistArtworkSourcesCache(
+      allPlaylists,
+    );
     final textController = TextEditingController();
     if (!mounted) return;
 
@@ -1713,6 +2024,12 @@ class _ArtistScreenState extends State<ArtistScreen> {
                             ),
                             elevation: 0,
                             child: ListTile(
+                              leading: _buildModalPlaylistArtworkGrid(
+                                pl,
+                                allSongs,
+                                streamingArtworkCache:
+                                    playlistArtworkSourcesCache,
+                              ),
                               title: Text(pl.name),
                               onTap: () async {
                                 await addItemsToPlaylist(pl.id);
@@ -1928,6 +2245,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
     String? fallbackArtist,
     String? fallbackThumbUrl,
   }) async {
+    final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
     final title = item.title?.trim().isNotEmpty == true
         ? item.title!.trim()
         : LocaleProvider.tr('title_unknown');
@@ -2002,7 +2320,12 @@ class _ArtistScreenState extends State<ArtistScreen> {
                               artist,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context).textTheme.bodyMedium,
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: isAmoled
+                                    ? Colors.white.withValues(alpha: 0.85)
+                                    : null,
+                              ),
                             ),
                           ],
                         ),
@@ -2381,15 +2704,13 @@ class _ArtistScreenState extends State<ArtistScreen> {
                             content: SingleChildScrollView(
                               child: Text(
                                 LocaleProvider.tr('artist_info'),
-                                style: Theme.of(context).textTheme.bodyMedium
-                                    ?.copyWith(
-                                      color: Theme.of(
-                                        context,
-                                      ).colorScheme.onSurfaceVariant,
-                                      height: 1.5,
-                                      fontSize: 16,
-                                    ),
-                                textAlign: TextAlign.start,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onSurface.withAlpha(180),
+                                ),
+                                textAlign: TextAlign.center,
                               ),
                             ),
                             actionsPadding: const EdgeInsets.all(16),
@@ -5787,7 +6108,14 @@ class _ArtistScreenState extends State<ArtistScreen> {
   Future<void> _addSelectedToPlaylist() async {
     final items = _getSelectedItems();
     if (items.isEmpty) return;
-    final allPlaylists = await PlaylistsDB().getAllPlaylists();
+    final allPlaylists = (await PlaylistsDB().getAllPlaylists())
+        .where(_playlistMatchesStreamingSource)
+        .toList()
+        .cast<hive_model.PlaylistModel>();
+    final allSongs = await SongsIndexDB().getIndexedSongs();
+    final playlistArtworkSourcesCache = await _buildPlaylistArtworkSourcesCache(
+      allPlaylists,
+    );
     final textController = TextEditingController();
     if (!mounted) return;
 
@@ -5863,6 +6191,12 @@ class _ArtistScreenState extends State<ArtistScreen> {
                             ),
                             elevation: 0,
                             child: ListTile(
+                              leading: _buildModalPlaylistArtworkGrid(
+                                pl,
+                                allSongs,
+                                streamingArtworkCache:
+                                    playlistArtworkSourcesCache,
+                              ),
                               title: Text(pl.name),
                               onTap: () async {
                                 await addItemsToPlaylist(pl.id);

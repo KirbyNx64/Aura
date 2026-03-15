@@ -249,8 +249,13 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     BuildContext context,
     SongModel song,
   ) async {
-    final playlists = await PlaylistsDB().getAllPlaylists();
+    final playlists = (await PlaylistsDB().getAllPlaylists())
+        .where((p) => _playlistMatchesTargetSource(p, forStreaming: false))
+        .toList();
     final allSongs = await SongsIndexDB().getIndexedSongs();
+    final playlistArtworkSourcesCache = await _buildPlaylistArtworkSourcesCache(
+      playlists,
+    );
     final TextEditingController controller = TextEditingController();
 
     if (!context.mounted) return;
@@ -379,6 +384,8 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                   leading: _buildPlaylistArtworkGrid(
                                     pl,
                                     allSongs,
+                                    streamingArtworkCache:
+                                        playlistArtworkSourcesCache,
                                   ),
                                   title: Text(
                                     pl.name,
@@ -2310,6 +2317,15 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     return true;
   }
 
+  bool _playlistMatchesTargetSource(
+    hive_model.PlaylistModel playlist, {
+    required bool forStreaming,
+  }) {
+    if (playlist.songPaths.isEmpty) return true;
+    if (forStreaming) return playlist.songPaths.any(_isStreamingRecentPath);
+    return playlist.songPaths.any((path) => !_isStreamingRecentPath(path));
+  }
+
   String? _extractVideoIdFromPath(String rawPath) {
     final path = rawPath.trim();
     if (path.isEmpty) return null;
@@ -2648,78 +2664,145 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   /// Generar cuadrícula de carátulas para una playlist
   Widget _buildPlaylistArtworkGrid(
     hive_model.PlaylistModel playlist,
-    List<SongModel> allSongs,
-  ) {
-    final rawList = playlist.songPaths;
-    // Filtra solo rutas válidas
-    final filtered = rawList.where((e) => e.isNotEmpty).toList();
+    List<SongModel> allSongs, {
+    Map<String, List<String>> streamingArtworkCache =
+        const <String, List<String>>{},
+  }) {
+    final filtered = playlist.songPaths
+        .where((path) => path.trim().isNotEmpty)
+        .toList();
+    final latestPaths = filtered.reversed.take(4).toList();
 
-    // Obtener las canciones reales que existen en el índice cargado
-    final List<SongModel> validSongs = [];
-    for (final songPath in filtered) {
-      final songIndex = allSongs.indexWhere((s) => s.data == songPath);
-      if (songIndex != -1) {
-        validSongs.add(allSongs[songIndex]);
-        if (validSongs.length >= 4) break; // Máximo 4 para el grid
+    final List<Widget> artworks = latestPaths.map((path) {
+      final normalizedPath = path.trim();
+      if (_isStreamingRecentPath(normalizedPath)) {
+        return _StreamingArtwork(
+          sources: _streamingPlaylistArtworkSources(
+            playlist.id,
+            normalizedPath,
+            streamingArtworkCache,
+          ),
+          backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
+          iconColor: Theme.of(context).colorScheme.onSurfaceVariant,
+        );
       }
-    }
+
+      final songIndex = allSongs.indexWhere(
+        (song) => song.data == normalizedPath,
+      );
+      if (songIndex == -1) {
+        return Container(
+          color: Theme.of(context).colorScheme.surfaceContainer,
+          child: Center(
+            child: Icon(
+              Icons.music_note,
+              color: Theme.of(context).colorScheme.onSurface,
+              size: 20,
+            ),
+          ),
+        );
+      }
+      final song = allSongs[songIndex];
+      return ArtworkListTile(
+        songId: song.id,
+        songPath: song.data,
+        borderRadius: BorderRadius.zero,
+      );
+    }).toList();
 
     return SizedBox(
-      width: 40,
-      height: 40,
+      width: 48,
+      height: 48,
       child: ClipRRect(
         borderRadius: BorderRadius.circular(8),
-        child: _buildArtworkLayout(validSongs),
+        child: _buildArtworkLayout(artworks),
       ),
     );
   }
 
-  Widget _buildArtworkLayout(List<SongModel> songs) {
-    switch (songs.length) {
+  List<String> _streamingPlaylistArtworkSources(
+    String playlistId,
+    String path,
+    Map<String, List<String>> streamingArtworkCache,
+  ) {
+    final cacheKey = '$playlistId::$path';
+    final cached = streamingArtworkCache[cacheKey];
+    if (cached != null && cached.isNotEmpty) return cached;
+
+    final videoId = _extractVideoIdFromPath(path);
+    if (videoId == null || videoId.isEmpty) return const [];
+    return [
+      'https://img.youtube.com/vi/$videoId/maxresdefault.jpg',
+      'https://img.youtube.com/vi/$videoId/sddefault.jpg',
+      'https://i.ytimg.com/vi/$videoId/hqdefault.jpg',
+    ];
+  }
+
+  Future<Map<String, List<String>>> _buildPlaylistArtworkSourcesCache(
+    List<hive_model.PlaylistModel> playlists,
+  ) async {
+    final cache = <String, List<String>>{};
+    for (final playlist in playlists) {
+      final paths = playlist.songPaths
+          .where((p) => p.trim().isNotEmpty)
+          .toList()
+          .reversed
+          .take(4);
+      for (final rawPath in paths) {
+        final path = rawPath.trim();
+        if (!_isStreamingRecentPath(path)) continue;
+        final meta = await PlaylistsDB().getPlaylistSongMeta(playlist.id, path);
+        final metaArtUri = meta?['artUri']?.toString().trim();
+        final metaVideoId = meta?['videoId']?.toString().trim();
+        final videoId = (metaVideoId != null && metaVideoId.isNotEmpty)
+            ? metaVideoId
+            : _extractVideoIdFromPath(path);
+
+        final sources = <String>[];
+        if (metaArtUri != null &&
+            metaArtUri.isNotEmpty &&
+            metaArtUri != 'null') {
+          sources.add(metaArtUri);
+        }
+        if (videoId != null && videoId.isNotEmpty) {
+          sources.addAll([
+            'https://img.youtube.com/vi/$videoId/maxresdefault.jpg',
+            'https://img.youtube.com/vi/$videoId/sddefault.jpg',
+            'https://i.ytimg.com/vi/$videoId/hqdefault.jpg',
+          ]);
+        }
+        if (sources.isNotEmpty) {
+          cache['${playlist.id}::$path'] = sources.toSet().toList();
+        }
+      }
+    }
+    return cache;
+  }
+
+  Widget _buildArtworkLayout(List<Widget> artworks) {
+    switch (artworks.length) {
       case 0:
         return Container(
-          color: Theme.of(context).colorScheme.primaryContainer.withAlpha(100),
+          color: Theme.of(context).colorScheme.surfaceContainer,
           child: Center(
             child: Icon(
-              Icons.queue_music_rounded,
-              color: Theme.of(context).colorScheme.primary,
+              Icons.music_note,
+              color: Theme.of(context).colorScheme.onSurface,
               size: 20,
             ),
           ),
         );
 
       case 1:
-        return ArtworkListTile(
-          songId: songs[0].id,
-          songPath: songs[0].data,
-          width: 40,
-          height: 40,
-          borderRadius: BorderRadius.zero,
-        );
+        return artworks[0];
 
       case 2:
       case 3:
         // Caso 2 y 3: mostramos 2 (lado a lado)
         return Row(
           children: [
-            Expanded(
-              child: ArtworkListTile(
-                songId: songs[0].id,
-                songPath: songs[0].data,
-                width: 20,
-                height: 40,
-                borderRadius: BorderRadius.zero,
-              ),
-            ),
-            Expanded(
-              child: ArtworkListTile(
-                songId: songs[1].id,
-                songPath: songs[1].data,
-                width: 20,
-                height: 40,
-                borderRadius: BorderRadius.zero,
-              ),
-            ),
+            Expanded(child: artworks[0]),
+            Expanded(child: artworks[1]),
           ],
         );
 
@@ -2730,48 +2813,16 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             Expanded(
               child: Row(
                 children: [
-                  Expanded(
-                    child: ArtworkListTile(
-                      songId: songs[0].id,
-                      songPath: songs[0].data,
-                      width: 20,
-                      height: 20,
-                      borderRadius: BorderRadius.zero,
-                    ),
-                  ),
-                  Expanded(
-                    child: ArtworkListTile(
-                      songId: songs[1].id,
-                      songPath: songs[1].data,
-                      width: 20,
-                      height: 20,
-                      borderRadius: BorderRadius.zero,
-                    ),
-                  ),
+                  Expanded(child: artworks[0]),
+                  Expanded(child: artworks[1]),
                 ],
               ),
             ),
             Expanded(
               child: Row(
                 children: [
-                  Expanded(
-                    child: ArtworkListTile(
-                      songId: songs[2].id,
-                      songPath: songs[2].data,
-                      width: 20,
-                      height: 20,
-                      borderRadius: BorderRadius.zero,
-                    ),
-                  ),
-                  Expanded(
-                    child: ArtworkListTile(
-                      songId: songs[3].id,
-                      songPath: songs[3].data,
-                      width: 20,
-                      height: 20,
-                      borderRadius: BorderRadius.zero,
-                    ),
-                  ),
+                  Expanded(child: artworks[2]),
+                  Expanded(child: artworks[3]),
                 ],
               ),
             ),
