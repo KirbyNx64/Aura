@@ -3452,6 +3452,8 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     _isSkipping = true;
 
     try {
+      final bool wasPlayingBeforeSkip = _player.playing;
+
       // Cancelar operaciones pendientes antes de cambiar
       _pendingArtworkOperations.clear();
       cancelAllArtworkLoads();
@@ -3466,7 +3468,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
               if (fetchedNextIndex != null) {
                 _scheduleStreamingSkip(
                   fetchedNextIndex,
-                  playAfterResolve: true,
+                  playAfterResolve: wasPlayingBeforeSkip,
                 );
                 _updateSleepTimer();
               }
@@ -3476,7 +3478,10 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         }
         _isSkipping = false;
         _consumeQueuedSkip();
-        _scheduleStreamingSkip(nextIndex, playAfterResolve: true);
+        _scheduleStreamingSkip(
+          nextIndex,
+          playAfterResolve: wasPlayingBeforeSkip,
+        );
         return;
       }
 
@@ -3499,12 +3504,16 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         unawaited(_ensureStreamingRadioQueue());
       }
 
-      final shouldAutoPlayLocal = !isStreamingQueue && !_player.playing;
-
       // En reproducción local (o colas no diferidas), avanzar índice real.
       await _player.seekToNext().timeout(const Duration(milliseconds: 300));
-      if (shouldAutoPlayLocal && !_player.playing) {
-        await _player.play();
+      if (!isStreamingQueue && wasPlayingBeforeSkip && !_player.playing) {
+        // No bloquear skip por posibles cuelgues de play() tras un cambio rápido.
+        unawaited(
+          _player
+              .play()
+              .timeout(const Duration(milliseconds: 900))
+              .catchError((_) {}),
+        );
       }
       _updateSleepTimer();
 
@@ -3534,6 +3543,8 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
     _isSkipping = true;
     try {
+      final bool wasPlayingBeforeSkip = _player.playing;
+
       // Cancelar operaciones pendientes antes de cambiar
       _pendingArtworkOperations.clear();
       cancelAllArtworkLoads();
@@ -3548,7 +3559,10 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
           if (previousIndex != null) {
             _isSkipping = false;
             _consumeQueuedSkip();
-            _scheduleStreamingSkip(previousIndex, playAfterResolve: true);
+            _scheduleStreamingSkip(
+              previousIndex,
+              playAfterResolve: wasPlayingBeforeSkip,
+            );
             return;
           } else {
             await _player
@@ -3564,7 +3578,6 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
           _streamRadioEnabled &&
           _mediaQueue.isNotEmpty &&
           _isStreamingMediaItem(_mediaQueue.first);
-      final shouldAutoPlayLocal = !isStreamingQueue && !_player.playing;
 
       if (_player.position.inMilliseconds > 5000) {
         await _player
@@ -3575,8 +3588,14 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
           const Duration(milliseconds: 650),
         );
       }
-      if (shouldAutoPlayLocal && !_player.playing) {
-        await _player.play();
+      if (!isStreamingQueue && wasPlayingBeforeSkip && !_player.playing) {
+        // No bloquear skip por posibles cuelgues de play() tras un cambio rápido.
+        unawaited(
+          _player
+              .play()
+              .timeout(const Duration(milliseconds: 900))
+              .catchError((_) {}),
+        );
       }
       _updateSleepTimer();
 
@@ -3687,7 +3706,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     if (_initializing) return;
     if (index >= 0 && index < _mediaQueue.length) {
       if (_deferredStreamingQueueMode) {
-        _scheduleStreamingSkip(index, playAfterResolve: true);
+        _scheduleStreamingSkip(index, playAfterResolve: _player.playing);
         return;
       }
       try {
