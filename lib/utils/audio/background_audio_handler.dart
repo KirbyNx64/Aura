@@ -366,6 +366,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   int? _lastSleepIndex;
   bool _stopAtEndOfSong = false;
   bool _isSkipping = false;
+  bool _isSwappingSource = false;
   bool _queuedSkipNext = false;
   bool _queuedSkipPrevious = false;
   bool _isPreloadingNext = false;
@@ -570,6 +571,9 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
               return;
             }
             if (_deferredStreamingQueueMode && _mediaQueue.isNotEmpty) {
+              // No auto-avanzar si estamos en medio de un swap de fuente
+              // (_concat.clear() dispara completed, pero no es fin natural de canción).
+              if (_isSwappingSource) return;
               final nextIdx = _nextDeferredQueueIndex();
               if (nextIdx != null) {
                 unawaited(_resolveAndPlayDeferredStreamingIndex(nextIdx));
@@ -2126,16 +2130,49 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
     try {
       // Verificar una última vez antes de cargar el audio en el player.
-      if (isSuperseded()) return false;
-      await _player
-          .setUrl(streamUrl, initialPosition: Duration.zero)
-          .timeout(const Duration(seconds: 6));
+      if (isSuperseded()) {
+        _isSwappingSource = false;
+        return false;
+      }
+
+      // Reusar el _concat existente: clear() + add() es mucho más ligero que
+      // crear uno nuevo y llamar setAudioSource(), que internamente dispone
+      // y reconfigura toda la cadena nativa del player.
+      // _isSwappingSource evita que el completed handler (disparado por clear())
+      // intente auto-avanzar a la siguiente canción.
+      _isSwappingSource = true;
+      if (_concat != null) {
+        // ignore: deprecated_member_use
+        if (_concat!.children.isNotEmpty) {
+          // ignore: deprecated_member_use
+          await _concat!.clear();
+        }
+        // ignore: deprecated_member_use
+        await _concat!.add(AudioSource.uri(Uri.parse(streamUrl)));
+      } else {
+        // Fallback: crear concat si no existe (primer uso o tras dispose).
+        // ignore: deprecated_member_use
+        _concat = ConcatenatingAudioSource(
+          children: [AudioSource.uri(Uri.parse(streamUrl))],
+        );
+        await _player
+            .setAudioSource(
+              // ignore: deprecated_member_use
+              _concat!,
+              initialIndex: 0,
+              initialPosition: Duration.zero,
+            )
+            .timeout(const Duration(seconds: 6));
+      }
+      _isSwappingSource = false;
     } on PlayerInterruptedException {
       // El player fue interrumpido por un skip más reciente — es esperado, ignorar.
+      _isSwappingSource = false;
       return false;
     } catch (_) {
       // Timeout, error de red u otro fallo al cargar el stream — no relanzar
       // porque esta función se llama con unawaited y causaría una excepción no capturada.
+      _isSwappingSource = false;
       reportStreamPlaybackError('unknown', videoId: videoId);
       return false;
     }
@@ -3568,6 +3605,17 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
     // Incrementar generación de artwork para cancelar descargas intermedias.
     _artworkGeneration++;
+
+    // Limpiar _concat para detener inmediatamente el audio de la canción anterior.
+    // Esto impide que el stream previo siga sonando mientras se carga el nuevo.
+    // Solo se limpia la reproducción actual, NO la cola de canciones (_mediaQueue).
+    // Se usa unawaited para que la parte nativa no bloquee el hilo de UI.
+    // _isSwappingSource evita que el completed handler dispare auto-advance.
+    if (_concat != null && _concat!.children.isNotEmpty) {
+      _isSwappingSource = true;
+      // ignore: deprecated_member_use
+      unawaited(_concat!.clear().catchError((_) {}));
+    }
 
     // 1) Actualizar UI instantáneamente: índice, metadata y estado de carga.
     _deferredStreamingQueueIndex = targetIndex;
