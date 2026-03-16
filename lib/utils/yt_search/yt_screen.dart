@@ -2313,7 +2313,10 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
     });
   }
 
-  Future<void> _addSongToFavorites(YtMusicResult item) async {
+  Future<void> _addSongToFavorites(
+    YtMusicResult item, {
+    bool notifyReload = true,
+  }) async {
     final videoId = item.videoId?.trim();
     if (videoId == null || videoId.isEmpty) return;
     final title = item.title?.trim().isNotEmpty == true
@@ -2334,7 +2337,9 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
       durationText: item.durationText,
       durationMs: item.durationMs,
     );
-    favoritesShouldReload.value = !favoritesShouldReload.value;
+    if (notifyReload) {
+      favoritesShouldReload.value = !favoritesShouldReload.value;
+    }
   }
 
   Future<void> _addSongsToFavorites(List<YtMusicResult> items) async {
@@ -2343,8 +2348,17 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
         .toList();
     if (validItems.isEmpty) return;
 
+    final addedVideoIds = <String>{};
+
     for (final item in validItems) {
-      await _addSongToFavorites(item);
+      final videoId = item.videoId?.trim();
+      if (videoId == null || videoId.isEmpty) continue;
+      if (!addedVideoIds.add(videoId)) continue;
+      await _addSongToFavorites(item, notifyReload: false);
+    }
+
+    if (addedVideoIds.isNotEmpty) {
+      favoritesShouldReload.value = !favoritesShouldReload.value;
     }
   }
 

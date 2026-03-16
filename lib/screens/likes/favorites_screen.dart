@@ -9,7 +9,8 @@ import 'package:music/main.dart'
         AudioHandlerSafeCast,
         audioHandler,
         audioServiceReady,
-        initializeAudioServiceSafely;
+        initializeAudioServiceSafely,
+        overlayVisibleNotifier;
 import 'package:music/utils/audio/background_audio_handler.dart';
 import 'package:music/utils/encoding_utils.dart';
 import 'package:audio_service/audio_service.dart';
@@ -3700,306 +3701,314 @@ class _FavoritesScreenState extends State<FavoritesScreen>
       body: ExpressiveRefreshIndicator(
         onRefresh: _refreshFavorites,
         color: Theme.of(context).colorScheme.primary,
-        child: ValueListenableBuilder<MediaItem?>(
-          valueListenable: _currentMediaItemNotifier,
-          builder: (context, currentMediaItem, child) {
-            final List<SongModel> songsToShow =
-                _favoritesSource == FavoritesSource.local &&
-                    _searchController.text.isNotEmpty
-                ? _filteredFavorites
-                : _favorites;
-            final List<_StreamingFavoriteItem> streamingToShow =
-                _favoritesSource == FavoritesSource.streaming &&
-                    _searchController.text.isNotEmpty
-                ? _filteredStreamingFavorites
-                : _streamingFavorites;
+        child: ValueListenableBuilder<bool>(
+          valueListenable: overlayVisibleNotifier,
+          builder: (context, overlayVisible, _) {
+            return ValueListenableBuilder<MediaItem?>(
+              valueListenable: _currentMediaItemNotifier,
+              builder: (context, currentMediaItem, child) {
+                final List<SongModel> songsToShow =
+                    _favoritesSource == FavoritesSource.local &&
+                        _searchController.text.isNotEmpty
+                    ? _filteredFavorites
+                    : _favorites;
+                final List<_StreamingFavoriteItem> streamingToShow =
+                    _favoritesSource == FavoritesSource.streaming &&
+                        _searchController.text.isNotEmpty
+                    ? _filteredStreamingFavorites
+                    : _streamingFavorites;
 
-            final colorScheme = colorSchemeNotifier.value;
-            final isAmoled = colorScheme == AppColorScheme.amoled;
-            final isDark = Theme.of(context).brightness == Brightness.dark;
+                final colorScheme = colorSchemeNotifier.value;
+                final isAmoled = colorScheme == AppColorScheme.amoled;
+                final isDark = Theme.of(context).brightness == Brightness.dark;
 
-            final hasItems = _favoritesSource == FavoritesSource.local
-                ? songsToShow.isNotEmpty
-                : streamingToShow.isNotEmpty;
+                final hasItems = _favoritesSource == FavoritesSource.local
+                    ? songsToShow.isNotEmpty
+                    : streamingToShow.isNotEmpty;
 
-            if (!hasItems) {
-              return SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                child: SizedBox(
-                  height: MediaQuery.of(context).size.height - 200,
-                  child: Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Container(
-                          width: 80,
-                          height: 80,
-                          alignment: Alignment.center,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: isDark
-                                ? Theme.of(context).colorScheme.secondary
-                                      .withValues(alpha: 0.04)
-                                : Theme.of(context).colorScheme.secondary
-                                      .withValues(alpha: 0.05),
-                          ),
-                          child: Icon(
-                            Icons.favorite_outline_rounded,
-                            weight: 600,
-                            size: 50,
-                            color:
-                                Theme.of(context).brightness == Brightness.light
-                                ? Theme.of(
-                                    context,
-                                  ).colorScheme.onSurface.withValues(alpha: 0.7)
-                                : Theme.of(context).colorScheme.onSurface
-                                      .withValues(alpha: 0.7),
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        _favoritesSource == FavoritesSource.local
-                            ? TranslatedText(
-                                'no_songs',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: Theme.of(context).colorScheme.onSurface
-                                      .withValues(alpha: 0.6),
-                                ),
-                              )
-                            : Text(
-                                LocaleProvider.tr('no_streaming_songs'),
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: Theme.of(context).colorScheme.onSurface
-                                      .withValues(alpha: 0.6),
-                                ),
+                if (!hasItems) {
+                  return SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    child: SizedBox(
+                      height: MediaQuery.of(context).size.height - 200,
+                      child: Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Container(
+                              width: 80,
+                              height: 80,
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: isDark
+                                    ? Theme.of(context).colorScheme.secondary
+                                          .withValues(alpha: 0.04)
+                                    : Theme.of(context).colorScheme.secondary
+                                          .withValues(alpha: 0.05),
                               ),
-                      ],
+                              child: Icon(
+                                Icons.favorite_outline_rounded,
+                                weight: 600,
+                                size: 50,
+                                color:
+                                    Theme.of(context).brightness ==
+                                        Brightness.light
+                                    ? Theme.of(context).colorScheme.onSurface
+                                          .withValues(alpha: 0.7)
+                                    : Theme.of(context).colorScheme.onSurface
+                                          .withValues(alpha: 0.7),
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            _favoritesSource == FavoritesSource.local
+                                ? TranslatedText(
+                                    'no_songs',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurface
+                                          .withValues(alpha: 0.6),
+                                    ),
+                                  )
+                                : Text(
+                                    LocaleProvider.tr('no_streaming_songs'),
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurface
+                                          .withValues(alpha: 0.6),
+                                    ),
+                                  ),
+                          ],
+                        ),
+                      ),
                     ),
-                  ),
-                ),
-              );
-            }
+                  );
+                }
 
-            final bottomPadding = MediaQuery.of(context).padding.bottom;
-            final space =
-                (currentMediaItem != null ? 100.0 : 0.0) + bottomPadding;
+                final bottomPadding = MediaQuery.of(context).padding.bottom;
+                final space = (overlayVisible ? 100.0 : 0.0) + bottomPadding;
 
-            final cardColor = isAmoled
-                ? Colors.white.withAlpha(20)
-                : isDark
-                ? Theme.of(
-                    context,
-                  ).colorScheme.secondary.withValues(alpha: 0.06)
-                : Theme.of(
-                    context,
-                  ).colorScheme.secondary.withValues(alpha: 0.07);
+                final cardColor = isAmoled
+                    ? Colors.white.withAlpha(20)
+                    : isDark
+                    ? Theme.of(
+                        context,
+                      ).colorScheme.secondary.withValues(alpha: 0.06)
+                    : Theme.of(
+                        context,
+                      ).colorScheme.secondary.withValues(alpha: 0.07);
 
-            if (_favoritesSource == FavoritesSource.streaming) {
-              return RawScrollbar(
-                controller: _scrollController,
-                thumbColor: Theme.of(context).colorScheme.primary,
-                thickness: 6.0,
-                radius: const Radius.circular(8),
-                interactive: true,
-                padding: EdgeInsets.only(bottom: space),
-                child: ListView.builder(
-                  controller: _scrollController,
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  padding: EdgeInsets.only(
-                    left: 16.0,
-                    right: 16.0,
-                    top: 8.0,
-                    bottom: space,
-                  ),
-                  itemCount: streamingToShow.length,
-                  itemBuilder: (context, index) {
-                    final item = streamingToShow[index];
-                    final isCurrent = _isCurrentStreamingFavorite(
-                      item,
-                      currentMediaItem,
-                    );
-                    final bool isFirst = index == 0;
-                    final isLast = index == streamingToShow.length - 1;
-                    final bool isOnly = streamingToShow.length == 1;
+                if (_favoritesSource == FavoritesSource.streaming) {
+                  return RawScrollbar(
+                    controller: _scrollController,
+                    thumbColor: Theme.of(context).colorScheme.primary,
+                    thickness: 6.0,
+                    radius: const Radius.circular(8),
+                    interactive: true,
+                    padding: EdgeInsets.only(bottom: space),
+                    child: ListView.builder(
+                      controller: _scrollController,
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: EdgeInsets.only(
+                        left: 16.0,
+                        right: 16.0,
+                        top: 8.0,
+                        bottom: space,
+                      ),
+                      itemCount: streamingToShow.length,
+                      itemBuilder: (context, index) {
+                        final item = streamingToShow[index];
+                        final isCurrent = _isCurrentStreamingFavorite(
+                          item,
+                          currentMediaItem,
+                        );
+                        final bool isFirst = index == 0;
+                        final isLast = index == streamingToShow.length - 1;
+                        final bool isOnly = streamingToShow.length == 1;
 
-                    BorderRadius borderRadius;
-                    if (isOnly) {
-                      borderRadius = BorderRadius.circular(20);
-                    } else if (isFirst) {
-                      borderRadius = const BorderRadius.only(
-                        topLeft: Radius.circular(20),
-                        topRight: Radius.circular(20),
-                        bottomLeft: Radius.circular(4),
-                        bottomRight: Radius.circular(4),
-                      );
-                    } else if (isLast) {
-                      borderRadius = const BorderRadius.only(
-                        topLeft: Radius.circular(4),
-                        topRight: Radius.circular(4),
-                        bottomLeft: Radius.circular(20),
-                        bottomRight: Radius.circular(20),
-                      );
-                    } else {
-                      borderRadius = BorderRadius.circular(4);
-                    }
+                        BorderRadius borderRadius;
+                        if (isOnly) {
+                          borderRadius = BorderRadius.circular(20);
+                        } else if (isFirst) {
+                          borderRadius = const BorderRadius.only(
+                            topLeft: Radius.circular(20),
+                            topRight: Radius.circular(20),
+                            bottomLeft: Radius.circular(4),
+                            bottomRight: Radius.circular(4),
+                          );
+                        } else if (isLast) {
+                          borderRadius = const BorderRadius.only(
+                            topLeft: Radius.circular(4),
+                            topRight: Radius.circular(4),
+                            bottomLeft: Radius.circular(20),
+                            bottomRight: Radius.circular(20),
+                          );
+                        } else {
+                          borderRadius = BorderRadius.circular(4);
+                        }
 
-                    Widget listTileWidget;
-                    if (isCurrent) {
-                      listTileWidget = ValueListenableBuilder<bool>(
-                        valueListenable: _isPlayingNotifier,
-                        builder: (context, playing, child) {
-                          return _buildStreamingListTile(
+                        Widget listTileWidget;
+                        if (isCurrent) {
+                          listTileWidget = ValueListenableBuilder<bool>(
+                            valueListenable: _isPlayingNotifier,
+                            builder: (context, playing, child) {
+                              return _buildStreamingListTile(
+                                context,
+                                item,
+                                isCurrent,
+                                playing,
+                                isAmoledTheme,
+                                borderRadius: borderRadius,
+                                onLongPress: () =>
+                                    _handleStreamingLongPress(context, item),
+                              );
+                            },
+                          );
+                        } else {
+                          listTileWidget = _buildStreamingListTile(
                             context,
                             item,
                             isCurrent,
-                            playing,
+                            false,
                             isAmoledTheme,
                             borderRadius: borderRadius,
                             onLongPress: () =>
                                 _handleStreamingLongPress(context, item),
                           );
-                        },
-                      );
-                    } else {
-                      listTileWidget = _buildStreamingListTile(
-                        context,
-                        item,
-                        isCurrent,
-                        false,
-                        isAmoledTheme,
-                        borderRadius: borderRadius,
-                        onLongPress: () =>
-                            _handleStreamingLongPress(context, item),
-                      );
-                    }
+                        }
 
-                    return Padding(
-                      padding: EdgeInsets.only(bottom: isLast ? 0 : 4),
-                      child: Card(
-                        color: isCurrent
-                            ? isAmoledTheme
-                                  ? cardColor
-                                  : Theme.of(context).colorScheme.primary
-                                        .withAlpha(isDark ? 40 : 25)
-                            : cardColor,
-                        margin: EdgeInsets.zero,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: borderRadius,
-                        ),
-                        child: ClipRRect(
-                          borderRadius: borderRadius,
-                          child: listTileWidget,
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              );
-            }
+                        return Padding(
+                          padding: EdgeInsets.only(bottom: isLast ? 0 : 4),
+                          child: Card(
+                            color: isCurrent
+                                ? isAmoledTheme
+                                      ? cardColor
+                                      : Theme.of(context).colorScheme.primary
+                                            .withAlpha(isDark ? 40 : 25)
+                                : cardColor,
+                            margin: EdgeInsets.zero,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: borderRadius,
+                            ),
+                            child: ClipRRect(
+                              borderRadius: borderRadius,
+                              child: listTileWidget,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  );
+                }
 
-            return RawScrollbar(
-              controller: _scrollController,
-              thumbColor: Theme.of(context).colorScheme.primary,
-              thickness: 6.0,
-              radius: const Radius.circular(8),
-              interactive: true,
-              padding: EdgeInsets.only(bottom: space),
-              child: ListView.builder(
-                controller: _scrollController,
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: EdgeInsets.only(
-                  left: 16.0,
-                  right: 16.0,
-                  top: 8.0,
-                  bottom: space,
-                ),
-                itemCount: songsToShow.length,
-                itemBuilder: (context, index) {
-                  final song = songsToShow[index];
-                  final path = song.data;
-                  final isCurrent =
-                      (currentMediaItem?.id != null &&
-                      path.isNotEmpty &&
-                      (currentMediaItem!.id == path ||
-                          currentMediaItem.extras?['data'] == path));
-                  final bool isFirst = index == 0;
-                  final bool isLast = index == songsToShow.length - 1;
-                  final bool isOnly = songsToShow.length == 1;
+                return RawScrollbar(
+                  controller: _scrollController,
+                  thumbColor: Theme.of(context).colorScheme.primary,
+                  thickness: 6.0,
+                  radius: const Radius.circular(8),
+                  interactive: true,
+                  padding: EdgeInsets.only(bottom: space),
+                  child: ListView.builder(
+                    controller: _scrollController,
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: EdgeInsets.only(
+                      left: 16.0,
+                      right: 16.0,
+                      top: 8.0,
+                      bottom: space,
+                    ),
+                    itemCount: songsToShow.length,
+                    itemBuilder: (context, index) {
+                      final song = songsToShow[index];
+                      final path = song.data;
+                      final isCurrent =
+                          (currentMediaItem?.id != null &&
+                          path.isNotEmpty &&
+                          (currentMediaItem!.id == path ||
+                              currentMediaItem.extras?['data'] == path));
+                      final bool isFirst = index == 0;
+                      final bool isLast = index == songsToShow.length - 1;
+                      final bool isOnly = songsToShow.length == 1;
 
-                  BorderRadius borderRadius;
-                  if (isOnly) {
-                    borderRadius = BorderRadius.circular(20);
-                  } else if (isFirst) {
-                    borderRadius = const BorderRadius.only(
-                      topLeft: Radius.circular(20),
-                      topRight: Radius.circular(20),
-                      bottomLeft: Radius.circular(4),
-                      bottomRight: Radius.circular(4),
-                    );
-                  } else if (isLast) {
-                    borderRadius = const BorderRadius.only(
-                      topLeft: Radius.circular(4),
-                      topRight: Radius.circular(4),
-                      bottomLeft: Radius.circular(20),
-                      bottomRight: Radius.circular(20),
-                    );
-                  } else {
-                    borderRadius = BorderRadius.circular(4);
-                  }
+                      BorderRadius borderRadius;
+                      if (isOnly) {
+                        borderRadius = BorderRadius.circular(20);
+                      } else if (isFirst) {
+                        borderRadius = const BorderRadius.only(
+                          topLeft: Radius.circular(20),
+                          topRight: Radius.circular(20),
+                          bottomLeft: Radius.circular(4),
+                          bottomRight: Radius.circular(4),
+                        );
+                      } else if (isLast) {
+                        borderRadius = const BorderRadius.only(
+                          topLeft: Radius.circular(4),
+                          topRight: Radius.circular(4),
+                          bottomLeft: Radius.circular(20),
+                          bottomRight: Radius.circular(20),
+                        );
+                      } else {
+                        borderRadius = BorderRadius.circular(4);
+                      }
 
-                  // Solo usar ValueListenableBuilder para la canción actual
-                  Widget listTileWidget;
-                  if (isCurrent) {
-                    listTileWidget = ValueListenableBuilder<bool>(
-                      valueListenable: _isPlayingNotifier,
-                      builder: (context, playing, child) {
-                        return _buildOptimizedListTile(
+                      // Solo usar ValueListenableBuilder para la canción actual
+                      Widget listTileWidget;
+                      if (isCurrent) {
+                        listTileWidget = ValueListenableBuilder<bool>(
+                          valueListenable: _isPlayingNotifier,
+                          builder: (context, playing, child) {
+                            return _buildOptimizedListTile(
+                              context,
+                              song,
+                              isCurrent,
+                              playing,
+                              isAmoled,
+                              borderRadius: borderRadius,
+                            );
+                          },
+                        );
+                      } else {
+                        listTileWidget = _buildOptimizedListTile(
                           context,
                           song,
                           isCurrent,
-                          playing,
+                          false,
                           isAmoled,
                           borderRadius: borderRadius,
                         );
-                      },
-                    );
-                  } else {
-                    listTileWidget = _buildOptimizedListTile(
-                      context,
-                      song,
-                      isCurrent,
-                      false,
-                      isAmoled,
-                      borderRadius: borderRadius,
-                    );
-                  }
+                      }
 
-                  return RepaintBoundary(
-                    child: Padding(
-                      padding: EdgeInsets.only(bottom: isLast ? 0 : 4),
-                      child: Card(
-                        color: isCurrent
-                            ? isAmoledTheme
-                                  ? cardColor
-                                  : Theme.of(context).colorScheme.primary
-                                        .withAlpha(isDark ? 40 : 25)
-                            : cardColor,
-                        margin: EdgeInsets.zero,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: borderRadius,
+                      return RepaintBoundary(
+                        child: Padding(
+                          padding: EdgeInsets.only(bottom: isLast ? 0 : 4),
+                          child: Card(
+                            color: isCurrent
+                                ? isAmoledTheme
+                                      ? cardColor
+                                      : Theme.of(context).colorScheme.primary
+                                            .withAlpha(isDark ? 40 : 25)
+                                : cardColor,
+                            margin: EdgeInsets.zero,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: borderRadius,
+                            ),
+                            child: ClipRRect(
+                              borderRadius: borderRadius,
+                              child: listTileWidget,
+                            ),
+                          ),
                         ),
-                        child: ClipRRect(
-                          borderRadius: borderRadius,
-                          child: listTileWidget,
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
+                      );
+                    },
+                  ),
+                );
+              },
             );
           },
         ),
