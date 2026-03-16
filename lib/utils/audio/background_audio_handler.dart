@@ -2496,6 +2496,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       videoId,
       artUri,
       artworkGen: trackGeneration ? _artworkGeneration : null,
+      highPriority: true,
     );
 
     if (!mounted || index >= _mediaQueue.length) return;
@@ -2516,9 +2517,12 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     String videoId,
     Uri remoteUri, {
     int? artworkGen,
+    bool highPriority = false,
   }) async {
-    // Función para verificar si esta operación fue superada por un skip más reciente.
-    bool isStale() => artworkGen != null && artworkGen != _artworkGeneration;
+    // Si una petición quedó "vieja" por skips nuevos, no la cancelamos.
+    // Solo la tratamos como prioridad normal para que no bloquee la actual.
+    final bool isOutdatedRequest =
+        artworkGen != null && artworkGen != _artworkGeneration;
 
     final cachedUri = _streamArtworkFileCache[videoId];
     if (cachedUri != null) {
@@ -2532,9 +2536,6 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       }
     }
 
-    // Abortar si ya no es la canción actual.
-    if (isStale()) return null;
-
     // Usamos cache v4 sin recorte para preservar la carátula original.
     try {
       final tempDir = await getTemporaryDirectory();
@@ -2545,8 +2546,6 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         return uri;
       }
 
-      if (isStale()) return null;
-
       final legacyFile = File('${tempDir.path}/yt_stream_art_$videoId.jpg');
       if (await legacyFile.exists() && await legacyFile.length() > 0) {
         await legacyFile.copy(v4File.path);
@@ -2556,25 +2555,19 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       }
     } catch (_) {}
 
-    // Abortar antes de iniciar descarga de red si ya es obsoleta.
-    if (isStale()) return null;
-
     final pending = _streamArtworkPreloadTasks[videoId];
     if (pending != null) {
       return await pending;
     }
 
     // Limitar descargas concurrentes para evitar saturar red e I/O.
-    if (_activeArtworkDownloads >= _maxConcurrentArtworkDownloads) {
+    if ((!highPriority || isOutdatedRequest) &&
+        _activeArtworkDownloads >= _maxConcurrentArtworkDownloads) {
       return null;
     }
 
     _activeArtworkDownloads++;
-    final future = _downloadStreamingArtworkToFile(
-      videoId,
-      remoteUri,
-      artworkGen: artworkGen,
-    );
+    final future = _downloadStreamingArtworkToFile(videoId, remoteUri);
     _streamArtworkPreloadTasks[videoId] = future;
     try {
       final result = await future;
@@ -2594,16 +2587,10 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
   Future<Uri?> _downloadStreamingArtworkToFile(
     String videoId,
-    Uri remoteUri, {
-    int? artworkGen,
-  }) async {
-    // Verificar si esta descarga sigue siendo relevante.
-    bool isStale() => artworkGen != null && artworkGen != _artworkGeneration;
-
+    Uri remoteUri,
+  ) async {
     HttpClient? client;
     try {
-      if (isStale()) return null;
-
       client = HttpClient()..connectionTimeout = const Duration(seconds: 4);
       final request = await client.getUrl(remoteUri);
       request.followRedirects = true;
@@ -2614,13 +2601,8 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         return null;
       }
 
-      // Verificar antes de descargar bytes completos.
-      if (isStale()) return null;
-
       final bytes = await consolidateHttpClientResponseBytes(response);
       if (bytes.isEmpty) return null;
-
-      if (isStale()) return null;
 
       final tempDir = await getTemporaryDirectory();
       // v4 invalida el cache recortado anterior para usar la carátula completa.
