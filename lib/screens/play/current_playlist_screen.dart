@@ -10,6 +10,8 @@ import 'package:mini_music_visualizer/mini_music_visualizer.dart';
 import 'package:music/widgets/title_marquee.dart';
 import 'package:music/widgets/artwork_list_tile.dart';
 import 'package:music/utils/audio/background_audio_handler.dart';
+import 'package:music/widgets/scrollable_positioned_list/scrollable_positioned_list.dart'
+    as spl;
 import 'dart:io';
 
 import 'package:music/utils/theme_controller.dart';
@@ -39,9 +41,11 @@ class CurrentPlaylistScreen extends StatefulWidget {
 
 class _CurrentPlaylistScreenState extends State<CurrentPlaylistScreen>
     with WidgetsBindingObserver {
-  late final ScrollController _scrollController;
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
+  bool _didResolveInitialIndex = false;
+  int _initialVisibleIndex = 0;
+  bool _isListReady = false;
 
   String _searchQuery = '';
   double _lastBottomInset = 0.0;
@@ -67,8 +71,15 @@ class _CurrentPlaylistScreenState extends State<CurrentPlaylistScreen>
   @override
   void initState() {
     super.initState();
-    _scrollController = widget.scrollController ?? ScrollController();
     WidgetsBinding.instance.addObserver(this);
+    // Deja que la pantalla termine su apertura y luego renderiza la lista.
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      if (!mounted) return;
+      setState(() {
+        _isListReady = true;
+      });
+    });
   }
 
   @override
@@ -86,9 +97,6 @@ class _CurrentPlaylistScreenState extends State<CurrentPlaylistScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    if (widget.scrollController == null) {
-      _scrollController.dispose();
-    }
     _searchController.dispose();
     _searchFocusNode.dispose();
     super.dispose();
@@ -253,6 +261,30 @@ class _CurrentPlaylistScreenState extends State<CurrentPlaylistScreen>
     );
   }
 
+  int? _resolveCurrentQueueIndex({
+    required int? liveQueueIndex,
+    required MediaItem? liveCurrentMediaItem,
+  }) {
+    final mediaId = liveCurrentMediaItem?.id;
+    final hasValidLiveQueueIndex =
+        liveQueueIndex != null &&
+        liveQueueIndex >= 0 &&
+        liveQueueIndex < widget.queue.length;
+
+    if (hasValidLiveQueueIndex) {
+      if (mediaId == null || widget.queue[liveQueueIndex].id == mediaId) {
+        return liveQueueIndex;
+      }
+    }
+
+    if (mediaId == null) {
+      return null;
+    }
+
+    final fallbackIndex = widget.queue.indexWhere((item) => item.id == mediaId);
+    return fallbackIndex >= 0 ? fallbackIndex : null;
+  }
+
   @override
   Widget build(BuildContext context) {
     final keyboardOpen = MediaQuery.of(context).viewInsets.bottom > 0;
@@ -310,6 +342,10 @@ class _CurrentPlaylistScreenState extends State<CurrentPlaylistScreen>
                         builder: (context, playbackSnapshot) {
                           final int? liveQueueIndex =
                               playbackSnapshot.data?.queueIndex;
+                          final currentQueueIndex = _resolveCurrentQueueIndex(
+                            liveQueueIndex: liveQueueIndex,
+                            liveCurrentMediaItem: liveCurrentMediaItem,
+                          );
                           return Column(
                             children: [
                               // Current Song Info and Search Bar (from original header)
@@ -596,6 +632,22 @@ class _CurrentPlaylistScreenState extends State<CurrentPlaylistScreen>
                                             ? Colors.white
                                             : primaryColor;
 
+                                        if (!_isListReady) {
+                                          return Center(
+                                            child: Column(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                const SizedBox(
+                                                  width: 40,
+                                                  height: 40,
+                                                  child:
+                                                      CircularProgressIndicator(),
+                                                ),
+                                              ],
+                                            ),
+                                          );
+                                        }
+
                                         // Mantener índice original para evitar ambigüedad
                                         // cuando hay IDs repetidos en radio.
                                         final indexedQueue = widget.queue
@@ -622,11 +674,41 @@ class _CurrentPlaylistScreenState extends State<CurrentPlaylistScreen>
                                                   })
                                                   .toList(growable: false);
 
-                                        return ListView.builder(
-                                          controller: _scrollController,
+                                        if (!_didResolveInitialIndex) {
+                                          final visibleIndex =
+                                              currentQueueIndex == null
+                                              ? -1
+                                              : filteredEntries.indexWhere(
+                                                  (entry) =>
+                                                      entry.key ==
+                                                      currentQueueIndex,
+                                                );
+                                          _initialVisibleIndex =
+                                              visibleIndex >= 0
+                                              ? visibleIndex
+                                              : 0;
+                                          _didResolveInitialIndex = true;
+                                        }
+
+                                        if (filteredEntries.isEmpty) {
+                                          return Center(
+                                            child: Text(
+                                              LocaleProvider.tr('no_results'),
+                                            ),
+                                          );
+                                        }
+
+                                        return spl
+                                            .ScrollablePositionedList.builder(
+                                          initialScrollIndex:
+                                              _initialVisibleIndex.clamp(
+                                                0,
+                                                filteredEntries.length - 1,
+                                              ),
+                                          initialAlignment: 0,
                                           physics:
-                                              const AlwaysScrollableScrollPhysics(),
-                                          cacheExtent: 200,
+                                              const ClampingScrollPhysics(),
+                                          minCacheExtent: 200,
                                           addAutomaticKeepAlives: false,
                                           addRepaintBoundaries: true,
                                           padding: EdgeInsets.only(
@@ -641,34 +723,9 @@ class _CurrentPlaylistScreenState extends State<CurrentPlaylistScreen>
                                                 filteredEntries[index];
                                             final realIndex = entry.key;
                                             final item = entry.value;
-                                            final mediaId =
-                                                liveCurrentMediaItem?.id;
-                                            final hasValidLiveQueueIndex =
-                                                liveQueueIndex != null &&
-                                                liveQueueIndex >= 0 &&
-                                                liveQueueIndex <
-                                                    widget.queue.length;
-                                            final queueIndexMatchesMediaId =
-                                                hasValidLiveQueueIndex &&
-                                                    mediaId != null
-                                                ? widget
-                                                          .queue[liveQueueIndex]
-                                                          .id ==
-                                                      mediaId
-                                                : false;
-
-                                            final bool isCurrent;
-                                            if (hasValidLiveQueueIndex &&
-                                                (mediaId == null ||
-                                                    queueIndexMatchesMediaId)) {
-                                              isCurrent =
-                                                  realIndex == liveQueueIndex;
-                                            } else {
-                                              // Fallback cuando queueIndex llega desfasado.
-                                              isCurrent =
-                                                  mediaId != null &&
-                                                  item.id == mediaId;
-                                            }
+                                            final isCurrent =
+                                                currentQueueIndex != null &&
+                                                realIndex == currentQueueIndex;
                                             final songId =
                                                 item.extras?['songId'] ?? 0;
                                             final songPath =
