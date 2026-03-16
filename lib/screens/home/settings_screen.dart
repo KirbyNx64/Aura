@@ -5404,7 +5404,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         await boxFav.clear();
         await boxFavMeta.clear();
         if (data['favorites'] is List) {
-          for (final item in data['favorites']) {
+          final favoriteItems = List<dynamic>.from(data['favorites']).reversed;
+          for (final item in favoriteItems) {
             final path = _extractPathFromBackupItem(item);
             if (path == null) continue;
             final itemMeta = _extractMetaFromBackupItem(item);
@@ -5429,7 +5430,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (options['recents'] == true) {
         await RecentsDB().clearAll();
         if (data['recents'] is List) {
-          for (final item in data['recents']) {
+          final recentItems = List<dynamic>.from(data['recents']).reversed;
+          for (final item in recentItems) {
             final path = _extractPathFromBackupItem(item);
             if (path == null) continue;
             final itemMeta = _extractMetaFromBackupItem(item);
@@ -5467,7 +5469,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         await boxPl.clear();
         await boxPlMeta.clear();
         if (data['playlists'] is List) {
-          for (final pl in data['playlists']) {
+          final playlistItems = List<dynamic>.from(data['playlists']).reversed;
+          for (final pl in playlistItems) {
             final id =
                 pl['id']?.toString() ??
                 DateTime.now().millisecondsSinceEpoch.toString();

@@ -71,10 +71,6 @@ class DependenciesScreen extends StatelessWidget {
       'https://github.com/anandnet/youtube_explode_dart',
       'git: 1d9ec9baa80',
     ),
-    'dart_ytmusic_api': _DependencyInfo(
-      'https://pub.dev/packages/dart_ytmusic_api',
-      '^1.3.6',
-    ),
     'file_selector': _DependencyInfo(
       'https://pub.dev/packages/file_selector',
       '^1.0.3',

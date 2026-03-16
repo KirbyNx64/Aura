@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'package:dio/dio.dart';
-import 'package:dart_ytmusic_api/dart_ytmusic_api.dart' as ytm_api;
 
 import '../../l10n/locale_provider.dart';
 
@@ -29,14 +28,6 @@ final Map<String, dynamic> ytServiceContext = {
     'user': {},
   },
 };
-
-// Nuevo proveedor para "Up Next" (solicitado para pruebas).
-final ytm_api.YTMusic _ytMusicApi = ytm_api.YTMusic();
-Future<void>? _ytMusicInitFuture;
-bool _ytMusicInitialized = false;
-
-// Toggle temporal: false = usa dart_ytmusic_api, true = proveedor legacy.
-const bool useLegacyWatchRadioProvider = false;
 
 class YtMusicResult {
   final String? title;
@@ -894,105 +885,12 @@ Future<Map<String, dynamic>> getWatchRadioTracks({
   String? playlistId,
   String? additionalParamsNext,
 }) async {
-  if (useLegacyWatchRadioProvider) {
-    return _getWatchRadioTracksLegacy(
-      videoId: videoId,
-      limit: limit,
-      playlistId: playlistId,
-      additionalParamsNext: additionalParamsNext,
-    );
-  }
-
-  final primary = await _getWatchRadioTracksViaDartYtMusicApi(
-    videoId: videoId,
-    limit: limit,
-  );
-  final tracks = primary['tracks'];
-  if (tracks is List && tracks.isNotEmpty) {
-    return primary;
-  }
-
-  // Fallback: el proveedor principal puede devolver vacío en el primer
-  // arranque de sesión. Intentamos endpoint legacy para no perder la radio
-  // inicial en reproducción individual.
   return _getWatchRadioTracksLegacy(
     videoId: videoId,
     limit: limit,
     playlistId: playlistId,
     additionalParamsNext: additionalParamsNext,
   );
-}
-
-Future<void> _ensureYtMusicApiInitialized() async {
-  if (_ytMusicInitialized) return;
-  _ytMusicInitFuture ??= () async {
-    final locale = languageNotifier.value;
-    final hl = locale.startsWith('es') ? 'es' : 'en';
-    await _ytMusicApi.initialize(hl: hl);
-    _ytMusicInitialized = true;
-  }();
-
-  try {
-    await _ytMusicInitFuture;
-  } catch (_) {
-    _ytMusicInitFuture = null;
-    rethrow;
-  }
-}
-
-Future<Map<String, dynamic>> _getWatchRadioTracksViaDartYtMusicApi({
-  required String videoId,
-  int limit = 24,
-}) async {
-  final normalizedVideoId = videoId.trim();
-  if (normalizedVideoId.isEmpty) {
-    return {
-      'tracks': <Map<String, dynamic>>[],
-      'additionalParamsForNext': null,
-    };
-  }
-
-  try {
-    await _ensureYtMusicApiInitialized();
-    final upNexts = await _ytMusicApi.getUpNexts(normalizedVideoId);
-    final tracks = <Map<String, dynamic>>[];
-    final seenVideoIds = <String>{normalizedVideoId};
-
-    for (final item in upNexts) {
-      final nextVideoId = item.videoId.trim();
-      if (nextVideoId.isEmpty || !seenVideoIds.add(nextVideoId)) continue;
-
-      final artistName = item.artists.name.trim();
-      final thumbUrl = item.thumbnails.isNotEmpty
-          ? _cleanThumbnailUrl(item.thumbnails.last.url, highQuality: true)
-          : null;
-
-      tracks.add({
-        'videoId': nextVideoId,
-        'title': item.title.trim().isEmpty
-            ? LocaleProvider.tr('title_unknown')
-            : item.title.trim(),
-        'artist': artistName.isEmpty ? null : artistName,
-        'thumbUrl': thumbUrl,
-        'durationMs': item.duration > 0 ? item.duration * 1000 : null,
-      });
-
-      if (tracks.length >= limit) break;
-    }
-
-    return {
-      'tracks': tracks,
-      // getUpNexts no expone token de continuación.
-      'additionalParamsForNext': null,
-      'provider': 'dart_ytmusic_api',
-    };
-  } catch (_) {
-    return {
-      'tracks': <Map<String, dynamic>>[],
-      'additionalParamsForNext': null,
-      'provider': 'dart_ytmusic_api',
-    };
-  }
 }
 
 Future<Map<String, dynamic>> _getWatchRadioTracksLegacy({
