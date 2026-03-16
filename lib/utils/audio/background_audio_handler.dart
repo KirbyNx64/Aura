@@ -2193,8 +2193,9 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     };
     final updatedItem = currentItem.copyWith(extras: updatedExtras);
     _mediaQueue[targetIndex] = updatedItem;
-    queue.add(List<MediaItem>.from(_mediaQueue));
-
+    // No reemitir la cola completa al cambiar de canción: solo actualizamos un ítem
+    // (streamUrl). Evita copiar 50 MediaItems y que la UI reconstruya toda la lista.
+    // mediaItem.add(updatedItem) basta para la pista actual.
     mediaItem.add(updatedItem);
 
     try {
@@ -2204,9 +2205,9 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         return false;
       }
 
-      // Reusar el _concat existente: clear() + add() es mucho más ligero que
-      // crear uno nuevo y llamar setAudioSource(), que internamente dispone
-      // y reconfigura toda la cadena nativa del player.
+      // Reusar el _concat existente (radio y no radio): clear() + add() es mucho
+      // más ligero que crear uno nuevo y setAudioSource(); mismo flujo para
+      // cola diferida con o sin radio.
       // _isSwappingSource evita que el completed handler (disparado por clear())
       // intente auto-avanzar a la siguiente canción.
       _isSwappingSource = true;
@@ -2335,7 +2336,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         'streamUrl': prefetchedUrl,
       };
       _mediaQueue[nextIndex] = current.copyWith(extras: updatedExtras);
-      queue.add(List<MediaItem>.from(_mediaQueue));
+      // No reemitir cola en prefetch: solo actualizamos un ítem; al saltar se usa mediaItem.
     } catch (_) {
       // Error silencioso para no afectar reproducción.
     } finally {
@@ -2694,7 +2695,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
                 : (_player.currentIndex ?? 0))
             .clamp(0, _mediaQueue.length - 1);
     final int remaining = (_mediaQueue.length - 1) - currentIndex;
-    final int missingItems = _streamRadioFixedQueueSize - remaining;
+    final int missingItems = _streamRadioFixedQueueSize - _mediaQueue.length;
     if (missingItems <= 0) {
       _streamRadioInitialBatchLoaded = true;
       debugPrint(
